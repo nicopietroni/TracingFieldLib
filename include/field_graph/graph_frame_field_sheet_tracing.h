@@ -1,0 +1,609 @@
+#ifndef FRAME_FIELD_GRAPH_SHEET_TRACING
+#define FRAME_FIELD_GRAPH_SHEET_TRACING
+
+//#include "../GeoLibrary/frame_field.h"
+#include "graph.h"
+#include "graph_tracing.h"
+#include "./frame_field.h"
+#include "graph_frame_field.h"
+#include "connectivity.h"
+//#define TRACE_DEBUG
+
+template <class ScalarType>
+class SheetTracer
+{
+public:
+
+    struct Sheet
+    {
+        std::vector<int> TetraIdxSide0;
+        std::vector<int> TetraFaceSide0;
+        std::vector<int> TetraIdxSide1;
+        std::vector<int> TetraFaceSide1;
+        std::vector<int> NodeSide0;
+        std::vector<int> NodeSide1;
+        std::vector<int> SourceNode0;
+        std::vector<int> SourceNode1;
+
+        void Clear()
+        {
+            TetraIdxSide0.clear();
+            TetraFaceSide0.clear();
+            TetraIdxSide1.clear();
+            TetraFaceSide1.clear();
+            NodeSide0.clear();
+            NodeSide1.clear();
+            SourceNode0.clear();
+            SourceNode1.clear();
+        }
+
+        bool FromSameTetraSource()
+        {
+            int IndexPoly0=PolyOfNode(SourceNode0[0]);
+            int IndexPoly1=PolyOfNode(SourceNode1[0]);
+
+            for (size_t i=1;i<SourceNode0.size();i++)
+                if(IndexPoly0!=PolyOfNode(SourceNode0[i]))return false;
+
+            for (size_t i=1;i<SourceNode0.size();i++)
+                if(IndexPoly1!=PolyOfNode(SourceNode1[i]))return false;
+
+            return true;
+        }
+
+        bool IsProper()const
+        {
+            assert(SourceNode0.size()>0);
+            assert(SourceNode1.size()>0);
+            for (size_t i=0;i<SourceNode0.size();i++)
+                for (size_t j=0;j<SourceNode1.size();j++)
+                    if(SourceNode0[i]==SourceNode1[j])return false;
+            return true;
+        }
+
+        int WhichSource(int IndexN)const
+        {
+            std::vector<int>::const_iterator it;
+            it = std::find(SourceNode0.begin(), SourceNode0.end(), IndexN);
+            if (it != SourceNode0.end()) return 0;
+            it = std::find(SourceNode1.begin(), SourceNode1.end(), IndexN);
+            if (it != SourceNode1.end()) return 1;
+            return -1;
+        }
+    };
+
+private:
+
+    //    static int GetSourceTetra(const Geo::TracingGraph<ScalarType> &TGraph,
+    //                              const int &IndexTetra,
+    //                              const std::set<int> &SourceNodeSet)
+    //    {
+    //        //get the nodes
+    //        std::vector<int> TetraN;
+    //        NodesOfPoly(IndexTetra,TetraN);
+
+    //        //source of the main tetra
+    //        int SourceN=-1;
+    //        ScalarType minDist=std::numeric_limits<ScalarType>::max();
+
+    //        //get all nodes
+    //        for (size_t j=0;j<TetraN.size();j++)
+    //        {
+    //            size_t currNode=TetraN[j];
+
+    //            //that node has not been reached during Dijkstra
+    //            if (!TGraph.IsMarked(currNode))continue;
+
+    //            ScalarType TestDist=TGraph.Distance(currNode);
+
+    //            if (TestDist>minDist)continue;
+
+    //            minDist=TestDist;
+
+    //            SourceN=TGraph.Source(currNode);
+    ////            //if already found a group before
+    ////            if (SourceT!=-1)
+    ////            {
+    ////                //only one tets marked except sources nodes
+    ////                //can have multiple nodes on the same tet
+    ////                assert(SourceNodeSet.count(currNode)>0);
+    ////                //the group should be at least the same
+    ////                assert(TGraph.Source(currNode)==SourceT);
+    ////            }
+    ////            SourceT=TGraph.Source(currNode);
+    ////            std::cout<<"SourceN:"<<SourceN<<std::endl;
+    //            assert(SourceNodeSet.count(SourceN)>0);
+    //        }
+    //        return SourceN;
+    //    }
+
+    static void SideSheetSeparetrix(const Geo::TracingGraph<ScalarType> &TGraph,
+                                   const int &T0,const Field::FrameField<ScalarType> &FT0,
+                                   const int &T1,const Field::FrameField<ScalarType> &FT1,
+                                   const Sheet &S,
+                                   int &SetT0,int &SetT1,
+                                   int &Node0,int &Node1)
+    {
+        std::vector<int> TetraN0;
+        NodesOfPoly(T0,TetraN0);
+        std::vector<int> TetraN1;
+        NodesOfPoly(T1,TetraN1);
+        assert(TetraN0.size()==6);
+        assert(TetraN0.size()==TetraN1.size());
+
+        SetT0=-1;SetT1=-1;
+        Node0=-1;Node1=-1;
+        for (size_t i=0;i<TetraN0.size();i++)
+        {
+            int IndexN0=TetraN0[i];
+            int SourceN0=-1;
+
+            if (TGraph.IsMarked(IndexN0))
+                SourceN0=TGraph.Source(IndexN0);
+
+            if(SourceN0==-1)continue;
+
+            int SourceSetN0=S.WhichSource(SourceN0);
+            assert(SourceSetN0!=-1);
+            assert((SourceSetN0==0)||(SourceSetN0==1));
+            int IndexFDir0=FrameOfNode(IndexN0);
+            for (size_t j=0;j<TetraN1.size();j++)
+            {
+                int IndexN1=TetraN1[j];
+                assert(IndexN0!=IndexN1);
+
+                int SourceN1=-1;
+                if (TGraph.IsMarked(IndexN1))
+                    SourceN1=TGraph.Source(IndexN1);
+
+                if(SourceN1==-1)continue;
+
+                int SourceSetN1=S.WhichSource(SourceN1);
+                if (SourceSetN1==-1)
+                {
+                    std::cout<<"Node Test"<<IndexN1<<std::endl;
+                    std::cout<<"Source Test 0"<<std::endl;
+                    for (size_t k=0;k<S.SourceNode0.size();k++)
+                         std::cout<<S.SourceNode0[k]<<std::endl;
+                    std::cout<<"Node Test"<<IndexN1<<std::endl;
+                    std::cout<<"Source Test 1"<<std::endl;
+                    for (size_t k=0;k<S.SourceNode1.size();k++)
+                        std::cout<<S.SourceNode1[k]<<std::endl;
+                    assert(0);
+                }
+                assert((SourceSetN1==0)||(SourceSetN1==1));
+
+                //if same source set nothing to do
+                if (SourceSetN0==SourceSetN1)continue;
+
+                //otherwise check directions
+                int IndexFDir1=FrameOfNode(IndexN1);
+
+                //if they are orthogonal does not care
+                Field::RelationType Rel0=Field::FrameRelationDir(FT0,IndexFDir0,FT1,IndexFDir1);
+                Field::RelationType Rel1=Field::FrameRelationDir(FT1,IndexFDir1,FT0,IndexFDir0);
+//                if (Rel0!=Rel1)
+//                {
+//                   std::cout<<"R0:"<<Rel0<<" R1:"<<Rel1<<std::endl;
+//                   assert(0);
+//                }
+                assert(Rel0==Rel1);
+//                if (Rel0==Field::NodeOrthogonal)continue;
+//                if (Rel0==Field::NodeOpposite)continue;
+                //if (Rel0!=Field::NodeOpposite)continue;
+                if (Rel0!=Field::NodeCollinear)continue;
+                //return;
+                SetT0=SourceSetN0;
+                SetT1=SourceSetN1;
+                Node0=IndexN0;
+                Node1=IndexN1;
+                return;
+            }
+        }
+    }
+
+public:
+
+    //    static void ExtractSheetFrom(Geo::TracingGraph<ScalarType> &TGraph,
+    //                                 const std::vector<std::vector<int> > &NextPoly,
+    //                                 const std::vector<std::vector<int> > &NextPolyF,
+    //                                 Sheet &S,bool WriteDbg=true)
+    //    {
+
+    //        S.NodeSide0.clear();
+    //        S.NodeSide1.clear();
+    //        S.TetraFaceSide0.clear();
+    //        S.TetraFaceSide1.clear();
+    //        S.TetraIdxSide0.clear();
+    //        S.TetraIdxSide1.clear();
+
+    //        //#ifdef TRACE_DEBUG
+    //        assert(S.NodeSide0.size()>0);
+    //        assert(S.NodeSide1.size()>0);
+    //        assert(S.NodeSide0[0]!=S.NodeSide1[0]);
+
+    //        int IndexPoly0=PolyOfNode(S.SourceNode0[0]);
+    //        int IndexPoly1=PolyOfNode(S.SourceNode1[0]);
+
+    //        for (size_t i=1;i<S.SourceNode0.size();i++)
+    //        {
+    //            assert(IndexPoly0==PolyOfNode(S.SourceNode0[0]));
+    //        }
+
+    //        for (size_t i=1;i<S.SourceNode1.size();i++)
+    //        {
+    //            assert(IndexPoly1==PolyOfNode(S.SourceNode1[0]));
+    //        }
+    //        //#endif
+    //        //set to make further checks
+
+    //        //trace from the two sets contemporanily
+    //        typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
+    //        SParam.stop_at_S0=false;
+    //        SParam.stop_at_S1=false;
+    //        //SParam.AvoidIntersections=true;
+
+    //        std::vector<int> SourceNodes(S.SourceNode0);
+    //        SourceNodes.insert(SourceNodes.end(),S.SourceNode1.begin(),S.SourceNode1.end());
+
+    //        std::set<int> SourceNodeSet0(S.SourceNode0.begin(),S.SourceNode0.end());
+    //        std::set<int> SourceNodeSet1(S.SourceNode1.begin(),S.SourceNode1.end());
+    //        std::set<int> SourceNodeSetAll(SourceNodes.begin(),SourceNodes.end());
+
+    //        //compute distance to nodes
+    //        int LastN;
+    //        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,SourceNodes,SParam,LastN);
+
+    //        //then check all tetra
+    //        assert(NextPoly.size()==NextPolyF.size());
+
+    //        int AllPairs=0;
+    //        int NoSource=0;
+    //        int SameSource=0;
+    //        // for each tetra
+    //        for (int i=0;i<(int)NextPoly.size();i++)
+    //            for (int j=0;j<(int)NextPoly[i].size();j++)
+    //            {
+    //                int T0=i;
+    //                int T0_F=j;
+    //                int T1=NextPoly[T0][T0_F];
+    //                int T1_F=NextPolyF[T0][T0_F];
+
+    //                assert(T0!=T1);
+
+    //                //if border do nothing
+    //                if (T1==-1)continue;
+
+    //                //check only once for each pair
+    //                if (T0>T1)continue;
+
+    //                AllPairs++;
+
+    //                //get the nodes
+    //                std::vector<int> TetraN;
+    //                NodesOfPoly(T0,TetraN);
+
+    //                //get the source of the tetra
+    //                int SourceT0=GetSourceTetra(TGraph,T0,SourceNodeSetAll);
+
+    //                //not reached during the diffusion
+    //                if (SourceT0==-1){NoSource++;continue;}
+
+
+    //                //get the source of the other tetra
+    //                int SourceT1=GetSourceTetra(TGraph,T1,SourceNodeSetAll);
+
+    //                //not reached during the diffusion
+    //                if (SourceT1==-1){NoSource++;continue;}
+
+    //                //see if they belong to different sets
+    //                bool IsT0_Set[2];
+    //                bool IsT1_Set[2];
+    //                IsT0_Set[0]=(SourceNodeSet0.count(SourceT0)>0);
+    //                IsT0_Set[1]=(SourceNodeSet1.count(SourceT0)>0);
+    //                IsT1_Set[0]=(SourceNodeSet0.count(SourceT1)>0);
+    //                IsT1_Set[1]=(SourceNodeSet1.count(SourceT1)>0);
+
+    //                //should belong to at least one set
+    //                assert(IsT0_Set[0]||IsT0_Set[1]);
+    //                assert(IsT1_Set[0]||IsT1_Set[1]);
+
+    //                //but not at both
+    //                assert(!(IsT0_Set[0]&&IsT0_Set[1]));
+    //                assert(!(IsT1_Set[0]&&IsT1_Set[1]));
+
+    //                //same set
+    //                if (IsT0_Set[0] && IsT1_Set[0]){SameSource++;continue;}
+    //                if (IsT0_Set[1] && IsT1_Set[1]){SameSource++;continue;}
+
+    //                //check if they belong to different sets
+    //                if (IsT0_Set[0]&&IsT1_Set[1])
+    //                {
+    //                    S.TetraIdxSide0.push_back(T0);
+    //                    S.TetraFaceSide0.push_back(T0_F);
+    //                    S.TetraIdxSide1.push_back(T1);
+    //                    S.TetraFaceSide1.push_back(T1_F);
+    //                }
+
+    //                if (IsT0_Set[1]&&IsT1_Set[0])
+    //                {
+    //                    S.TetraIdxSide0.push_back(T1);
+    //                    S.TetraFaceSide0.push_back(T1_F);
+    //                    S.TetraIdxSide1.push_back(T0);
+    //                    S.TetraFaceSide1.push_back(T0_F);
+    //                }
+    //            }
+    //        if (WriteDbg)
+    //        {
+    //            std::cout<<"All Tested Pairs: "<<AllPairs<<std::endl;
+    //            std::cout<<"NoSource: "<<NoSource<<std::endl;
+    //            std::cout<<"SameSource: "<<SameSource<<std::endl;
+    //        }
+    //    }
+
+    static void CompleteSheet(Geo::TracingGraph<ScalarType> &TGraph,
+                              const std::vector<Field::FrameField<ScalarType> > &TetraField,
+                              const std::vector<std::vector<int> > &NextPoly,
+                              const std::vector<std::vector<int> > &NextPolyF,
+                              Sheet &S,bool WriteDbg=true)
+    {
+
+        S.NodeSide0.clear();
+        S.NodeSide1.clear();
+        S.TetraFaceSide0.clear();
+        S.TetraFaceSide1.clear();
+        S.TetraIdxSide0.clear();
+        S.TetraIdxSide1.clear();
+
+        //check
+        assert(S.IsProper());
+        assert(S.FromSameTetraSource());
+
+
+        //trace from the two sets contemporanily
+        typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
+        SParam.stop_at_S0=false;
+        SParam.stop_at_S1=false;
+        //SParam.AvoidIntersections=true;
+
+        std::vector<int> SourceNodes(S.SourceNode0);
+        SourceNodes.insert(SourceNodes.end(),S.SourceNode1.begin(),S.SourceNode1.end());
+
+        //compute distance to nodes
+        int LastN;
+        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,SourceNodes,SParam,LastN);
+
+        //then check all tetra
+        assert(NextPoly.size()==NextPolyF.size());
+
+        int AllPairs=0;
+        int NoSource=0;
+        int SameSource=0;
+        // for each tetra
+        for (int i=0;i<(int)NextPoly.size();i++)
+            for (int j=0;j<(int)NextPoly[i].size();j++)
+            {
+                int T0=i;
+                int T0_F=j;
+                int T1=NextPoly[T0][T0_F];
+                int T1_F=NextPolyF[T0][T0_F];
+
+                assert(T0!=T1);
+
+                //if border do nothing
+                if (T1==-1)continue;
+
+                //check only once for each pair
+                if (T0>T1)continue;
+
+                AllPairs++;
+
+                int T0Set=-1;
+                int T1Set=-1;
+                int IndexN0=-1;
+                int IndexN1=-1;
+                SideSheetSeparetrix(TGraph,T0,TetraField[T0],T1,TetraField[T1],S,T0Set,T1Set,IndexN0,IndexN1);
+
+                if (T0Set==-1)
+                {
+                    assert(T1Set==-1);
+                    continue;
+                }
+
+                assert((T0Set==0)||(T0Set==1));
+                assert((T1Set==0)||(T1Set==1));
+                assert(T0Set!=T1Set);
+                if (T0Set==0)
+                {
+                    S.TetraIdxSide0.push_back(T0);
+                    S.TetraFaceSide0.push_back(T0_F);
+                    S.NodeSide0.push_back(IndexN0);
+                    S.TetraIdxSide1.push_back(T1);
+                    S.TetraFaceSide1.push_back(T1_F);
+                    S.NodeSide1.push_back(IndexN1);
+                }
+                else
+                {
+                    assert(T1Set==0);
+                    S.TetraIdxSide0.push_back(T1);
+                    S.TetraFaceSide0.push_back(T1_F);
+                    S.NodeSide0.push_back(IndexN1);
+                    S.TetraIdxSide1.push_back(T0);
+                    S.TetraFaceSide1.push_back(T0_F);
+                    S.NodeSide1.push_back(IndexN0);
+                }
+            }
+        if (WriteDbg)
+        {
+            std::cout<<"All Tested Pairs: "<<AllPairs<<std::endl;
+            std::cout<<"NoSource: "<<NoSource<<std::endl;
+            std::cout<<"SameSource: "<<SameSource<<std::endl;
+        }
+    }
+
+    //    static bool ExtractSheetFrom(Geo::TracingGraph<ScalarType> &TGraph,
+    //                                 const std::vector<std::vector<int> > &NextPoly,
+    //                                 const std::vector<std::vector<int> > &NextPolyF,
+    //                                 const int &IndexT,const int &IndexDir,Sheet &S,
+    //                                 bool writeDBG=true)
+    //    {
+    //        assert(IndexT>=0);
+    //        assert(IndexDir>=0);
+    //        assert(IndexDir<6);
+
+    //        S.Clear();
+
+    //        int IndexN0=NodeOfPolyFrame(IndexT,IndexDir);
+    //        if(!TGraph.EnabledN[IndexN0])return false;
+
+    //        //get oposite node
+    //        int IndexN1=-1;
+    //        int IndexOppN0=OppositeNodeFrameField(IndexN0);
+    //        //then get the closest node
+    //        IndexN1=TGraph.FirstActiveNeigh(IndexOppN0);
+    //        if (IndexN1==-1)return false;
+    //        assert(TGraph.EnabledN[IndexN1]);
+
+
+    ////        //then get the ortho nodes
+    //        OrthoNodesFrameField(IndexN0,S.SourceNode0);
+    //        OrthoNodesFrameField(IndexN1,S.SourceNode1);
+
+    //        //filter to have only internals
+    //        S.SourceNode0.push_back(IndexN0);
+    //        Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode0);
+
+    //        S.SourceNode1.push_back(IndexN1);
+    ////        NodeSet1.push_back(IndexOppN0);
+    //        Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode1);
+
+    //        if (S.SourceNode0.size()==0)return false;
+    //        if (S.SourceNode1.size()==0)return false;
+
+    //        if (writeDBG)
+    //        {
+    //            std::cout<<"Size of Node Set 0:"<<S.SourceNode0.size()<<std::endl;
+    //            std::cout<<"Size of Node Set 1:"<<S.SourceNode1.size()<<std::endl;
+    //        }
+    //        ExtractSheetFrom(TGraph,NextPoly,NextPolyF,S);
+
+    //        return true;
+    //    }
+    static bool ExtractSheetFrom(const std::vector<Field::FrameField<ScalarType> > &TetraField,
+                                 Geo::TracingGraph<ScalarType> &TGraph,
+                                 const std::vector<std::vector<int> > &NextPoly,
+                                 const std::vector<std::vector<int> > &NextPolyF,
+                                 const int &IndexT,const int &IndexDir,Sheet &S,
+                                 bool useOrtho=true,bool UseOpposite=false,
+                                 bool writeDBG=true)
+    {
+        assert(IndexT>=0);
+        assert(IndexDir>=0);
+        assert(IndexDir<6);
+        assert(useOrtho||UseOpposite);
+
+        if (writeDBG)
+            std::cout<<"Tracing From Tet "<<IndexT<<" Dir "<<IndexDir<<std::endl;
+
+        S.Clear();
+
+        //get the current node of the tetra
+        int IndexN0=NodeOfPolyFrame(IndexT,IndexDir);
+
+        if (writeDBG)
+            std::cout<<"Node0 "<<IndexN0<<std::endl;
+
+        //if not enabled return true (maybe to change in assert?)
+        if(!TGraph.EnabledN[IndexN0])return false;
+
+        //get oposite node
+        int IndexN1=-1;
+        int IndexOppN0=OppositeNodeFrameField(IndexN0);
+
+        //then get the closest node
+        IndexN1=TGraph.FirstActiveNeigh(IndexOppN0);
+
+        //if there is not another opposite return false
+        if (IndexN1==-1)return false;
+
+        if (writeDBG)
+            std::cout<<"Node1 "<<IndexN1<<std::endl;
+
+        assert(TGraph.EnabledN[IndexN1]);
+
+
+        //then get the ortho nodes
+        if (useOrtho)
+        {
+            OrthoNodesFrameField(IndexN0,S.SourceNode0);
+            OrthoNodesFrameField(IndexN1,S.SourceNode1);
+        }
+
+        //add the opposite
+        if (UseOpposite)
+        {
+            S.SourceNode0.push_back(IndexN0);
+            S.SourceNode1.push_back(IndexN1);
+        }
+
+        std::cout<<"Size 0:"<<S.SourceNode0.size()<<std::endl;
+        std::cout<<"Size 1:"<<S.SourceNode1.size()<<std::endl;
+        //filter to have only internals
+        Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode0);
+        Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode1);
+
+        std::cout<<"Size 0 _ new:"<<S.SourceNode0.size()<<std::endl;
+        std::cout<<"Size 1 _ new:"<<S.SourceNode1.size()<<std::endl;
+
+        //if no node remains no possible extraction
+        if (S.SourceNode0.size()==0)return false;
+        if (S.SourceNode1.size()==0)return false;
+
+        if (writeDBG)
+        {
+            std::cout<<"Size of Node Set 0:"<<S.SourceNode0.size()<<std::endl;
+            std::cout<<"Size of Node Set 1:"<<S.SourceNode1.size()<<std::endl;
+        }
+
+        CompleteSheet(TGraph,TetraField,NextPoly,NextPolyF,S);
+        assert(S.NodeSide0.size()==S.NodeSide1.size());
+
+        return true;
+    }
+
+    static void RetrievePaths(const Sheet&S,
+                       const Geo::TracingGraph<ScalarType> &TGraph,
+                       std::vector<std::vector<int> > &PathSide0,
+                       std::vector<std::vector<int> > &PathSide1)
+    {
+        //std::set<int> Ed
+        std::set<int> startN0(S.SourceNode0.begin(),S.SourceNode0.end());
+        std::set<int> startN1(S.SourceNode1.begin(),S.SourceNode1.end());
+
+//        std::set<int> startN(S.SourceNode0.begin(),S.SourceNode0.end());;
+//        startN.insert(S.SourceNode1.begin(),S.SourceNode1.end());
+
+        PathSide0.clear();
+        PathSide1.clear();
+
+        assert(S.NodeSide0.size()==S.NodeSide1.size());
+
+        PathSide0.resize(S.NodeSide0.size());
+        PathSide1.resize(S.NodeSide1.size());
+
+        for (size_t i=0;i<S.NodeSide0.size();i++)
+        {
+            bool found=Geo::GraphQuery<ScalarType>::RetrievePath(TGraph,S.NodeSide0[i],startN0,PathSide0[i]);
+            assert(found);
+        }
+
+        for (size_t i=0;i<S.NodeSide1.size();i++)
+        {
+            bool found=Geo::GraphQuery<ScalarType>::RetrievePath(TGraph,S.NodeSide1[i],startN1,PathSide1[i]);
+            assert(found);
+        }
+    }
+
+
+};
+#endif
