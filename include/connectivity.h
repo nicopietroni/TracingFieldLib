@@ -187,6 +187,64 @@ void getFFAdjacency(const std::vector<std::vector<int> > &Faces,
     }
 }
 
+void getFFAdjacencyNonManifold(const std::vector<std::vector<int> > &Faces,
+                               std::vector<std::vector<std::vector<int> > > &NextF,
+                               std::vector<std::vector<std::vector<int> > > &NextE)
+{
+    typedef typename std::pair<size_t,size_t> sizeTPair;
+
+    NextF.clear();
+    NextE.clear();
+    NextF.resize(Faces.size());
+    NextE.resize(Faces.size());
+
+    std::map<sizeTPair, std::vector<sizeTPair> > EdgeVToFaceE;
+    for (size_t i=0;i<Faces.size();i++)
+    {
+        size_t sizeF=Faces[i].size();
+        NextF[i].resize(sizeF);
+        NextE[i].resize(sizeF);
+        for (size_t j=0;j<Faces[i].size();j++)
+        {
+            int indexV0=Faces[i][j];
+            int indexV1=Faces[i][(j+1)%sizeF];
+            sizeTPair Key((size_t)std::min(indexV0,indexV1),(size_t)std::max(indexV0,indexV1));
+            EdgeVToFaceE[Key].push_back(sizeTPair(i,j));
+        }
+    }
+
+    std::vector<std::pair<sizeTPair, std::vector<sizeTPair> > > EdgeVect(EdgeVToFaceE.begin(),EdgeVToFaceE.end());
+    for (size_t i=0;i<EdgeVect.size();i++)
+    {
+        assert(EdgeVect[i].second.size()>=1);
+        if (EdgeVect[i].second.size()==1)//this is a border edge
+        {
+            int IndexF0=EdgeVect[i].second[0].first;
+            int IndexE0=EdgeVect[i].second[0].second;
+            NextF[IndexF0][IndexE0].push_back(-1);
+            NextE[IndexF0][IndexE0].push_back(-1);
+        }
+        else
+        {
+            for(size_t j=0;j<EdgeVect[i].second.size();j++)
+            {
+                int IndexF0=EdgeVect[i].second[j].first;
+                int IndexE0=EdgeVect[i].second[j].second;
+                 for(size_t k=0;k<EdgeVect[i].second.size();k++)
+                 {
+                     if (j==k)continue;
+                     int IndexF1=EdgeVect[i].second[k].first;
+                     int IndexE1=EdgeVect[i].second[k].second;
+                     assert(IndexF0!=IndexF1);
+                     NextF[IndexF0][IndexE0].push_back(IndexF1);
+                     NextE[IndexF0][IndexE0].push_back(IndexE1);
+                 }
+            }
+        }
+    }
+}
+
+
 
 void FindFaceStar(const std::vector<std::vector<int> > &connections,
                   std::vector<std::vector<int> > &Kernel,

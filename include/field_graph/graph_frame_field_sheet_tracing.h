@@ -6,7 +6,7 @@
 #include "graph_tracing.h"
 #include "./frame_field.h"
 #include "graph_frame_field.h"
-#include "connectivity.h"
+#include <connectivity.h>
 //#define TRACE_DEBUG
 
 template <class ScalarType>
@@ -74,55 +74,100 @@ public:
 
 private:
 
-    //    static int GetSourceTetra(const Geo::TracingGraph<ScalarType> &TGraph,
-    //                              const int &IndexTetra,
-    //                              const std::set<int> &SourceNodeSet)
+    //    static void SideSheetSeparetrix(const Geo::TracingGraph<ScalarType> &TGraph,
+    //                                    const int &T0,const Field::FrameField<ScalarType> &FT0,
+    //                                    const int &T1,const Field::FrameField<ScalarType> &FT1,
+    //                                    const Sheet &S,
+    //                                    int &SetT0,int &SetT1,
+    //                                    int &Node0,int &Node1)
     //    {
-    //        //get the nodes
-    //        std::vector<int> TetraN;
-    //        NodesOfPoly(IndexTetra,TetraN);
+    //        std::vector<int> TetraN0;
+    //        NodesOfPoly(T0,TetraN0);
+    //        std::vector<int> TetraN1;
+    //        NodesOfPoly(T1,TetraN1);
+    //        assert(TetraN0.size()==6);
+    //        assert(TetraN0.size()==TetraN1.size());
 
-    //        //source of the main tetra
-    //        int SourceN=-1;
-    //        ScalarType minDist=std::numeric_limits<ScalarType>::max();
-
-    //        //get all nodes
-    //        for (size_t j=0;j<TetraN.size();j++)
+    //        SetT0=-1;SetT1=-1;
+    //        Node0=-1;Node1=-1;
+    //        for (size_t i=0;i<TetraN0.size();i++)
     //        {
-    //            size_t currNode=TetraN[j];
+    //            int IndexN0=TetraN0[i];
+    //            int SourceN0=-1;
 
-    //            //that node has not been reached during Dijkstra
-    //            if (!TGraph.IsMarked(currNode))continue;
+    //            if (TGraph.IsMarked(IndexN0))
+    //                SourceN0=TGraph.Source(IndexN0);
 
-    //            ScalarType TestDist=TGraph.Distance(currNode);
+    //            if(SourceN0==-1)continue;
 
-    //            if (TestDist>minDist)continue;
+    //            int SourceSetN0=S.WhichSource(SourceN0);
+    //            assert(SourceSetN0!=-1);
+    //            assert((SourceSetN0==0)||(SourceSetN0==1));
+    //            int IndexFDir0=FrameOfNode(IndexN0);
+    //            for (size_t j=0;j<TetraN1.size();j++)
+    //            {
+    //                int IndexN1=TetraN1[j];
+    //                assert(IndexN0!=IndexN1);
 
-    //            minDist=TestDist;
+    //                int SourceN1=-1;
+    //                if (TGraph.IsMarked(IndexN1))
+    //                    SourceN1=TGraph.Source(IndexN1);
 
-    //            SourceN=TGraph.Source(currNode);
-    ////            //if already found a group before
-    ////            if (SourceT!=-1)
-    ////            {
-    ////                //only one tets marked except sources nodes
-    ////                //can have multiple nodes on the same tet
-    ////                assert(SourceNodeSet.count(currNode)>0);
-    ////                //the group should be at least the same
-    ////                assert(TGraph.Source(currNode)==SourceT);
-    ////            }
-    ////            SourceT=TGraph.Source(currNode);
-    ////            std::cout<<"SourceN:"<<SourceN<<std::endl;
-    //            assert(SourceNodeSet.count(SourceN)>0);
+    //                if(SourceN1==-1)continue;
+
+    //                int SourceSetN1=S.WhichSource(SourceN1);
+    //                if (SourceSetN1==-1)
+    //                {
+    //                    std::cout<<"Node Test"<<IndexN1<<std::endl;
+    //                    std::cout<<"Source Test 0"<<std::endl;
+    //                    for (size_t k=0;k<S.SourceNode0.size();k++)
+    //                        std::cout<<S.SourceNode0[k]<<std::endl;
+    //                    std::cout<<"Node Test"<<IndexN1<<std::endl;
+    //                    std::cout<<"Source Test 1"<<std::endl;
+    //                    for (size_t k=0;k<S.SourceNode1.size();k++)
+    //                        std::cout<<S.SourceNode1[k]<<std::endl;
+    //                    assert(0);
+    //                }
+    //                assert((SourceSetN1==0)||(SourceSetN1==1));
+
+    //                //if same source set nothing to do
+    //                if (SourceSetN0==SourceSetN1)continue;
+
+    //                //otherwise check directions
+    //                int IndexFDir1=FrameOfNode(IndexN1);
+
+    //                //if they are orthogonal does not care
+    //                Field::RelationType Rel0=Field::FrameRelationDir(FT0,IndexFDir0,FT1,IndexFDir1);
+    //                Field::RelationType Rel1=Field::FrameRelationDir(FT1,IndexFDir1,FT0,IndexFDir0);
+    //                //                if (Rel0!=Rel1)
+    //                //                {
+    //                //                   std::cout<<"R0:"<<Rel0<<" R1:"<<Rel1<<std::endl;
+    //                //                   assert(0);
+    //                //                }
+    //                assert(Rel0==Rel1);
+    //                //                if (Rel0==Field::NodeOrthogonal)continue;
+    //                //                if (Rel0==Field::NodeOpposite)continue;
+    //                //if (Rel0!=Field::NodeOpposite)continue;
+    //                if (Rel0!=Field::NodeCollinear)continue;
+    //                //return;
+    //                SetT0=SourceSetN0;
+    //                SetT1=SourceSetN1;
+    //                Node0=IndexN0;
+    //                Node1=IndexN1;
+    //                return;
+    //            }
     //        }
-    //        return SourceN;
     //    }
 
+    static ScalarType PathDistances(const ScalarType &D0,const ScalarType &D1)
+    { return (D0*D0+D1*D1);}
+
     static void SideSheetSeparetrix(const Geo::TracingGraph<ScalarType> &TGraph,
-                                   const int &T0,const Field::FrameField<ScalarType> &FT0,
-                                   const int &T1,const Field::FrameField<ScalarType> &FT1,
-                                   const Sheet &S,
-                                   int &SetT0,int &SetT1,
-                                   int &Node0,int &Node1)
+                                    const int &T0,const Field::FrameField<ScalarType> &FT0,
+                                    const int &T1,const Field::FrameField<ScalarType> &FT1,
+                                    const Sheet &S,
+                                    int &SetT0,int &SetT1,
+                                    int &Node0,int &Node1)
     {
         std::vector<int> TetraN0;
         NodesOfPoly(T0,TetraN0);
@@ -133,6 +178,8 @@ private:
 
         SetT0=-1;SetT1=-1;
         Node0=-1;Node1=-1;
+        ScalarType MinD=std::numeric_limits<ScalarType>::max();
+
         for (size_t i=0;i<TetraN0.size();i++)
         {
             int IndexN0=TetraN0[i];
@@ -161,14 +208,14 @@ private:
                 int SourceSetN1=S.WhichSource(SourceN1);
                 if (SourceSetN1==-1)
                 {
-                    std::cout<<"Node Test"<<IndexN1<<std::endl;
-                    std::cout<<"Source Test 0"<<std::endl;
-                    for (size_t k=0;k<S.SourceNode0.size();k++)
-                         std::cout<<S.SourceNode0[k]<<std::endl;
-                    std::cout<<"Node Test"<<IndexN1<<std::endl;
-                    std::cout<<"Source Test 1"<<std::endl;
-                    for (size_t k=0;k<S.SourceNode1.size();k++)
-                        std::cout<<S.SourceNode1[k]<<std::endl;
+                    //                    std::cout<<"Node Test"<<IndexN1<<std::endl;
+                    //                    std::cout<<"Source Test 0"<<std::endl;
+                    //                    for (size_t k=0;k<S.SourceNode0.size();k++)
+                    //                        std::cout<<S.SourceNode0[k]<<std::endl;
+                    //                    std::cout<<"Node Test"<<IndexN1<<std::endl;
+                    //                    std::cout<<"Source Test 1"<<std::endl;
+                    //                    for (size_t k=0;k<S.SourceNode1.size();k++)
+                    //                        std::cout<<S.SourceNode1[k]<<std::endl;
                     assert(0);
                 }
                 assert((SourceSetN1==0)||(SourceSetN1==1));
@@ -182,22 +229,22 @@ private:
                 //if they are orthogonal does not care
                 Field::RelationType Rel0=Field::FrameRelationDir(FT0,IndexFDir0,FT1,IndexFDir1);
                 Field::RelationType Rel1=Field::FrameRelationDir(FT1,IndexFDir1,FT0,IndexFDir0);
-//                if (Rel0!=Rel1)
-//                {
-//                   std::cout<<"R0:"<<Rel0<<" R1:"<<Rel1<<std::endl;
-//                   assert(0);
-//                }
                 assert(Rel0==Rel1);
-//                if (Rel0==Field::NodeOrthogonal)continue;
-//                if (Rel0==Field::NodeOpposite)continue;
-                //if (Rel0!=Field::NodeOpposite)continue;
+
                 if (Rel0!=Field::NodeCollinear)continue;
+
+                ScalarType D0=TGraph.Distance(IndexN0);
+                ScalarType D1=TGraph.Distance(IndexN1);
+                ScalarType PathD=PathDistances(D0,D1);
+                if (PathD<MinD)
+                {
+                    SetT0=SourceSetN0;
+                    SetT1=SourceSetN1;
+                    Node0=IndexN0;
+                    Node1=IndexN1;
+                    MinD=PathD;
+                }
                 //return;
-                SetT0=SourceSetN0;
-                SetT1=SourceSetN1;
-                Node0=IndexN0;
-                Node1=IndexN1;
-                return;
             }
         }
     }
@@ -489,6 +536,7 @@ public:
 
     //        return true;
     //    }
+
     static bool ExtractSheetFrom(const std::vector<Field::FrameField<ScalarType> > &TetraField,
                                  Geo::TracingGraph<ScalarType> &TGraph,
                                  const std::vector<std::vector<int> > &NextPoly,
@@ -572,16 +620,16 @@ public:
     }
 
     static void RetrievePaths(const Sheet&S,
-                       const Geo::TracingGraph<ScalarType> &TGraph,
-                       std::vector<std::vector<int> > &PathSide0,
-                       std::vector<std::vector<int> > &PathSide1)
+                              const Geo::TracingGraph<ScalarType> &TGraph,
+                              std::vector<std::vector<int> > &PathSide0,
+                              std::vector<std::vector<int> > &PathSide1)
     {
         //std::set<int> Ed
         std::set<int> startN0(S.SourceNode0.begin(),S.SourceNode0.end());
         std::set<int> startN1(S.SourceNode1.begin(),S.SourceNode1.end());
 
-//        std::set<int> startN(S.SourceNode0.begin(),S.SourceNode0.end());;
-//        startN.insert(S.SourceNode1.begin(),S.SourceNode1.end());
+        //        std::set<int> startN(S.SourceNode0.begin(),S.SourceNode0.end());;
+        //        startN.insert(S.SourceNode1.begin(),S.SourceNode1.end());
 
         PathSide0.clear();
         PathSide1.clear();
@@ -605,5 +653,48 @@ public:
     }
 
 
+    void CleanSheet(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                    const std::vector<std::vector<int> > &TetraConnectivity,
+                    Geo::TracingGraph<ScalarType> &TGraph,/*
+                    const std::vector<std::vector<int> > &NextPoly,
+                    const std::vector<std::vector<int> > &NextPolyF,*/
+                    Sheet &S)
+    {
+        //extract the surface
+        const std::vector<Geo::Point3<ScalarType> > SheetMeshVertPos;
+        const std::vector<std::vector<int> > SheetMeshConnectivity;
+        Tetra::TetraFaceMesh(VertPos,TetraConnectivity,S.TetraIdxSide0,
+                             S.TetraFaceSide0,SheetMeshVertPos,
+                             SheetMeshConnectivity);
+
+        assert(SheetMeshConnectivity.size()==S.NodeSide0.size());
+        assert(SheetMeshConnectivity.size()==S.NodeSide1.size());
+
+        //update the connectivity
+        std::vector<std::vector<std::vector<int> > > NextF;
+        std::vector<std::vector<std::vector<int> > > NextE;
+        Geo::getFFAdjacencyNonManifold(SheetMeshConnectivity,NextF,NextE);
+
+        //compute the distance of each face
+        std::vector<ScalarType> FaceDist;
+        ScalarType MinD=std::numeric_limits<ScalarType>::max();
+        for (size_t i=0;i<S.NodeSide0;i++)
+        {
+            int IndexN0=S.NodeSide0[i];
+            int IndexN1=S.NodeSide1[i];
+            assert(IndexN0>=0);
+            assert(IndexN1>=0);
+            assert(IndexN0<TGraph.NumNodes());
+            assert(IndexN1<TGraph.NumNodes());
+            assert(IndexN0!=IndexN1);
+            ScalarType D0=TGraph.Distance(IndexN0);
+            ScalarType D1=TGraph.Distance(IndexN1);
+            ScalarType PathD=PathDistances(D0,D1);
+            FaceDist.push_back(PathD);
+        }
+
+        //get the starting point
+
+    }
 };
 #endif

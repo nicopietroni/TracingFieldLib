@@ -97,6 +97,13 @@ public:
                 VertUV[GlobalIdx]=CompVertUV[j];
             }
         }
+        Geo::Box2<ScalarType> BB_UV;
+        BB_UV.Init(VertUV);
+        if (Rearrange)
+        {
+            Geo::OutlinePacker<ScalarType> Packer;
+            Packer.Pack(VertUV,Faces,BB_UV.Diag()*0.01);
+        }
 //        Geo::Box2<ScalarType> BB_UV;
 //        BB_UV.Init(VertUV);
 //        if (Rearrange)
