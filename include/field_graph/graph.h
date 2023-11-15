@@ -133,11 +133,24 @@ public:
         return(N[IndexN].size()==0);
     }
 
+    bool AreConnected(const int &IndexN0,
+                      const int &IndexN1)const
+    {
+        assert(EnabledN[IndexN0]);
+        assert(EnabledN[IndexN1]);
+        for (size_t i=0;i<N[IndexN0].size();i++)
+        {
+            if (!EnabledA[IndexN0][i])continue;
+            if (N[IndexN0][i]==IndexN1)return true;
+        }
+        return false;
+    }
+
     void RemoveNeighbours(const int &IndexN)
     {
         assert(IndexN>=0);
-        assert(IndexN<N.size());
-        assert(IndexN<W.size());
+        assert(IndexN<(int)N.size());
+        assert(IndexN<(int)W.size());
         N[IndexN].clear();
         W[IndexN].clear();
     }

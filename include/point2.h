@@ -92,6 +92,13 @@ public:
         return true;
     }
 
+    inline bool operator <(const Point2<ScalarType> &P1)const
+    {
+        if (X!=P1.X)return X<P1.X;
+        if (Y!=P1.Y)return Y<P1.Y;
+        return false;
+    }
+
     inline bool operator !=(const Point2<ScalarType> &P1)
     {
         if (X!=P1.X)return true;

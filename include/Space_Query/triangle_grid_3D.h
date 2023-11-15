@@ -2,7 +2,7 @@
 #define TRIANGLE_GRID
 
 #include <vector>
-#include "grid_basics.h"
+#include "grid_basics_3D.h"
 #include <point3.h>
 #include <box3.h>
 #include <triangle3.h>

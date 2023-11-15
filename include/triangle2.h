@@ -53,6 +53,21 @@ void BarycentricCoords(const Traingle2<ScalarType> &T,
     gamma=1-alpha-beta;
 }
 
+template <class ScalarType>
+bool IsInside(const Traingle2<ScalarType> &T,
+              const Geo::Point2<ScalarType> &Test_pos)
+{
+   ScalarType CrossV[3];
+   for (size_t i=0;i<3;i++)
+   {
+       Geo::Point2<ScalarType> P0=T.P(i);
+       Geo::Point2<ScalarType> P1=T.P((i+1)%3);
+       CrossV[i]=Cross(Test_pos-P0,P1-P0);
+   }
+   if ((CrossV[0]<0)&&(CrossV[1]<0)&&(CrossV[2]<0))return true;
+   if ((CrossV[0]>0)&&(CrossV[1]>0)&&(CrossV[2]>0))return true;
+}
+
 } //namespace
 
 
