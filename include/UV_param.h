@@ -240,8 +240,12 @@ public:
         if (Has_No_Constr)
         {
             FixedV.push_back(0);
-            FixedUV.push_back(Geo::Point2<ScalarType>(0,0));
+            FixedUV.push_back(VertUV[0]);
         }
+//            FixedV.push_back(1);
+//            FixedUV.push_back(VertUV[1]);
+////            GetDefaultPairVertexToFix_AlongX(VertPos,FixedV,FixedUV);
+//        }
 
         b.resize(FixedV.size());
         bc.resize(FixedV.size(),2);

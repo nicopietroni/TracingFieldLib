@@ -9,7 +9,7 @@
 #include <set>
 #include "point3.h"
 #include "point2.h"
-#include <connectivity.h>
+#include "connectivity.h"
 #include <pos3.h>
 
 template <class ScalarType>
@@ -81,6 +81,13 @@ bool IsAllQuad(const std::vector<std::vector<int> > &Faces)
     std::map<int,int> ValMap;
     NumFaceValences(Faces,ValMap);
     return(ValMap[4]==(int)Faces.size());
+}
+
+bool IsAllTris(const std::vector<std::vector<int> > &Faces)
+{
+    std::map<int,int> ValMap;
+    NumFaceValences(Faces,ValMap);
+    return(ValMap[3]==(int)Faces.size());
 }
 
 void VertValences(const std::vector<std::vector<int> > &Faces,

@@ -66,6 +66,7 @@ bool IsInside(const Traingle2<ScalarType> &T,
    }
    if ((CrossV[0]<0)&&(CrossV[1]<0)&&(CrossV[2]<0))return true;
    if ((CrossV[0]>0)&&(CrossV[1]>0)&&(CrossV[2]>0))return true;
+   return false;
 }
 
 } //namespace

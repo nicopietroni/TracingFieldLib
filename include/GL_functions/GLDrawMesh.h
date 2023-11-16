@@ -248,7 +248,8 @@ void DrawSurfaceMesh(const std::vector<Geo::Point3<ScalarType> > &VertPos,
 template <class ScalarType>
 void DrawUVMesh(std::vector<Geo::Point2<ScalarType> > &UVPos,
                 std::vector<std::vector<int> > &Connectivity,
-                bool drawire=false,TypeRendMesh TRM=TRTriangle,
+                bool drawire=false,bool drawfill=true,
+                TypeRendMesh TRM=TRTriangle,
                 std::vector<Geo::Point3<ScalarType> > *FaceCol=NULL)
 {
     typedef typename Geo::Point2<ScalarType> CoordType;
@@ -259,7 +260,8 @@ void DrawUVMesh(std::vector<Geo::Point2<ScalarType> > &UVPos,
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(1.0, 1);
 
-    DrawSurfaceFillUV<ScalarType>(UVPos,Connectivity,TRM,FaceCol);
+    if (drawfill)
+        DrawSurfaceFillUV<ScalarType>(UVPos,Connectivity,TRM,FaceCol);
 
     glDisable(GL_POLYGON_OFFSET_FILL);
     glEnable(GL_COLOR_MATERIAL);

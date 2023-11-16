@@ -7,6 +7,8 @@
 #include "point3.h"
 #include "Space_Query/triangle_grid_2D.h"
 #include <map>
+#include <connectivity.h>
+#include <box3.h>
 
 namespace Geo
 {
@@ -208,6 +210,64 @@ public:
         }
     }
 
+    static void MultiComponentQuadrangulateRaster(const std::vector<Geo::Point2<ScalarType> > &vert_2D,
+                                                  const std::vector<Geo::Point3<ScalarType> > &vert_3D,
+                                                  const std::vector<std::vector<int> > &face,
+                                                  std::vector<Geo::Point2<ScalarType> > &quad_vert2D,
+                                                  std::vector<Geo::Point3<ScalarType> > &quad_vert3D,
+                                                  std::vector<std::vector<int> > &quadF,ScalarType edgeSize=-1,
+                                                  bool IncludeExternal=true)
+    {
+        quad_vert2D.clear();
+        quad_vert3D.clear();
+        quadF.clear();
+
+        //split into connected component
+        std::vector<std::vector<Geo::Point3<ScalarType> > > SubMeshesV;
+        std::vector<std::vector<std::vector<int> > > SubMeshesF;
+        std::vector<std::vector<int> > OriginalV,OriginalF;
+        SplitByFFConnectedComponenent<ScalarType>(vert_3D,face,SubMeshesV,SubMeshesF,OriginalV,OriginalF);
+
+        //check
+        assert(SubMeshesF.size()==SubMeshesV.size());
+        assert(SubMeshesF.size()==OriginalV.size());
+
+        if (edgeSize==-1)
+        {
+            Geo::Box3<ScalarType> BB;
+            BB.Init(vert_3D);
+            edgeSize=BB.Diag()*0.03;
+        }
+
+        for (size_t i=0;i<SubMeshesV.size();i++)
+        {
+            std::vector<Geo::Point2<ScalarType> > vert_2DComp;
+            for (size_t j=0;j<OriginalV[i].size();j++)
+                vert_2DComp.push_back(vert_2D[OriginalV[i][j]]);
+
+            assert(vert_2DComp.size()==SubMeshesV[i].size());
+
+            std::vector<Geo::Point2<ScalarType> > quad_vert2D_Comp;
+            std::vector<Geo::Point3<ScalarType> > quad_vert3D_Comp;
+            std::vector<std::vector<int> > quadFComp;
+
+            //quadrangulate components
+            QuadrangulateRaster(vert_2DComp,SubMeshesV[i],SubMeshesF[i],quad_vert2D_Comp,quad_vert3D_Comp,quadFComp,edgeSize,IncludeExternal);
+
+
+            //sum up exhisting vertices
+            for (size_t j=0;j<quadFComp.size();j++)
+                for (size_t k=0;k<quadFComp[j].size();k++)
+                    quadFComp[j][k]+=quad_vert3D.size();
+
+            quadF.insert(quadF.end(),quadFComp.begin(),quadFComp.end());
+
+            //copy back to original
+            quad_vert2D.insert(quad_vert2D.end(),quad_vert2D_Comp.begin(),quad_vert2D_Comp.end());
+            quad_vert3D.insert(quad_vert3D.end(),quad_vert3D_Comp.begin(),quad_vert3D_Comp.end());
+
+        }
+    }
 };
 
 }

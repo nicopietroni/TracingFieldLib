@@ -4,7 +4,7 @@
 #include "point3.h"
 #include <Eigen/Sparse>
 #include <set>
-#include "mesh_functions.h"
+//#include "mesh_functions.h"
 
 namespace Geo
 {
