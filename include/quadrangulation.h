@@ -33,7 +33,7 @@ public:
         BB_2D.Init(vert);
         if (edgeSize<=0)
             edgeSize=BB_2D.Diag()*0.05;
-        BB_2D.Inflate(edgeSize);
+        BB_2D.Inflate(edgeSize/2);
 
         Geo::TriangleSpatialIndex2D<ScalarType> Grid_2D;
         Grid_2D.Init(vert,face);
@@ -44,8 +44,8 @@ public:
         DivY=std::max(DivY,1);
 
         std::map<Geo::Point2<int>,int> GridVert;
-        for (int x_i=0;x_i<DivX;x_i++)
-            for (int y_i=0;y_i<DivY;y_i++)
+        for (int x_i=0;x_i<=DivX;x_i++)
+            for (int y_i=0;y_i<=DivY;y_i++)
             {
                 Geo::Point2<int> GridIDX(x_i,y_i);
 
@@ -72,8 +72,8 @@ public:
             std::vector<Geo::Point2<int> > AdditionalGridIdx;
             std::vector<int> AdditionalVertIdx;
 
-            for (int x_i=0;x_i<DivX;x_i++)
-                for (int y_i=0;y_i<DivY;y_i++)
+            for (int x_i=0;x_i<=DivX;x_i++)
+                for (int y_i=0;y_i<=DivY;y_i++)
                 {
                     Geo::Point2<int> GridIDX(x_i,y_i);
                     if (GridVert.count(GridIDX)>0)continue;

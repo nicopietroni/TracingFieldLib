@@ -203,6 +203,21 @@ public:
 
     }
 
+    bool FirstTrianglesOverPoint(const std::vector<Geo::Point2<ScalarType> > &vert,
+                                 const std::vector<std::vector<int> > &face,
+                                 const CoordType &_p,int &FacesIn,
+                                 Geo::Point3<ScalarType> &BaryCoords)
+    {
+        std::vector<int> FacesInV;
+        std::vector<Geo::Point3<ScalarType> > BaryCoordsV;
+        TrianglesOverPoint(vert,face,_p,FacesInV,BaryCoordsV);
+        if (FacesInV.size()==0)return false;
+        assert(BaryCoordsV.size()>0);
+        FacesIn=FacesInV[0];
+        BaryCoords=BaryCoordsV[0];
+        return true;
+    }
+
     /*! \brief Base constructor */
     TriangleSpatialIndex2D()
     {TMark=0;}
