@@ -147,7 +147,7 @@ void GLDrawCurvatureField(const std::vector<Field::CrossF<ScalarType> > &Crosses
     ScalarType minK=std::numeric_limits<ScalarType>::max();
     ScalarType maxK=0;//-std::numeric_limits<ScalarType>::max();
 
-    for (size_t i=0;i<Crosses.size();i++)
+    for (size_t i=0;i<(int)Crosses.size();i++)
     {
         minK=std::min(minK,fabs(Crosses[i].K[0]));
         minK=std::min(minK,fabs(Crosses[i].K[1]));

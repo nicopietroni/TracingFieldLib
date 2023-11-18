@@ -64,7 +64,7 @@ public:
         Selected.clear();
         if (RadiusStar==0)
         {
-            for (int i = 0; i < Connectivity.size(); i++) Selected.push_back(i);
+            for (int i = 0; i < (int)Connectivity.size(); i++) Selected.push_back(i);
             return;
         }
         //initialize the kernel

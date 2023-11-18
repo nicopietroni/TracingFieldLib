@@ -357,7 +357,7 @@ void SplitQuadIntoTris(const std::vector<Geo::Point3<ScalarType> > &Pos,
 {
     Tris.clear();
     //2 triangles for each quad
-    Tris.resize(Quads.size()*2,std::vector<int> (3,-1));
+    Tris.resize((int)Quads.size()*2,std::vector<int> (3,-1));
     for (size_t i=0;i<Quads.size();i++)
     {
         assert(Quads[i].size()==4);
