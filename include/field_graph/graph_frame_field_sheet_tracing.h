@@ -211,7 +211,8 @@ private:
     static void SideSheetSeparetrix(const Geo::TracingGraph<ScalarType> &TGraph,
                                     const int &T0,const Field::FrameField<ScalarType> &FT0,
                                     const int &T1,const Field::FrameField<ScalarType> &FT1,
-                                    const Sheet &S,
+                                    Sheet &S,
+                                   // std::map<int,std::set<int> > &ReacheableN,
                                     int &SetT0,int &SetT1,
                                     int &Node0,int &Node1)
     {
@@ -230,10 +231,6 @@ private:
         {
             int IndexN0=TetraN0[i];
 
-            //should both be selected
-            if (!TGraph.IsSelected(IndexN0,0))continue;
-            if (!TGraph.IsSelected(IndexN0,1))continue;
-
             int SourceN0=-1;
 
             if (TGraph.IsMarked(IndexN0))
@@ -248,10 +245,6 @@ private:
             for (size_t j=0;j<TetraN1.size();j++)
             {
                 int IndexN1=TetraN1[j];
-
-                //should both be selected
-                if (!TGraph.IsSelected(IndexN1,0))continue;
-                if (!TGraph.IsSelected(IndexN1,1))continue;
 
                 assert(IndexN0!=IndexN1);
 
@@ -280,6 +273,10 @@ private:
                 assert(Rel0==Rel1);
 
                 if (Rel0!=Field::NodeCollinear)continue;
+
+//                //check if mutually reachable
+//                if (ReacheableN[SourceN1].count(IndexN0)==0)continue;
+//                if (ReacheableN[SourceN0].count(IndexN1)==0)continue;
 
                 ScalarType D0=TGraph.Distance(IndexN0);
                 ScalarType D1=TGraph.Distance(IndexN1);
@@ -538,45 +535,99 @@ public:
     //        }
     //    }
 
-    static void SelectReachableNodes(Geo::TracingGraph<ScalarType> &TGraph,Sheet &S)
-    {
-        TGraph.DeSelectAll(0);
-        TGraph.DeSelectAll(1);
+//    static void SelectReachableNodes(Geo::TracingGraph<ScalarType> &TGraph,Sheet &S)
+//    {
+//        TGraph.DeSelectAll(0);
+//        TGraph.DeSelectAll(1);
 
+//        typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
+//        SParam.stop_at_S0=false;
+//        SParam.stop_at_S1=false;
+
+//        //propagate the first one
+//        int LastN;
+//        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,S.SourceNode0,SParam,LastN);
+//        for (size_t i=0;i<TGraph.NumNodes();i++)
+//            if (TGraph.IsMarked(i))
+//            {
+//                assert(TGraph.Distance(i)>=0);
+//                TGraph.Select(i,0);
+//            }
+
+//        //propagate the second one
+//        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,S.SourceNode1,SParam,LastN);
+//        for (size_t i=0;i<TGraph.NumNodes();i++)
+//            if (TGraph.IsMarked(i))
+//            {
+//                assert(TGraph.Distance(i)>=0);
+//                TGraph.Select(i,1);
+//            }
+//    }
+
+
+
+//    static void FindReachebleNodes(Geo::TracingGraph<ScalarType> &TGraph,
+//                                   const int &IndexN,
+//                                   std::set<int> &ReacheableN)
+//    {
+//        ReacheableN.clear();
+
+//        typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
+//        SParam.stop_at_S0=false;
+//        SParam.stop_at_S1=false;
+
+//        int LastN;
+//        std::vector<int> Sources(1,IndexN);
+//        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,Sources,SParam,LastN);
+//        for (size_t i=0;i<TGraph.NumNodes();i++)
+//            if (TGraph.IsMarked(i))
+//               ReacheableN.insert(i);
+//    }
+
+//    static void FindReachebleNodes(Geo::TracingGraph<ScalarType> &TGraph,
+//                                   Sheet &S,std::map<int,std::set<int> > &ReacheableN)
+//    {
+
+//        for (size_t i=0;i<S.SourceNode0.size();i++)
+//        {
+//            std::set<int> CurrReach;
+//            int IndexN=S.SourceNode0[i];
+//            FindReachebleNodes(TGraph,IndexN,CurrReach);
+//            ReacheableN[IndexN]=CurrReach;
+//        }
+
+//        for (size_t i=0;i<S.SourceNode1.size();i++)
+//        {
+//            std::set<int> CurrReach;
+//            int IndexN=S.SourceNode1[i];
+//            FindReachebleNodes(TGraph,IndexN,CurrReach);
+//            ReacheableN[IndexN]=CurrReach;
+//        }
+//    }
+
+    static void TraceAllSources(Geo::TracingGraph<ScalarType> &TGraph, Sheet &S)
+    {
+        //trace from the two sets contemporanily
         typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
         SParam.stop_at_S0=false;
         SParam.stop_at_S1=false;
 
-        //propagate the first one
+        std::vector<int> SourceNodes(S.SourceNode0);
+        SourceNodes.insert(SourceNodes.end(),S.SourceNode1.begin(),S.SourceNode1.end());
+
+        //compute distance to nodes
         int LastN;
-        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,S.SourceNode0,SParam,LastN);
-        for (size_t i=0;i<TGraph.NumNodes();i++)
-            if (TGraph.IsMarked(i))
-            {
-                assert(TGraph.Distance(i)>=0);
-                TGraph.Select(i,0);
-            }
-
-        //propagate the second one
-        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,S.SourceNode1,SParam,LastN);
-        for (size_t i=0;i<TGraph.NumNodes();i++)
-            if (TGraph.IsMarked(i))
-            {
-                assert(TGraph.Distance(i)>=0);
-                TGraph.Select(i,1);
-            }
+        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,SourceNodes,SParam,LastN);
     }
-
 
     static void AddFacesAdjTetras(const std::vector<Field::FrameField<ScalarType> > &TetraField,
                                   Geo::TracingGraph<ScalarType> &TGraph,
                                   const std::vector<std::vector<int> > &NextPoly,
                                   const std::vector<std::vector<int> > &NextPolyF,
+                                  //std::map<int,std::set<int> > &ReacheableN,
                                   Sheet &S)
     {
-        int AllPairs=0;
-        //        int NoSource=0;
-        //        int SameSource=0;
+        //int AllPairs=0;
         // for each tetra
         for (int i=0;i<(int)NextPoly.size();i++)
             for (int j=0;j<(int)NextPoly[i].size();j++)
@@ -594,14 +645,17 @@ public:
                 //check only once for each pair
                 if (T0>T1)continue;
 
-                AllPairs++;
+                //AllPairs++;
 
                 int T0Set=-1;
                 int T1Set=-1;
                 int IndexN0=-1;
                 int IndexN1=-1;
-                SideSheetSeparetrix(TGraph,T0,TetraField[T0],T1,TetraField[T1],S,T0Set,T1Set,IndexN0,IndexN1);
+//                SideSheetSeparetrix(TGraph,T0,TetraField[T0],T1,TetraField[T1],S,
+//                                    ReacheableN,T0Set,T1Set,IndexN0,IndexN1);
 
+                SideSheetSeparetrix(TGraph,T0,TetraField[T0],T1,TetraField[T1],S,
+                                    T0Set,T1Set,IndexN0,IndexN1);
                 if (T0Set==-1)
                 {
                     assert(T1Set==-1);
@@ -639,28 +693,17 @@ public:
                                       const std::vector<std::vector<int> > &NextPolyF,
                                       Sheet &S)
     {
-        SelectReachableNodes(TGraph,S);
-
-        //trace from the two sets contemporanily
-        typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
-        SParam.stop_at_S0=false;
-        SParam.stop_at_S1=false;
-        //SParam.AvoidIntersections=true;
-
-        std::vector<int> SourceNodes(S.SourceNode0);
-        SourceNodes.insert(SourceNodes.end(),S.SourceNode1.begin(),S.SourceNode1.end());
-
-        //compute distance to nodes
-        int LastN;
-        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,SourceNodes,SParam,LastN);
-
         //then check all tetra
         assert(NextPoly.size()==NextPolyF.size());
 
+//        std::map<int,std::set<int> > ReacheableSourceN;
+//        FindReachebleNodes(TGraph,S,ReacheableSourceN);
+
+        TraceAllSources(TGraph,S);
+
         //then add the nodes from adj tetras
-        AddFacesAdjTetras(TetraField,TGraph,NextPoly,NextPolyF,S);
-
-
+        //AddFacesAdjTetras(TetraField,TGraph,NextPoly,NextPolyF,ReacheableSourceN,S);
+         AddFacesAdjTetras(TetraField,TGraph,NextPoly,NextPolyF,S);
     }
 
 
@@ -923,9 +966,6 @@ public:
         //get the current node of the tetra
         int IndexN0=NodeOfPolyFrame(IndexT,IndexDir);
 
-        //        if (writeDBG)
-        //            std::cout<<"Node0 "<<IndexN0<<std::endl;
-
         //if not enabled return true (maybe to change in assert?)
         if(!TGraph.EnabledN[IndexN0])return false;
 
@@ -938,9 +978,6 @@ public:
 
         //if there is not another opposite return false
         if (IndexN1==-1)return false;
-
-        //        if (writeDBG)
-        //            std::cout<<"Node1 "<<IndexN1<<std::endl;
 
         assert(TGraph.EnabledN[IndexN1]);
 
@@ -958,8 +995,9 @@ public:
             S.SourceNode1.push_back(IndexN1);
         }
 
-        //        std::cout<<"Size 0:"<<S.SourceNode0.size()<<std::endl;
-        //        std::cout<<"Size 1:"<<S.SourceNode1.size()<<std::endl;
+        std::cout<<"Size 0:"<<S.SourceNode0.size()<<std::endl;
+        std::cout<<"Size 1:"<<S.SourceNode1.size()<<std::endl;
+
         //filter to have only internals
         Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode0);
         Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode1);
@@ -975,10 +1013,10 @@ public:
             std::cout<<"Size of Node Set 1:"<<S.SourceNode1.size()<<std::endl;
         }
 
-        //CompleteSheet(TGraph,TetraField,NextPoly,NextPolyF,S);
         FindSeparatricesNodes(TetraField,TGraph,NextPoly,NextPolyF,S);
         assert(S.NodeSide0.size()==S.NodeSide1.size());
 
+        std::cout<<"TEST final Nodes:"<<S.NodeSide0.size()<<std::endl;
         return true;
     }
 

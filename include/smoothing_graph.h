@@ -327,12 +327,13 @@ void GLobalSmoothStep(SmoothingGraph<ScalarType> &SGraph,
     //#pragma omp parallel for
     for (size_t i=0;i<SGraph.Nodes.size();i++)
     {
+
             if (SGraph.NType==SmoothingGraph<ScalarType>::CrossNode)
-                NewCrosses[i]=InterpolateCrossNeigh(SGraph,i,FacesNormals[i],UseQ,Damp);
+                NewCrosses[i]=InterpolateCrossNeigh(SGraph,i,FacesNormals[i],UseQ);
             else
             {
                 assert(SGraph.NType==SmoothingGraph<ScalarType>::FrameNode);
-                NewFrames[i]=InterpolateFrameNeigh(SGraph,i,UseQ,Damp);
+                NewFrames[i]=InterpolateFrameNeigh(SGraph,i,UseQ);
             }
     }
 

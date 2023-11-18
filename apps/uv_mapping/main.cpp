@@ -399,7 +399,7 @@ void GLDrawMesh()
 
         if (DrawUV)
         {
-            GLDraw::DrawUVMesh<ScalarType>(VerPosUV,Connectivity,true,GLDraw::TRTriangle,&FaceColor);
+            GLDraw::DrawUVMesh<ScalarType>(VerPosUV,Connectivity,true,true,GLDraw::TRTriangle,&FaceColor);
         }
         else
         {

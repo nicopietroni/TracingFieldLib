@@ -189,7 +189,7 @@ void PropagateCrossFromFix()
 void UpdateCrossFieldFromFrame()
 {
     CrossFieldFromFrame(FrameField,ExtPoly,SurfExtFace,SurfFaceNormals,SurfVertPos,FaceCurv);
-    SetVertCrossFromFace<UsedScalarType>(SurfVertPos,SurfExtFace,SurfFaceNormals,SurfVertNormals,FaceCurv,VertCurv);
+    SetVertCrossFromFace<UsedScalarType>(SurfVertPos,SurfExtFace,SurfVertNormals,FaceCurv,VertCurv);
     GetFaceSingularities(FaceCurv,VertPos,SurfExtFace,NextF,NextE,SingIndex,SingValue);
     has_cross_field=true;
 }
@@ -643,10 +643,10 @@ void GLDrawMesh()
     }
 
     if (DrawFrameSing && has_frame_field)
-        GLDraw::DrawPolylines(PolyLSing,PolyColorSing);
+        GLDraw::GLDrawPolylines(PolyLSing,PolyColorSing);
 
     if (DrawFrame && has_frame_field)
-        GLDraw::DrawPolylines(PolyL,PolyColor);
+        GLDraw::GLDrawPolylines(PolyL,PolyColor);
 
     glColor4f(.5f,1.f,.8f,.3f);
     GLDraw::DrawSurfaceMesh<UsedScalarType>(VertPos,ExtFace,FaceNormals,VertNormals,DrawSurface,DrawWire,true,TransparentSurface);
