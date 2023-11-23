@@ -48,14 +48,14 @@ public:
 
         bool ProperSources()
         {
-            int IndexPoly0=PolyOfNode(SourceNode0[0]);
-            int IndexPoly1=PolyOfNode(SourceNode1[0]);
+            int IndexPoly0=Field::FrameFieldGraph::PolyOfNode(SourceNode0[0]);
+            int IndexPoly1=Field::FrameFieldGraph::PolyOfNode(SourceNode1[0]);
 
             for (size_t i=1;i<SourceNode0.size();i++)
-                if(IndexPoly0!=PolyOfNode(SourceNode0[i]))return false;
+                if(IndexPoly0!=Field::FrameFieldGraph::PolyOfNode(SourceNode0[i]))return false;
 
             for (size_t i=1;i<SourceNode0.size();i++)
-                if(IndexPoly1!=PolyOfNode(SourceNode1[i]))return false;
+                if(IndexPoly1!=Field::FrameFieldGraph::PolyOfNode(SourceNode1[i]))return false;
 
             return true;
         }
@@ -217,9 +217,9 @@ private:
                                     int &Node0,int &Node1)
     {
         std::vector<int> TetraN0;
-        NodesOfPoly(T0,TetraN0);
+        Field::FrameFieldGraph::NodesOfPoly(T0,TetraN0);
         std::vector<int> TetraN1;
-        NodesOfPoly(T1,TetraN1);
+        Field::FrameFieldGraph::NodesOfPoly(T1,TetraN1);
         assert(TetraN0.size()==6);
         assert(TetraN0.size()==TetraN1.size());
 
@@ -241,7 +241,7 @@ private:
             int SourceSetN0=S.WhichSource(SourceN0);
             assert(SourceSetN0!=-1);
             assert((SourceSetN0==0)||(SourceSetN0==1));
-            int IndexFDir0=FrameOfNode(IndexN0);
+            int IndexFDir0=Field::FrameFieldGraph::FrameOfNode(IndexN0);
             for (size_t j=0;j<TetraN1.size();j++)
             {
                 int IndexN1=TetraN1[j];
@@ -265,7 +265,7 @@ private:
                 if (SourceSetN0==SourceSetN1)continue;
 
                 //otherwise check directions
-                int IndexFDir1=FrameOfNode(IndexN1);
+                int IndexFDir1=Field::FrameFieldGraph::FrameOfNode(IndexN1);
 
                 //if they are orthogonal does not care
                 Field::RelationType Rel0=Field::FrameRelationDir(FT0,IndexFDir0,FT1,IndexFDir1);
@@ -964,14 +964,14 @@ public:
         S.Clear();
 
         //get the current node of the tetra
-        int IndexN0=NodeOfPolyFrame(IndexT,IndexDir);
+        int IndexN0=Field::FrameFieldGraph::NodeOfPolyFrame(IndexT,IndexDir);
 
         //if not enabled return true (maybe to change in assert?)
         if(!TGraph.EnabledN[IndexN0])return false;
 
         //get oposite node
         int IndexN1=-1;
-        int IndexOppN0=OppositeNodeFrameField(IndexN0);
+        int IndexOppN0=Field::FrameFieldGraph::OppositeNodeFrameField(IndexN0);
 
         //then get the closest node
         IndexN1=TGraph.FirstActiveNeigh(IndexOppN0);
@@ -984,8 +984,8 @@ public:
         //then get the ortho nodes
         if (useOrtho)
         {
-            OrthoNodesFrameField(IndexN0,S.SourceNode0);
-            OrthoNodesFrameField(IndexN1,S.SourceNode1);
+            Field::FrameFieldGraph::OrthoNodesFrameField(IndexN0,S.SourceNode0);
+            Field::FrameFieldGraph::OrthoNodesFrameField(IndexN1,S.SourceNode1);
         }
 
         //add the opposite
@@ -1153,8 +1153,8 @@ public:
                     int IndexN0=S.NodeSide0[NeighIdx];
                     int IndexN1=S.NodeSide1[NeighIdx];
 
-                    bool AreCoherent0=AreDirectionCoherent(FrameField,CurrN0,IndexN0);
-                    bool AreCoherent1=AreDirectionCoherent(FrameField,CurrN1,IndexN1);
+                    bool AreCoherent0=Field::FrameFieldGraph::AreDirectionCoherent(FrameField,CurrN0,IndexN0);
+                    bool AreCoherent1=Field::FrameFieldGraph::AreDirectionCoherent(FrameField,CurrN1,IndexN1);
 
                     if (!AreCoherent0)continue;
                     if (!AreCoherent1)continue;

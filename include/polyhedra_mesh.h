@@ -8,6 +8,7 @@
 #include <map>
 #include "point3.h"
 #include "box3.h"
+#include "connectivity.h"
 
 namespace Tetra
 {
@@ -415,6 +416,53 @@ void GetVPAdjacency(const size_t numV,const std::vector<std::vector<int> > &Conn
             assert(currV<(int)VPAdjacency.size());
             VPAdjacency[currV].push_back(std::pair<int,int>(i,j));
         }
+}
+
+void GetPPKernelAlongVertices(const size_t numV,
+                              const std::vector<std::vector<int> > &Connectivity,
+                              std::vector<std::vector<int> > &Adjacency,
+                              int diffuse_step=0)
+{
+    assert(diffuse_step==0);//to be implemented
+
+    std::vector<std::vector<std::pair<int,int> > > VPAdjacency;
+    Tetra::GetVPAdjacency(numV,Connectivity,VPAdjacency);
+
+    Adjacency.clear();
+    Adjacency.resize(Connectivity.size());
+
+    for (size_t i=0;i<VPAdjacency.size();i++)
+    {
+        std::vector<int>  Polys;
+        for (size_t j=0;j<VPAdjacency[i].size();j++)
+            Polys.push_back(VPAdjacency[i][j].first);
+
+        for (size_t k=0;k<Polys.size();k++)
+            for (size_t w=0;w<Polys.size();w++)
+            {
+                if (k==w)continue;
+                int IndexP0=Polys[k];
+                int IndexP1=Polys[w];
+                assert(IndexP0!=IndexP1);
+                assert(IndexP0>=0);
+                assert(IndexP1>=0);
+                assert(IndexP0<(int)Adjacency.size());
+                assert(IndexP1<(int)Adjacency.size());
+                Adjacency[IndexP0].push_back(IndexP1);
+                Adjacency[IndexP1].push_back(IndexP0);
+            }
+    }
+
+    //remove duplicates
+    for (size_t i=0;i<Adjacency.size();i++)
+    {
+        std::sort(Adjacency[i].begin(),Adjacency[i].end());
+        std::vector<int>::iterator last = std::unique(Adjacency[i].begin(),Adjacency[i].end());
+        Adjacency[i].erase(last, Adjacency[i].end());
+    }
+
+    if (diffuse_step>0)
+        Geo::ExtendStar(Adjacency,diffuse_step);
 }
 
 void FFExternalMesh(const std::vector<std::vector<int> > &Connectivity,

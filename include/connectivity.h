@@ -9,34 +9,64 @@
 namespace Geo
 {
 
-void ExtendStar( std::vector<std::vector<int> > &Kernel)
+//void ExtendStar( std::vector<std::vector<int> > &Kernel, int step)
+//{
+//    std::vector<std::vector<int>  > NewVertexKernels;
+//    NewVertexKernels.resize(Kernel.size());
+//    for (size_t i=0;i<Kernel.size();i++)
+//    {
+//        NewVertexKernels[i].push_back(i);
+//        for (size_t j=0;j<Kernel[i].size();j++)
+//        {
+//            int NeighV=Kernel[i][j];
+//            NewVertexKernels[i].push_back(NeighV);
+//            NewVertexKernels[i].insert(NewVertexKernels[i].end(),
+//                                       Kernel[NeighV].begin(),
+//                                       Kernel[NeighV].end());
+//        }
+//    }
+//    Kernel=NewVertexKernels;
+//    for (size_t i=0;i<Kernel.size();i++)
+//    {
+//        std::sort(Kernel[i].begin(),Kernel[i].end());
+//        auto last = std::unique(Kernel[i].begin(),Kernel[i].end());
+//        Kernel[i].erase(last, Kernel[i].end());
+//    }
+//}
+
+void ExtendStar( std::vector<std::vector<int> > &Kernel, int steps)
 {
-    std::vector<std::vector<int>  > NewVertexKernels;
-    NewVertexKernels.resize(Kernel.size());
-    for (size_t i=0;i<Kernel.size();i++)
+    std::vector<std::vector<int>  > Kernel0=Kernel;
+    //NewVertexKernels.resize(Kernel.size());
+    for (int s=0;s<steps;s++)
     {
-        NewVertexKernels[i].push_back(i);
-        for (size_t j=0;j<Kernel[i].size();j++)
+        std::vector<std::vector<int>  > VertexKernel=Kernel;
+        for (size_t i=0;i<VertexKernel.size();i++)
         {
-            int NeighV=Kernel[i][j];
-            NewVertexKernels[i].push_back(NeighV);
-            NewVertexKernels[i].insert(NewVertexKernels[i].end(),
-                                       Kernel[NeighV].begin(),
-                                       Kernel[NeighV].end());
+            for (size_t j=0;j<VertexKernel[i].size();j++)
+            {
+                int NeighV=VertexKernel[i][j];
+                for (size_t k=0;k<Kernel0[NeighV].size();k++)
+                {
+                    if (Kernel0[NeighV][k]!=(int)i)
+                        Kernel[i].push_back(Kernel0[NeighV][k]);
+                }
+            }
         }
-    }
-    Kernel=NewVertexKernels;
-    for (size_t i=0;i<Kernel.size();i++)
-    {
-        std::sort(Kernel[i].begin(),Kernel[i].end());
-        auto last = std::unique(Kernel[i].begin(),Kernel[i].end());
-        Kernel[i].erase(last, Kernel[i].end());
+        //Kernel=NewVertexKernel;
+        for (size_t i=0;i<Kernel.size();i++)
+        {
+            std::sort(Kernel[i].begin(),Kernel[i].end());
+            auto last = std::unique(Kernel[i].begin(),Kernel[i].end());
+            Kernel[i].erase(last, Kernel[i].end());
+        }
     }
 }
 
 void FindVertexStar(const std::vector<std::vector<int> > &connections,
                     const size_t NumVert,
-                    std::vector<std::vector<int> > &Kernel)
+                    std::vector<std::vector<int> > &Kernel,
+                    const int extend_step=0)
 {
     Kernel.clear();
     Kernel.resize(NumVert);
@@ -74,6 +104,9 @@ void FindVertexStar(const std::vector<std::vector<int> > &connections,
             assert(std::find(Kernel[IndexV1].begin(), Kernel[IndexV1].end(), IndexV0) != Kernel[IndexV1].end());
         }
     }
+
+    if (extend_step>0)
+        ExtendStar(Kernel,extend_step);
 }
 
 void FindVertexStar(const std::vector<std::vector<int> > &connections,
@@ -83,20 +116,12 @@ void FindVertexStar(const std::vector<std::vector<int> > &connections,
     int NumV=0;
     for (size_t i=0;i<connections.size();i++)
         for (size_t j=0;j<connections[i].size();j++)
-          NumV=std::max(NumV,connections[i][j]);
+            NumV=std::max(NumV,connections[i][j]);
 
     NumV++;//num vertices is bigger index +1
 
-    FindVertexStar(connections,NumV,Kernel);
-
-    for (int i=0;i<extend_step;i++)
-        ExtendStar(Kernel);
+    FindVertexStar(connections,NumV,Kernel,extend_step);
 }
-
-
-
-
-
 
 //void FindFacexStar(const std::vector<std::vector<int> > &Faces,
 //                   const std::vector<std::vector<int> > &NextF,
@@ -230,15 +255,15 @@ void getFFAdjacencyNonManifold(const std::vector<std::vector<int> > &Faces,
             {
                 int IndexF0=EdgeVect[i].second[j].first;
                 int IndexE0=EdgeVect[i].second[j].second;
-                 for(size_t k=0;k<EdgeVect[i].second.size();k++)
-                 {
-                     if (j==k)continue;
-                     int IndexF1=EdgeVect[i].second[k].first;
-                     int IndexE1=EdgeVect[i].second[k].second;
-                     assert(IndexF0!=IndexF1);
-                     NextF[IndexF0][IndexE0].push_back(IndexF1);
-                     NextE[IndexF0][IndexE0].push_back(IndexE1);
-                 }
+                for(size_t k=0;k<EdgeVect[i].second.size();k++)
+                {
+                    if (j==k)continue;
+                    int IndexF1=EdgeVect[i].second[k].first;
+                    int IndexE1=EdgeVect[i].second[k].second;
+                    assert(IndexF0!=IndexF1);
+                    NextF[IndexF0][IndexE0].push_back(IndexF1);
+                    NextE[IndexF0][IndexE0].push_back(IndexE1);
+                }
             }
         }
     }
@@ -259,28 +284,28 @@ void FindFaceStar(const std::vector<std::vector<int> > &connections,
         for (size_t j=0;j<NextF[i].size();j++)
             if (NextF[i][j]!=-1)Kernel[i].push_back(NextF[i][j]);
 
-    for (int i=0;i<extend_step;i++)
-        ExtendStar(Kernel);
+//    for (int i=0;i<extend_step;i++)
+    ExtendStar(Kernel,extend_step);
 }
 
 void getBorderVert(const std::vector<std::vector<int> > &connections,
                    const std::vector<std::vector<int> > &NextF,
                    std::vector<size_t> &BorderV)
 {
-        BorderV.clear();
-        for (size_t i=0;i<NextF.size();i++)
-            for (size_t j=0;j<NextF[i].size();j++)
-            {
-                if (NextF[i][j]!=-1)continue;
-                int numV=connections[i].size();
-                int IndexV0=connections[i][j];
-                int IndexV1=connections[i][(j+1)%numV];
-                BorderV.push_back(IndexV0);
-                BorderV.push_back(IndexV1);
-            }
-        std::sort(BorderV.begin(),BorderV.end());
-        std::vector<size_t>::iterator last = std::unique(BorderV.begin(), BorderV.end());
-        BorderV.erase(last, BorderV.end());
+    BorderV.clear();
+    for (size_t i=0;i<NextF.size();i++)
+        for (size_t j=0;j<NextF[i].size();j++)
+        {
+            if (NextF[i][j]!=-1)continue;
+            int numV=connections[i].size();
+            int IndexV0=connections[i][j];
+            int IndexV1=connections[i][(j+1)%numV];
+            BorderV.push_back(IndexV0);
+            BorderV.push_back(IndexV1);
+        }
+    std::sort(BorderV.begin(),BorderV.end());
+    std::vector<size_t>::iterator last = std::unique(BorderV.begin(), BorderV.end());
+    BorderV.erase(last, BorderV.end());
 }
 
 void getBorderVert(const std::vector<std::vector<int> > &connections,

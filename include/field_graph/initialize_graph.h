@@ -6,9 +6,13 @@
 #include <stdio.h>
 #include "../point3.h"
 #include "../frame_field.h"
+#include "../cross_field.h"
 #include "../polyhedra_mesh.h"
 #include "graph.h"
 #include "graph_frame_field.h"
+#include "graph_cross_field.h"
+#include "connectivity.h"
+#include "best_rotation.h"
 
 namespace Geo
 {
@@ -28,25 +32,15 @@ class TragingGraphFunctions
         return (val);//*Weight;
     }
 
-    static bool IsVisible(const Field::FrameField<ScalarType> &F0,
-                          const Field::FrameField<ScalarType> &F1,
-                          const int Dir0,const int Dir1,
+    static bool IsVisible(const Geo::Point3<ScalarType> &P0,
+                          const Geo::Point3<ScalarType> &P1,
+                          const Geo::Point3<ScalarType> &D0,
+                          const Geo::Point3<ScalarType> &D1,
                           const ScalarType &drift_penalty,
                           const ScalarType maxAngle,
                           ScalarType &EdgeW)
     {
-        assert(Dir0>=0);
-        assert(Dir1>=0);
-        assert(Dir0<6);
-        assert(Dir1<6);
-
-        EdgeW=-1;
-        Geo::Point3<ScalarType> P0=F0.Pos;
-        Geo::Point3<ScalarType> P1=F1.Pos;
-        Geo::Point3<ScalarType> D0=F0.GetDirection(Dir0);
-        Geo::Point3<ScalarType> D1=F1.GetDirection(Dir1);
         assert(Dot<ScalarType>(D0,D1)>=0);
-
         Geo::Point3<ScalarType> AvgP=(P0+P1)/(ScalarType)2;
         Geo::Point3<ScalarType> AvgD=(D0+D1)/(ScalarType)2;
 
@@ -60,17 +54,61 @@ class TragingGraphFunctions
         return true;
     }
 
-    static int AddAdjacency(TracingGraph<ScalarType> &TGraph,
-                            const int IndexN0,
-                            const std::vector<std::vector<int> > &Adjacency,
-                            const std::vector<Field::FrameField<ScalarType> > &FrameField,
-                            const ScalarType &drift_penalty,
-                            const ScalarType maxAngle)
+    static bool IsVisibleCross(const Field::CrossF<ScalarType> &F0,
+                               const Field::CrossF<ScalarType> &F1,
+                               const int Dir0,const int Dir1,
+                               const ScalarType &drift_penalty,
+                               const ScalarType maxAngle,
+                               ScalarType &EdgeW)
+    {
+        assert(Dir0>=0);
+        assert(Dir1>=0);
+        assert(Dir0<4);
+        assert(Dir1<4);
+
+        EdgeW=-1;
+        Geo::Point3<ScalarType> P0=F0.Pos;
+        Geo::Point3<ScalarType> P1=F1.Pos;
+        Geo::Point3<ScalarType> D0=F0.GetDirection(Dir0);
+        Geo::Point3<ScalarType> D1=F1.GetDirection(Dir1);
+        D0.Normalize();
+        D1.Normalize();
+        return (IsVisible(P0,P1,D0,D1,drift_penalty,maxAngle,EdgeW));
+    }
+
+    static bool IsVisibleFrame(const Field::FrameField<ScalarType> &F0,
+                               const Field::FrameField<ScalarType> &F1,
+                               const int Dir0,const int Dir1,
+                               const ScalarType &drift_penalty,
+                               const ScalarType maxAngle,
+                               ScalarType &EdgeW)
+    {
+        assert(Dir0>=0);
+        assert(Dir1>=0);
+        assert(Dir0<6);
+        assert(Dir1<6);
+
+        EdgeW=-1;
+        Geo::Point3<ScalarType> P0=F0.Pos;
+        Geo::Point3<ScalarType> P1=F1.Pos;
+        Geo::Point3<ScalarType> D0=F0.GetDirection(Dir0);
+        Geo::Point3<ScalarType> D1=F1.GetDirection(Dir1);
+        D0.Normalize();
+        D1.Normalize();
+        return (IsVisible(P0,P1,D0,D1,drift_penalty,maxAngle,EdgeW));
+    }
+
+    static int AddAdjacencyFrame(TracingGraph<ScalarType> &TGraph,
+                                 const int IndexN0,
+                                 const std::vector<std::vector<int> > &Adjacency,
+                                 const std::vector<Field::FrameField<ScalarType> > &FrameField,
+                                 const ScalarType &drift_penalty,
+                                 const ScalarType maxAngle)
     {
         //get the index of polihedron
-        int IndexPoly0=PolyOfNode(IndexN0);
+        int IndexPoly0=Field::FrameFieldGraph::PolyOfNode(IndexN0);
         //and the current direction
-        int IndexDir0=FrameOfNode(IndexN0);
+        int IndexDir0=Field::FrameFieldGraph::FrameOfNode(IndexN0);
 
         assert(IndexPoly0<Adjacency.size());
         assert(IndexPoly0>=0);
@@ -94,13 +132,13 @@ class TragingGraphFunctions
             assert(IndexDir1>=0);
 
             //then get the new node
-            int IndexN1=NodeOfPolyFrame(IndexPoly1,IndexDir1);
+            int IndexN1=Field::FrameFieldGraph::NodeOfPolyFrame(IndexPoly1,IndexDir1);
 
 
             //CHECK VISIBILITY
             ScalarType EdgeW;
-            if (!IsVisible(FrameField[IndexPoly0],FrameField[IndexPoly1],
-                           IndexDir0,IndexDir1,drift_penalty,maxAngle,EdgeW))
+            if (!IsVisibleFrame(FrameField[IndexPoly0],FrameField[IndexPoly1],
+                                IndexDir0,IndexDir1,drift_penalty,maxAngle,EdgeW))
                 continue;
 
             TGraph.N[IndexN0].push_back(IndexN1);
@@ -109,10 +147,59 @@ class TragingGraphFunctions
         return (TGraph.N[IndexN0].size());
     }
 
-    static void SetNodeType(TracingGraph<ScalarType> &TGraph,
-                            const std::vector<std::vector<int> > &PolyConnectivity,
-                            const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                            const std::vector<Field::FrameField<ScalarType> > &FrameField)
+    static int AddAdjacencyCross(TracingGraph<ScalarType> &TGraph,
+                                 const int IndexN0,
+                                 const std::vector<std::vector<int> > &Adjacency,
+                                 const std::vector<Field::CrossF<ScalarType> > &CrossField,
+                                 const ScalarType &drift_penalty,
+                                 const ScalarType maxAngle)
+    {
+        //get the index of polihedron
+        int IndexFace0=Field::CrossFieldGraph::ElemOfNode(IndexN0);
+        //and the current direction
+        int IndexDir0=Field::CrossFieldGraph::DirOfNode(IndexN0);
+
+        assert(IndexFace0<Adjacency.size());
+        assert(IndexFace0>=0);
+        assert(IndexDir0<4);
+        assert(IndexDir0>=0);
+
+        //then get all possible neighbours
+        for (size_t j=0;j<Adjacency[IndexFace0].size();j++)
+        {
+            //get the index of polihedron
+            int IndexFace1=Adjacency[IndexFace0][j];
+            assert(IndexFace1<CrossField.size());
+            assert(IndexFace1>=0);
+
+            //and the current direction
+            int IndexDir1=CrossField[IndexFace1].FollowDirection(CrossField[IndexFace0],IndexDir0);
+
+            assert(IndexFace1<Adjacency.size());
+            assert(IndexDir1>=0);
+            assert(IndexDir1<4);
+            assert(IndexDir1>=0);
+
+            //then get the new node
+            int IndexN1=Field::CrossFieldGraph::NodeOfElemDir(IndexFace1,IndexDir1);
+
+
+            //CHECK VISIBILITY
+            ScalarType EdgeW;
+            if (!IsVisibleCross(CrossField[IndexFace0],CrossField[IndexFace1],
+                                IndexDir0,IndexDir1,drift_penalty,maxAngle,EdgeW))
+                continue;
+
+            TGraph.N[IndexN0].push_back(IndexN1);
+            TGraph.W[IndexN0].push_back(EdgeW);
+        }
+        return (TGraph.N[IndexN0].size());
+    }
+
+    static void SetNodeTypeFrame(TracingGraph<ScalarType> &TGraph,
+                                 const std::vector<std::vector<int> > &PolyConnectivity,
+                                 const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                 const std::vector<Field::FrameField<ScalarType> > &FrameField)
     {
         std::vector<Geo::Point3<ScalarType> > VertNormals;
 
@@ -148,17 +235,117 @@ class TragingGraphFunctions
             DirOppT1=Field::OppositeFrameDir(DirT1);
 
             //then remove negibours
-            int NodeN=NodeOfPolyFrame(IndexP,DirN);
-            int NodeT0=NodeOfPolyFrame(IndexP,DirT0);
-            int NodeT1=NodeOfPolyFrame(IndexP,DirT1);
-            int NodeT0Opp=NodeOfPolyFrame(IndexP,DirOppT0);
-            int NodeT1Opp=NodeOfPolyFrame(IndexP,DirOppT1);
+            int NodeN=Field::FrameFieldGraph::NodeOfPolyFrame(IndexP,DirN);
+            int NodeT0=Field::FrameFieldGraph::NodeOfPolyFrame(IndexP,DirT0);
+            int NodeT1=Field::FrameFieldGraph::NodeOfPolyFrame(IndexP,DirT1);
+            int NodeT0Opp=Field::FrameFieldGraph::NodeOfPolyFrame(IndexP,DirOppT0);
+            int NodeT1Opp=Field::FrameFieldGraph::NodeOfPolyFrame(IndexP,DirOppT1);
 
             TGraph.NodeType(NodeN)=ExitDomain;
             TGraph.NodeType(NodeT0)=TangentDomain;
             TGraph.NodeType(NodeT1)=TangentDomain;
             TGraph.NodeType(NodeT0Opp)=TangentDomain;
             TGraph.NodeType(NodeT1Opp)=TangentDomain;
+        }
+
+    }
+
+    static void GetVertParallelExitDir(const std::vector<std::vector<int> > &FaceConnectivity,
+                                       const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                       std::vector<std::vector<Geo::Point3<ScalarType> > > &BorderVDirs,
+                                       std::vector<Geo::Point3<ScalarType> > &BorderExitVDirs)
+    {
+        ScalarType eps=0.0000001;
+        //update Normals
+        std::vector<Point3<ScalarType> > FaceNormals;
+        std::vector<Point3<ScalarType> > VertNormals;
+        Geo::ComputeNormals(VertPos,FaceConnectivity,FaceNormals,VertNormals);
+
+        std::vector<std::vector<int> > NextF,NextE;
+        Geo::getFFAdjacency(FaceConnectivity,NextF,NextE);
+
+        BorderVDirs.resize(VertPos.size());
+        BorderExitVDirs.resize(VertPos.size(),Geo::Point3<ScalarType>(0,0,0));
+
+        for (size_t i=0;i<NextF.size();i++)
+            for (size_t j=0;j<NextF[i].size();j++)
+            {
+                if (NextF[i][j]!=-1)continue;//only border
+                int sizeF=FaceConnectivity[i].size();
+                int IndexV0=FaceConnectivity[i][j];
+                int IndexV1=FaceConnectivity[i][(j+1)%sizeF];
+                assert(IndexV0!=IndexV1);
+                assert(IndexV0>=0);
+                assert(IndexV1>=0);
+                assert(IndexV0<VertPos.size());
+                assert(IndexV1<VertPos.size());
+                Geo::Point3<ScalarType> Pos0=VertPos[IndexV0];
+                Geo::Point3<ScalarType> Pos1=VertPos[IndexV1];
+                Geo::Point3<ScalarType> Dir=Pos1-Pos0;
+                Dir.Normalize();
+
+                //bring the vector in the right space
+                Geo::Point3<ScalarType> NormF=FaceNormals[i];
+                Geo::Point3<ScalarType> Norm0=VertNormals[IndexV0];
+                Geo::Point3<ScalarType> Norm1=VertNormals[IndexV1];
+                assert(fabs(NormF.Norm()-1)<eps);
+                assert(fabs(Norm0.Norm()-1)<eps);
+                assert(fabs(Norm1.Norm()-1)<eps);
+                Eigen::Matrix3<ScalarType> Rot0=Geo::PointMatch<ScalarType>::BestRotationMatrix(NormF,Norm0);
+                Eigen::Matrix3<ScalarType> Rot1=Geo::PointMatch<ScalarType>::BestRotationMatrix(NormF,Norm0);
+
+                //the direction should point on the other side in this case for IndexV1
+                Geo::Point3<ScalarType> Dir0=Rot0*Dir;
+                Geo::Point3<ScalarType> Dir1=Rot1*(Dir);
+                BorderVDirs[IndexV0].push_back(Dir0);
+                BorderVDirs[IndexV1].push_back(-Dir1);
+
+                //then compute the opposite direction, but should always turn the same side
+                Geo::Point3<ScalarType> Opp0=Cross(Dir0,NormF);
+                Geo::Point3<ScalarType> Opp1=Cross(Dir1,NormF);
+                Opp0.Normalize();
+                Opp1.Normalize();
+                BorderExitVDirs[IndexV0]+=Opp0;
+                BorderExitVDirs[IndexV1]+=Opp1;
+            }
+
+        for (size_t i=0;i<BorderExitVDirs.size();i++)
+            BorderExitVDirs[i].Normalize();
+    }
+
+    static void SetNodeTypeVertCross(TracingGraph<ScalarType> &TGraph,
+                                     const std::vector<std::vector<int> > &FaceConnectivity,
+                                     const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                     const std::vector<Field::CrossF<ScalarType> > &CrossField)
+    {
+        std::vector<std::vector<Geo::Point3<ScalarType> > > BorderVDirs;
+        std::vector<Geo::Point3<ScalarType> > BorderExitVDirs;
+        GetVertParallelExitDir(FaceConnectivity,VertPos,BorderVDirs,BorderExitVDirs);
+
+        assert(BorderVDirs.size()==VertPos.size());
+        assert(BorderExitVDirs.size()==VertPos.size());
+        assert(CrossField.size()==VertPos.size());
+        for (size_t i=0;i<VertPos.size();i++)
+        {
+           if (BorderVDirs[i].size()==0)continue;
+
+           //set the exit dir
+           assert(BorderExitVDirs[i]!=Geo::Point3<ScalarType>(0,0,0));
+           int ExitDirIdx=CrossField[i].BestDirectionI(BorderExitVDirs[i]);
+           assert(ExitDirIdx>=0);
+           assert(ExitDirIdx<4);
+           int IndexNOpp=Field::CrossFieldGraph::NodeOfElemDir(i,ExitDirIdx);
+           TGraph.NodeType(IndexNOpp)=ExitDomain;
+
+           for (size_t j=0;j<BorderVDirs[i].size();j++)
+           {
+               assert(BorderVDirs[i][j]!=Geo::Point3<ScalarType>(0,0,0));
+               int BorderDirIdx=CrossField[i].BestDirectionI(BorderVDirs[i][j]);
+               assert(BorderDirIdx>=0);
+               assert(BorderDirIdx<4);
+               int IndexNBord=Field::CrossFieldGraph::NodeOfElemDir(i,BorderDirIdx);
+               TGraph.NodeType(IndexNBord)=TangentDomain;
+           }
         }
     }
 
@@ -176,27 +363,30 @@ class TragingGraphFunctions
             ScalarType CurrA=maxAngle;
             do{
                 CurrA+=10;
-                AddedN=AddAdjacency(TGraph,(int)i,Adjacency,FrameField,drift_penalty,CurrA);
+                AddedN=AddAdjacencyFrame(TGraph,(int)i,Adjacency,FrameField,drift_penalty,CurrA);
             }while ((AddedN==0)&&(CurrA<270));
             if (AddedN==0)
                 std::cout<<"WARNING INTERNAL SINK"<<std::endl;
         }
     }
 
-    static void RemoveBorderPolyField(TracingGraph<ScalarType> &TGraph)
+    static void RemoveBorderExitNeigh(TracingGraph<ScalarType> &TGraph,
+                                      bool RemoveTangent=true)
     {
         for (size_t i=0;i<TGraph.NumNodes();i++)
         {
-            if (TGraph.NodeType(i)==ExitDomain)//||(TGraph.NodeType(i)==TangentDomain))
+            if (TGraph.NodeType(i)==ExitDomain)
+                TGraph.RemoveNeighbours(i);
+            if ((RemoveTangent)&&(TGraph.NodeType(i)==TangentDomain))
                 TGraph.RemoveNeighbours(i);
         }
     }
 
-    static void InitAdjacencyFromPolyField(TracingGraph<ScalarType> &TGraph,
-                                           const std::vector<std::vector<int> > &Adjacency,
-                                           const std::vector<Field::FrameField<ScalarType> > &FrameField,
-                                           const ScalarType &drift_penalty,
-                                           const ScalarType maxAngle)
+    static void InitAdjacencyFromPolyFrameField(TracingGraph<ScalarType> &TGraph,
+                                                const std::vector<std::vector<int> > &Adjacency,
+                                                const std::vector<Field::FrameField<ScalarType> > &FrameField,
+                                                const ScalarType &drift_penalty,
+                                                const ScalarType maxAngle)
     {
 
         //instanciate 6 nodes per each frame (one for each direction)
@@ -207,74 +397,77 @@ class TragingGraphFunctions
 
         //for each node
         for (size_t i=0;i<TGraph.N.size();i++)
-            AddAdjacency(TGraph,(int)i,Adjacency,FrameField,drift_penalty,maxAngle);
+            AddAdjacencyFrame(TGraph,(int)i,Adjacency,FrameField,drift_penalty,maxAngle);
+
+        TGraph.SortAllNeighbyW();
+    }
+
+    static void InitAdjacencyFromVertCrossField(TracingGraph<ScalarType> &TGraph,
+                                                const std::vector<std::vector<int> > &Adjacency,
+                                                const std::vector<Field::CrossF<ScalarType> > &CrossField,
+                                                const ScalarType &drift_penalty,
+                                                const ScalarType maxAngle)
+    {
+
+        //instanciate 6 nodes per each frame (one for each direction)
+        TGraph.N.resize(CrossField.size()*4);
+        TGraph.W.resize(CrossField.size()*4);
+
+        TGraph.NT.clear();
+        TGraph.NT.resize(TGraph.N.size(),Internal);
+
+        //for each node
+        for (size_t i=0;i<TGraph.N.size();i++)
+            AddAdjacencyCross(TGraph,(int)i,Adjacency,CrossField,drift_penalty,maxAngle);
 
         TGraph.SortAllNeighbyW();
     }
 
 public:
 
-    static void GetGraphComplexAdjacency(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                                         const std::vector<std::vector<int> > &PolyConnectivity,
-                                         std::vector<std::vector<int> > &Adjacency,
-                                         size_t diffuse_step=0)
+    static void InitFromVertCrossField(TracingGraph<ScalarType> &TGraph,
+                                       const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                       const std::vector<std::vector<int> > &Faces,
+                                       const std::vector<Field::CrossF<ScalarType> > &CrossField,
+                                       const ScalarType &drift_penalty=100,
+                                       const ScalarType maxAngle=45,
+                                       const size_t diffuse_step=0)
     {
-        assert(diffuse_step==0);//to be implemented
+        TGraph.Clear();
+        assert(VertPos.size()==CrossField.size());
+        std::vector<std::vector<int> > Adjacency;
+        Geo::FindVertexStar(Faces,Adjacency,diffuse_step);
 
-        std::vector<std::vector<std::pair<int,int> > > VPAdjacency;
-        Tetra::GetVPAdjacency(VertPos.size(),PolyConnectivity,VPAdjacency);
+        InitAdjacencyFromVertCrossField(TGraph,Adjacency,CrossField,drift_penalty,maxAngle);
 
-        Adjacency.clear();
-        Adjacency.resize(PolyConnectivity.size());
+        SetNodeTypeVertCross(TGraph,Faces,VertPos,CrossField);
+        RemoveBorderExitNeigh(TGraph);
 
-        for (size_t i=0;i<VPAdjacency.size();i++)
-        {
-            std::vector<int>  Polys;
-            for (size_t j=0;j<VPAdjacency[i].size();j++)
-                Polys.push_back(VPAdjacency[i][j].first);
 
-            for (size_t k=0;k<Polys.size();k++)
-                for (size_t w=0;w<Polys.size();w++)
-                {
-                    if (k==w)continue;
-                    int IndexP0=Polys[k];
-                    int IndexP1=Polys[w];
-                    assert(IndexP0!=IndexP1);
-                    assert(IndexP0>=0);
-                    assert(IndexP1>=0);
-                    assert(IndexP0<Adjacency.size());
-                    assert(IndexP1<Adjacency.size());
-                    Adjacency[IndexP0].push_back(IndexP1);
-                    Adjacency[IndexP1].push_back(IndexP0);
-                }
-        }
-
-        //remove duplicates
-        for (size_t i=0;i<Adjacency.size();i++)
-        {
-            std::sort(Adjacency[i].begin(),Adjacency[i].end());
-            std::vector<int>::iterator last = std::unique(Adjacency[i].begin(),Adjacency[i].end());
-            Adjacency[i].erase(last, Adjacency[i].end());
-        }
+        TGraph.InitTracing();
+        TGraph.SortAllNeighbyW();
     }
 
-    static void InitFromPolyField(TracingGraph<ScalarType> &TGraph,
-                                  const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                                  const std::vector<std::vector<int> > &PolyConnectivity,
-                                  const std::vector<Field::FrameField<ScalarType> > &FrameField,
-                                  const ScalarType &drift_penalty=100,
-                                  const ScalarType maxAngle=45,
-                                  const size_t diffuse_step=0)
+    static void InitFromPolyFrameField(TracingGraph<ScalarType> &TGraph,
+                                       const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                       const std::vector<std::vector<int> > &PolyConnectivity,
+                                       const std::vector<Field::FrameField<ScalarType> > &FrameField,
+                                       const ScalarType &drift_penalty=100,
+                                       const ScalarType maxAngle=45,
+                                       const size_t diffuse_step=0)
     {
         TGraph.Clear();
 
         assert(PolyConnectivity.size()==FrameField.size());
         std::vector<std::vector<int> > Adjacency;
-        GetGraphComplexAdjacency(VertPos,PolyConnectivity,Adjacency,diffuse_step);
-        InitAdjacencyFromPolyField(TGraph,Adjacency,FrameField,drift_penalty,maxAngle);
+        //GetGraphComplexAdjacency(VertPos,PolyConnectivity,Adjacency,diffuse_step);
+        Tetra::GetPPKernelAlongVertices(VertPos.size(),PolyConnectivity,Adjacency,diffuse_step);
 
-        SetNodeType(TGraph,PolyConnectivity,VertPos,FrameField);
-        RemoveBorderPolyField(TGraph);
+        InitAdjacencyFromPolyFrameField(TGraph,Adjacency,FrameField,drift_penalty,maxAngle);
+
+        SetNodeTypeFrame(TGraph,PolyConnectivity,VertPos,FrameField);
+        //RemoveBorderPolyField(TGraph);
+        RemoveBorderExitNeigh(TGraph,false);
 
         FixNonExitSink(TGraph,Adjacency,FrameField,drift_penalty,maxAngle);
 

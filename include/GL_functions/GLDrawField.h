@@ -13,19 +13,17 @@ namespace GLDraw
 {
 
 template <class ScalarType>
-void DrawDirection(const Field::FrameField<ScalarType> &F,
-                   const int Dir,
-                   const ScalarType scaleVal,
-                   const ScalarType moveVal,
-                   Geo::Point3<ScalarType> Col0=Geo::Point3<ScalarType>(0,0,1),
-                   Geo::Point3<ScalarType> Col1=Geo::Point3<ScalarType>(0.5,0.9,0.5),
-                   ScalarType pointSize=10.f,
-                   ScalarType lineSize=3.f)
+void DrawDirectionVect(const Geo::Point3<ScalarType> &P0,
+                       const Geo::Point3<ScalarType> &Dir,
+                       const ScalarType scaleVal,
+                       const ScalarType moveVal,
+                       Geo::Point3<ScalarType> Col0=Geo::Point3<ScalarType>(0,0,1),
+                       Geo::Point3<ScalarType> Col1=Geo::Point3<ScalarType>(0.5,0.9,0.5),
+                       ScalarType pointSize=10.f,
+                       ScalarType lineSize=3.f)
 {
-    Geo::Point3<ScalarType> P0=F.Pos;
-    Geo::Point3<ScalarType> CurrDir=F.GetDirection(Dir);
-    Geo::Point3<ScalarType> P1=P0+CurrDir*scaleVal;
-    P0=P0+(P1-P0)*moveVal;
+    Geo::Point3<ScalarType> P_1=P0+Dir*scaleVal;
+    Geo::Point3<ScalarType> P_0=P0+(P_1-P0)*moveVal;
 
     glDisable(GL_LIGHTING);
     glLineWidth(lineSize);
@@ -33,22 +31,57 @@ void DrawDirection(const Field::FrameField<ScalarType> &F,
 
     glColor3f((float)Col0.X,(float)Col0.Y,(float)Col0.Z);
     glBegin(GL_POINTS);
-    glVertex(P0);
+    glVertex(P_0);
     glEnd();
 
     glColor3f((float)Col1.X,(float)Col1.Y,(float)Col1.Z);
     glBegin(GL_LINES);
-    glVertex(P0);
-    glVertex(P1);
+    glVertex(P_0);
+    glVertex(P_1);
     glEnd();
 }
 
 template <class ScalarType>
-void DrawDirection(const Field::CrossF<ScalarType> &F,
-                   const int Dir,
-                   const ScalarType lineLen,
-                   const ScalarType lineWidth,
-                   Geo::Point3<ScalarType> Col)
+void DrawDirectionFrame(const Field::FrameField<ScalarType> &F,
+                        const int Dir,
+                        const ScalarType scaleVal,
+                        const ScalarType moveVal,
+                        Geo::Point3<ScalarType> Col0=Geo::Point3<ScalarType>(0,0,1),
+                        Geo::Point3<ScalarType> Col1=Geo::Point3<ScalarType>(0.5,0.9,0.5),
+                        ScalarType pointSize=10.f,
+                        ScalarType lineSize=3.f)
+{
+    Geo::Point3<ScalarType> P0=F.Pos;
+    Geo::Point3<ScalarType> CurrDir=F.GetDirection(Dir);
+    DrawDirectionVect(P0,CurrDir,scaleVal,moveVal,Col0,
+                      Col1,pointSize,lineSize);
+}
+
+template <class ScalarType>
+void DrawDirectionCross(const Field::CrossF<ScalarType> &F,
+                        const int Dir,
+                        const ScalarType scaleVal,
+                        const ScalarType moveVal,
+                        Geo::Point3<ScalarType> Col0=Geo::Point3<ScalarType>(0,0,1),
+                        Geo::Point3<ScalarType> Col1=Geo::Point3<ScalarType>(0.5,0.9,0.5),
+                        ScalarType pointSize=10.f,
+                        ScalarType lineSize=3.f)
+{
+    assert(Dir>=0);
+    assert(Dir<4);
+
+    Geo::Point3<ScalarType> P0=F.Pos;
+    Geo::Point3<ScalarType> CurrDir=F.GetDirection(Dir);
+    DrawDirectionVect(P0,CurrDir,scaleVal,moveVal,Col0,
+                      Col1,pointSize,lineSize);
+}
+
+template <class ScalarType>
+void DrawDirectionSimple(const Field::CrossF<ScalarType> &F,
+                         const int Dir,
+                         const ScalarType lineLen,
+                         const ScalarType lineWidth,
+                         Geo::Point3<ScalarType> Col)
 {
     assert(Dir>=0);
     assert(Dir<4);
@@ -79,7 +112,7 @@ void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
                       ScalarType MaxW=6,
                       ScalarType MinW=0.5)
 {
-    Geo::Point3<ScalarType> center=F.Pos;
+    //Geo::Point3<ScalarType> center=F.Pos;
 
 
     for (size_t dir=0;dir<4;dir++)
@@ -101,7 +134,7 @@ void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
             ScalarType IntervW=MaxW-MinW;
             lineWidth=(fabs(Qval)/MaxQ)*IntervW+MinW;
         }
-        DrawDirection(F,dir,scaleVal,lineWidth,Col);
+        DrawDirectionSimple(F,dir,scaleVal,lineWidth,Col);
     }
 }
 
@@ -129,11 +162,11 @@ void GLDrawCurvatureField(const Field::CrossF<ScalarType> &F,
     Geo::Point3<ScalarType> ColV=Geo::ColorRGBRamp((ScalarType)1,(ScalarType)0,ratioValV);
     ScalarType lineWidthV=(ratioValV)*IntervW+MinW;
 
-    DrawDirection(F,0,scaleVal,lineWidthU,ColU);
-    DrawDirection(F,2,scaleVal,lineWidthU,ColU);
+    DrawDirectionSimple(F,0,scaleVal,lineWidthU,ColU);
+    DrawDirectionSimple(F,2,scaleVal,lineWidthU,ColU);
 
-    DrawDirection(F,1,scaleVal,lineWidthV,ColV);
-    DrawDirection(F,3,scaleVal,lineWidthV,ColV);
+    DrawDirectionSimple(F,1,scaleVal,lineWidthV,ColV);
+    DrawDirectionSimple(F,3,scaleVal,lineWidthV,ColV);
 }
 
 
@@ -155,8 +188,8 @@ void GLDrawCurvatureField(const std::vector<Field::CrossF<ScalarType> > &Crosses
         maxK=std::max(maxK,fabs(Crosses[i].K[1]));
     }
 
-//    std::cout<<"minK:"<<minK<<std::endl;
-//    std::cout<<"maxK:"<<maxK<<std::endl;
+    //    std::cout<<"minK:"<<minK<<std::endl;
+    //    std::cout<<"maxK:"<<maxK<<std::endl;
 
     for (size_t i=0;i<Crosses.size();i++)
         GLDrawCurvatureField(Crosses[i],scaleVal,fabs(Crosses[i].K[0]),fabs(Crosses[i].K[1]),minK,maxK);
@@ -171,7 +204,7 @@ void DrawFrame(const Field::FrameField<ScalarType> &F,
                Geo::Point3<ScalarType> Col1=Geo::Point3<ScalarType>(0.5,0.9,0.5))
 {
     for (size_t i=0;i<6;i++)
-        DrawDirection<ScalarType>(F,i,scaleVal,0,Col0,Col1);
+        DrawDirectionFrame<ScalarType>(F,i,scaleVal,0,Col0,Col1);
 }
 
 template <class ScalarType>
@@ -248,7 +281,7 @@ void DrawSingularity(const std::vector<Geo::Point3<ScalarType> > &VertPos,
         int IndexV=SingVertIDX[i];
         Geo::Point3<ScalarType> CurrPos=VertPos[IndexV];
 
-        assert(IndexV<VertPos.size());
+        assert(IndexV<(int)VertPos.size());
         int SingVal=SingValue[i];
 
         Geo::Point3<ScalarType> Col(0,1,0);

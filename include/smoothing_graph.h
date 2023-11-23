@@ -88,7 +88,8 @@ void InitFromSurface(const std::vector<Geo::Point3<ScalarType> > &VertPos,
     SGraph.NType=SmoothingGraph<ScalarType>::CrossNode;
 
     std::vector<std::vector<int> > Adjacency;
-    Geo::TragingGraphFunctions<ScalarType>::GetGraphComplexAdjacency(VertPos,Faces,Adjacency);
+    //Geo::TragingGraphFunctions<ScalarType>::GetGraphComplexAdjacency(VertPos,Faces,Adjacency);
+    Tetra::GetPPKernelAlongVertices(VertPos.size(),Faces,Adjacency);
 
     SGraph.Nodes.resize(SurfCross.size());
     for (size_t i=0;i<SGraph.Nodes.size();i++)
@@ -146,7 +147,8 @@ void  InitFromPolyhedraMesh(const std::vector<Geo::Point3<ScalarType> > &VertPos
 
     //set adjacency
     std::vector<std::vector<int> > Adjacency;
-    Geo::TragingGraphFunctions<ScalarType>::GetGraphComplexAdjacency(VertPos,Poly,Adjacency);
+    //Geo::TragingGraphFunctions<ScalarType>::GetGraphComplexAdjacency(VertPos,Poly,Adjacency);
+    Tetra::GetPPKernelAlongVertices(VertPos.size(),Poly,Adjacency);
 
     SGraph.Nodes.resize(Frames.size());
     for (size_t i=0;i<SGraph.Nodes.size();i++)

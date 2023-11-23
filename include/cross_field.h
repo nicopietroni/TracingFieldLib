@@ -13,6 +13,22 @@
 
 namespace Field{
 
+void OrthoCrossDirs(const int Dir,std::vector<int> &OrthoD)
+{
+    assert(Dir>=0);
+    assert(Dir<4);
+    OrthoD.clear();
+    OrthoD.push_back((Dir+1)%4);
+    OrthoD.push_back((Dir+2)%4);
+}
+
+int OppositeCrossDir(const int Dir)
+{
+    assert(Dir>=0);
+    assert(Dir<4);
+    return ((Dir+2)%64);
+}
+
 
 template <class ScalarType>
 class CrossF
@@ -106,6 +122,17 @@ public:
     {
         int IndexD=BestDirectionI(TargetD);
         return GetDirection(IndexD);
+    }
+
+    int FollowDirection(const Field::CrossF<ScalarType> &F1,int Dir)const
+    {
+        assert(Dir>=0);
+        assert(Dir<4);
+        Geo::Point3<ScalarType> TargetD=F1.GetDirection(Dir);
+        int BestD=BestDirectionI(TargetD);
+        assert(BestD>=0);
+        assert(BestD<4);
+        return BestD;
     }
 
     void InitFromNormal(const Geo::Point3<ScalarType> &_Pos,

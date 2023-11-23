@@ -160,7 +160,7 @@ public:
         DirY=(DirN+2)%6;
     }
 
-    bool ForceCorrect()
+    void ForceCorrect()
     {
         D[0].Normalize();
         D[1].Normalize();

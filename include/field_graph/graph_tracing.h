@@ -43,11 +43,19 @@ public:
     {
         assert(endNode>=0);
         assert(endNode<TGraph.NumNodes());
+        //check if is Loop
+        bool isLoop=(startN.count(endNode)>0);
         // get the nodes from
         size_t curr_node = endNode;
         std::list<size_t> nodeList;
         int step=0;
         nodeList.push_back(curr_node);
+        //do a first step if is loop
+        if (isLoop)
+        {
+            curr_node = TGraph.Father(curr_node);
+            nodeList.push_back(curr_node);
+        }
         while ((startN.count(curr_node)==0)&&(step<TGraph.NumNodes()))
         {
             //std::cout<<curr_node<<std::endl;
@@ -176,7 +184,6 @@ public:
                 if (NextWeight<OldWeight)
                 {
                     TGraph.Mark(NextN);
-
 //                    //mark also others in case would avoid self intersect
 //                    if (SParam.AvoidIntersections)
 //                    {

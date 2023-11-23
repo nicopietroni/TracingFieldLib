@@ -95,6 +95,7 @@ void SmoothGlobal()
     if (!has_cross_field)return;
     SmoothGlobalPolyvector(VertPos,Connectivity,FaceNormals,FaceCurv,SParam);
     GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
+    SetVertCrossFromFace(VertPos,Connectivity,VertNormals,FaceCurv,VertCurv);
 }
 
 
@@ -294,8 +295,12 @@ void SetRenderBar()
         }
         //ImGui::SameLine();
 
-        ImGui::SliderFloat("Top Fix",&TopIntevalFix, 0, 0.3, "%2.f",ImGuiSliderFlags_AlwaysClamp);
+        // Create a slider for the float value
+        ImGui::SliderFloat("Top Fix", &TopIntevalFix, 0.0f, 0.3f);
         SParam.TopIntevalFix= (ScalarType) TopIntevalFix;
+
+//        ImGui::SliderFloat("Top Fix",&TopIntevalFix, 0, 0.3, "%2.f",ImGuiSliderFlags_AlwaysClamp);
+//        SParam.TopIntevalFix= (ScalarType) TopIntevalFix;
 
         ImGui::SliderFloat("Smoothness",&GlobalSmoothVal, 50, 500, "%1.f",ImGuiSliderFlags_AlwaysClamp);
         SParam.GlobalSmoothVal=GlobalSmoothVal;
@@ -346,14 +351,7 @@ void GLDrawMesh()
     GLDraw::glScale(3/MeshBox.Diag());
     GLDraw::glTranslate(-MeshBox.Center());
 
-    //    UsedScalarType scaleVal=MeshBox.Diag()*(UsedScalarType)0.02;
-    //    vcg::glScale(2.0f/mesh.bbox.Diag());
-    //    vcg::glTranslate(-mesh.bbox.Center());
     bool DrawSurface=true;
-    //    bool DrawWire=true;
-    //    std::cout<<"Conn "<<Connectivity.size()<<std::endl;
-    //    std::cout<<"FNorm "<<FaceNormals.size()<<std::endl;
-
 
     //mesh.GLDrawBox();
     if (showMesh)
@@ -361,9 +359,7 @@ void GLDrawMesh()
         glColor4f(mesh_color.x * mesh_color.w, mesh_color.y * mesh_color.w, mesh_color.z * mesh_color.w, mesh_color.w);
         glPushAttrib(GL_ALL_ATTRIB_BITS);
         glLineWidth(line_thick);
-        //        glWrap.SetHintParamf(vcg::GLW::HNPPointSize,line_thick);
-        //        glWrap.Draw(DMode,vcg::GLW::CMNone,vcg::GLW::TMNone);
-        GLDraw::DrawSurfaceMesh<ScalarType>(VertPos,Connectivity,FaceNormals,VertNormals,DrawSurface,false,true,false);
+        GLDraw::DrawSurfaceMesh<ScalarType>(VertPos,Connectivity,FaceNormals,VertNormals,DrawSurface,true,true,false);
         glPopAttrib();
 
     }

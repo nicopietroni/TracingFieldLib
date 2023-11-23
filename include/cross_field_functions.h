@@ -190,7 +190,7 @@ void SetVertCrossFromFace(const std::vector<Geo::Point3<ScalarType> > &VertPos,
         for (size_t j=0;j<VertFaces[i].size();j++)
         {
             int IndexF=VertFaces[i][j];
-            assert(IndexF<FaceCurv.size());
+            assert(IndexF<(int)FaceCurv.size());
             FaceCross.push_back(FaceCurv[IndexF]);
             if (weightByQuality)
                 W[j]=FaceCurv[IndexF].Q;
@@ -261,7 +261,7 @@ void GetFaceSingularities(const std::vector<Field::CrossF<ScalarType> > &FaceCro
             //if border no singularity
             if (BorderVSet.count(IndexV)>0)continue;
 
-            assert(IndexV<Visited.size());
+            assert(IndexV<(int)Visited.size());
 
             Pos3 currP(i,j,IndexV);
 
