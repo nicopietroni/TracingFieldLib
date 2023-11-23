@@ -53,3 +53,7 @@ apps/uv_mapping/build/CMakeFiles/uv_mapping.dir/link.txt
 apps/uv_mapping/build/Makefile
 apps/uv_mapping/build/uv_mapping
 apps/uv_mapping/uv_mapping.pro.user
+apps/cross_field_smoother/.qtc_clangd/compile_commands.json
+apps/cross_field_smoother/cross_field_smoother.pro.user
+apps/frame_field_smoother/.qmake.stash
+*.plist
