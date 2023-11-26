@@ -26,7 +26,7 @@ int OppositeCrossDir(const int Dir)
 {
     assert(Dir>=0);
     assert(Dir<4);
-    return ((Dir+2)%64);
+    return ((Dir+2)%4);
 }
 
 

@@ -5,7 +5,12 @@
 #include <vector>
 #include <stdio.h>
 #include <iostream>
+#include <unordered_set>
+#include <set>
+
 //#include "../point3.h"
+
+#define SELECTED_GRAPH_FLAG 4
 
 namespace  Geo{
 
@@ -22,48 +27,235 @@ enum GraphType
 template <class ScalarType>
 class TracingGraph
 {
+
+
     //TO BE USED IN DIJKSTRA
     //the temporary mark
     std::vector<int> TM;
+
     //array of fathers node
     std::vector<int> F;
+
     //the distance
     std::vector<ScalarType> D;
-    //the global mark
-    size_t GlobalMark;
 
-    //std::vector<bool> Start;
-    //selected flags
-    std::vector<bool> S0,S1;
+    //the global mark
+    int GlobalMark;
+
+    //selected marks used for Dijkstra
+    std::vector<int> Sel[SELECTED_GRAPH_FLAG];
+    int GlobalSelMark[SELECTED_GRAPH_FLAG];
+
     //source value for tracing short patsh
     std::vector<int> Src;
-
-    GraphType GType;
     //END OF DIJKSTRA
 
-    //    //the visited mark to be used for other algotithms
-    //    std::vector<int> VisitedM;
-    //    //the visited global mark
-    //    size_t VisitedGlobalMark;
+    GraphType GType;
+
+    // Hash function
+    struct hashPaitIntFunction
+    {
+      size_t operator()(const std::pair<int , int> &x) const
+      {
+        return x.first ^ x.second;
+      }
+    };
+
+    std::unordered_set<std::pair<int,int>,hashPaitIntFunction > DirectE;
+    //std::set<std::pair<int,int> > DirectE;
+
+    bool AllocatedSelected()
+    {
+        for (size_t i=0;i<SELECTED_GRAPH_FLAG;i++)
+            if(NT.size()!=Sel[i].size())return false;
+        return true;
+    }
+
+    struct NeighInfo
+    {
+        //the next node
+        int N;
+        //the weight
+        ScalarType W;
+        //active or not
+        bool Enabled;
+        //direct or not
+        bool Direct;
+        //Visible or not
+        bool Visible;
+
+        NeighInfo()
+        {
+            N=-1;
+            W=-1;
+            Enabled=false;
+            Direct=false;
+            Visible=false;
+        }
+
+        inline bool operator ==(const NeighInfo &N1)const
+        {
+            return ((N==N1.N)&&(W==N1.W)&&
+                    (Enabled==N1.Enabled)&&
+                    (Direct==N1.Direct)&&
+                    (Visible==N1.Visible));
+        }
+
+        inline bool operator <(const NeighInfo &N1)const
+        {
+            //assert(N!=N1.N);//can't have two times same neighbour
+            if (Visible && !N1.Visible)return true;
+            if (!Visible && N1.Visible)return false;
+            if (W!=N1.W)return (W<N1.W);
+            return (N<N1.N);
+        }
+
+        NeighInfo(const int _N,
+                  const ScalarType _W,
+                  const bool _Enabled,
+                  const bool _Direct,
+                  const bool _Visible)
+        {
+            N=_N;
+            W=_W;
+            Enabled=_Enabled;
+            Direct=_Direct;
+            Visible=_Visible;
+        }
+    };
+
+
+    std::vector<std::vector<NeighInfo> > N;
 
 public:
 
-    //set if a node is enabled or not
-    std::vector<bool> EnabledN;
-    //set if an arc is enabled or not
-    std::vector<std::vector<bool> > EnabledA;
-    //neighbouring information
-    std::vector<std::vector<int> > N;
-    //weight of the arch
-    std::vector<std::vector<ScalarType> > W;
+    void InitDirectEdge()
+    {
+        DirectE.clear();
+
+        for (size_t i=0;i<NumNodes();i++)
+            for (size_t j=0;j<N[i].size();j++)
+            {
+                int IndexN0=i;
+                if (!DirectLink(i,j))continue;
+                int IndexN1=NodeLink(i,j);
+                std::pair<int,int> Key(std::min(IndexN0,IndexN1),
+                                       std::max(IndexN1,IndexN0));
+                DirectE.insert(Key);
+            }
+        std::cout<<"Direct Link "<<DirectE.size()<<std::endl;
+    }
+
     //type of node
     std::vector<NType> NT;
+    //set if a node is enabled or not
+    std::vector<bool> EnabledN;
+
+    bool IsDirectPairE(const int &IndexN0,
+                       const int &IndexN1)
+    {
+        std::pair<int,int> Key(std::min(IndexN0,IndexN1),
+                               std::max(IndexN0,IndexN1));
+        return(DirectE.count(Key)>0);
+    }
+
+    bool ProperNeigh(const int &IndexN)
+    {
+        if (N[IndexN].size()<2)
+            return true;
+
+        for (size_t i=0;i<N[IndexN].size()-1;i++)
+        {
+            for (size_t j=(i+1);j<N[IndexN].size();j++)
+                if (N[IndexN][i].N==N[IndexN][j].N)return false;
+        }
+        return true;
+    }
+
+    bool ProperNeigh()
+    {
+        for (size_t i=0;i<NumNodes();i++)
+            if (!ProperNeigh(i))return false;
+        return true;
+    }
+
+    void AddNeighbour(const int &IndexN0,
+                      const int &IndexN1,
+                      const ScalarType W,
+                      const bool Enabled,
+                      const bool Direct,
+                      const bool Visible)
+    {
+        assert(IndexN0>=0);
+        assert(IndexN0<(int)N.size());
+        N[IndexN0].push_back(NeighInfo(IndexN1,W,Enabled,Direct,Visible));
+    }
+
+    void AllocateNodes(int NumNodes)
+    {
+        N.clear();
+        N.resize(NumNodes);
+        NT.clear();
+        NT.resize(NumNodes,Internal);
+        EnabledN.clear();
+        EnabledN.resize(NumNodes,true);
+    }
+
+    int NeighSize(const int &IndexN0)
+    {
+        assert(IndexN0>=0);
+        assert(IndexN0<(int)N.size());
+        return ((int)N[IndexN0].size());
+    }
+
+    bool ActiveLink(const int &IndexN0,const int &LocalIdx)const
+    {
+        assert(IndexN0>=0);
+        assert(IndexN0<(int)N.size());
+        assert(LocalIdx>=0);
+        assert(LocalIdx<(int)N[IndexN0].size());
+        return (N[IndexN0][LocalIdx].Enabled);
+    }
+
+    bool DirectLink(const int &IndexN0,const int &LocalIdx)const
+    {
+        assert(IndexN0>=0);
+        assert(IndexN0<(int)N.size());
+        assert(LocalIdx>=0);
+        assert(LocalIdx<(int)N[IndexN0].size());
+        return (N[IndexN0][LocalIdx].Direct);
+    }
+
+    bool VisibleLink(const int &IndexN0,const int &LocalIdx)const
+    {
+        assert(IndexN0>=0);
+        assert(IndexN0<(int)N.size());
+        assert(LocalIdx>=0);
+        assert(LocalIdx<(int)N[IndexN0].size());
+        return (N[IndexN0][LocalIdx].Visible);
+    }
+
+    ScalarType WeightLink(const int &IndexN0,const int &LocalIdx)const
+    {
+        assert(IndexN0>=0);
+        assert(IndexN0<(int)N.size());
+        assert(LocalIdx>=0);
+        assert(LocalIdx<(int)N[IndexN0].size());
+        return (N[IndexN0][LocalIdx].W);
+    }
+
+    int NodeLink(const int &IndexN0,const int &LocalIdx)const
+    {
+        assert(IndexN0>=0);
+        assert(IndexN0<(int)N.size());
+        assert(LocalIdx>=0);
+        assert(LocalIdx<(int)N[IndexN0].size());
+        return (N[IndexN0][LocalIdx].N);
+    }
 
     void SelectNoteType(NType TypeNode,int IndexS)
     {
-        assert(NT.size()==S0.size());
-        assert(NT.size()==S1.size());
-        assert((IndexS==0)||(IndexS==1));
+        assert(AllocatedSelected());
         for (size_t i=0;i<NT.size();i++)
         {
             if (NT[i]==TypeNode)
@@ -74,9 +266,13 @@ public:
     void EnableAllNodes()
     {
         EnabledN=std::vector<bool>(N.size(),true);
-        EnabledA=std::vector<std::vector<bool> > (N.size(),std::vector<bool>());
+    }
+
+    void EnableAllArcs()
+    {
         for (size_t i=0;i<N.size();i++)
-            EnabledA[i]=std::vector<bool>(N[i].size(),true);
+            for (size_t j=0;j<N[i].size();j++)
+                N[i][j].Enabled=true;
     }
 
     void DisableNodeType(NType TypeNode)
@@ -89,19 +285,31 @@ public:
         }
     }
 
-    void DisableArconDisabledNodeType()
+    void EnableNode(const int &IndexN)
     {
-        assert(N.size()==EnabledA.size());
+        assert(IndexN>=0);
+        assert(IndexN<EnabledN.size());
+        EnabledN[IndexN]=true;
+    }
+
+    void DisableNode(const int &IndexN)
+    {
+        assert(IndexN>=0);
+        assert(IndexN<EnabledN.size());
+        EnabledN[IndexN]=false;
+    }
+
+    void DisableArcsToDisabledNodes()
+    {
         for (size_t i=0;i<N.size();i++)
         {
-            assert(EnabledA[i].size()==N[i].size());
             for (size_t j=0;j<N[i].size();i++)
             {
                 int IndexN=N[i][j];
                 assert(IndexN>=0);
                 assert(IndexN<EnabledN.size());
                 if (EnabledN[IndexN])continue;
-                EnabledA[i][j]=false;
+                N[i][j].Enabled=false;
             }
         }
     }
@@ -109,27 +317,26 @@ public:
     void Clear()
     {
         EnabledN.clear();
-        EnabledA.clear();
+        //EnabledA.clear();
         N.clear();
-        W.clear();
+
+        //W.clear();
         TM.clear();
         F.clear();
         D.clear();
-        S0.clear();
-        S1.clear();
         NT.clear();
         Src.clear();
-        //VisitedM.clear();
-
         GlobalMark=0;
-        //VisitedGlobalMark=0;
+        for (size_t i=0;i<SELECTED_GRAPH_FLAG;i++)
+        {
+            Sel[i].clear();
+            GlobalSelMark[i]=0;
+        }
     }
 
     bool IsSink(const size_t &IndexN)const
     {
         assert(IndexN<N.size());
-        assert(IndexN<W.size());
-        assert(N[IndexN].size()==W[IndexN].size());
         return(N[IndexN].size()==0);
     }
 
@@ -140,8 +347,8 @@ public:
         assert(EnabledN[IndexN1]);
         for (size_t i=0;i<N[IndexN0].size();i++)
         {
-            if (!EnabledA[IndexN0][i])continue;
-            if (N[IndexN0][i]==IndexN1)return true;
+            if (!N[IndexN0][i].Enabled)continue;
+            if (N[IndexN0][i].N==IndexN1)return true;
         }
         return false;
     }
@@ -150,9 +357,9 @@ public:
     {
         assert(IndexN>=0);
         assert(IndexN<(int)N.size());
-        assert(IndexN<(int)W.size());
+        //assert(IndexN<(int)W.size());
         N[IndexN].clear();
-        W[IndexN].clear();
+        //W[IndexN].clear();
     }
 
     void UnMarkAll()
@@ -172,54 +379,18 @@ public:
         return(TM[IndexN]==GlobalMark);
     }
 
-    //    void SetAllUnVisited()
-    //    {
-    //        VisitedGlobalMark++;
-    //    }
-
-    //    void SetVisited(const size_t &IndexN)
-    //    {
-    //        assert(IndexN<VisitedM.size());
-    //        VisitedM[IndexN]=VisitedGlobalMark;
-    //    }
-
-    //    bool IsVisited(const size_t &IndexN)
-    //    {
-    //        assert(IndexN<VisitedM.size());
-    //        return(VisitedM[IndexN]==VisitedGlobalMark);
-    //    }
-
-
     void Select(const size_t &IndexN,const int IndexS)
     {
-        assert((IndexS==0)||(IndexS==1));
-        assert(IndexN<S0.size());
-        assert(IndexN<S1.size());
-        if (IndexS==0)
-            S0[IndexN]=true;
-        else
-            S1[IndexN]=true;
-    }
-
-    void Unselect(const size_t &IndexN,const int IndexS)
-    {
-        assert((IndexS==0)||(IndexS==1));
-        assert(IndexN<S0.size());
-        assert(IndexN<S1.size());
-        if (IndexS==0)
-            S0[IndexN]=false;
-        else
-            S1[IndexN]=false;
+        assert((IndexS>=0)||(IndexS<=SELECTED_GRAPH_FLAG));
+        assert(IndexN<Sel[IndexS].size());
+        Sel[IndexS][IndexN]=GlobalSelMark[IndexS];
     }
 
     bool IsSelected(const size_t &IndexN,const int IndexS)const
     {
-        assert(IndexN<S0.size());
-        assert(IndexN<S1.size());
-        if (IndexS==0)
-            return(S0[IndexN]);
-        else
-            return(S1[IndexN]);
+        assert((IndexS>=0)||(IndexS<=SELECTED_GRAPH_FLAG));
+        assert(IndexN<Sel[IndexS].size());
+        return (Sel[IndexS][IndexN]==GlobalSelMark[IndexS]);
     }
 
     void InitTracing()
@@ -230,19 +401,19 @@ public:
         F.resize(N.size(),-1);
         D.clear();
         D.resize(N.size(),0);
-        S0.clear();
-        S0.resize(N.size(),false);
-        S1.clear();
-        S1.resize(N.size(),false);
-        Src.clear();
+
+        for (size_t i=0;i<SELECTED_GRAPH_FLAG;i++)
+        {
+            GlobalSelMark[i]=0;
+            Sel[i].resize(N.size(),-1);
+        }
+
         Src.resize(N.size(),-1);
         GlobalMark=0;
-        //        VisitedM.clear();
-        //        VisitedM.resize(N.size(),0);
 
-        GlobalMark=0;
-        //        VisitedGlobalMark=0;
         EnableAllNodes();
+
+        InitDirectEdge();
     }
 
     int &Father(const size_t &IndexN)
@@ -295,58 +466,30 @@ public:
 
     size_t NumNodes()const
     {
-        assert(EnabledN.size()==EnabledA.size());
-        assert(N.size()==W.size());
         assert(TM.size()==F.size());
         assert(F.size()==D.size());
         return (N.size());
     }
 
-    void SortNeighbyW(const size_t &IndexN)
+    void SortNeigh(const size_t &IndexN)
     {
-        assert(N.size()==W.size());
         assert(IndexN<N.size());
-        assert(IndexN<W.size());
-        std::vector<std::pair<ScalarType,size_t> > WN;
-        for (size_t i=0;i<N[IndexN].size();i++)
-            WN.push_back(std::pair<ScalarType,size_t>(W[IndexN][i],N[IndexN][i]));
-
-        std::sort(WN.begin(),WN.end());
-
-        W[IndexN].clear();
-        N[IndexN].clear();
-
-        for (size_t i=0;i<WN.size();i++)
-        {
-            W[IndexN].push_back(WN[i].first);
-            N[IndexN].push_back(WN[i].second);
-        }
-
+        std::sort(N[IndexN].begin(),N[IndexN].end());
     }
 
-    void SortAllNeighbyW()
+
+    void SortAllNeigh()
     {
         for (size_t i=0;i<NumNodes();i++)
-            SortNeighbyW(i);
-    }
-
-    void SelectAll(const int IndexS)
-    {
-        assert((IndexS==0)||(IndexS==1));
-        if (IndexS==0)
-            std::fill(S0.begin(), S0.end(), true);
-        else
-            std::fill(S1.begin(), S1.end(), true);
+            SortNeigh(i);
     }
 
     void DeSelectAll(const int IndexS)
     {
-        assert((IndexS==0)||(IndexS==1));
-        if (IndexS==0)
-            std::fill(S0.begin(), S0.end(), false);
-        else
-            std::fill(S1.begin(), S1.end(), false);
+        assert((IndexS>=0)||(IndexS<=SELECTED_GRAPH_FLAG));
+        GlobalSelMark[IndexS]++;
     }
+
 
     GraphType TypeofGraph()const
     {return GType;}
@@ -356,23 +499,14 @@ public:
         //then get the closest node
         for (size_t i=0;i<N[IndexN].size();i++)
         {
-            int NextN=N[IndexN][i];
+            //int NextN=N[IndexN][i];
+            if (!ActiveLink(IndexN,i))continue;
+            int NextN=NodeLink(IndexN,i);
             if (!EnabledN[NextN])continue;
             return NextN;
         }
         return -1;
     }
-
-    //        void Check()
-    //        {
-    //            ScalarType L=0;
-    //            for (size_t i=0;i<W.size();i++)
-    //                for (size_t j=0;j<W[i].size();j++)
-    //                {
-    //                   L+=W[i][j];
-    //                }
-    //            std::cout<<"L"<<L<<std::endl;
-    //        }
 
     TracingGraph(GraphType _GType)
     {GType=_GType;}

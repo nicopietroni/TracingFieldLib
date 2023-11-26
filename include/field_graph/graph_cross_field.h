@@ -49,9 +49,18 @@ static int OppositeNodeCrossField(int IndexN)
     assert(DirI<4);
     int OppDir=Field::OppositeCrossDir(DirI);
     assert(OppDir>=0);
-    assert(OppDir<6);
+    assert(OppDir<4);
     int ElemI=ElemOfNode(IndexN);
     return NodeOfElemDir(ElemI,OppDir);
+}
+
+static void OppositeNodeCrossField(const std::vector<int> &IndexN,
+                                   std::vector<int> &OppIndexN)
+{
+    //OppIndexN.clear();
+    OppIndexN.resize(IndexN.size(),-1);
+    for (size_t i=0;i<IndexN.size();i++)
+        OppIndexN.push_back(OppositeNodeCrossField(IndexN[i]));
 }
 
 void OrthoNodesCrossField(int IndexN,std::vector<int> &OrthoN)
@@ -72,60 +81,6 @@ void OrthoNodesCrossField(int IndexN,std::vector<int> &OrthoN)
     }
 }
 
-//template <class ScalarType>
-//bool AreDirectionCoherent(const std::vector<Field::FrameField<ScalarType> > &FrameField,
-//                          const int &IndexN0,const int &IndexN1)
-//{
-//    if (IndexN0==IndexN1)return true;
-//    assert(IndexN0!=IndexN1);
-//    assert(IndexN0>=0);
-//    assert(IndexN1>=0);
-
-//    int FrIndex0=FrameOfNode(IndexN0);
-//    assert(FrIndex0<FrameField.size());
-//    assert(FrIndex0>=0);
-//    int DrIndex0=FrameOfNode(IndexN0);
-//    assert(DrIndex0>=0);
-//    assert(DrIndex0<6);
-
-//    int FrIndex1=FrameOfNode(IndexN1);
-//    assert(FrIndex1<FrameField.size());
-//    assert(FrIndex1>=0);
-//    int DrIndex1=FrameOfNode(IndexN1);
-//    assert(DrIndex1>=0);
-//    assert(DrIndex1<6);
-
-//    if((FrIndex0==FrIndex1)&&(FrIndex0!=FrIndex1))return false;//same frame different direction
-
-//    int DrTest1=FrameField[FrIndex1].FollowDirection(FrameField[FrIndex0],DrIndex0);
-
-//    return (DrTest1==DrIndex1);
-//}
-
-//template <class ScalarType>
-//void SelectPossibleArrivalReturnNodes(const size_t &startNode,
-//                                      Geo::TracingGraph<ScalarType> &TGraph,
-//                                      int IndexSel=0)
-//{
-//    std::vector<int> OrthoN;
-//    OrthoNodesFrameField((int)startNode,OrthoN);
-
-//    TGraph.Select(startNode,IndexSel);
-//    for (size_t j=0;j<OrthoN.size();j++)
-//        TGraph.Select(OrthoN[j],IndexSel);
-//}
-
-//static void UnSelectPossibleArrivalReturnNodes(const size_t &startNode,
-//                                         TracingGraph<ScalarType> &TGraph,
-//                                         int IndexSel=0)
-//{
-//    std::vector<int> OrthoN;
-//    OrthoNodesFrameField((int)startNode,OrthoN);
-
-//    TGraph.Unselect(startNode,IndexSel);
-//    for (size_t j=0;j<OrthoN.size();j++)
-//        TGraph.Unselect(OrthoN[j],IndexSel);
-//}
 };
 }
 #endif

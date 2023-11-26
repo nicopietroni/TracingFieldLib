@@ -4,7 +4,7 @@
 #include "graph.h"
 #include <list>
 #include <set>
-#include "graph_frame_field.h"
+//#include "graph_frame_field.h"
 
 namespace Geo{
 
@@ -64,34 +64,29 @@ public:
             assert(curr_node<TGraph.NumNodes());
             nodeList.push_back(curr_node);
             step++;
-        } //&&(curr_node != endNode)&&(step<1000));
-        //if is a loop the put again the first
-        //if (curr_node == endNode)
-        //    nodeList.push_back(curr_node);
-
-        //std::cout<<"step:"<<step<<std::endl;
-        //std::cout<<curr_node<<std::endl;
-        //std::cout<<"test end"<<std::endl;
+        }
         path.assign(nodeList.rbegin(), nodeList.rend());
-        return (step<TGraph.NumNodes());
+        return (step<(int)TGraph.NumNodes());
     }
 
     struct ShortestPathParam
     {
         bool avoid_zero_path;
-        bool stop_at_S0;
-        bool stop_at_S1;
+        bool StopAtSel[SELECTED_GRAPH_FLAG];
         ScalarType MaxL;
-        //bool AvoidIntersections;
+        bool onlyDirect;
+        bool onlyVisible;
+        bool stopAtPrevDist;
 
-        //bool AvoidIntersections
         ShortestPathParam()
         {
             avoid_zero_path=true;
-            stop_at_S0=true;
-            stop_at_S1=true;
-            //AvoidIntersections=false;
+            for (size_t i=0;i<SELECTED_GRAPH_FLAG;i++)
+                StopAtSel[i]=false;
             MaxL=std::numeric_limits<ScalarType>::max();
+            onlyDirect=false;
+            onlyVisible=true;
+            stopAtPrevDist=false;
         }
     };
 
@@ -117,6 +112,10 @@ public:
         }
 
         //set initial
+        bool check_select=false;
+        for (size_t i=0;i<SELECTED_GRAPH_FLAG;i++)
+            check_select|=SParam.StopAtSel[i];
+
         std::make_heap(Heap.begin(),Heap.end());
         do
         {
@@ -133,15 +132,13 @@ public:
 
             assert(TGraph.IsMarked(CurrN));
 
-            bool check_select=SParam.stop_at_S0|| SParam.stop_at_S1;
+            //bool check_select=SParam.stop_at_S0|| SParam.stop_at_S1;
             if (check_select)
             {
                 bool HasCompletedPath=false;
 
-                if (SParam.stop_at_S0)
-                    HasCompletedPath|=TGraph.IsSelected(CurrN,0);
-                if (SParam.stop_at_S1)
-                    HasCompletedPath|=TGraph.IsSelected(CurrN,1);
+                for (size_t i=0;i<SELECTED_GRAPH_FLAG;i++)
+                    HasCompletedPath|=(SParam.StopAtSel[i] && TGraph.IsSelected(CurrN,i));
 
                 //this is to also include loops
                 if (SParam.avoid_zero_path)
@@ -150,28 +147,34 @@ public:
                 if (HasCompletedPath)
                 {
                     StopNode=CurrN;
-                    //                    //std::cout<<"Retrieve"<<std::endl;
-                    //                    RetrievePath(TGraph,CurrN,StartN,PathN);
-                    //                    //std::cout<<"End Retrieve"<<std::endl;
-                    //                    PathL=TGraph.Distance(CurrN);
+
                     return true;
                 }
             }
 
             //go over neighbours
-            for (size_t i=0;i<TGraph.N[CurrN].size();i++)
+            //for (size_t i=0;i<TGraph.N[CurrN].size();i++)
+            for (size_t i=0;i<TGraph.NeighSize(CurrN);i++)
             {
                 //check if the link is enabled
-                if (!TGraph.EnabledA[CurrN][i])continue;
-                size_t NextN=TGraph.N[CurrN][i];
+                //if (!TGraph.EnabledA[CurrN][i])continue;
+                if (!TGraph.ActiveLink(CurrN,i))continue;
+                if (SParam.onlyDirect && (!TGraph.DirectLink(CurrN,i)))continue;
+                if (SParam.onlyVisible && (!TGraph.VisibleLink(CurrN,i)))continue;
+
+                //size_t NextN=TGraph.N[CurrN][i];
+                size_t NextN=TGraph.NodeLink(CurrN,i);
                 if (!TGraph.EnabledN[NextN])continue;
 
                 //then get the next weight
-                ScalarType NextWeight=CurrWeight+TGraph.W[CurrN][i];
+                //ScalarType NextWeight=CurrWeight+TGraph.W[CurrN][i];
+                ScalarType NextWeight=CurrWeight+TGraph.WeightLink(CurrN,i);
                 ScalarType OldWeight=std::numeric_limits<ScalarType>::max();
 
                 //check if has been explored or not
                 bool IsMarked=(TGraph.IsMarked(NextN));
+                //if use previous distance not need to check if marked
+                //TO BE DONE
                 if (IsMarked)
                 {
                     //check for loops
@@ -184,23 +187,7 @@ public:
                 if (NextWeight<OldWeight)
                 {
                     TGraph.Mark(NextN);
-//                    //mark also others in case would avoid self intersect
-//                    if (SParam.AvoidIntersections)
-//                    {
-//                        Geo::GraphType GType=TGraph.TypeofGraph();
-//                        if (GType==GT_CrossField)
-//                        {
-//                            std::cout<<"HAVE TO BE IMPLEMENTED"<<std::endl;
-//                            exit(0);
-//                        }
-//                        if (GType==GT_FrameField)
-//                        {
-//                           std::vector<int> IndexNodes;
-//                           NodesOfSamePoly(NextN,IndexNodes);
-//                           for (size_t j=0;j<IndexNodes.size();j++)
-//                               TGraph.Mark(IndexNodes[j]);
-//                        }
-//                    }
+
                     TGraph.Distance(NextN)=NextWeight;
                     TGraph.Father(NextN)=CurrN;
                     TGraph.Source(NextN)=CurrSource;
@@ -232,9 +219,7 @@ public:
         {
             assert(StopNode>=0);
             assert(StopNode<TGraph.NumNodes());
-            //std::cout<<"Retrieve"<<std::endl;
             RetrievePath(TGraph,StopNode,StartN,PathN);
-            //std::cout<<"End Retrieve"<<std::endl;
             PathL=TGraph.Distance(StopNode);
             return true;
         }
@@ -251,6 +236,7 @@ public:
             return true;
         return false;
     }
+
 
     static bool TraceFrom(TracingGraph<ScalarType> &TGraph,
                           const int &SourceNode,
@@ -272,10 +258,12 @@ public:
         while (true)
         {
             int NextI=-1;
-            for (size_t i=0;i<TGraph.N[CurrN].size();i++)
+            //for (size_t i=0;i<TGraph.N[CurrN].size();i++)
+            for (size_t i=0;i<TGraph.NeighSize(CurrN);i++)
             {
                 //if (IsSelected(TGraph,CurrN,SParam))
-                if (!TGraph.EnabledA[CurrN][i])continue;
+                //if (!TGraph.EnabledA[CurrN][i])continue;
+                if (!TGraph.ActiveLink(CurrN,i))continue;
                 NextI=i;
                 break;
             }
@@ -283,8 +271,10 @@ public:
             assert(TGraph.EnabledN[NextI]);
             if (!TGraph.IsSink(CurrN))
             {
-                PathL+=TGraph.W[CurrN][NextI];
-                CurrN=TGraph.N[CurrN][NextI];
+//                PathL+=TGraph.W[CurrN][NextI];
+//                CurrN=TGraph.N[CurrN][NextI];
+                PathL+=TGraph.WeightLink(CurrN,NextI);
+                CurrN=TGraph.NodeLink(CurrN,NextI);
 
                 if (PathL>SParam.MaxL)
                     return false;
@@ -301,7 +291,6 @@ public:
 
         }
     }
-
 
 };
 }

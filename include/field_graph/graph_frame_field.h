@@ -104,31 +104,6 @@ public:
 
         return (DrTest1==DrIndex1);
     }
-
-    //template <class ScalarType>
-    //void SelectPossibleArrivalReturnNodes(const size_t &startNode,
-    //                                      Geo::TracingGraph<ScalarType> &TGraph,
-    //                                      int IndexSel=0)
-    //{
-    //    std::vector<int> OrthoN;
-    //    OrthoNodesFrameField((int)startNode,OrthoN);
-
-    //    TGraph.Select(startNode,IndexSel);
-    //    for (size_t j=0;j<OrthoN.size();j++)
-    //        TGraph.Select(OrthoN[j],IndexSel);
-    //}
-
-    //static void UnSelectPossibleArrivalReturnNodes(const size_t &startNode,
-    //                                         TracingGraph<ScalarType> &TGraph,
-    //                                         int IndexSel=0)
-    //{
-    //    std::vector<int> OrthoN;
-    //    OrthoNodesFrameField((int)startNode,OrthoN);
-
-    //    TGraph.Unselect(startNode,IndexSel);
-    //    for (size_t j=0;j<OrthoN.size();j++)
-    //        TGraph.Unselect(OrthoN[j],IndexSel);
-    //}
 };
 }
 #endif

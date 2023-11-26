@@ -7,7 +7,6 @@
 #include "../frame_field.h"
 #include "GLDrawMesh.h"
 #include "GLDrawField.h"
-
 #include "../field_graph/graph.h"
 #include "../field_graph/graph_frame_field.h"
 #include "../field_graph/graph_cross_field.h"
@@ -21,25 +20,41 @@ class GLCrossFieldGraph
 
 public:
 
+    struct PathDrawParam
+    {
+        bool DrawPath;
+        ScalarType pointSize;
+        ScalarType lineSize;
+        Geo::Point3<ScalarType> ColPoint;
+        Geo::Point3<ScalarType> ColLine;
+        ScalarType moveVal;
+
+        PathDrawParam()
+        {
+            DrawPath=true;
+            pointSize=10;
+            lineSize=5;
+            ColPoint=Geo::Point3<ScalarType>(0,0,1);
+            ColLine=Geo::Point3<ScalarType>(0.5,0.9,0.5);
+            moveVal=(ScalarType)0.1;
+        }
+    };
+
     static void DrawNodes(const Geo::TracingGraph<ScalarType> &TGraph,
                           const std::vector<Field::CrossF<ScalarType> > &Cross,
                           const std::vector<int> &Nodes_To_Draw,
                           const ScalarType scaleVal,
-                          bool DrawPath=true,
-                          const ScalarType pointSize=10,
-                          const ScalarType lineSize=5,
-                          Geo::Point3<ScalarType> ColPoint=Geo::Point3<ScalarType>(0,0,1),
-                          Geo::Point3<ScalarType> ColLine=Geo::Point3<ScalarType>(0.5,0.9,0.5),
-                          const ScalarType moveVal=(ScalarType)0.1)
+                          const PathDrawParam &PDParam=PathDrawParam(),
+                          const Geo::Point3<ScalarType> &ColLine=Geo::Point3<ScalarType>(0,1,1))
     {
         glPushAttrib(GL_ALL_ATTRIB_BITS);
 
         glDepthRange(0.0,0.9999);
-        if (DrawPath)
+        if (PDParam.DrawPath)
         {
             glDisable(GL_LIGHTING);
-            glLineWidth(lineSize/2);
-            glColor3f(0,1,1);
+            glLineWidth(PDParam.lineSize*2);
+            GLDraw::glColor(ColLine);
             glBegin(GL_LINE_STRIP);
             for (size_t i=0;i<Nodes_To_Draw.size();i++)
             {
@@ -53,16 +68,35 @@ public:
         {
             int currNode=Nodes_To_Draw[i];
             assert(currNode>=0);
-            assert(currNode<(int)TGraph.N.size());
+            //assert(currNode<(int)TGraph.N.size());
+            assert(currNode<(int)TGraph.NumNodes());
             int CrossD=Field::CrossFieldGraph::DirOfNode(currNode);
             int CrossI=Field::CrossFieldGraph::ElemOfNode(currNode);
             assert(CrossD<4);
             assert(CrossI<(int)Cross.size());
-            GLDraw::DrawDirectionCross<ScalarType>(Cross[CrossI],CrossD,scaleVal,moveVal,
-                                                   ColPoint,ColLine,(float)pointSize,(float)lineSize);
+            GLDraw::DrawDirectionCross<ScalarType>(Cross[CrossI],CrossD,scaleVal,PDParam.moveVal,
+                                                   PDParam.ColPoint,PDParam.ColLine,
+                                                   (float)PDParam.pointSize,(float)PDParam.lineSize);
         }
         glDepthRange(0.0,1.0);
         glPopAttrib();
+    }
+
+    static void DrawPaths(const Geo::TracingGraph<ScalarType> &TGraph,
+                          const std::vector<Field::CrossF<ScalarType> > &Cross,
+                          const std::vector<std::vector<int> > &Paths_To_Draw,
+                          const ScalarType scaleVal,
+                          const PathDrawParam &PDParam=PathDrawParam(),
+                          const std::vector<Geo::Point3<ScalarType>> &PathColors=
+                                std::vector<Geo::Point3<ScalarType>>())
+    {
+        for (size_t i=0;i<Paths_To_Draw.size();i++)
+        {
+            if (PathColors.size()==Paths_To_Draw.size())
+                DrawNodes(TGraph,Cross,Paths_To_Draw[i],scaleVal,PDParam,PathColors[i]);
+            else
+                DrawNodes(TGraph,Cross,Paths_To_Draw[i],scaleVal,PDParam);
+        }
     }
 
     static void DrawSelectedNodes(const Geo::TracingGraph<ScalarType> &TGraph,
@@ -122,7 +156,8 @@ public:
         {
             int currNode=Nodes_To_Draw[i];
             assert(currNode>=0);
-            assert(currNode<(int)TGraph.N.size());
+            //assert(currNode<(int)TGraph.N.size());
+            assert(currNode<(int)TGraph.NumNodes());
             int FrameD=Field::FrameFieldGraph::FrameOfNode(currNode);
             int FrameI=Field::FrameFieldGraph::PolyOfNode(currNode);
             assert(FrameD<6);
@@ -136,7 +171,6 @@ public:
         }
         glPopAttrib();
     }
-
 
     static void DrawPathNodes(const Geo::TracingGraph<ScalarType> &TGraph,
                               const std::vector<Field::FrameField<ScalarType> > &Frames,

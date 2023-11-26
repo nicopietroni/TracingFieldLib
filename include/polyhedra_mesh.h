@@ -423,7 +423,6 @@ void GetPPKernelAlongVertices(const size_t numV,
                               std::vector<std::vector<int> > &Adjacency,
                               int diffuse_step=0)
 {
-    assert(diffuse_step==0);//to be implemented
 
     std::vector<std::vector<std::pair<int,int> > > VPAdjacency;
     Tetra::GetVPAdjacency(numV,Connectivity,VPAdjacency);
@@ -459,10 +458,20 @@ void GetPPKernelAlongVertices(const size_t numV,
         std::sort(Adjacency[i].begin(),Adjacency[i].end());
         std::vector<int>::iterator last = std::unique(Adjacency[i].begin(),Adjacency[i].end());
         Adjacency[i].erase(last, Adjacency[i].end());
+
     }
 
     if (diffuse_step>0)
         Geo::ExtendStar(Adjacency,diffuse_step);
+}
+
+void GetPPKernelAlongVertices(const std::vector<std::vector<int> > &Connectivity,
+                              std::vector<std::vector<int> > &Adjacency,
+                              int diffuse_step=0)
+{
+    int NumIdx=Geo::FindMaxVertIdx(Connectivity);
+    NumIdx++;
+    GetPPKernelAlongVertices(NumIdx,Connectivity,Adjacency,diffuse_step);
 }
 
 void FFExternalMesh(const std::vector<std::vector<int> > &Connectivity,

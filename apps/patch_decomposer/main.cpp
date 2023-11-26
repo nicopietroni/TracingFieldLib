@@ -22,6 +22,10 @@
 #include <field_graph/graph.h>
 #include <field_graph/initialize_graph.h>
 #include <field_graph/graph_tracing.h>
+#include <field_graph/path_functions.h>
+#include <chrono>
+#include <field_graph/tracing_interface.h>
+#include <field_graph/path_sampling.h>
 
 GLFWwindow* window;
 std::string PathMesh;
@@ -71,6 +75,10 @@ int CurrN=0;
 int OldN=-1;
 std::vector<int> PathN;
 
+Geo::CrossPathSampling<ScalarType> PathSampl(VertPos,Connectivity,TGraph,VertCurv,SingIndex,SingValue);
+
+std::vector<Geo::Point3<ScalarType> > PathColors;
+
 void InitGraph()
 {
     Geo::TragingGraphFunctions<ScalarType>::InitFromVertCrossField(TGraph,VertPos,Connectivity,VertCurv,
@@ -78,6 +86,15 @@ void InitGraph()
     TGraph.DeSelectAll(0);
     TGraph.SelectNoteType(Geo::ExitDomain,0);
     TGraph.SelectNoteType(Geo::TangentDomain,0);
+}
+
+int failed_trace=0;
+int tested_trace=0;
+
+void InitTracing()
+{
+    PathN.clear();
+    PathSampl.Init();
 }
 
 void TestTrace()
@@ -91,27 +108,66 @@ void TestTrace()
         }
         currI=(currI+1)%TGraph.NumNodes();
     }while (true);
-
-    //select the same for loop
-    TGraph.DeSelectAll(1);
-    TGraph.SelectNoteType(Geo::ExitDomain,1);
-    TGraph.Select(CurrN,1);
-
-    Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
-    SParam.avoid_zero_path=true;
-    SParam.stop_at_S0=false;
-    SParam.stop_at_S1=true;
-
-    ScalarType PathL;
-    std::vector<int> SourceNodes;
-    SourceNodes.push_back(CurrN);
-    bool traced=Geo::GraphQuery<ScalarType>::ShortestPaths(TGraph,SourceNodes,PathN,PathL,SParam);
-//    if (traced)
-//        std::cout<<"Traced Correctly"<<std::endl;
-//    else
-//        std::cout<<"Not Traced"<<std::endl;
-    //Geo::GraphQuery<ScalarType>::TraceFrom(TGraph,CurrN,PathN,PathL,SParam);
+    tested_trace++;
+    bool has_traced=Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(TGraph,CurrN,PathN);
+    if (!has_traced) failed_trace++;
 }
+
+void TestSpeed()
+{
+    // Record the start time
+    auto start = std::chrono::high_resolution_clock::now();
+    failed_trace=0;
+    tested_trace=0;
+    for (CurrN=0;CurrN<(int)TGraph.NumNodes();CurrN++)
+    {
+        if ((CurrN % 100)==0)
+            std::cout<<"Testing "<<CurrN<<std::endl;
+       TestTrace();
+    }
+    // Record the end time
+    auto end = std::chrono::high_resolution_clock::now();
+
+    // Calculate the elapsed time
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
+
+    std::cout << "All Trace Elapsed time: " << elapsed_seconds << " seconds " << tested_trace <<" start nodes"<<std::endl;
+    std::cout << "Failed trace " << failed_trace <<std::endl;
+
+    CurrN=0;
+}
+
+void TestSelfIntersect()
+{
+    // Record the start time
+    auto start = std::chrono::high_resolution_clock::now();
+
+    for (CurrN=0;CurrN<(int)TGraph.NumNodes();CurrN++)
+    {
+        if ((CurrN % 100)==0)
+            std::cout<<"Testing "<<CurrN<<std::endl;
+       TestTrace();
+       if (Geo::PathFunctions<ScalarType>::SelfIntersectTangentially(TGraph,PathN))
+       {
+           std::cout<<"Found Self Intersection Path "<<CurrN<<std::endl;
+//           for (size_t i=0;i<PathN.size();i++)
+//           {}
+           break;
+       }
+    }
+    // Record the end time
+    auto end = std::chrono::high_resolution_clock::now();
+
+    // Calculate the elapsed time
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
+
+    std::cout << "All Trace Elapsed time: " << elapsed_seconds << " seconds " << TGraph.NumNodes() <<" start nodes"<<std::endl;
+
+    CurrN=0;
+}
+
 
 void LoadMesh(const std::string &path)
 {
@@ -280,10 +336,26 @@ void SetRenderBar()
         TestTrace();
         OldN=CurrN;
     }
-//    if (ImGui::Button("Test Trace"))
-//    {
-//        TestTrace();
-//    }
+
+    if (ImGui::Button("Test Trace Speed"))
+    {
+        TestSpeed();
+    }
+    if (ImGui::Button("Test Self Intersect"))
+    {
+        TestSelfIntersect();
+    }
+    if (ImGui::Button("Init Tracing"))
+    {
+        InitTracing();
+    }
+
+    if (ImGui::Button("Add Next"))
+    {
+        PathSampl.AddNextPath();
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+    }
 
     //    ImGui::SliderInt("Ring",&Nring, 2, 5, "%d",ImGuiSliderFlags_AlwaysClamp);
     //    if (ImGui::Button("Init By Curvature"))
@@ -375,6 +447,12 @@ void GLDrawMesh()
 
 
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(TGraph,VertCurv,PathN,MeshBox.Diag()*0.005);
+
+
+    GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam;
+    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(TGraph,VertCurv,PathSampl.
+                                                          SelectedPaths,MeshBox.Diag()*0.005,
+                                                          PDParam,PathColors);
     //GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawSelectedNodes(TGraph,VertCurv,0,MeshBox.Diag()*0.005);
 
 }

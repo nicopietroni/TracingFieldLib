@@ -109,15 +109,24 @@ void FindVertexStar(const std::vector<std::vector<int> > &connections,
         ExtendStar(Kernel,extend_step);
 }
 
-void FindVertexStar(const std::vector<std::vector<int> > &connections,
-                    std::vector<std::vector<int> > &Kernel,
-                    const int extend_step=0)
+int FindMaxVertIdx(const std::vector<std::vector<int> > &connections)
 {
     int NumV=0;
     for (size_t i=0;i<connections.size();i++)
         for (size_t j=0;j<connections[i].size();j++)
             NumV=std::max(NumV,connections[i][j]);
+    return NumV;
+}
 
+void FindVertexStar(const std::vector<std::vector<int> > &connections,
+                    std::vector<std::vector<int> > &Kernel,
+                    const int extend_step=0)
+{
+//    int NumV=0;
+//    for (size_t i=0;i<connections.size();i++)
+//        for (size_t j=0;j<connections[i].size();j++)
+//            NumV=std::max(NumV,connections[i][j]);
+    int NumV=FindMaxVertIdx(connections);
     NumV++;//num vertices is bigger index +1
 
     FindVertexStar(connections,NumV,Kernel,extend_step);
@@ -268,8 +277,6 @@ void getFFAdjacencyNonManifold(const std::vector<std::vector<int> > &Faces,
         }
     }
 }
-
-
 
 void FindFaceStar(const std::vector<std::vector<int> > &connections,
                   std::vector<std::vector<int> > &Kernel,

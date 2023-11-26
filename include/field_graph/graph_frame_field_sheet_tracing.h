@@ -609,8 +609,8 @@ public:
     {
         //trace from the two sets contemporanily
         typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
-        SParam.stop_at_S0=false;
-        SParam.stop_at_S1=false;
+        SParam.StopAtSel[0]=false;
+        SParam.StopAtSel[1]=false;
 
         std::vector<int> SourceNodes(S.SourceNode0);
         SourceNodes.insert(SourceNodes.end(),S.SourceNode1.begin(),S.SourceNode1.end());

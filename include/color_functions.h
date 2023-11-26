@@ -83,6 +83,13 @@ Point3<ScalarType> ScatterColor(int range, int value,float Sat=.3f,float Val=.9f
 }
 
 template <class ScalarType>
+void ScatterColor(std::vector<Point3<ScalarType> > &Col,float Sat=.3f,float Val=.9f)
+{
+    for (size_t i=0;i<Col.size();i++)
+        Col[i]=ScatterColor<ScalarType>((int)Col.size(),(int)i,Sat,Val);
+}
+
+template <class ScalarType>
 inline Geo::Point3<ScalarType> Blue()
 {
     return Geo::Point3<ScalarType>(0,0,1);
