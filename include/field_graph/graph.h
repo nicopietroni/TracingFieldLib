@@ -257,6 +257,32 @@ public:
         return (N[IndexN0][LocalIdx].N);
     }
 
+    void GetNeigh(const int &IndexN0,
+                  bool onlyDirect,
+                  bool onlyVisible,
+                  std::vector<int> &Neigh,
+                  std::vector<ScalarType> &NeighW)const
+    {
+        assert(IndexN0>=0);
+        assert(IndexN0<(int)N.size());
+        Neigh.clear();
+        NeighW.clear();
+
+        for (size_t i=0;i<N[IndexN0].size();i++)
+        {
+           if (!ActiveLink(IndexN0,i))continue;
+           if ((onlyDirect)&&(!DirectLink(IndexN0,i)))continue;
+           if ((onlyVisible)&&(!VisibleLink(IndexN0,i)))continue;
+
+           int IndexNeigh=N[IndexN0][i].N;
+           if (!IsEnabled(IndexNeigh))continue;
+
+           Neigh.push_back(IndexNeigh);
+           NeighW.push_back(N[IndexN0][i]);
+        }
+    }
+
+
     void SelectNoteType(NType TypeNode,int IndexS)
     {
         assert(AllocatedSelected());
