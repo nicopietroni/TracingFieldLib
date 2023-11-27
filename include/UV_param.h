@@ -221,7 +221,7 @@ public:
 
         Eigen::MatrixXd V_uv;
         V_uv.resize(VertPos.size(),2);
-        for (unsigned i=0;i<V_uv.cols();++i)
+        for (unsigned i=0;i<V_uv.rows();++i)
         {
             V_uv(i,0)=VertUV[i].X;
             V_uv(i,1)=VertUV[i].Y;
