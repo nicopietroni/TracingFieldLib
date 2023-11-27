@@ -97,76 +97,90 @@ void InitTracing()
     PathSampl.Init();
 }
 
-void TestTrace()
+void AddAllPaths()
 {
-    int currI=CurrN;
-    do{
-        if (TGraph.NodeType(currI)==Geo::Internal)
-        {
-           CurrN=currI;
-           break;
-        }
-        currI=(currI+1)%TGraph.NumNodes();
-    }while (true);
-    tested_trace++;
-    bool has_traced=Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(TGraph,CurrN,PathN);
-    if (!has_traced) failed_trace++;
-}
-
-void TestSpeed()
-{
-    // Record the start time
     auto start = std::chrono::high_resolution_clock::now();
-    failed_trace=0;
-    tested_trace=0;
-    for (CurrN=0;CurrN<(int)TGraph.NumNodes();CurrN++)
-    {
-        if ((CurrN % 100)==0)
-            std::cout<<"Testing "<<CurrN<<std::endl;
-       TestTrace();
-    }
-    // Record the end time
+    PathSampl.InsertAllPaths();
     auto end = std::chrono::high_resolution_clock::now();
-
     // Calculate the elapsed time
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
+    std::cout << "Adding Paths Elapsed time: " << elapsed_seconds << " seconds " <<std::endl;
 
-    std::cout << "All Trace Elapsed time: " << elapsed_seconds << " seconds " << tested_trace <<" start nodes"<<std::endl;
-    std::cout << "Failed trace " << failed_trace <<std::endl;
-
-    CurrN=0;
+    PathColors.resize(PathSampl.SelectedPaths.size());
+    Geo::ScatterColor<ScalarType>(PathColors);
 }
 
-void TestSelfIntersect()
-{
-    // Record the start time
-    auto start = std::chrono::high_resolution_clock::now();
+//void TestTrace()
+//{
+//    int currI=CurrN;
+//    do{
+//        if (TGraph.NodeType(currI)==Geo::Internal)
+//        {
+//           CurrN=currI;
+//           break;
+//        }
+//        currI=(currI+1)%TGraph.NumNodes();
+//    }while (true);
+//    tested_trace++;
+//    bool has_traced=Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(TGraph,CurrN,PathN);
+//    if (!has_traced) failed_trace++;
+//}
 
-    for (CurrN=0;CurrN<(int)TGraph.NumNodes();CurrN++)
-    {
-        if ((CurrN % 100)==0)
-            std::cout<<"Testing "<<CurrN<<std::endl;
-       TestTrace();
-       if (Geo::PathFunctions<ScalarType>::SelfIntersectTangentially(TGraph,PathN))
-       {
-           std::cout<<"Found Self Intersection Path "<<CurrN<<std::endl;
-//           for (size_t i=0;i<PathN.size();i++)
-//           {}
-           break;
-       }
-    }
-    // Record the end time
-    auto end = std::chrono::high_resolution_clock::now();
+//void TestSpeed()
+//{
+//    // Record the start time
+//    auto start = std::chrono::high_resolution_clock::now();
+//    failed_trace=0;
+//    tested_trace=0;
+//    for (CurrN=0;CurrN<(int)TGraph.NumNodes();CurrN++)
+//    {
+//        if ((CurrN % 100)==0)
+//            std::cout<<"Testing "<<CurrN<<std::endl;
+//       TestTrace();
+//    }
+//    // Record the end time
+//    auto end = std::chrono::high_resolution_clock::now();
 
-    // Calculate the elapsed time
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
+//    // Calculate the elapsed time
+//    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+//    double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
 
-    std::cout << "All Trace Elapsed time: " << elapsed_seconds << " seconds " << TGraph.NumNodes() <<" start nodes"<<std::endl;
+//    std::cout << "All Trace Elapsed time: " << elapsed_seconds << " seconds " << tested_trace <<" start nodes"<<std::endl;
+//    std::cout << "Failed trace " << failed_trace <<std::endl;
 
-    CurrN=0;
-}
+//    CurrN=0;
+//}
+
+//void TestSelfIntersect()
+//{
+//    // Record the start time
+//    auto start = std::chrono::high_resolution_clock::now();
+
+//    for (CurrN=0;CurrN<(int)TGraph.NumNodes();CurrN++)
+//    {
+//        if ((CurrN % 100)==0)
+//            std::cout<<"Testing "<<CurrN<<std::endl;
+//       TestTrace();
+//       if (Geo::PathFunctions<ScalarType>::SelfIntersectTangentially(TGraph,PathN))
+//       {
+//           std::cout<<"Found Self Intersection Path "<<CurrN<<std::endl;
+////           for (size_t i=0;i<PathN.size();i++)
+////           {}
+//           break;
+//       }
+//    }
+//    // Record the end time
+//    auto end = std::chrono::high_resolution_clock::now();
+
+//    // Calculate the elapsed time
+//    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+//    double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
+
+//    std::cout << "All Trace Elapsed time: " << elapsed_seconds << " seconds " << TGraph.NumNodes() <<" start nodes"<<std::endl;
+
+//    CurrN=0;
+//}
 
 
 void LoadMesh(const std::string &path)
@@ -330,32 +344,47 @@ void SetRenderBar()
         has_graph=true;
     }
 
-    ImGui::InputInt("test node",&CurrN);
-    if ((CurrN!=OldN)&&(has_graph))
-    {
-        TestTrace();
-        OldN=CurrN;
-    }
+//    ImGui::InputInt("test node",&CurrN);
+//    if ((CurrN!=OldN)&&(has_graph))
+//    {
+//        TestTrace();
+//        OldN=CurrN;
+//    }
 
-    if (ImGui::Button("Test Trace Speed"))
-    {
-        TestSpeed();
-    }
-    if (ImGui::Button("Test Self Intersect"))
-    {
-        TestSelfIntersect();
-    }
+//    if (ImGui::Button("Test Trace Speed"))
+//    {
+//        TestSpeed();
+//    }
+//    if (ImGui::Button("Test Self Intersect"))
+//    {
+//        TestSelfIntersect();
+//    }
+
     if (ImGui::Button("Init Tracing"))
     {
         InitTracing();
     }
 
-    if (ImGui::Button("Add Next"))
+    if (ImGui::Button("Add One"))
     {
         PathSampl.AddNextPath();
         PathColors.resize(PathSampl.SelectedPaths.size());
         Geo::ScatterColor<ScalarType>(PathColors);
     }
+
+    if (ImGui::Button("Add All Paths"))
+        AddAllPaths();
+//        auto start = std::chrono::high_resolution_clock::now();
+//        PathSampl.InsertAllPaths();
+//        auto end = std::chrono::high_resolution_clock::now();
+//        // Calculate the elapsed time
+//        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+//        double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
+//        std::cout << "Adding Paths Elapsed time: " << elapsed_seconds << " seconds " <<std::endl;
+
+//        PathColors.resize(PathSampl.SelectedPaths.size());
+//        Geo::ScatterColor<ScalarType>(PathColors);
+//    }
 
     //    ImGui::SliderInt("Ring",&Nring, 2, 5, "%d",ImGuiSliderFlags_AlwaysClamp);
     //    if (ImGui::Button("Init By Curvature"))

@@ -11,6 +11,7 @@
 //#include "../point3.h"
 
 #define SELECTED_GRAPH_FLAG 4
+#define DIST_SWAP_NUM 2
 
 namespace  Geo{
 
@@ -37,7 +38,8 @@ class TracingGraph
     std::vector<int> F;
 
     //the distance
-    std::vector<ScalarType> D;
+    int CurrDIndex;
+    std::vector<ScalarType> D[DIST_SWAP_NUM];
 
     //the global mark
     int GlobalMark;
@@ -124,10 +126,12 @@ class TracingGraph
         }
     };
 
-
     std::vector<std::vector<NeighInfo> > N;
 
 public:
+
+    int &CurrDistIndex()
+    {return CurrDIndex;}
 
     void InitDirectEdge()
     {
@@ -285,6 +289,13 @@ public:
         }
     }
 
+    bool IsEnabled(const int &IndexN)const
+    {
+        assert(IndexN>=0);
+        assert(IndexN<EnabledN.size());
+        return(EnabledN[IndexN]);
+    }
+
     void EnableNode(const int &IndexN)
     {
         assert(IndexN>=0);
@@ -299,20 +310,26 @@ public:
         EnabledN[IndexN]=false;
     }
 
-    void DisableArcsToDisabledNodes()
+    void DisableNodes(const std::vector<int> &IndexN)
     {
-        for (size_t i=0;i<N.size();i++)
-        {
-            for (size_t j=0;j<N[i].size();i++)
-            {
-                int IndexN=N[i][j];
-                assert(IndexN>=0);
-                assert(IndexN<EnabledN.size());
-                if (EnabledN[IndexN])continue;
-                N[i][j].Enabled=false;
-            }
-        }
+        for (size_t i=0;i<IndexN.size();i++)
+            DisableNode(IndexN[i]);
     }
+
+//    void DisableArcsToDisabledNodes()
+//    {
+//        for (size_t i=0;i<N.size();i++)
+//        {
+//            for (size_t j=0;j<N[i].size();i++)
+//            {
+//                int IndexN=N[i][j];
+//                assert(IndexN>=0);
+//                assert(IndexN<EnabledN.size());
+//                if (EnabledN[IndexN])continue;
+//                N[i][j].Enabled=false;
+//            }
+//        }
+//    }
 
     void Clear()
     {
@@ -323,7 +340,9 @@ public:
         //W.clear();
         TM.clear();
         F.clear();
-        D.clear();
+        for (size_t i=0;i<DIST_SWAP_NUM;i++)
+            D[i].clear();
+        //D.clear();
         NT.clear();
         Src.clear();
         GlobalMark=0;
@@ -399,8 +418,12 @@ public:
         TM.resize(N.size(),0);
         F.clear();
         F.resize(N.size(),-1);
-        D.clear();
-        D.resize(N.size(),0);
+
+        for (size_t i=0;i<DIST_SWAP_NUM;i++)
+        {
+            D[i].clear();
+            D[i].resize(N.size(),0);
+        }
 
         for (size_t i=0;i<SELECTED_GRAPH_FLAG;i++)
         {
@@ -442,14 +465,16 @@ public:
 
     const ScalarType &Distance(const size_t &IndexN)const
     {
-        assert(IndexN<D.size());
-        return D[IndexN];
+        assert(CurrDIndex<DIST_SWAP_NUM);
+        assert(IndexN<D[CurrDIndex].size());
+        return D[CurrDIndex][IndexN];
     }
 
     ScalarType &Distance(const size_t &IndexN)
     {
-        assert(IndexN<D.size());
-        return D[IndexN];
+        assert(CurrDIndex<DIST_SWAP_NUM);
+        assert(IndexN<D[CurrDIndex].size());
+        return D[CurrDIndex][IndexN];
     }
 
     const NType &NodeType(const size_t &IndexN)const
@@ -467,7 +492,8 @@ public:
     size_t NumNodes()const
     {
         assert(TM.size()==F.size());
-        assert(F.size()==D.size());
+        assert(CurrDIndex<DIST_SWAP_NUM);
+        assert(F.size()==D[CurrDIndex].size());
         return (N.size());
     }
 
@@ -509,7 +535,7 @@ public:
     }
 
     TracingGraph(GraphType _GType)
-    {GType=_GType;}
+    {GType=_GType;CurrDIndex=0;}
 };
 
 template <class ScalarType>

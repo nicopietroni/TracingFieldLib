@@ -5,7 +5,7 @@
 #include <list>
 #include <set>
 #include "path_functions.h"
-#include "../cross_field.h"
+//#include "../cross_field.h"
 #include "graph_tracing.h"
 
 namespace Geo{
@@ -35,6 +35,7 @@ class GraphTracing
         SParam.avoid_zero_path=true;
         SParam.StopAtSel[0]=true;
         SParam.onlyDirect=false;
+        SParam.stopAtPrevDist=false;
 
         ScalarType PathL;
         std::vector<int> SourceNodes;

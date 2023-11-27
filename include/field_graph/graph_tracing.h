@@ -147,7 +147,6 @@ public:
                 if (HasCompletedPath)
                 {
                     StopNode=CurrN;
-
                     return true;
                 }
             }
@@ -173,9 +172,9 @@ public:
 
                 //check if has been explored or not
                 bool IsMarked=(TGraph.IsMarked(NextN));
+
                 //if use previous distance not need to check if marked
-                //TO BE DONE
-                if (IsMarked)
+                if ((IsMarked)||(SParam.stopAtPrevDist))
                 {
                     //check for loops
                     ScalarType testDist=TGraph.Distance(NextN);

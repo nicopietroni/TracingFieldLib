@@ -9,7 +9,7 @@
 #include "../mesh_sampling.h"
 #include "tracing_interface.h"
 #include "path_functions.h"
-
+#include "./connectivity.h"
 
 namespace Geo{
 
@@ -31,6 +31,17 @@ class CrossPathSampling
     std::vector<int> StartingNodes;
     //std::vector<ScalarType> NodeDistances;
     int NumSamples;
+
+
+    std::vector<std::vector<int> > SampledPaths;
+    enum SP_Status{SP_Selected,SP_Discarded,SP_Evaluate};
+    std::vector<SP_Status> SampledPaths_Status;
+
+    bool avoidSingularities;
+    bool dynamicUpdates;
+    std::vector<std::pair<ScalarType,int> > Candidates;
+
+    std::unordered_set<int> ConflictNodes;
 
 public:
 
@@ -55,9 +66,13 @@ private:
                                                   RadiusStar,SampledVert,true);
 
         std::cout<<"Sampled "<<SampledVert.size()<<" Starting vertices"<<std::endl;
+        std::set<int> SingSetId(SingIndex.begin(),SingIndex.end());
         //get nodes from sampled vertices
         for (size_t i=0;i<SampledVert.size();i++)
         {
+            //not start tracing from singularities
+            if (avoidSingularities)
+                if (SingSetId.count(SampledVert[i])>0)continue;
 
             std::vector<int> IndexN;
             Field::CrossFieldGraph::NodesOfElem(SampledVert[i],IndexN);
@@ -97,12 +112,13 @@ private:
 
     void InitializeDistance()
     {
+        TGraph.CurrDistIndex()=0;
 
         std::vector<int> StartN;
 
         //first add singularities
         if (avoidSingularities)
-           StartN.insert(StartN.end(),SingNodes.begin(),SingNodes.end());
+            StartN.insert(StartN.end(),SingNodes.begin(),SingNodes.end());
 
         //add border nodes
         StartN.insert(StartN.end(),BorderNodes.begin(),BorderNodes.end());
@@ -124,6 +140,7 @@ private:
         SParam.MaxL=std::numeric_limits<ScalarType>::max();
         SParam.onlyDirect=false;
         SParam.onlyVisible=false;
+        SParam.stopAtPrevDist=false;
         SParam.stopAtPrevDist=false;
 
         int StopNode;
@@ -148,17 +165,14 @@ private:
         return CurrD;
     }
 
-    std::vector<std::vector<int> > SampledPaths;
-    bool avoidSingularities;
-    bool dynamicUpdates;
-    std::vector<std::pair<ScalarType,int> > Candidates;
-    std::unordered_set<int> ConflictNodes;
 
     void SamplePaths(int NumSamples)
     {
         std::cout<<"Sampling starting Nnodes"<<std::endl;
         InitTracingNodes(NumSamples);
         std::cout<<"Sampled "<<StartingNodes.size()<<" Starting Nodes"<<std::endl;
+
+        std::vector<int> NewStartingNodes;
         for (size_t i=0;i<StartingNodes.size();i++)
         {
             std::vector<int> CurrPath;
@@ -167,13 +181,17 @@ private:
             bool self_intersect=Geo::PathFunctions<ScalarType>::SelfIntersectTangentially(TGraph,CurrPath);
             if (self_intersect)continue;
             SampledPaths.push_back(CurrPath);
-
+            NewStartingNodes.push_back(StartingNodes[i]);
         }
+        StartingNodes=NewStartingNodes;
+        SampledPaths_Status.clear();
+        SampledPaths_Status.resize(SampledPaths.size(),SP_Evaluate);
         std::cout<<"Sampled "<<SampledPaths.size()<<" Paths"<<std::endl;
     }
 
     void InitCandidates()
     {
+        Candidates.clear();
         for (size_t i=0;i<SampledPaths.size();i++)
             Candidates.push_back(std::pair<ScalarType,int>(-1,i));
     }
@@ -191,13 +209,12 @@ private:
         std::sort(Candidates.begin(),Candidates.end());
     }
 
-    bool ConflictWithInserted(int IndexPath)
+    bool ConflictWithInserted(const std::vector<int> &TestPath)
     {
-        assert(IndexPath>=0);
-        assert(IndexPath<(int)SampledPaths.size());
-        for (size_t i=0;i<SampledPaths[IndexPath].size();i++)
+
+        for (size_t i=0;i<TestPath.size();i++)
         {
-            int test_node=SampledPaths[IndexPath][i];
+            int test_node=TestPath[i];
             if (ConflictNodes.count(test_node)>0)return true;
         }
         return false;
@@ -224,61 +241,173 @@ private:
         }
     }
 
-    void InitSingularityNodes()
+    void InitSingularityNodes(bool use_star=true)
     {
+        std::vector<int> VertToUse=SingIndex;
+        //add sing star in case
+        if (use_star)
+        {
+            std::vector<std::vector<int> > Kernel;
+            Geo::FindVertexStar(Connectivity,VertPos.size(),Kernel);
+            for (size_t j=0;j<SingIndex.size();j++)
+            {
+                int IndexV=SingIndex[j];
+                assert(IndexV>=0);
+                assert(IndexV<Kernel.size());
+                VertToUse.insert(VertToUse.end(),Kernel[IndexV].begin(),Kernel[IndexV].end());
+            }
+        }
+        //move one to
         SingNodes.clear();
-        for (size_t j=0;j<SingIndex.size();j++)
+        for (size_t j=0;j<VertToUse.size();j++)
         {
             std::vector<int> IndexN;
-            Field::CrossFieldGraph::NodesOfElem(SingIndex[j],IndexN);
+            Field::CrossFieldGraph::NodesOfElem(VertToUse[j],IndexN);
             for (size_t j=0;j<IndexN.size();j++)
             {
-                if (!IsTraceable(IndexN[j]))continue;
-                SingNodes.push_back(IndexN[j]);
+                if (!IsTraceable(VertToUse[j]))continue;
+                SingNodes.push_back(VertToUse[j]);
             }
         }
     }
 
-//    void InitInsertedPathNodes()
-//    {
-////        SingNodes.clear();
-////        for (size_t j=0;j<SingIndex.size();j++)
-////        {
-////            std::vector<int> IndexN;
-////            Field::CrossFieldGraph::NodesOfElem(SingIndex[j],IndexN);
-////            for (size_t j=0;j<IndexN.size();j++)
-////            {
-////                if (!IsTraceable(IndexN[j]))continue;
-////                SingNodes.push_back(IndexN[j]);
-////            }
-////        }
-//    }
+    void AddToConflictNodes(const std::vector<int> &NodesPath)
+    {
+        std::vector<int> OppNodesPath;
+        Field::CrossFieldGraph::OppositeNodeCrossField(NodesPath,OppNodesPath);
+        ConflictNodes.insert(NodesPath.begin(),NodesPath.end());
+        ConflictNodes.insert(OppNodesPath.begin(),OppNodesPath.end());
+    }
+
+    void DisableGraphNodes(const std::vector<int> &NodesPath)
+    {
+        std::vector<int> To_Disable=NodesPath;
+        std::vector<int> OppNodesPath;
+        Field::CrossFieldGraph::OppositeNodeCrossField(NodesPath,OppNodesPath);
+        To_Disable.insert(To_Disable.end(),OppNodesPath.begin(),OppNodesPath.end());
+        TGraph.DisableNodes(To_Disable);
+    }
+
+    void UpdateDistancesWithLastInsertedPath()
+    {
+        std::vector<int> StartN;
+        StartN.insert(StartN.end(),SelectedPaths.back().begin(),SelectedPaths.back().end());
+        std::vector<int> OppNodes;
+        Field::CrossFieldGraph::OppositeNodeCrossField(SelectedPaths.back(),OppNodes);
+        StartN.insert(StartN.end(),OppNodes.begin(),OppNodes.end());
+
+        typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
+        SParam.avoid_zero_path=true;
+        for (size_t i=0;i<SELECTED_GRAPH_FLAG;i++)
+            SParam.StopAtSel[i]=false;
+        SParam.MaxL=std::numeric_limits<ScalarType>::max();
+        SParam.onlyDirect=false;
+        SParam.onlyVisible=false;
+        SParam.stopAtPrevDist=true;
+
+        int StopNode;
+        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,StartN,SParam,StopNode);
+    }
+
+    void RetraceCandidatesConflictWithSelected()
+    {
+        assert(SampledPaths_Status.size()==SampledPaths.size());
+        assert(StartingNodes.size()==SampledPaths.size());
+        for (size_t i=0;i<SampledPaths.size();i++)
+        {
+            if (SampledPaths_Status[i]!=SP_Evaluate)continue;
+            bool has_conflict=ConflictWithInserted(SampledPaths[i]);
+            if (!has_conflict)continue;//fine no need to retrace
+
+            //check if the start nodes is avalable
+            if (ConflictNodes.count(StartingNodes[i])>0)
+            {
+                assert(!TGraph.IsEnabled(StartingNodes[i]));
+                SampledPaths_Status[i]=SP_Discarded;
+                continue;
+            }
+
+            bool has_traced=Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(TGraph,StartingNodes[i],SampledPaths[i]);
+            if (!has_traced)
+            {
+                SampledPaths_Status[i]=SP_Discarded;
+                continue;
+            }
+            bool self_intersect=Geo::PathFunctions<ScalarType>::SelfIntersectTangentially(TGraph,SampledPaths[i]);
+            if (self_intersect)
+            {
+                SampledPaths_Status[i]=SP_Discarded;
+                continue;
+            }
+        }
+    }
 
 public:
 
+    void WriteStats()
+    {
+        std::cout<<"Added Total:" <<SelectedPaths.size()<<" paths"<<std::endl;
+        int NumNodes=0;
+        for (int i=0;i<SelectedPaths.size();i++)
+            NumNodes+=SelectedPaths[i].size();
+        std::cout<<"Nodes Total:" <<NumNodes<<std::endl;
+    }
+
     bool AddNextPath()
     {
+        if (Candidates.size()==0)return false;
+
+        TGraph.CurrDistIndex()=0;
         //start from the last one in reverse order (add the farthest)
-        for (size_t i=Candidates.size()-1;i>=0;i--)
+        for (int i=Candidates.size()-1;i>=0;i--)
         {
+
             int IndexPath=Candidates[i].second;
+
+            if (SampledPaths_Status[IndexPath]!=SP_Evaluate)continue;
+
             //in this case just check if intersect
             bool has_conflict=false;
             if (!dynamicUpdates)
-                has_conflict=ConflictWithInserted(IndexPath);
+                has_conflict=ConflictWithInserted(SampledPaths[IndexPath]);
 
             if (has_conflict)
+            {
+                SampledPaths_Status[IndexPath]=SP_Discarded;
                 continue;
-
-            //remove the one that have been marked and the inserted one
-            int CurrSize=(i+1);
-            Candidates.resize(CurrSize-1);
+            }
 
             //add the new path
+            SampledPaths_Status[IndexPath]=SP_Selected;
             SelectedPaths.push_back(SampledPaths[IndexPath]);
 
+            AddToConflictNodes(SelectedPaths.back());
+
             //then update distance
-            InitializeDistance();
+            //InitializeDistance();
+
+            if (avoidSingularities)
+                EnableSingularities();
+
+            UpdateDistancesWithLastInsertedPath();
+
+            if (avoidSingularities)
+                DisableSingularities();
+
+            if (dynamicUpdates)
+            {
+                DisableGraphNodes(SelectedPaths.back());
+
+                //              for (size_t i=0;i<SelectedPaths.size();i++)
+                //                  DisableGraphNodes(SelectedPaths[i]);
+
+                TGraph.CurrDistIndex()=1;
+                RetraceCandidatesConflictWithSelected();
+                TGraph.CurrDistIndex()=0;
+
+                //                TGraph.EnableAllNodes();
+                //                DisableSingularities();
+            }
 
             //and update candiate priority
             UpdateCandidatePriority();
@@ -288,13 +417,18 @@ public:
         return false;
     }
 
+    void InsertAllPaths()
+    {
+        while(AddNextPath()){};
+        WriteStats();
+    }
+
     void Init()
     {
         InitBorderNodes();
 
         InitSingularityNodes();
 
-        InitializeDistance();
         if (avoidSingularities)
             DisableSingularities();
 
@@ -303,9 +437,12 @@ public:
         if (avoidSingularities)
             EnableSingularities();
 
+        InitializeDistance();
+
         InitCandidates();
 
         UpdateCandidatePriority();
+
     }
 
     CrossPathSampling(std::vector<Geo::Point3<ScalarType > > &_VertPos,
@@ -319,7 +456,7 @@ public:
           SingIndex(_SingIndex),SingValue(_SingValue)
     {
         avoidSingularities=true;
-        dynamicUpdates=false;
+        dynamicUpdates=true;
         NumSamples=1000;
     }
 };

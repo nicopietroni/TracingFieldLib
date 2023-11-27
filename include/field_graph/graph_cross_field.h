@@ -57,8 +57,7 @@ static int OppositeNodeCrossField(int IndexN)
 static void OppositeNodeCrossField(const std::vector<int> &IndexN,
                                    std::vector<int> &OppIndexN)
 {
-    //OppIndexN.clear();
-    OppIndexN.resize(IndexN.size(),-1);
+    OppIndexN.clear();
     for (size_t i=0;i<IndexN.size();i++)
         OppIndexN.push_back(OppositeNodeCrossField(IndexN[i]));
 }
