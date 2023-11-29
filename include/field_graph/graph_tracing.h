@@ -77,6 +77,7 @@ public:
         bool onlyDirect;
         bool onlyVisible;
         bool stopAtPrevDist;
+        int MaxSteps;
 
         ShortestPathParam()
         {
@@ -87,6 +88,7 @@ public:
             onlyDirect=false;
             onlyVisible=true;
             stopAtPrevDist=false;
+            MaxSteps=-1;
         }
     };
 
@@ -107,6 +109,7 @@ public:
             TGraph.Distance(IndexN0)=0;
             TGraph.Father(IndexN0)=-1;
             TGraph.Source(IndexN0)=IndexN0;
+            TGraph.Steps(IndexN0)=0;
             assert(TGraph.EnabledN[IndexN0]);
             Heap.push_back(HeapEntry(IndexN0,0,IndexN0));
         }
@@ -123,12 +126,14 @@ public:
             size_t CurrN=(Heap.back()).NodeI;
             ScalarType CurrWeight=TGraph.Distance(CurrN);
             size_t CurrSource=TGraph.Source(CurrN);
+            int CurrSteps=TGraph.Steps(CurrN);
             //size_t CurrSource=(Heap.back()).NodeSource;
 
             Heap.pop_back();
 
             if (CurrWeight>SParam.MaxL)
                 return false;
+
 
             assert(TGraph.IsMarked(CurrN));
 
@@ -190,7 +195,15 @@ public:
                     TGraph.Distance(NextN)=NextWeight;
                     TGraph.Father(NextN)=CurrN;
                     TGraph.Source(NextN)=CurrSource;
+                    TGraph.Steps(NextN)=TGraph.Steps(CurrN)+1;
 
+
+//                    if ((SParam.MaxSteps>0)&&(TGraph.Steps(NextN)>SParam.MaxSteps))
+//                    {
+////                        std::cout<<"Max Steps"<<SParam.MaxSteps<<std::endl;
+////                        std::cout<<"Next Steps"<<TGraph.Steps(NextN)<<std::endl;
+//                        continue;
+//                    }
                     Heap.push_back(HeapEntry(NextN,NextWeight,CurrSource));
                     push_heap(Heap.begin(),Heap.end());
                 }

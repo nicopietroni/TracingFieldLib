@@ -7,6 +7,7 @@
 #include <random>
 #include <vector>
 #include "connectivity.h"
+#include <pos3.h>
 
 namespace Geo{
 
@@ -22,21 +23,75 @@ class MeshSampling
         std::shuffle(Sequence.begin(), Sequence.end(), gen);
     }
 
+    //    static void PruneSamples(const int NumVert,
+    //                             const std::vector<std::vector<int> > &Connectivity,
+    //                             const int &RadiusStar,
+    //                             const std::vector<int> &Constraints,
+    //                             std::vector<int> &To_prune)
+    //    {
+    //        //initialize the kernel
+    //        std::vector<std::vector<int> > KernelVert;
+    //        Geo::FindVertexStar(Connectivity,KernelVert,RadiusStar-1);
+
+    //        std::vector<int> Selected;
+    //        std::vector<bool> Valid(NumVert,true);
+    //        for (size_t i=0;i<To_prune.size();i++)
+    //        {
+    //            size_t CurrV=To_prune[i];
+    //            if (!Valid[CurrV])continue;
+
+    //            Selected.push_back(CurrV);
+    //            for (size_t j=0;j<KernelVert[CurrV].size();j++)
+    //            {
+    //                int NeighV=KernelVert[CurrV][j];
+    //                Valid[NeighV]=false;
+    //            }
+    //        }
+    //        To_prune=Selected;
+    //    }
+
     static void PruneSamples(const int NumVert,
                              const std::vector<std::vector<int> > &Connectivity,
-                             const int &RadiusStar,std::vector<int> &To_prune)
+                             const int &RadiusStar,
+                             const std::vector<int> &Constraints,
+                             std::vector<int> &To_prune)
     {
         //initialize the kernel
         std::vector<std::vector<int> > KernelVert;
         Geo::FindVertexStar(Connectivity,KernelVert,RadiusStar-1);
 
+        std::set<int> ConstraintsSet(Constraints.begin(),Constraints.end());
+
         std::vector<int> Selected;
         std::vector<bool> Valid(NumVert,true);
+
+        //first prune considering the border
+        for (size_t i=0;i<Constraints.size();i++)
+        {
+            //add those by default
+            size_t CurrV=Constraints[i];
+            Selected.push_back(CurrV);
+
+            //invalidate the rest
+            for (size_t j=0;j<KernelVert[CurrV].size();j++)
+            {
+                int NeighV=KernelVert[CurrV][j];
+                Valid[NeighV]=false;
+            }
+        }
+
         for (size_t i=0;i<To_prune.size();i++)
         {
             size_t CurrV=To_prune[i];
+
+            //this already inserted and pruned
+            if (ConstraintsSet.count(CurrV)>0)
+                continue;
+
+            //other one non valid, go on
             if (!Valid[CurrV])continue;
 
+            //add those as selected
             Selected.push_back(CurrV);
             for (size_t j=0;j<KernelVert[CurrV].size();j++)
             {
@@ -47,65 +102,110 @@ class MeshSampling
         To_prune=Selected;
     }
 
+
 public:
 
-//    static void SampleBorder(const std::vector<std::vector<int> > &Connectivity,
-//                           const int NumVert,const int &RadiusStar,
-//                           std::vector<size_t> &Selected,int RandSeed=0)
-//    {
-//        //get all border
-//        std::vector<std::vector<int> > NextF,NextE;
-//        Geo::getFFAdjacency(Connectivity,NextF,NextE);
-//        std::vector<size_t> BorderV;
-//        Geo::getBorderVert(Connectivity,NextF,BorderV);
-//        Selected=BorderV;
+    //    static void SampleBorder(const std::vector<std::vector<int> > &Connectivity,
+    //                           const int NumVert,const int &RadiusStar,
+    //                           std::vector<size_t> &Selected,int RandSeed=0)
+    //    {
+    //        //get all border
+    //        std::vector<std::vector<int> > NextF,NextE;
+    //        Geo::getFFAdjacency(Connectivity,NextF,NextE);
+    //        std::vector<size_t> BorderV;
+    //        Geo::getBorderVert(Connectivity,NextF,BorderV);
+    //        Selected=BorderV;
 
-//        //shuffle
-//        std::mt19937 gen(RandSeed);
-//        std::shuffle(Selected.begin(), Selected.end(), gen);
+    //        //shuffle
+    //        std::mt19937 gen(RandSeed);
+    //        std::shuffle(Selected.begin(), Selected.end(), gen);
 
-//        //then prune
-//        PruneSamples(NumVert,Connectivity,RadiusStar,Selected);
-//    }
+    //        //then prune
+    //        PruneSamples(NumVert,Connectivity,RadiusStar,Selected);
+    //    }
 
-//    static void SampleVert(const std::vector<std::vector<int> > &Connectivity,
-//                           const int NumVert,const int &RadiusStar,
-//                           std::vector<int> &Selected,
-//                           int RandSeed=0)
-//    {
-//        Selected.clear();
-//        if (RadiusStar==0)
-//        {
-//            for (int i = 0; i < NumVert; i++) Selected.push_back(i);
-//            return;
-//        }
-//        //initialize the kernel
-//        std::vector<std::vector<int> > KernelVert;
-//        Geo::FindVertexStar(Connectivity,KernelVert,RadiusStar-1);
+    //    static void SampleVert(const std::vector<std::vector<int> > &Connectivity,
+    //                           const int NumVert,const int &RadiusStar,
+    //                           std::vector<int> &Selected,
+    //                           int RandSeed=0)
+    //    {
+    //        Selected.clear();
+    //        if (RadiusStar==0)
+    //        {
+    //            for (int i = 0; i < NumVert; i++) Selected.push_back(i);
+    //            return;
+    //        }
+    //        //initialize the kernel
+    //        std::vector<std::vector<int> > KernelVert;
+    //        Geo::FindVertexStar(Connectivity,KernelVert,RadiusStar-1);
 
-//        std::vector<size_t> Sequence;
-//        std::vector<bool> Valid(NumVert,true);
+    //        std::vector<size_t> Sequence;
+    //        std::vector<bool> Valid(NumVert,true);
 
-//        //randomly perturb the order
-//        GetRandomSeq(NumVert-1,Sequence,RandSeed);
+    //        //randomly perturb the order
+    //        GetRandomSeq(NumVert-1,Sequence,RandSeed);
 
-//        for (size_t i=0;i<Sequence.size();i++)
-//        {
-//            int CurrV=Sequence[i];
-//            if (!Valid[CurrV])continue;
+    //        for (size_t i=0;i<Sequence.size();i++)
+    //        {
+    //            int CurrV=Sequence[i];
+    //            if (!Valid[CurrV])continue;
 
-//            Selected.push_back(CurrV);
-//            for (size_t j=0;j<KernelVert[CurrV].size();j++)
-//            {
-//                int NeighV=KernelVert[CurrV][j];
-//                Valid[NeighV]=false;
-//            }
-//        }
-//    }
+    //            Selected.push_back(CurrV);
+    //            for (size_t j=0;j<KernelVert[CurrV].size();j++)
+    //            {
+    //                int NeighV=KernelVert[CurrV][j];
+    //                Valid[NeighV]=false;
+    //            }
+    //        }
+    //    }
+
+    //    static void SampleVert(const std::vector<std::vector<int> > &Connectivity,
+    //                           const int NumVert,const int &RadiusStar,
+    //                           std::vector<int> &Selected,bool priority_border,
+    //                           int RandSeed=0)
+    //    {
+    //        Selected.clear();
+    //        if (RadiusStar==0)
+    //        {
+    //            for (int i = 0; i < NumVert; i++) Selected.push_back(i);
+    //            return;
+    //        }
+
+    //        if (priority_border)
+    //        {
+    //            std::vector<std::vector<int> > NextF,NextE;
+    //            Geo::getFFAdjacency(Connectivity,NextF,NextE);
+    //            std::vector<bool> IsB;
+    //            Geo::getBorderVert(Connectivity,NextF,NumVert,IsB);
+    //            assert(IsB.size()==NumVert);
+
+    //            std::vector<int> NonBordV,BorderV;
+
+    //            for (size_t i=0;i<IsB.size();i++)
+    //            {
+    //                if (IsB[i])
+    //                    BorderV.push_back((int)i);
+    //                else
+    //                    NonBordV.push_back((int)i);
+    //            }
+    //            std::mt19937 gen(RandSeed);
+    //            std::shuffle(BorderV.begin(), BorderV.end(), gen);
+    //            std::shuffle(NonBordV.begin(), NonBordV.end(), gen);
+    //            //first border then others
+    //            Selected=BorderV;
+    //            Selected.insert(Selected.end(),NonBordV.begin(),NonBordV.end());
+    //        }
+    //        else
+    //        {
+    //            GetRandomSeq(NumVert-1,Selected,RandSeed);
+    //        }
+    //        PruneSamples(NumVert,Connectivity,RadiusStar,Selected);
+    //    }
 
     static void SampleVert(const std::vector<std::vector<int> > &Connectivity,
                            const int NumVert,const int &RadiusStar,
-                           std::vector<int> &Selected,bool priority_border,
+                           std::vector<int> &Selected,
+                           const std::vector<int> &Constraints=std::vector<int>(),
                            int RandSeed=0)
     {
         Selected.clear();
@@ -115,35 +215,9 @@ public:
             return;
         }
 
-        if (priority_border)
-        {
-            std::vector<std::vector<int> > NextF,NextE;
-            Geo::getFFAdjacency(Connectivity,NextF,NextE);
-            std::vector<bool> IsB;
-            Geo::getBorderVert(Connectivity,NextF,NumVert,IsB);
-            assert(IsB.size()==NumVert);
+        GetRandomSeq(NumVert-1,Selected,RandSeed);
 
-            std::vector<int> NonBordV,BorderV;
-
-            for (size_t i=0;i<IsB.size();i++)
-            {
-                if (IsB[i])
-                    BorderV.push_back((int)i);
-                else
-                    NonBordV.push_back((int)i);
-            }
-            std::mt19937 gen(RandSeed);
-            std::shuffle(BorderV.begin(), BorderV.end(), gen);
-            std::shuffle(NonBordV.begin(), NonBordV.end(), gen);
-            //first border then others
-            Selected=BorderV;
-            Selected.insert(Selected.end(),NonBordV.begin(),NonBordV.end());
-        }
-        else
-        {
-            GetRandomSeq(NumVert-1,Selected,RandSeed);
-        }
-        PruneSamples(NumVert,Connectivity,RadiusStar,Selected);
+        PruneSamples(NumVert,Connectivity,RadiusStar,Constraints,Selected);
     }
 
     static void SampleFaces(const std::vector<std::vector<int> > &Connectivity,
@@ -179,6 +253,42 @@ public:
         }
     }
 
+    static void SampleBordersRegularly(const std::vector<std::vector<int> > &Faces,
+                                       const std::vector<std::vector<int> > &NextF,
+                                       const std::vector<std::vector<int> > &NextE,
+                                       const int StepSize,
+                                       const int MinSamplePerBorder,
+                                       std::vector<int> &Selected)
+    {
+        std::vector<std::vector<Pos3 > > BorderPos;
+        getBorderSequnces(Faces,NextF,NextE,BorderPos);
+        for (size_t i=0;i<BorderPos.size();i++)
+        {
+            int CurrStepSize=StepSize;
+            int Subd=floor((ScalarType)BorderPos[i].size()/(ScalarType)StepSize);
+            if (Subd<MinSamplePerBorder)
+            {
+                CurrStepSize=floor((ScalarType)BorderPos[i].size()/(ScalarType)MinSamplePerBorder);
+            }
+            CurrStepSize=std::max((int)1,CurrStepSize);
+
+            for (size_t j=0;j<BorderPos[i].size();j+=CurrStepSize)
+                Selected.push_back(BorderPos[i][j].V);
+        }
+    }
+
+    static void SampleWithBorderRegular(const int NumVert,
+                                        const std::vector<std::vector<int> > &Faces,
+                                        const int StepSize, const int MinSamplePerBorder,
+                                        std::vector<int> &Selected,
+                                        int RandSeed=0)
+    {
+        std::vector<std::vector<int> > NextF,NextE;
+        Geo::getFFAdjacency(Faces,NextF,NextE);
+        std::vector<int> BorderConstraints;
+        SampleBordersRegularly(Faces,NextF,NextE,StepSize,MinSamplePerBorder,BorderConstraints);
+        SampleVert(Faces,NumVert,StepSize,Selected,BorderConstraints,RandSeed);
+    }
 };
 
 }

@@ -25,6 +25,21 @@ inline void glColor(const Geo::Point3<ScalarType> &c)
     glColor3f((float)c.X,(float)c.Y,(float)c.Z);
 }
 
+template <class ScalarType>
+inline void glColorAlpha(const Geo::Point3<ScalarType> &c,
+                         const ScalarType &alpha)
+{
+    assert(c.X>=0);
+    assert(c.X<=1);
+    assert(c.Y>=0);
+    assert(c.Y<=1);
+    assert(c.Z>=0);
+    assert(c.Z<=1);
+    assert(alpha>=0);
+    assert(alpha<=1);
+    glColor4f((float)c.X,(float)c.Y,(float)c.Z,(float)alpha);
+}
+
 inline void glVertex(Geo::Point3<int> const & p)     { glVertex3i(p.X,p.Y,p.Z);}
 inline void glVertex(Geo::Point3<float> const & p)   { glVertex3f(p.X,p.Y,p.Z);}
 inline void glVertex(Geo::Point3<double> const & p)  { glVertex3d(p.X,p.Y,p.Z);}

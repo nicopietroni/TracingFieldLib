@@ -38,7 +38,8 @@ void DrawSurfaceFill3D(const std::vector< Geo::Point3<ScalarType> > &VertPos,
                        const std::vector<Geo::Point3<ScalarType> > &FaceNormal,
                        const std::vector<Geo::Point3<ScalarType> > &VertNormal,
                        bool SmoothShade,TypeRendMesh TRM=TRTriangle,
-                       std::vector<Geo::Point3<ScalarType>> *FaceCol=NULL)
+                       std::vector<Geo::Point3<ScalarType>> *FaceCol=NULL,
+                       bool use_blend=false)
 {
     assert(Connectivity.size()==FaceNormal.size());
     glEnable(GL_LIGHTING);
@@ -46,8 +47,12 @@ void DrawSurfaceFill3D(const std::vector< Geo::Point3<ScalarType> > &VertPos,
     for (size_t i=0;i<Connectivity.size();i++)
     {
         if (FaceCol!=NULL)
-            glColor((*FaceCol)[i]);
-
+        {
+            if (use_blend)
+                glColorAlpha((*FaceCol)[i],0.5);
+            else
+                glColor((*FaceCol)[i]);
+        }
         if (TRM==TRTriangle)
             glBegin(GL_TRIANGLES);
         if (TRM==TrQuad)
@@ -230,7 +235,9 @@ void DrawSurfaceMesh(const std::vector<Geo::Point3<ScalarType> > &VertPos,
     glPolygonOffset(1.0, 1);
 
     if (drawsurface)
-        DrawSurfaceFill3D<ScalarType>(VertPos,Connectivity,FaceNormal,VertNormal,smoothShade,TRM,FaceCol);
+        DrawSurfaceFill3D<ScalarType>(VertPos,Connectivity,FaceNormal,
+                                      VertNormal,smoothShade,TRM,FaceCol,
+                                      use_blend);
 
 
     glDisable(GL_POLYGON_OFFSET_FILL);

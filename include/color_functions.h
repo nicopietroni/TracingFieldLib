@@ -168,12 +168,15 @@ template <class ScalarType>
 void GetColorByScalar(const std::vector<ScalarType> &ScalarVal,
                       std::vector<Geo::Point3<ScalarType> > &Color)
 {
+    Color.clear();
+    if (ScalarVal.size()==0)return;
     // Find the minimum element
     typename std::vector<ScalarType>::const_iterator minElement = std::min_element(ScalarVal.begin(), ScalarVal.end());
     // Find the maximum element
     typename std::vector<ScalarType>::const_iterator maxElement = std::max_element(ScalarVal.begin(), ScalarVal.end());
     ScalarType MinVal=(*minElement);
     ScalarType MaxVal=(*maxElement);
+
     GetColorByScalar(ScalarVal,MinVal,MaxVal,Color);
 
 }

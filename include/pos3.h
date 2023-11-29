@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <iostream>
+#include <connectivity.h>
 
 class Pos3{
 
@@ -74,7 +75,7 @@ public:
 
     int CheckConsistency(const std::vector<std::vector<int> > &Faces,
                          const std::vector<std::vector<int> > &NextF,
-                         const std::vector<std::vector<int> > &NextE)const
+                         const std::vector<std::vector<int> > &NextEd)const
     {
         if (F<0)return -1;
         if (E<0)return -2;
@@ -87,23 +88,23 @@ public:
         int newF=NextF[F][E];
         if (newF!=-1)
         {
-            int newE=NextE[F][E];
+            int newE=NextEd[F][E];
             if (NextF[newF][newE]!=F)return -6;
         }
         return 0;
     }
 
     void FlipF(const std::vector<std::vector<int> > &NextF,
-               const std::vector<std::vector<int> > &NextE)
+               const std::vector<std::vector<int> > &NextEd)
     {
         assert(F>=0);
         assert(E>=0);
         assert(F<(int)NextF.size());
         assert(E<(int)NextF[F].size());
-        assert(F<(int)NextE.size());
-        assert(E<(int)NextE[F].size());
+        assert(F<(int)NextEd.size());
+        assert(E<(int)NextEd[F].size());
         int newF=NextF[F][E];
-        int newE=NextE[F][E];
+        int newE=NextEd[F][E];
         F=newF;
         E=newE;
     }
@@ -116,14 +117,26 @@ public:
 
     void NextE(const std::vector<std::vector<int> > &Faces,
                const std::vector<std::vector<int> > &NextF,
-               const std::vector<std::vector<int> > &NextE)
-    {      
-        FlipF(NextF,NextE);
+               const std::vector<std::vector<int> > &NextEd)
+    {
+        FlipF(NextF,NextEd);
         FlipE(Faces);
         assert(F>=0);
         assert(E>=0);
         assert(F<(int)NextF.size());
         assert(E<(int)NextF[F].size());
+    }
+
+    void NextB(const std::vector<std::vector<int> > &Faces,
+               const std::vector<std::vector<int> > &NextF,
+               const std::vector<std::vector<int> > &NextEd)
+    {
+        assert(IsBorder(NextF));
+        FlipE(Faces);
+        while (!IsBorder(NextF))
+        {
+            NextE(Faces,NextF,NextEd);
+        }
     }
 };
 
@@ -139,11 +152,11 @@ void GetSortedFacesFaceFun(const Pos3 &StartPos,
     HasBorder=false;
 
     assert(currPos.CheckConsistency(Faces,NextF,NextE)==0);
-//    if (ret!=0)
-//    {
-//        std::cout<<"Error:"<<ret<<std::endl;
-//        assert(0);
-//    }
+    //    if (ret!=0)
+    //    {
+    //        std::cout<<"Error:"<<ret<<std::endl;
+    //        assert(0);
+    //    }
 
     do
     {
@@ -179,5 +192,42 @@ void GetSortedFacesFaceFun(const Pos3 &StartPos,
     std::cout<<"Done"<<std::endl;
 }
 
+
+void getBorderSequnces(const std::vector<std::vector<int> > &Faces,
+                       const std::vector<std::vector<int> > &NextF,
+                       const std::vector<std::vector<int> > &NextE,
+                       std::vector<std::vector<Pos3 > > &BorderPos)
+{
+    BorderPos.clear();
+    int MaxV=Geo::FindMaxVertIdx(Faces);
+
+    std::vector<bool> Tested(MaxV,false);
+
+
+    for (size_t i=0;i<NextF.size();i++)
+        for (size_t j=0;j<NextF[i].size();j++)
+        {
+            //not a border
+            if (NextF[i][j]!=-1)continue;
+
+            int FSize=Faces[i].size();
+            int VertIdx0=Faces[i][j];
+            int VertIdx1=Faces[i][(j+1)%FSize];
+            if (Tested[VertIdx0]&&Tested[VertIdx1])continue;
+
+            //otherwise start goind around the border
+            BorderPos.resize(BorderPos.size()+1);
+            Pos3 StartPos(i,j,VertIdx0);
+            Pos3 CurrPos=StartPos;
+            do{
+                Tested[CurrPos.V]=true;
+                BorderPos.back().push_back(CurrPos);
+                //go next border
+                CurrPos.NextB(Faces,NextF,NextE);
+                //then on other side
+                CurrPos.FlipV(Faces);
+            }while (CurrPos!=StartPos);
+        }
+}
 
 #endif

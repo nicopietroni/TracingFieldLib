@@ -1,7 +1,7 @@
 #ifndef CONNECTIVITY
 #define CONNECTIVITY
 
-#include "point3.h"
+//#include "point3.h"
 #include <Eigen/Sparse>
 #include <set>
 //#include "mesh_functions.h"
@@ -332,6 +332,9 @@ void getBorderVert(const std::vector<std::vector<int> > &connections,
         IsB[IndexV]=true;
     }
 }
+
+
+
 
 }
 

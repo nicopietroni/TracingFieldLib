@@ -39,7 +39,7 @@ public:
         TGraph.Select(IndexN1,0);
         SParam.onlyDirect=true;
         SParam.onlyVisible=false;
-
+        SParam.MaxSteps=TGraph.diffuse_step+1;
         std::vector<int> SourceNodes(1,IndexN0);
         ScalarType PathL;
         bool has_connected=Geo::GraphQuery<ScalarType>::ShortestPaths(TGraph,SourceNodes,DirectPath,PathL,SParam);
@@ -64,6 +64,9 @@ public:
             bool connected=ConnectDirect(TGraph,IndexN0,IndexN1,DirectPath);
             if (!connected)return false;
 
+            //the new path can be only 3 + diffusion steps (should be 2 but one because of singularities)
+            if (DirectPath.size()>(TGraph.diffuse_step+3))
+                return false;
             //then from second to one before the last
             for (size_t j=1;j<DirectPath.size()-1;j++)
                 NewPath.push_back(DirectPath[j]);

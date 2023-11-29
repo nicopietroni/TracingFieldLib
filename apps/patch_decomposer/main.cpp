@@ -73,7 +73,7 @@ int diffuse_step=1;
 
 int CurrN=0;
 int OldN=-1;
-std::vector<int> PathN;
+//std::vector<int> PathN;
 
 Geo::CrossPathSampling<ScalarType> PathSampl(VertPos,Connectivity,TGraph,VertCurv,SingIndex,SingValue);
 
@@ -93,7 +93,7 @@ int tested_trace=0;
 
 void InitTracing()
 {
-    PathN.clear();
+    //PathN.clear();
     PathSampl.Init();
 }
 
@@ -365,6 +365,8 @@ void SetRenderBar()
         InitTracing();
     }
 
+    ImGui::Checkbox("Dynamic Update", &PathSampl.dynamicUpdates);
+
     if (ImGui::Button("Add One"))
     {
         PathSampl.AddNextPath();
@@ -475,7 +477,7 @@ void GLDrawMesh()
     }
 
 
-    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(TGraph,VertCurv,PathN,MeshBox.Diag()*0.005);
+    //GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(TGraph,VertCurv,PathN,MeshBox.Diag()*0.005);
 
 
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam;

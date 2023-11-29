@@ -527,7 +527,7 @@ public:
         SetNodeTypeVertCross(TGraph,Faces,VertPos,CrossField);
         RemoveBorderExitNeigh(TGraph);
 
-
+        TGraph.diffuse_step=diffuse_step;
         TGraph.InitTracing();
         TGraph.SortAllNeigh();
     }
@@ -550,7 +550,7 @@ public:
         assert(IsProperConnectivity(Adjacency));
 
         std::set<std::pair<int,int> > EdgeSet;
-        GetCrossAdjDirectSet(PolyConnectivity,EdgeSet);
+        GetFrameAdjDirectSet(PolyConnectivity,EdgeSet);
 
         InitAdjacencyFromPolyFrameField(TGraph,Adjacency,EdgeSet,FrameField,drift_penalty,maxAngle);
 

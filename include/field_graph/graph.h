@@ -44,6 +44,11 @@ class TracingGraph
     //the global mark
     int GlobalMark;
 
+
+    //the integer steps
+    std::vector<int> S;
+
+
     //selected marks used for Dijkstra
     std::vector<int> Sel[SELECTED_GRAPH_FLAG];
     int GlobalSelMark[SELECTED_GRAPH_FLAG];
@@ -129,6 +134,8 @@ class TracingGraph
     std::vector<std::vector<NeighInfo> > N;
 
 public:
+    //the number of diffusion done
+    int diffuse_step;
 
     int &CurrDistIndex()
     {return CurrDIndex;}
@@ -278,7 +285,7 @@ public:
            if (!IsEnabled(IndexNeigh))continue;
 
            Neigh.push_back(IndexNeigh);
-           NeighW.push_back(N[IndexN0][i]);
+           NeighW.push_back(N[IndexN0][i].W);
         }
     }
 
@@ -296,6 +303,11 @@ public:
     void EnableAllNodes()
     {
         EnabledN=std::vector<bool>(N.size(),true);
+    }
+
+    void DisableAllNodes()
+    {
+        EnabledN=std::vector<bool>(N.size(),false);
     }
 
     void EnableAllArcs()
@@ -366,6 +378,7 @@ public:
         //W.clear();
         TM.clear();
         F.clear();
+        S.clear();
         for (size_t i=0;i<DIST_SWAP_NUM;i++)
             D[i].clear();
         //D.clear();
@@ -445,6 +458,9 @@ public:
         F.clear();
         F.resize(N.size(),-1);
 
+        S.clear();
+        S.resize(N.size(),0);
+
         for (size_t i=0;i<DIST_SWAP_NUM;i++)
         {
             D[i].clear();
@@ -501,6 +517,18 @@ public:
         assert(CurrDIndex<DIST_SWAP_NUM);
         assert(IndexN<D[CurrDIndex].size());
         return D[CurrDIndex][IndexN];
+    }
+
+    const int &Steps(const size_t &IndexN)const
+    {
+        assert(IndexN<S.size());
+        return S[IndexN];
+    }
+
+    int &Steps(const size_t &IndexN)
+    {
+        assert(IndexN<S.size());
+        return S[IndexN];
     }
 
     const NType &NodeType(const size_t &IndexN)const

@@ -38,13 +38,13 @@ class CrossPathSampling
     std::vector<SP_Status> SampledPaths_Status;
 
     bool avoidSingularities;
-    bool dynamicUpdates;
     std::vector<std::pair<ScalarType,int> > Candidates;
 
     std::unordered_set<int> ConflictNodes;
 
 public:
 
+    bool dynamicUpdates;
     std::vector<std::vector<int> > SelectedPaths;
 
 private:
@@ -62,8 +62,14 @@ private:
     {
         int RadiusStar=VertPos.size()/NumSources;
         std::vector<int> SampledVert;
-        Geo::MeshSampling<ScalarType>::SampleVert(Connectivity,VertPos.size(),
-                                                  RadiusStar,SampledVert,true);
+
+        //        Geo::MeshSampling<ScalarType>::SampleVert(Connectivity,VertPos.size(),
+        //                                                  RadiusStar,SampledVert,true);
+        //        std::vector<std::vector<int> > NextF,NextE;
+        //        Geo::getFFAdjacency(Connectivity,NextF,NextE);
+        //        Geo::MeshSampling<ScalarType>::SampleBordersRegularly(Connectivity,NextF,NextE,RadiusStar,4,SampledVert);
+
+        Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,RadiusStar,4,SampledVert);
 
         std::cout<<"Sampled "<<SampledVert.size()<<" Starting vertices"<<std::endl;
         std::set<int> SingSetId(SingIndex.begin(),SingIndex.end());
@@ -131,6 +137,21 @@ private:
             std::vector<int> OppNodes;
             Field::CrossFieldGraph::OppositeNodeCrossField(SelectedPaths[i],OppNodes);
             StartN.insert(StartN.end(),OppNodes.begin(),OppNodes.end());
+        }
+
+        if (StartN.size()==0)
+        {
+            //add the ones with smaller X
+            int IndexV=-1;
+            ScalarType minX=std::numeric_limits<ScalarType>::max();
+            for (size_t i=0;i<VertPos.size();i++)
+            {
+                if (VertPos[i].X>minX)continue;
+                IndexV=i;
+                minX=VertPos[i].X;
+            }
+            assert(IndexV>=0);
+            StartN.push_back(IndexV);
         }
 
         typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
@@ -344,6 +365,16 @@ private:
 
 public:
 
+    void ClearSamples()
+    {
+        StartingNodes.clear();
+        SampledPaths.clear();
+        SampledPaths_Status.clear();
+        Candidates.clear();
+        ConflictNodes.clear();
+        SelectedPaths.clear();
+    }
+
     void WriteStats()
     {
         std::cout<<"Added Total:" <<SelectedPaths.size()<<" paths"<<std::endl;
@@ -398,15 +429,9 @@ public:
             {
                 DisableGraphNodes(SelectedPaths.back());
 
-                //              for (size_t i=0;i<SelectedPaths.size();i++)
-                //                  DisableGraphNodes(SelectedPaths[i]);
-
                 TGraph.CurrDistIndex()=1;
                 RetraceCandidatesConflictWithSelected();
                 TGraph.CurrDistIndex()=0;
-
-                //                TGraph.EnableAllNodes();
-                //                DisableSingularities();
             }
 
             //and update candiate priority
@@ -425,6 +450,10 @@ public:
 
     void Init()
     {
+        TGraph.EnableAllNodes();
+
+        ClearSamples();
+
         InitBorderNodes();
 
         InitSingularityNodes();
