@@ -315,6 +315,7 @@ void getBorderVert(const std::vector<std::vector<int> > &connections,
     BorderV.erase(last, BorderV.end());
 }
 
+
 void getBorderVert(const std::vector<std::vector<int> > &connections,
                    const std::vector<std::vector<int> > &NextF,
                    const int NumVert,

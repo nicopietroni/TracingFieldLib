@@ -26,6 +26,7 @@
 #include <chrono>
 #include <field_graph/tracing_interface.h>
 #include <field_graph/path_sampling.h>
+#include "tangent_space_smooth.h"
 
 GLFWwindow* window;
 std::string PathMesh;
@@ -109,6 +110,11 @@ void AddAllPaths()
 
     PathColors.resize(PathSampl.SelectedPaths.size());
     Geo::ScatterColor<ScalarType>(PathColors);
+}
+
+void SmoothPaths()
+{
+    Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos,Connectivity);
 }
 
 //void TestTrace()
@@ -376,6 +382,10 @@ void SetRenderBar()
 
     if (ImGui::Button("Add All Paths"))
         AddAllPaths();
+
+    if (ImGui::Button("Smooth Param"))
+        SmoothPaths();
+
 //        auto start = std::chrono::high_resolution_clock::now();
 //        PathSampl.InsertAllPaths();
 //        auto end = std::chrono::high_resolution_clock::now();

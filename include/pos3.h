@@ -192,6 +192,24 @@ void GetSortedFacesFaceFun(const Pos3 &StartPos,
     std::cout<<"Done"<<std::endl;
 }
 
+void GetSortedVertStar(const Pos3 &StartPos,
+                       const std::vector<std::vector<int> > &Faces,
+                       const std::vector<std::vector<int> > &NextF,
+                       const std::vector<std::vector<int> > &NextE,
+                       std::vector<int > &VertFan,
+                       bool &HasBorder)
+{
+    VertFan.clear();
+
+    std::vector<Pos3> PosFan;
+    GetSortedFacesFaceFun(StartPos,Faces,NextF,NextE,PosFan,HasBorder);
+    for (size_t i=0;i<PosFan.size();i++)
+    {
+        assert(PosFan[i].V==StartPos.V);
+        PosFan[i].FlipV(Faces);
+        VertFan.push_back(PosFan[i].V);
+    }
+}
 
 void getBorderSequnces(const std::vector<std::vector<int> > &Faces,
                        const std::vector<std::vector<int> > &NextF,
@@ -228,6 +246,25 @@ void getBorderSequnces(const std::vector<std::vector<int> > &Faces,
                 CurrPos.FlipV(Faces);
             }while (CurrPos!=StartPos);
         }
+}
+
+void getBorderSequncesVert(const std::vector<std::vector<int> > &Faces,
+                           const std::vector<std::vector<int> > &NextF,
+                           const std::vector<std::vector<int> > &NextE,
+                           std::vector<std::vector<int > > &BorderVIdx)
+{
+    BorderVIdx.clear();
+    std::vector<std::vector<Pos3 > > BorderPos;
+    getBorderSequnces(Faces,NextF,NextE,BorderPos);
+    BorderVIdx.resize(BorderPos.size());
+    for (size_t i=0;i<BorderPos.size();i++)
+    {
+        for (size_t j=0;j<BorderPos[i].size();j++)
+            BorderVIdx[i].push_back(BorderPos[i][j].V);
+
+        assert(BorderVIdx[i].size()>1);
+        assert(BorderVIdx[i][0]!=BorderVIdx[i].back());
+    }
 }
 
 #endif
