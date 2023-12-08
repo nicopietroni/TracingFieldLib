@@ -114,6 +114,21 @@ public:
         DrawNodes(TGraph,Cross,Nodes_To_Draw,scaleVal,lineSize*2,lineSize,Geo::Point3<ScalarType>(0,0,1),ColLine);
     }
 
+    static void DrawNodesOfType(const Geo::TracingGraph<ScalarType> &TGraph,
+                                const std::vector<Field::CrossF<ScalarType> > &Cross,
+                                const typename Geo::NType TNode,
+                                const ScalarType scaleVal, const PathDrawParam &PDParam=PathDrawParam(),
+                                const Geo::Point3<ScalarType> &ColLine=Geo::Point3<ScalarType>(0,1,1))
+    {
+        std::vector<int> Nodes_To_Draw;
+        for (size_t i=0;i<TGraph.NumNodes();i++)
+        {
+            if (TGraph.NodeType(i)!=TNode)continue;
+            Nodes_To_Draw.push_back(i);
+        }
+        DrawNodes(TGraph,Cross,Nodes_To_Draw,scaleVal,PDParam,ColLine);
+    }
+
 };
 
 template <class ScalarType>

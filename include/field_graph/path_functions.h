@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
+#include "../math_utils.h"
 
 namespace Geo{
 
@@ -172,6 +173,23 @@ public:
 
             if (TestNSet.count(IndexN)>0)return true;
             if (TestNSet.count(OppN)>0)return true;
+        }
+        return false;
+    }
+
+    static bool HasSelfEdgeTwice(const std::vector<int> &PathN)
+    {
+        std::unordered_set<std::pair<int,int>,Geo::hashPairIntFunction > TestNSet;
+        for (int i=0;i<PathN.size()-1;i++)
+        {
+            int IndexN0=PathN[i];
+            int IndexN1=PathN[i+1];
+            int IndexV0=Field::CrossFieldGraph::ElemOfNode(IndexN0);
+            int IndexV1=Field::CrossFieldGraph::ElemOfNode(IndexN1);
+            std::pair<int,int> key(std::min(IndexV0,IndexV1),
+                                   std::max(IndexV0,IndexV1));
+            if (TestNSet.count(key)>0)return true;
+            TestNSet.insert(key);
         }
         return false;
     }

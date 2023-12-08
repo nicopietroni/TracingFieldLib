@@ -16,6 +16,7 @@
 #include <GL_functions/GLDrawMesh.h>
 #include <GL_functions/GLDrawField.h>
 #include <GL_functions/GLDrawGraph.h>
+#include <GL_functions/GLDrawPatchData.h>
 
 #include "IO/io_field.h"
 #include <connectivity.h>
@@ -27,13 +28,14 @@
 #include <field_graph/tracing_interface.h>
 #include <field_graph/path_sampling.h>
 #include "tangent_space_smooth.h"
+#include <field_graph/patch_managing.h>
 
 GLFWwindow* window;
 std::string PathMesh;
 std::string PathField;
 UI::OrbitBall trackball;
 ImVec4 clear_color = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);
-ImVec4 mesh_color = ImVec4(0.79f, 0.9f, 0.87f, 1.00f);
+//ImVec4 mesh_color = ImVec4(0.79f, 0.9f, 0.87f, 1.00f);
 float line_thick=1.f;
 int selected_rend_item = 5;
 
@@ -41,6 +43,10 @@ bool showMesh=true;
 bool showCross=true;
 bool showSing=true;
 bool has_graph=false;
+bool DrawTangentNode=false;
+bool DrawExitNode=false;
+bool DrawCorners=false;
+
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
 // Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
@@ -71,7 +77,7 @@ Geo::TracingGraph<ScalarType> TGraph(Geo::GT_CrossField);
 float drift_penalty=100.f;
 float maxAngle=45.f;
 int diffuse_step=1;
-
+int smooth_steps=10;
 int CurrN=0;
 int OldN=-1;
 //std::vector<int> PathN;
@@ -79,6 +85,29 @@ int OldN=-1;
 Geo::CrossPathSampling<ScalarType> PathSampl(VertPos,Connectivity,TGraph,VertCurv,SingIndex,SingValue);
 
 std::vector<Geo::Point3<ScalarType> > PathColors;
+
+std::vector<Geo::Point3<ScalarType> > FaceCol;
+Geo::PatchManaging<ScalarType> PatchM(VertPos,Connectivity,TGraph,PathSampl.SelectedPaths);
+
+int CurrCol=0;
+int OldCol=CurrCol;
+
+Geo::Point3<ScalarType> mesh_color(0.79, 0.9, 0.87);
+
+void UpdateColor()
+{
+    switch(CurrCol) {
+    case 0:
+        FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
+        break;
+    case 1:
+        PatchM.GetColorFaceByPatch(FaceCol);
+        break;
+    default:
+        FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
+        // code block
+    }
+}
 
 void InitGraph()
 {
@@ -98,23 +127,110 @@ void InitTracing()
     PathSampl.Init();
 }
 
-void AddAllPaths()
+void AddAllPaths(bool upd_patches=true)
 {
-    auto start = std::chrono::high_resolution_clock::now();
+    //auto start = std::chrono::high_resolution_clock::now();
     PathSampl.InsertAllPaths();
-    auto end = std::chrono::high_resolution_clock::now();
-    // Calculate the elapsed time
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
-    std::cout << "Adding Paths Elapsed time: " << elapsed_seconds << " seconds " <<std::endl;
+    //    auto end = std::chrono::high_resolution_clock::now();
+    //    // Calculate the elapsed time
+    //    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    //    double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
+    //    std::cout << "Adding Paths Elapsed time: " << elapsed_seconds << " seconds " <<std::endl;
 
     PathColors.resize(PathSampl.SelectedPaths.size());
     Geo::ScatterColor<ScalarType>(PathColors);
+
+    if (upd_patches)
+    {
+        PatchM.Update();
+        CurrCol=1;
+        UpdateColor();
+    }
 }
 
 void SmoothPaths()
 {
-    Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos,Connectivity);
+    Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
+    std::vector<std::vector<int> > VertPaths;
+    PathSampl.GetVertexSelectedPaths(VertPaths);
+    for (size_t i=0;i<VertPaths.size();i++)
+    {
+        for (size_t j=0;j<VertPaths[i].size()-1;j++)
+        {
+            int IndexV0=VertPaths[i][j];
+            int IndexV1=VertPaths[i][j+1];
+            std::pair<int,int> key(std::min(IndexV0,IndexV1),
+                                   std::max(IndexV0,IndexV1));
+            UVP.FeatureLines.push_back(key);
+        }
+    }
+    UVP.Steps=smooth_steps;
+    Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos,Connectivity,UVP);
+
+    //update cross F poistion
+    for (size_t i=0;i<VertCurv.size();i++)
+        VertCurv[i].Pos=VertPos[i];
+}
+
+void InitPatches()
+{
+    PatchM.Init();
+}
+
+void BatchProcess()
+{
+    std::cout << "*** INIT GRAPHS *** " <<std::endl;
+    auto start = std::chrono::high_resolution_clock::now();
+    InitGraph();
+    auto end0 = std::chrono::high_resolution_clock::now();
+    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
+
+    std::cout << "*** INIT PATCHES *** " <<std::endl;
+    InitPatches();
+    auto end1 = std::chrono::high_resolution_clock::now();
+    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - end0);
+
+    std::cout << "*** INIT TRACING *** " <<std::endl;
+    InitTracing();
+    auto end2 = std::chrono::high_resolution_clock::now();
+    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
+
+    std::cout << "*** ADD ALL PATHS *** " <<std::endl;
+    AddAllPaths(false);
+    auto end3 = std::chrono::high_resolution_clock::now();
+    auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
+
+    std::cout << "*** UPDATING PATCHES *** " <<std::endl;
+    PatchM.Update();
+    CurrCol=1;
+    UpdateColor();
+
+    auto end4 = std::chrono::high_resolution_clock::now();
+    auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
+
+    std::cout << "*** SMOOTH PATCHES *** " <<std::endl;
+    SmoothPaths();
+    auto end5 = std::chrono::high_resolution_clock::now();
+    auto elapsed5 = std::chrono::duration_cast<std::chrono::microseconds>(end5 - end4);
+
+    PatchM.InitVisualCornersEdges();
+
+    double elapsed_seconds0 = elapsed0.count() * 1e-6; // Convert microseconds to seconds
+    double elapsed_seconds1 = elapsed1.count() * 1e-6; // Convert microseconds to seconds
+    double elapsed_seconds2 = elapsed2.count() * 1e-6; // Convert microseconds to seconds
+    double elapsed_seconds3 = elapsed3.count() * 1e-6; // Convert microseconds to seconds
+    double elapsed_seconds4 = elapsed4.count() * 1e-6; // Convert microseconds to seconds
+    double elapsed_seconds5 = elapsed5.count() * 1e-6; // Convert microseconds to seconds
+
+    showCross=false;
+
+    std::cout << "*** TIMINGS (sec) *** " <<std::endl;
+    std::cout << "* Init Graph Elapsed time: " << elapsed_seconds0 <<std::endl;
+    std::cout << "* Init Patches: " << elapsed_seconds1 <<std::endl;
+    std::cout << "* Init Tracing: " << elapsed_seconds2  <<std::endl;
+    std::cout << "* Adding Paths: " << elapsed_seconds3  <<std::endl;
+    std::cout << "* Updating Patches: " << elapsed_seconds4  <<std::endl;
+    std::cout << "* Smooth Patches: " << elapsed_seconds5  <<std::endl;
 }
 
 //void TestTrace()
@@ -204,6 +320,8 @@ void LoadMesh(const std::string &path)
     }
     else
         std::cout<<"Mesh not loaded"<<std::endl;
+
+    UpdateColor();
 }
 
 void LoadField(const std::string &path)
@@ -339,36 +457,40 @@ void SetRenderBar()
     ImGui::Checkbox("Draw Mesh", &showMesh);
     ImGui::Checkbox("Draw Cross", &showCross);
     ImGui::Checkbox("Draw Singularities", &showSing);
+    ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
+    ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
+    ImGui::Checkbox("Draw Corners", &DrawCorners);
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "GRAPH");
     ImGui::SliderFloat("Drift",&drift_penalty, 0, 1000);
     ImGui::SliderFloat("Max Angle",&maxAngle, 0, 90);
     ImGui::InputInt("Diffuse Step",&diffuse_step);
+
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATCHES");
+    static const char* itemsShape[] = { "Color Uniform",
+                                        "Color By Path"};
+    ImGui::Combo("Color Patches", &CurrCol, itemsShape, IM_ARRAYSIZE(itemsShape));
+    if (CurrCol!=OldCol)
+    {
+        UpdateColor();
+        OldCol=CurrCol;
+    }
+
     if (ImGui::Button("Init Graph"))
     {
         InitGraph();
         has_graph=true;
     }
 
-//    ImGui::InputInt("test node",&CurrN);
-//    if ((CurrN!=OldN)&&(has_graph))
-//    {
-//        TestTrace();
-//        OldN=CurrN;
-//    }
-
-//    if (ImGui::Button("Test Trace Speed"))
-//    {
-//        TestSpeed();
-//    }
-//    if (ImGui::Button("Test Self Intersect"))
-//    {
-//        TestSelfIntersect();
-//    }
-
     if (ImGui::Button("Init Tracing"))
     {
         InitTracing();
+    }
+
+    if (ImGui::Button("Init Patches"))
+    {
+        InitPatches();
     }
 
     ImGui::Checkbox("Dynamic Update", &PathSampl.dynamicUpdates);
@@ -378,54 +500,23 @@ void SetRenderBar()
         PathSampl.AddNextPath();
         PathColors.resize(PathSampl.SelectedPaths.size());
         Geo::ScatterColor<ScalarType>(PathColors);
+        PatchM.Update();
+        UpdateColor();
     }
 
     if (ImGui::Button("Add All Paths"))
         AddAllPaths();
 
-    if (ImGui::Button("Smooth Param"))
+    ImGui::InputInt("Smooth Steps",&smooth_steps);
+    if (ImGui::Button("Smooth"))
         SmoothPaths();
 
-//        auto start = std::chrono::high_resolution_clock::now();
-//        PathSampl.InsertAllPaths();
-//        auto end = std::chrono::high_resolution_clock::now();
-//        // Calculate the elapsed time
-//        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-//        double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
-//        std::cout << "Adding Paths Elapsed time: " << elapsed_seconds << " seconds " <<std::endl;
+    if (ImGui::Button("Batch Process"))
+        BatchProcess();
 
-//        PathColors.resize(PathSampl.SelectedPaths.size());
-//        Geo::ScatterColor<ScalarType>(PathColors);
-//    }
+    if (ImGui::Button("Save Patches"))
+        PatchM.WriteSubMeshes(std::string("test.obj"));
 
-    //    ImGui::SliderInt("Ring",&Nring, 2, 5, "%d",ImGuiSliderFlags_AlwaysClamp);
-    //    if (ImGui::Button("Init By Curvature"))
-    //    {
-    //        if (loadedMesh)
-    //            InitFieldByCurvature();
-    //    }
-
-    //    if (has_cross_field)
-    //    {
-    //        if (ImGui::Button("Smooth Field"))
-    //        {
-    //            if (loadedMesh)
-    //                SmoothGlobal();
-    //        }
-    //        //ImGui::SameLine();
-
-    //        ImGui::SliderFloat("Top Fix",&TopIntevalFix, 0, 0.3, "%2.f",ImGuiSliderFlags_AlwaysClamp);
-    //        SParam.TopIntevalFix= (ScalarType) TopIntevalFix;
-
-    //        ImGui::SliderFloat("Smoothness",&GlobalSmoothVal, 50, 500, "%1.f",ImGuiSliderFlags_AlwaysClamp);
-    //        SParam.GlobalSmoothVal=GlobalSmoothVal;
-
-    //        if (ImGui::Button("Save Field"))
-    //        {
-    //            if (loadedMesh)
-    //                SaveField();
-    //        }
-    //    }
     ImGui::End();
 }
 
@@ -468,10 +559,10 @@ void GLDrawMesh()
 
     if (showMesh)
     {
-        glColor4f(mesh_color.x * mesh_color.w, mesh_color.y * mesh_color.w, mesh_color.z * mesh_color.w, mesh_color.w);
+        //glColor4f(mesh_color.x * mesh_color.w, mesh_color.y * mesh_color.w, mesh_color.z * mesh_color.w, mesh_color.w);
         glPushAttrib(GL_ALL_ATTRIB_BITS);
         glLineWidth(line_thick);
-        GLDraw::DrawSurfaceMesh<ScalarType>(VertPos,Connectivity,FaceNormals,VertNormals,true,true,true,false);
+        GLDraw::DrawSurfaceMesh<ScalarType>(VertPos,Connectivity,FaceNormals,VertNormals,true,true,true,false,GLDraw::TRTriangle,&FaceCol);
         glPopAttrib();
     }
 
@@ -491,9 +582,22 @@ void GLDrawMesh()
 
 
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam;
+    PDParam.DrawPath=true;
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(TGraph,VertCurv,PathSampl.
                                                           SelectedPaths,MeshBox.Diag()*0.005,
                                                           PDParam,PathColors);
+
+    PDParam.DrawPath=false;
+    if (DrawExitNode)
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::ExitDomain,MeshBox.Diag()*0.005,PDParam);
+    if (DrawTangentNode)
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::TangentDomain,MeshBox.Diag()*0.005,PDParam);
+
+    //GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCorners(VertPos,PatchM);
+    if (DrawCorners)
+        GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCorners(PatchM);
+
+    GLGraphDraw::GLDrawPatchData<ScalarType>::DrawSides(PatchM);
     //GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawSelectedNodes(TGraph,VertCurv,0,MeshBox.Diag()*0.005);
 
 }

@@ -3,7 +3,7 @@
 
 #include <assert.h>
 #include "point2.h"
-
+#include "segment2.h"
 namespace Geo{
 
 template <class ScalarType>
@@ -67,6 +67,20 @@ bool IsInside(const Traingle2<ScalarType> &T,
    if ((CrossV[0]<0)&&(CrossV[1]<0)&&(CrossV[2]<0))return true;
    if ((CrossV[0]>0)&&(CrossV[1]>0)&&(CrossV[2]>0))return true;
    return false;
+}
+
+template <class ScalarType>
+ScalarType Distance(const Traingle2<ScalarType> &T,const Geo::Point2<ScalarType> &Test_pos)
+{
+    if (IsInside(T,Test_pos))return 0;
+    ScalarType minD=std::numeric_limits<ScalarType>::max();
+    for (size_t i=0;i<3;i++)
+    {
+        Segment2<ScalarType> s_edge(T.P(i),T.P((i+1)%3));
+        ScalarType currD=Distance(s_edge,Test_pos);
+        if (currD>minD)minD=currD;
+    }
+    return minD;
 }
 
 } //namespace

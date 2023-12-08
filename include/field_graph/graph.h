@@ -7,6 +7,7 @@
 #include <iostream>
 #include <unordered_set>
 #include <set>
+//#include "../math_utils.h"
 
 //#include "../point3.h"
 
@@ -59,17 +60,17 @@ class TracingGraph
 
     GraphType GType;
 
-    // Hash function
-    struct hashPaitIntFunction
-    {
-      size_t operator()(const std::pair<int , int> &x) const
-      {
-        return x.first ^ x.second;
-      }
-    };
+//    // Hash function
+//    struct hashPaitIntFunction
+//    {
+//      size_t operator()(const std::pair<int , int> &x) const
+//      {
+//        return x.first ^ x.second;
+//      }
+//    };
 
-    std::unordered_set<std::pair<int,int>,hashPaitIntFunction > DirectE;
-    //std::set<std::pair<int,int> > DirectE;
+    //std::unordered_set<std::pair<int,int>,Geo::hashPairIntFunction > DirectE;
+    std::set<std::pair<int,int> > DirectE;
 
     bool AllocatedSelected()
     {
@@ -145,6 +146,9 @@ public:
         DirectE.clear();
 
         for (size_t i=0;i<NumNodes();i++)
+        {
+            //std::cout<<"Node:"<<i<<std::endl;
+
             for (size_t j=0;j<N[i].size();j++)
             {
                 int IndexN0=i;
@@ -154,7 +158,7 @@ public:
                                        std::max(IndexN1,IndexN0));
                 DirectE.insert(Key);
             }
-        std::cout<<"Direct Link "<<DirectE.size()<<std::endl;
+        }
     }
 
     //type of node
@@ -289,6 +293,27 @@ public:
         }
     }
 
+    void GetNeighType(const int &IndexN0,
+                      bool onlyDirect,
+                      bool onlyVisible,
+                      NType TypeNode,
+                      std::vector<int> &Neigh,
+                      std::vector<ScalarType> &NeighW)const
+    {
+
+        Neigh.clear();
+        NeighW.clear();
+        std::vector<int> Neigh0;
+        std::vector<ScalarType> NeighW0;
+        GetNeigh(IndexN0,onlyDirect,onlyVisible,Neigh0,NeighW0);
+        for (size_t i=0;i<Neigh0.size();i++)
+        {
+            if (NodeType(Neigh0[i])!=TypeNode)continue;
+            Neigh.push_back(Neigh0[i]);
+            NeighW.push_back(NeighW0[i]);
+        }
+    }
+
 
     void SelectNoteType(NType TypeNode,int IndexS)
     {
@@ -339,6 +364,12 @@ public:
         assert(IndexN>=0);
         assert(IndexN<EnabledN.size());
         EnabledN[IndexN]=true;
+    }
+
+    void EnableNodes(const std::vector<int> &IndexN)
+    {
+        for (size_t i=0;i<IndexN.size();i++)
+            EnableNode(IndexN[i]);
     }
 
     void DisableNode(const int &IndexN)
@@ -409,6 +440,20 @@ public:
             if (N[IndexN0][i].N==IndexN1)return true;
         }
         return false;
+    }
+
+    ScalarType WeightConnectection(const int &IndexN0,
+                                   const int &IndexN1,
+                                   bool check_enabled=true)const
+    {
+        assert(EnabledN[IndexN0]);
+        assert(EnabledN[IndexN1]);
+        for (size_t i=0;i<N[IndexN0].size();i++)
+        {
+            if ((check_enabled)&&(!N[IndexN0][i].Enabled))continue;
+            if (N[IndexN0][i].N==IndexN1)return(N[IndexN0][i].W);
+        }
+        return -1;
     }
 
     void RemoveNeighbours(const int &IndexN)

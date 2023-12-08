@@ -20,22 +20,22 @@ public:
     /*! \brief Base constructor */
     TriangleCell(){}
 
-//    /*! \brief Return the updated primitive of the cell, considering the Temporary mark
-//     *  \param FaceMark Per vertex temporary mark
-//     *  \param TMark The current Temporary mark
-//     *  \param ret The selected primitives
-//     */
-//    void GetUpdated(const std::vector<int> &FaceMark,
-//                    int TMark,
-//                    std::vector<int> &ret)const
-//    {
-//        for (size_t i=0;i<entries.size();i++)
-//        {
-//            int index=entries[i];
-//            if (FaceMark[index]>=TMark)continue;
-//            ret.push_back(entries[i]);
-//        }
-//    }
+    //    /*! \brief Return the updated primitive of the cell, considering the Temporary mark
+    //     *  \param FaceMark Per vertex temporary mark
+    //     *  \param TMark The current Temporary mark
+    //     *  \param ret The selected primitives
+    //     */
+    //    void GetUpdated(const std::vector<int> &FaceMark,
+    //                    int TMark,
+    //                    std::vector<int> &ret)const
+    //    {
+    //        for (size_t i=0;i<entries.size();i++)
+    //        {
+    //            int index=entries[i];
+    //            if (FaceMark[index]>=TMark)continue;
+    //            ret.push_back(entries[i]);
+    //        }
+    //    }
 
     /*! \brief Insert a primitive in the Cell
      *  \param tri The primitive to be inserted
@@ -60,7 +60,7 @@ class TriangleSpatialIndex
     std::vector<std::vector<std::vector<CellType> > > Grid;
 
 public:
-     /*! \brief The bounding box of the whole space*/
+    /*! \brief The bounding box of the whole space*/
     //AABBox<ScalarType> bbox;
     Box3<ScalarType> bbox;
 
@@ -184,9 +184,9 @@ public:
             if(!iboxtodo.IsEmpty())
             {
 
-//                std::cout<<"Size: X:"<<iboxtodo.Min.X<<" "<<iboxtodo.Max.X<<std::endl;
-//                std::cout<<"Size: Y:"<<iboxtodo.Min.Y<<" "<<iboxtodo.Max.Y<<std::endl;
-//                std::cout<<"Size: Z:"<<iboxtodo.Min.Z<<" "<<iboxtodo.Max.Z<<std::endl;
+                //                std::cout<<"Size: X:"<<iboxtodo.Min.X<<" "<<iboxtodo.Max.X<<std::endl;
+                //                std::cout<<"Size: Y:"<<iboxtodo.Min.Y<<" "<<iboxtodo.Max.Y<<std::endl;
+                //                std::cout<<"Size: Z:"<<iboxtodo.Min.Z<<" "<<iboxtodo.Max.Z<<std::endl;
 
                 for (int ix=iboxtodo.Min.X; ix<=iboxtodo.Max.X; ix++)
                     for (int iy=iboxtodo.Min.Y; iy<=iboxtodo.Max.Y; iy++)
@@ -213,18 +213,18 @@ public:
 
                                 if (!triBB.Collide(boxtodo))continue;
 
-//                                std::cout<<"TestA"<<std::endl;
+                                //                                std::cout<<"TestA"<<std::endl;
                                 Geo::Traingle3<ScalarType> T(p0,p1,p2);
 
                                 CoordType closP=ClosestVert(T,_p);
                                 ScalarType currD=(closP-_p).Norm();
                                 if (currD>_minDist)continue;
 
-//                                closP=p0;//Geo::ClosestPoint(T,_p);
-//                                //std::cout<<"Test"<<std::endl;
+                                //                                closP=p0;//Geo::ClosestPoint(T,_p);
+                                //                                //std::cout<<"Test"<<std::endl;
 
-////                                tested++;
-////                                currD=(closP-_p).Norm();
+                                ////                                tested++;
+                                ////                                currD=(closP-_p).Norm();
                                 if (currD<_minDist)
                                 {
                                     _minDist=currD;
@@ -242,8 +242,8 @@ public:
             }
             else
             {
-//                std::cout<<"NumCell:"<<num_cell<<std::endl;
-//                std::cout<<"Tested:"<<tested<<"total: "<<face.size()<<std::endl;
+                //                std::cout<<"NumCell:"<<num_cell<<std::endl;
+                //                std::cout<<"Tested:"<<tested<<"total: "<<face.size()<<std::endl;
                 return true;
             }
 
@@ -267,19 +267,19 @@ public:
         FaceMark.resize(face.size(),0);
 
         bbox.Init(vert);
-//        for (size_t i=0;i<face.size();i++)
-//        {
-//            int IndexV0=face[i][0];
-//            int IndexV1=face[i][1];
-//            int IndexV2=face[i][2];
-//            CoordType p0=vert[IndexV0];//CoordType(vert[IndexV0].X,vert[IndexV0].Y,vert[IndexV0].Z);
-//            CoordType p1=vert[IndexV1];//CoordType(vert[IndexV1].X,vert[IndexV1].Y,vert[IndexV1].Z);
-//            CoordType p2=vert[IndexV2];//CoordType(vert[IndexV2].X,vert[IndexV2].Y,vert[IndexV2].Z);
+        //        for (size_t i=0;i<face.size();i++)
+        //        {
+        //            int IndexV0=face[i][0];
+        //            int IndexV1=face[i][1];
+        //            int IndexV2=face[i][2];
+        //            CoordType p0=vert[IndexV0];//CoordType(vert[IndexV0].X,vert[IndexV0].Y,vert[IndexV0].Z);
+        //            CoordType p1=vert[IndexV1];//CoordType(vert[IndexV1].X,vert[IndexV1].Y,vert[IndexV1].Z);
+        //            CoordType p2=vert[IndexV2];//CoordType(vert[IndexV2].X,vert[IndexV2].Y,vert[IndexV2].Z);
 
-//            bbox.Add(p0);
-//            bbox.Add(p1);
-//            bbox.Add(p2);
-//        }
+        //            bbox.Add(p0);
+        //            bbox.Add(p1);
+        //            bbox.Add(p2);
+        //        }
 
         //inflate a bit
         CoordType size3D=bbox.Max-bbox.Min;

@@ -38,9 +38,13 @@ class CrossPathSampling
     std::vector<SP_Status> SampledPaths_Status;
 
     bool avoidSingularities;
+    bool updatePatches;
     std::vector<std::pair<ScalarType,int> > Candidates;
 
     std::unordered_set<int> ConflictNodes;
+
+    //these are used to detect when two path shared an edge and to solve it
+    std::unordered_set<std::pair<int,int>,Geo::hashPairIntFunction > ConflictEdges;
 
 public:
 
@@ -48,6 +52,12 @@ public:
     std::vector<std::vector<int> > SelectedPaths;
 
 private:
+
+    ScalarType TimeTracing;
+    ScalarType TimeUpdDist;
+    ScalarType TimeConflict;
+    ScalarType TimeInitData;
+    ScalarType TimeUpdPatches;
 
     bool IsTraceable(int &IndexN)
     {
@@ -189,17 +199,40 @@ private:
 
     void SamplePaths(int NumSamples)
     {
+        auto start = std::chrono::high_resolution_clock::now();
+
         std::cout<<"Sampling starting Nnodes"<<std::endl;
         InitTracingNodes(NumSamples);
         std::cout<<"Sampled "<<StartingNodes.size()<<" Starting Nodes"<<std::endl;
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        TimeInitData += duration.count() * 1e-6;
 
         std::vector<int> NewStartingNodes;
         for (size_t i=0;i<StartingNodes.size();i++)
         {
             std::vector<int> CurrPath;
+
+            auto start = std::chrono::high_resolution_clock::now();
+
             bool has_traced=Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(TGraph,StartingNodes[i],CurrPath);
+
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            TimeTracing += duration.count() * 1e-6;
+
             if (!has_traced)continue;
+
+            start = std::chrono::high_resolution_clock::now();
+
             bool self_intersect=Geo::PathFunctions<ScalarType>::SelfIntersectTangentially(TGraph,CurrPath);
+
+            end = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+            TimeConflict += duration.count() * 1e-6;
+
             if (self_intersect)continue;
             SampledPaths.push_back(CurrPath);
             NewStartingNodes.push_back(StartingNodes[i]);
@@ -237,6 +270,19 @@ private:
         {
             int test_node=TestPath[i];
             if (ConflictNodes.count(test_node)>0)return true;
+        }
+        return false;
+    }
+
+    bool ConflictEdgeWithInsertedEdges(const std::vector<int> &TestPath)
+    {
+        for (size_t i=0;i<TestPath.size()-1;i++)
+        {
+            int IndexV0=Field::CrossFieldGraph::ElemOfNode(TestPath[i]);
+            int IndexV1=Field::CrossFieldGraph::ElemOfNode(TestPath[i+1]);
+            std::pair<int,int> key(std::min(IndexV0,IndexV1),
+                                   std::max(IndexV0,IndexV1));
+            if(ConflictEdges.count(key)>0)return true;
         }
         return false;
     }
@@ -300,6 +346,18 @@ private:
         ConflictNodes.insert(OppNodesPath.begin(),OppNodesPath.end());
     }
 
+    void AddToConflictEdges(const std::vector<int> &NodesPath)
+    {
+        for (size_t i=0;i<NodesPath.size()-1;i++)
+        {
+            int IndexV0=Field::CrossFieldGraph::ElemOfNode(NodesPath[i]);
+            int IndexV1=Field::CrossFieldGraph::ElemOfNode(NodesPath[i+1]);
+            std::pair<int,int> key(std::min(IndexV0,IndexV1),
+                                   std::max(IndexV0,IndexV1));
+            ConflictEdges.insert(key);
+        }
+    }
+
     void DisableGraphNodes(const std::vector<int> &NodesPath)
     {
         std::vector<int> To_Disable=NodesPath;
@@ -355,12 +413,23 @@ private:
                 continue;
             }
             bool self_intersect=Geo::PathFunctions<ScalarType>::SelfIntersectTangentially(TGraph,SampledPaths[i]);
+            self_intersect|=Geo::PathFunctions<ScalarType>::HasSelfEdgeTwice(SampledPaths[i]);
             if (self_intersect)
             {
                 SampledPaths_Status[i]=SP_Discarded;
                 continue;
             }
         }
+    }
+
+
+    void WriteTiming()
+    {
+        std::cout<<"*** TIMINGS ***"<<std::endl;
+        std::cout<<"* Time Init:"<<TimeInitData<<std::endl;
+        std::cout<<"* Time tracing:"<<TimeTracing<<std::endl;
+        std::cout<<"* Time upd Dist:"<<TimeUpdDist<<std::endl;
+        std::cout<<"* Time Conflicts:"<<TimeConflict<<std::endl;
     }
 
 public:
@@ -399,8 +468,15 @@ public:
 
             //in this case just check if intersect
             bool has_conflict=false;
+
+
+            auto start = std::chrono::high_resolution_clock::now();
+
             if (!dynamicUpdates)
                 has_conflict=ConflictWithInserted(SampledPaths[IndexPath]);
+
+            if (!has_conflict)
+               has_conflict|=ConflictEdgeWithInsertedEdges(SampledPaths[IndexPath]);
 
             if (has_conflict)
             {
@@ -408,29 +484,46 @@ public:
                 continue;
             }
 
+
             //add the new path
             SampledPaths_Status[IndexPath]=SP_Selected;
             SelectedPaths.push_back(SampledPaths[IndexPath]);
 
             AddToConflictNodes(SelectedPaths.back());
+            AddToConflictEdges(SelectedPaths.back());
 
-            //then update distance
-            //InitializeDistance();
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            TimeConflict += duration.count() * 1e-6;
+
 
             if (avoidSingularities)
                 EnableSingularities();
 
+            start = std::chrono::high_resolution_clock::now();
             UpdateDistancesWithLastInsertedPath();
 
             if (avoidSingularities)
                 DisableSingularities();
+
+            end = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            TimeUpdDist += duration.count() * 1e-6;
+
 
             if (dynamicUpdates)
             {
                 DisableGraphNodes(SelectedPaths.back());
 
                 TGraph.CurrDistIndex()=1;
+                start = std::chrono::high_resolution_clock::now();
+
                 RetraceCandidatesConflictWithSelected();
+
+                end = std::chrono::high_resolution_clock::now();
+                duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+                TimeTracing += duration.count() * 1e-6;
+
                 TGraph.CurrDistIndex()=0;
             }
 
@@ -446,10 +539,19 @@ public:
     {
         while(AddNextPath()){};
         WriteStats();
+        WriteTiming();
     }
 
     void Init()
     {
+        TimeTracing=0;
+        TimeUpdDist=0;
+        TimeConflict=0;
+        TimeInitData=0;
+        TimeUpdPatches=0;
+
+        auto start = std::chrono::high_resolution_clock::now();
+
         TGraph.EnableAllNodes();
 
         ClearSamples();
@@ -461,17 +563,49 @@ public:
         if (avoidSingularities)
             DisableSingularities();
 
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        TimeInitData += duration.count() * 1e-6;
+
         SamplePaths(NumSamples);
 
         if (avoidSingularities)
             EnableSingularities();
 
+        start = std::chrono::high_resolution_clock::now();
+
         InitializeDistance();
+
+        end = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        TimeUpdDist += duration.count() * 1e-6;
 
         InitCandidates();
 
         UpdateCandidatePriority();
 
+        start = std::chrono::high_resolution_clock::now();
+
+
+        end = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        TimeUpdPatches += duration.count() * 1e-6;
+
+        WriteTiming();
+
+    }
+
+    void GetVertexSelectedPaths(std::vector<std::vector<int> > &VertPaths)
+    {
+        VertPaths.clear();
+        VertPaths.resize(SelectedPaths.size());
+
+        for (size_t i=0;i<SelectedPaths.size();i++)
+            for (size_t j=0;j<SelectedPaths[i].size();j++)
+            {
+                int IndexV=Field::CrossFieldGraph::ElemOfNode(SelectedPaths[i][j]);
+                VertPaths[i].push_back(IndexV);
+            }
     }
 
     CrossPathSampling(std::vector<Geo::Point3<ScalarType > > &_VertPos,
@@ -486,7 +620,11 @@ public:
     {
         avoidSingularities=true;
         dynamicUpdates=true;
+        updatePatches=true;
         NumSamples=1000;
+        TimeTracing=0;
+        TimeUpdDist=0;
+        TimeConflict=0;
     }
 };
 

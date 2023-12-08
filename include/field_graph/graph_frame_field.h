@@ -2,6 +2,7 @@
 #define FRAME_FIELD_GRAPH
 
 #include "../frame_field.h"
+#include "point3.h"
 
 namespace Field{
 
@@ -103,6 +104,15 @@ public:
         int DrTest1=FrameField[FrIndex1].FollowDirection(FrameField[FrIndex0],DrIndex0);
 
         return (DrTest1==DrIndex1);
+    }
+
+    template <class ScalarType>
+    static Geo::Point3<ScalarType> NodePos(const std::vector<Field::FrameField<ScalarType> > &FrameField,const int &IndexN)
+    {
+        int IndexT=PolyOfNode(IndexN);
+        assert(IndexT>=0);
+        assert(IndexT<FrameField.size());
+        return(FrameField[IndexT].Pos);
     }
 };
 }

@@ -4,9 +4,9 @@ project(patch_decomposer)
 # Set the C++ standard to C++17
 set(CMAKE_CXX_STANDARD 17)
 
-#if(NOT CMAKE_BUILD_TYPE)
-#    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
-#endif()
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+endif()
 
 set(IMGUI_DIR "/Users/134750/Desktop/imgui/" CACHE INTERNAL "")
 set(GLEWPATH "/Users/134750/Desktop/code/lib/glew" CACHE INTERNAL "")

@@ -98,3 +98,6 @@ apps/patch_decomposer/build/Makefile
 apps/patch_decomposer/glew-df5c8e71.o.tmp
 apps/patch_decomposer/patch_decomposer.app/Contents/PkgInfo
 apps/patch_decomposer/patch_decomposer.app/Contents/Resources/empty.lproj
+apps/patch_decomposer/build/CMakeFiles/Progress/1
+apps/patch_decomposer/build/CMakeFiles/Progress/1
+apps/patch_decomposer/build/CMakeFiles/Progress/count.txt

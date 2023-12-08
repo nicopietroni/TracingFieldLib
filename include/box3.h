@@ -106,29 +106,11 @@ public:
         return true;
     }
 
-//    bool Collide(Box3<ScalarType> const &b)
-//    {
-//        return (b.Min.X<Max.X && b.Max.X>Min.X &&
-//                b.Min.Y<Max.Y && b.Max.Y>Min.Y &&
-//                b.Min.Z<Max.Z && b.Max.Z>Min.Z) ;
-//    }
-
     bool Collide(Box3<ScalarType> const &b)
     {
-        // Check for no-overlap conditions along each axis
-        if (Max.X < b.Min.X || Min.X > b.Max.X) {
-            return false; // No overlap on X-axis
-        }
-
-        if (Max.Y < b.Min.Y || Min.Y > b.Max.Y) {
-            return false; // No overlap on Y-axis
-        }
-
-        if (Max.Z < b.Min.Z || Min.Z > b.Max.Z) {
-            return false; // No overlap on Z-axis
-        }
-
-        return true; // Overlapping on all three axes
+        return (b.Min.X<=Max.X && b.Max.X>=Min.X &&
+                b.Min.Y<=Max.Y && b.Max.Y>=Min.Y &&
+                b.Min.Z<=Max.Z && b.Max.Z>=Min.Z) ;
     }
 
     void Intersect(Box3<ScalarType> const &b)

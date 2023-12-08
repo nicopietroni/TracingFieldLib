@@ -2,6 +2,7 @@
 #define CROSS_FIELD_GRAPH
 
 #include "../cross_field.h"
+#include "graph.h"
 
 namespace Field{
 
@@ -14,9 +15,25 @@ static int DirOfNode(int IndexN)
     return (IndexN%4);
 }
 
+static void DirOfNodes(const std::vector<int> & IndexN,
+                      std::vector<int> &Elems)
+{
+    Elems.clear();
+    for (size_t i=0;i<IndexN.size();i++)
+        Elems.push_back(DirOfNode(IndexN[i]));
+}
+
 static int ElemOfNode(int IndexN)
 {
     return (IndexN/4);
+}
+
+static void ElemsOfNode(const std::vector<int> & IndexN,
+                       std::vector<int> &Elems)
+{
+    Elems.clear();
+    for (size_t i=0;i<IndexN.size();i++)
+        Elems.push_back(ElemOfNode(IndexN[i]));
 }
 
 static int NodeOfElemDir(int IndexE,int IndexD)

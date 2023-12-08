@@ -58,6 +58,13 @@ public:
             V=currV0;
     }
 
+    int VFlip(const std::vector<std::vector<int> > &Faces)
+    {
+        Pos3 TestP=(*this);
+        TestP.FlipV(Faces);
+        return TestP.V;
+    }
+
     void FlipE(const std::vector<std::vector<int> > &Faces)
     {
         assert(F<(int)Faces.size());
@@ -218,9 +225,8 @@ void getBorderSequnces(const std::vector<std::vector<int> > &Faces,
 {
     BorderPos.clear();
     int MaxV=Geo::FindMaxVertIdx(Faces);
-
-    std::vector<bool> Tested(MaxV,false);
-
+    assert(MaxV>=0);
+    std::vector<bool> Tested(MaxV+1,false);
 
     for (size_t i=0;i<NextF.size();i++)
         for (size_t j=0;j<NextF[i].size();j++)
