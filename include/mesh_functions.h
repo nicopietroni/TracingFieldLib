@@ -581,6 +581,28 @@ void SplitByFFConnectedComponenent(const std::vector<Geo::Point3<ScalarType> > &
                                   SubMeshesF,OriginalV,OriginalF);
 }
 
+int PolyMeshGenus(int NVert,int nEdges,int NFaces, int NHoles, int NComponents)
+{
+    return -((NVert + NFaces - nEdges + NHoles - 2 * NComponents) / 2);
+}
+
+int NumEdges(const std::vector<std::vector<int> > &Connectivity)
+{
+    std::set<std::pair<int,int> > EdgeSet;
+    for (size_t i=0;i<Connectivity.size();i++)
+    {
+        int sizeF=Connectivity[i].size();
+        for (int j=0;j<sizeF;j++)
+        {
+            int IndexV0=Connectivity[i][j];
+            int IndexV1=Connectivity[i][(j+1)%sizeF];
+            std::pair<int,int> entry (std::min(IndexV0,IndexV1),std::max(IndexV0,IndexV1));
+            EdgeSet.insert(entry);
+        }
+    }
+    return EdgeSet.size();
+}
+
 template <class ScalarType>
 void SplitMeshFromEdges(std::vector<Geo::Point3<ScalarType> > &Pos,
                         std::vector<std::vector<int> > &Faces,

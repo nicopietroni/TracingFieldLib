@@ -7,13 +7,6 @@
 #include "GLDrawBase.h"
 #include "color_functions.h"
 
-//#include "../point3.h"
-//#include "../frame_field.h"
-//#include "GLDrawMesh.h"
-//#include "GLDrawField.h"
-//#include "../field_graph/graph.h"
-//#include "../field_graph/graph_frame_field.h"
-//#include "../field_graph/graph_cross_field.h"
 
 namespace GLGraphDraw
 {

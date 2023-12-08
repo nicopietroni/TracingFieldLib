@@ -46,6 +46,7 @@ bool has_graph=false;
 bool DrawTangentNode=false;
 bool DrawExitNode=false;
 bool DrawCorners=false;
+bool DrawSides=false;
 
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
@@ -102,6 +103,15 @@ void UpdateColor()
         break;
     case 1:
         PatchM.GetColorFaceByPatch(FaceCol);
+        break;
+    case 2:
+        PatchM.GetColorFaceIfDiskLike(FaceCol);
+        break;
+    case 3:
+        PatchM.GetColorByValence(FaceCol);
+        break;
+    case 4:
+        PatchM.GetColorByMatchSingularity(FaceCol);
         break;
     default:
         FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
@@ -170,6 +180,10 @@ void SmoothPaths()
     //update cross F poistion
     for (size_t i=0;i<VertCurv.size();i++)
         VertCurv[i].Pos=VertPos[i];
+
+    PatchM.UpdateSubPatchPos();
+    PatchM.InitVisualCornersEdges();
+
 }
 
 void InitPatches()
@@ -336,6 +350,7 @@ void LoadField(const std::string &path)
 
         Field::CrossF<ScalarType>::getMinMaxQ(VertCurv,minQCrossVert,maxQCrossVert);
         GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
+        PatchM.AddSingularities(SingIndex,SingValue);
     }
     else
         std::cout<<"Field not loaded"<<std::endl;
@@ -457,9 +472,11 @@ void SetRenderBar()
     ImGui::Checkbox("Draw Mesh", &showMesh);
     ImGui::Checkbox("Draw Cross", &showCross);
     ImGui::Checkbox("Draw Singularities", &showSing);
-    ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
-    ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
+    //    ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
+    //    ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
     ImGui::Checkbox("Draw Corners", &DrawCorners);
+    ImGui::Checkbox("Draw Sides", &DrawSides);
+
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "GRAPH");
     ImGui::SliderFloat("Drift",&drift_penalty, 0, 1000);
@@ -469,7 +486,11 @@ void SetRenderBar()
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATCHES");
     static const char* itemsShape[] = { "Color Uniform",
-                                        "Color By Path"};
+                                        "Color By Path",
+                                        "Color if Disk",
+                                        "Color Valence",
+                                        "Color Match Sing"};
+
     ImGui::Combo("Color Patches", &CurrCol, itemsShape, IM_ARRAYSIZE(itemsShape));
     if (CurrCol!=OldCol)
     {
@@ -502,6 +523,7 @@ void SetRenderBar()
         Geo::ScatterColor<ScalarType>(PathColors);
         PatchM.Update();
         UpdateColor();
+        PatchM.InitVisualCornersEdges();
     }
 
     if (ImGui::Button("Add All Paths"))
@@ -588,16 +610,17 @@ void GLDrawMesh()
                                                           PDParam,PathColors);
 
     PDParam.DrawPath=false;
-    if (DrawExitNode)
-        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::ExitDomain,MeshBox.Diag()*0.005,PDParam);
-    if (DrawTangentNode)
-        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::TangentDomain,MeshBox.Diag()*0.005,PDParam);
+    //    if (DrawExitNode)
+    //        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::ExitDomain,MeshBox.Diag()*0.005,PDParam);
+    //    if (DrawTangentNode)
+    //        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::TangentDomain,MeshBox.Diag()*0.005,PDParam);
 
     //GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCorners(VertPos,PatchM);
     if (DrawCorners)
         GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCorners(PatchM);
 
-    GLGraphDraw::GLDrawPatchData<ScalarType>::DrawSides(PatchM);
+    if (DrawSides)
+        GLGraphDraw::GLDrawPatchData<ScalarType>::DrawSides(PatchM);
     //GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawSelectedNodes(TGraph,VertCurv,0,MeshBox.Diag()*0.005);
 
 }
