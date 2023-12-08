@@ -5,6 +5,7 @@
 #include <GL/glew.h>
 #include "../field_graph/patch_managing.h"
 #include "GLDrawBase.h"
+#include "color_functions.h"
 
 //#include "../point3.h"
 //#include "../frame_field.h"
@@ -91,8 +92,7 @@ public:
 
     static void DrawSides(Geo::PatchManaging<ScalarType> &PM,
                           const int &IndexPatch,
-                          const ScalarType LineSize=10,
-                          const Geo::Point3<ScalarType> &ColLine=Geo::Point3<ScalarType>(0,1,0))
+                          const ScalarType LineSize=10)
     {
         glPushAttrib(GL_ALL_ATTRIB_BITS);
 
@@ -101,14 +101,15 @@ public:
         glDisable(GL_LIGHTING);
         glLineWidth((GLfloat)LineSize);
 
-        GLDraw::glColor(ColLine);
 
         for (size_t i=0;i<PM.VisualPaths[IndexPatch].size();i++)
         {
+            Geo::Point3<ScalarType> ColLine=Geo::ScatterColor<ScalarType>((int)PM.VisualPaths[IndexPatch].size(),i);
+            GLDraw::glColor(ColLine);
             glBegin(GL_LINE_STRIP);
             for (size_t j=0;j<PM.VisualPaths[IndexPatch][i].size();j++)
             {
-                Geo::Point3<ScalarType> Pos=PM.VisualPaths[IndexPatch][i];
+                Geo::Point3<ScalarType> Pos=PM.VisualPaths[IndexPatch][i][j];
                 GLDraw::glVertex(Pos);
             }
              glEnd();
@@ -118,11 +119,12 @@ public:
         glPopAttrib();
     }
 
-    static void DrawSides(Geo::PatchManaging<ScalarType> &PM,const ScalarType LineSize=10,
-                          const Geo::Point3<ScalarType> &ColLine=Geo::Point3<ScalarType>(0,1,0))
+    static void DrawSides(Geo::PatchManaging<ScalarType> &PM,const ScalarType LineSize=10)
     {
         for (size_t i=0;i<PM.VisualCorners.size();i++)
-            DrawSides(PM,i,LineSize,ColLine);
+        {
+            DrawSides(PM,i,LineSize);
+        }
     }
 };
 

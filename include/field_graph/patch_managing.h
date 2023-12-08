@@ -247,7 +247,6 @@ private:
                         SidePos.push_back(AvgPos/(ScalarType)NumPos);
                     }
                 }
-                std::cout<<"Test"<<std::endl;
                 VisualPaths[IndexP].push_back(SidePos);
             }
         //        typename std::map<int,std::pair<Geo::Point3<ScalarType>,int> >::iterator IteMapCorn;
