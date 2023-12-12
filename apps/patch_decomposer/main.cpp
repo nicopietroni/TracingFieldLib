@@ -29,6 +29,7 @@
 #include <field_graph/path_sampling.h>
 #include "tangent_space_smooth.h"
 #include <field_graph/patch_managing.h>
+#include <field_graph/patch_decomposer.h>
 
 GLFWwindow* window;
 std::string PathMesh;
@@ -95,6 +96,11 @@ int OldCol=CurrCol;
 
 Geo::Point3<ScalarType> mesh_color(0.79, 0.9, 0.87);
 
+Geo::PatchDecomposer<ScalarType> PDeco(PatchM,PathSampl);
+
+//for debugging the marked parts
+//std::vector<int> MarkedV;
+
 void UpdateColor()
 {
     switch(CurrCol) {
@@ -131,6 +137,13 @@ void InitGraph()
 int failed_trace=0;
 int tested_trace=0;
 
+void InitConditions()
+{
+    PDeco.ClearConditions();
+    PDeco.AddCondition(new Geo::DiskLikeCondition<ScalarType>());
+    PDeco.AddCondition(new Geo::SingleSingularityCondition<ScalarType>());
+}
+
 void InitTracing()
 {
     //PathN.clear();
@@ -150,9 +163,10 @@ void AddAllPaths(bool upd_patches=true)
     PathColors.resize(PathSampl.SelectedPaths.size());
     Geo::ScatterColor<ScalarType>(PathColors);
 
+    std::vector<int> UpdatedPatches;
     if (upd_patches)
     {
-        PatchM.Update();
+        PatchM.Update(UpdatedPatches);
         CurrCol=1;
         UpdateColor();
     }
@@ -163,9 +177,11 @@ void SmoothPaths()
     Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
     std::vector<std::vector<int> > VertPaths;
     PathSampl.GetVertexSelectedPaths(VertPaths);
+
     for (size_t i=0;i<VertPaths.size();i++)
     {
-        for (size_t j=0;j<VertPaths[i].size()-1;j++)
+        if (VertPaths[i].size()==0)continue;
+        for (int j=0;j<(int)VertPaths[i].size()-1;j++)
         {
             int IndexV0=VertPaths[i][j];
             int IndexV1=VertPaths[i][j+1];
@@ -183,12 +199,13 @@ void SmoothPaths()
 
     PatchM.UpdateSubPatchPos();
     PatchM.InitVisualCornersEdges();
-
 }
 
 void InitPatches()
 {
-    PatchM.Init();
+    PatchM.Init();    
+    InitConditions();
+    PDeco.Init();
 }
 
 void BatchProcess()
@@ -215,9 +232,11 @@ void BatchProcess()
     auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
 
     std::cout << "*** UPDATING PATCHES *** " <<std::endl;
-    PatchM.Update();
+    std::vector<int> UpdatedPatches;
+    PatchM.Update(UpdatedPatches);
     CurrCol=1;
-    UpdateColor();
+    UpdateColor();  
+    PatchM.CompactEmptyPatches();
 
     auto end4 = std::chrono::high_resolution_clock::now();
     auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
@@ -227,7 +246,7 @@ void BatchProcess()
     auto end5 = std::chrono::high_resolution_clock::now();
     auto elapsed5 = std::chrono::duration_cast<std::chrono::microseconds>(end5 - end4);
 
-    PatchM.InitVisualCornersEdges();
+    //PatchM.InitVisualCornersEdges();
 
     double elapsed_seconds0 = elapsed0.count() * 1e-6; // Convert microseconds to seconds
     double elapsed_seconds1 = elapsed1.count() * 1e-6; // Convert microseconds to seconds
@@ -486,7 +505,7 @@ void SetRenderBar()
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATCHES");
     static const char* itemsShape[] = { "Color Uniform",
-                                        "Color By Path",
+                                        "Color By Patch",
                                         "Color if Disk",
                                         "Color Valence",
                                         "Color Match Sing"};
@@ -521,13 +540,40 @@ void SetRenderBar()
         PathSampl.AddNextPath();
         PathColors.resize(PathSampl.SelectedPaths.size());
         Geo::ScatterColor<ScalarType>(PathColors);
-        PatchM.Update();
+        std::vector<int> UpdatedPatches;
+        PatchM.Update(UpdatedPatches);
         UpdateColor();
-        PatchM.InitVisualCornersEdges();
+        //PatchM.InitVisualCornersEdges();
     }
 
     if (ImGui::Button("Add All Paths"))
         AddAllPaths();
+
+    if (ImGui::Button("Add One If Need"))
+    {
+        bool terminated=false;
+        bool solved=false;
+        PDeco.AddNextIfNeeded(solved,terminated);
+        //PathSampl.GetMarkedVertices(MarkedV,0);
+
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+//        std::vector<int> UpdatedPatches;
+//        PatchM.Update(UpdatedPatches);
+        UpdateColor();
+        //PatchM.InitVisualCornersEdges();
+    }
+
+    if (ImGui::Button("Remove one if possible"))
+    {
+        bool terminated=false;
+        bool solved=false;
+        PDeco.RemoveNextIfPossible();
+
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+        UpdateColor();
+    }
 
     ImGui::InputInt("Smooth Steps",&smooth_steps);
     if (ImGui::Button("Smooth"))
@@ -610,18 +656,12 @@ void GLDrawMesh()
                                                           PDParam,PathColors);
 
     PDParam.DrawPath=false;
-    //    if (DrawExitNode)
-    //        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::ExitDomain,MeshBox.Diag()*0.005,PDParam);
-    //    if (DrawTangentNode)
-    //        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::TangentDomain,MeshBox.Diag()*0.005,PDParam);
 
-    //GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCorners(VertPos,PatchM);
     if (DrawCorners)
         GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCorners(PatchM);
 
     if (DrawSides)
         GLGraphDraw::GLDrawPatchData<ScalarType>::DrawSides(PatchM);
-    //GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawSelectedNodes(TGraph,VertCurv,0,MeshBox.Diag()*0.005);
 
 }
 

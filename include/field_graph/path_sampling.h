@@ -1,6 +1,8 @@
 #ifndef PATH_SAMPLING
 #define PATH_SAMPLING
 
+#define VERT_MARK_SIZE 2
+
 #include "graph.h"
 #include <list>
 #include <set>
@@ -50,6 +52,22 @@ public:
 
     bool dynamicUpdates;
     std::vector<std::vector<int> > SelectedPaths;
+
+    //this used to get some subdomains to sample into subdomain or
+    //to check if a path pass from some vertices/faces
+    std::vector<int> VertTMark[VERT_MARK_SIZE];
+    int GlobalTMark[VERT_MARK_SIZE];
+    bool check_pass_on[VERT_MARK_SIZE];
+    bool limit_path_to[VERT_MARK_SIZE];
+
+    void InitMarkVector()
+    {
+        for (size_t i=0;i<VERT_MARK_SIZE;i++)
+        {
+            VertTMark[i]=std::vector<int>(VertPos.size(),0);
+            GlobalTMark[i]=0;
+        }
+    }
 
 private:
 
@@ -422,7 +440,6 @@ private:
         }
     }
 
-
     void WriteTiming()
     {
         std::cout<<"*** TIMINGS ***"<<std::endl;
@@ -432,7 +449,66 @@ private:
         std::cout<<"* Time Conflicts:"<<TimeConflict<<std::endl;
     }
 
+    bool IsMarkeVert(const int &IndexV,const int &IndexMark)
+    {
+        assert(IndexMark>=0);
+        assert(IndexMark<VERT_MARK_SIZE);
+        assert(IndexV>=0);
+        assert(IndexV<VertPos.size());
+        return (VertTMark[IndexMark][IndexV]==GlobalTMark[IndexMark]);
+    }
+
+    bool IsMarkedNode(const int &IndexNode,int IndexMark)
+    {
+        assert(IndexMark>=0);
+        assert(IndexMark<VERT_MARK_SIZE);
+        assert(IndexNode>=0);
+        assert(IndexNode<TGraph.NumNodes());
+        int IndexV=Field::CrossFieldGraph::ElemOfNode(IndexNode);
+        return (IsMarkeVert(IndexV,IndexMark));
+    }
+
+
+    //    void MarkNode(const int &IndexNode,int IndexMark)
+    //    {
+    //        assert(IndexMark>=0);
+    //        assert(IndexMark<VERT_MARK_SIZE);
+    //        assert(IndexNode>=0);
+    //        assert(IndexNode<TGraph.NumNodes());
+    //        int IndexV=Field::CrossFieldGraph::ElemOfNode(IndexNode);
+    //        VertTMark[IndexMark][IndexV]=GlobalTMark[IndexV];
+    //    }
+
 public:
+
+    void UnMarkAll(int IndexMark)
+    {
+        assert(IndexMark>=0);
+        assert(IndexMark<VERT_MARK_SIZE);
+        GlobalTMark[IndexMark]++;
+    }
+
+    void MarkVertices(const std::vector<int> &To_MarkVert,int IndexMark)
+    {
+        assert(IndexMark>=0);
+        assert(IndexMark<VERT_MARK_SIZE);
+        for (size_t i=0;i<To_MarkVert.size();i++)
+        {
+            int IndexV=To_MarkVert[i];
+            assert(IndexV>=0);
+            assert(IndexV<VertTMark[IndexMark].size());
+            assert(IndexV<VertPos.size());
+            VertTMark[IndexMark][IndexV]=GlobalTMark[IndexMark];
+        }
+    }
+
+    bool HasMarkedVert(int &IndexCandidate,int IndexMark)
+    {
+        assert(IndexCandidate<SampledPaths.size());
+        for (size_t i=0;i<SampledPaths[IndexCandidate].size();i++)
+            if (IsMarkedNode(SampledPaths[IndexCandidate][i],IndexMark))return true;
+        return false;
+    }
 
     void ClearSamples()
     {
@@ -466,9 +542,32 @@ public:
 
             if (SampledPaths_Status[IndexPath]!=SP_Evaluate)continue;
 
-            //in this case just check if intersect
-            bool has_conflict=false;
+            //CHECK OF PASSING ON REQUIRED PATCHES
+            bool pass_on_patches=true;
+            for (size_t j=0;j<VERT_MARK_SIZE;j++)
+                if (check_pass_on[j])pass_on_patches=false;
 
+            if (!pass_on_patches)
+            {
+                //std::cout<<"checking useful path"<<std::endl;
+                for (size_t j=0;j<VERT_MARK_SIZE;j++)
+                {
+                    if (check_pass_on[j] && (HasMarkedVert(IndexPath,j)))
+                    {
+                        pass_on_patches=true;
+                        break;
+                    }
+                }
+            }
+
+            if (!pass_on_patches)
+            {
+                SampledPaths_Status[IndexPath]=SP_Discarded;
+                continue;
+            }
+
+            //CHECK OF INTERSECTION
+            bool has_conflict=false;
 
             auto start = std::chrono::high_resolution_clock::now();
 
@@ -476,7 +575,7 @@ public:
                 has_conflict=ConflictWithInserted(SampledPaths[IndexPath]);
 
             if (!has_conflict)
-               has_conflict|=ConflictEdgeWithInsertedEdges(SampledPaths[IndexPath]);
+                has_conflict|=ConflictEdgeWithInsertedEdges(SampledPaths[IndexPath]);
 
             if (has_conflict)
             {
@@ -496,7 +595,7 @@ public:
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
             TimeConflict += duration.count() * 1e-6;
 
-
+            //UPDATE DISTANCES WITH LAST ADDED
             if (avoidSingularities)
                 EnableSingularities();
 
@@ -510,7 +609,7 @@ public:
             duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
             TimeUpdDist += duration.count() * 1e-6;
 
-
+            //UPDATE CANDIDATES IF NEEDED
             if (dynamicUpdates)
             {
                 DisableGraphNodes(SelectedPaths.back());
@@ -527,12 +626,22 @@ public:
                 TGraph.CurrDistIndex()=0;
             }
 
-            //and update candiate priority
+            //UPDATE PRIORITY
             UpdateCandidatePriority();
 
             return true;
         }
         return false;
+    }
+
+    void GetMarkedVertices(std::vector<int> &MarkedV,
+                           int IndexMark)
+    {
+        assert(IndexMark>=0);
+        assert(IndexMark<VERT_MARK_SIZE);
+        MarkedV.clear();
+        for (size_t i=0;i<VertPos.size();i++)
+            if (IsMarkeVert(i,IndexMark))MarkedV.push_back(i);
     }
 
     void InsertAllPaths()
@@ -591,6 +700,8 @@ public:
         duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         TimeUpdPatches += duration.count() * 1e-6;
 
+        InitMarkVector();
+
         WriteTiming();
 
     }
@@ -625,6 +736,12 @@ public:
         TimeTracing=0;
         TimeUpdDist=0;
         TimeConflict=0;
+        for (size_t i=0;i<VERT_MARK_SIZE;i++)
+        {
+            check_pass_on[i]=false;
+            limit_path_to[i]=false;
+        }
+
     }
 };
 

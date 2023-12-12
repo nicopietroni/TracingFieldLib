@@ -35,6 +35,15 @@ public:
     //for each patch, for each side , the vector of points
     std::vector<std::vector<std::vector<Geo::Point3<ScalarType> > > > VisualPaths;
 
+    //SUBMESHES
+    std::vector<std::vector<Geo::Point3<ScalarType> > > SubPatchVertPos;
+    std::vector<std::vector<std::vector<int> > > SubPatchFaces;
+
+    //their mapping to original one
+    std::vector<std::vector<int > > SubPatchVertToOriginal;
+    std::vector<std::vector<int > > SubPatchFacesToOriginal;
+    //END SUBMESHES
+
 private:
 
     //the original mesh
@@ -56,21 +65,15 @@ private:
     std::vector<std::vector<int> > PatchOriginalFaces;
     std::vector<int> OriginalFaceToPatch;
 
-    //SUBMESHES
-    std::vector<std::vector<Geo::Point3<ScalarType> > > SubPatchVertPos;
-    std::vector<std::vector<std::vector<int> > > SubPatchFaces;
-
-    //their mapping to original one
-    std::vector<std::vector<int > > SubPatchVertToOriginal;
-    std::vector<std::vector<int > > SubPatchFacesToOriginal;
-    //END SUBMESHES
-
     //for each edge the nodes that are passed with respect to the first node
     // std::unordered_map<std::pair<int,int>,int[2],Geo::hashPairIntFunction > PathsEdges;
     std::map<std::pair<int,int>,std::vector<int> > PathsEdges;
 
     //this one store for each edge the faces that are on it
     std::map<std::pair<int,int>,std::vector<int> > EdgesToFace;
+
+    //    //the selected flag to check and trace part of the mesh
+    //    std::vector<int> TracingDomainMark;
 
 
     void InitVisualCorners(int IndexP)
@@ -548,7 +551,7 @@ private:
             bool found=false;
             for (size_t j=0;j<PathNodes.size();j++)
             {
-                if (PathNodes[i]!=OLDPathNodes[j])continue;
+                if (OLDPathNodes[i]!=(PathNodes[j]))continue;
                 found=true;
                 break;
             }
@@ -712,7 +715,7 @@ private:
         }
         std::vector<std::vector<int> > ComponentsF;
         FFConnectedComponenentElements(FacesToCheck,ComponentsF);
-        std::cout<<"new components found:"<<ComponentsF.size()<<std::endl;
+
         //clear the old one
         for (size_t i=0;i<ToUpdPatches.size();i++)
         {
@@ -845,15 +848,6 @@ private:
             UpdateSubMesh(IndexPatches[i]);
     }
 
-    //    void CompactEmptyPatches()
-    //    {
-
-    //        for (size_t i=0;i<PatchOriginalFaces.size();i++)
-    //        {
-    //            if ()
-    //        }
-    //    }
-
     void FindPatchCorners(const std::vector<int> &IndexPatches)
     {
         for (size_t i=0;i<IndexPatches.size();i++)
@@ -876,7 +870,7 @@ private:
         SubPatchVertPos[IndexPatch].clear();
         SubPatchFaces[IndexPatch].clear();
         SubPatchVertToOriginal[IndexPatch].clear();
-        SubPatchVertToOriginal[IndexPatch].clear();
+        SubPatchFacesToOriginal[IndexPatch].clear();
         PatchCorners[IndexPatch].clear();
         EdgePatchSides[IndexPatch].clear();
         VisualCorners[IndexPatch].clear();
@@ -912,7 +906,54 @@ private:
 
 public:
 
-    bool MatchSingularity(int IndexPatch)
+    void CompactEmptyPatches()
+    {
+        std::vector<std::vector<std::vector<ScalarType> > > SideLenghts_Swap;
+        std::vector<std::vector<int> > PatchOriginalFaces_Swap;
+        std::vector<std::vector<Geo::Point3<ScalarType> > > SubPatchVertPos_Swap;
+        std::vector<std::vector<std::vector<int> > > SubPatchFaces_Swap;
+        std::vector<std::vector<int > > SubPatchVertToOriginal_Swap;
+        std::vector<std::vector<int > > SubPatchFacesToOriginal_Swap;
+        std::vector<std::vector<std::vector<int> > > PatchCorners_Swap;
+        std::vector<std::vector<std::vector<std::vector<std::pair<int,int> > > > > EdgePatchSides_Swap;
+        std::vector<std::vector<Geo::Point3<ScalarType> > > VisualCorners_Swap;
+        std::vector<std::vector<std::vector<Geo::Point3<ScalarType> > > > VisualPaths_Swap;
+
+
+        for (size_t i=0;i<PatchOriginalFaces.size();i++)
+        {
+            if (PatchOriginalFaces[i].size()==0)continue;
+
+            SideLenghts_Swap.push_back(SideLenghts[i]);
+            PatchOriginalFaces_Swap.push_back(PatchOriginalFaces[i]);
+            SubPatchVertPos_Swap.push_back(SubPatchVertPos[i]);
+            SubPatchFaces_Swap.push_back(SubPatchFaces[i]);
+            SubPatchVertToOriginal_Swap.push_back(SubPatchVertToOriginal[i]);
+            SubPatchFacesToOriginal_Swap.push_back( SubPatchFacesToOriginal[i]);
+            PatchCorners_Swap.push_back(PatchCorners[i]);
+            EdgePatchSides_Swap.push_back(EdgePatchSides[i]);
+            if (UpdateVisual)
+            {
+                VisualCorners_Swap.push_back(VisualCorners[i]);
+                VisualPaths_Swap.push_back(VisualPaths[i]);
+            }
+        }
+    }
+
+    bool HasMultipleSingularities(int IndexPatch)const
+    {
+        int numSing=0;
+        for (size_t i=0;i<SubPatchVertToOriginal[IndexPatch].size();i++)
+        {
+            int IndexVOr=SubPatchVertToOriginal[IndexPatch][i];
+            if (SingValence.count(IndexVOr)==0)continue;
+            numSing++;
+            if (numSing>1)return true;
+        }
+        return false;
+    }
+
+    bool MatchSingularity(int IndexPatch)const
     {
         assert(IndexPatch>=0);
         assert(IndexPatch<SubPatchVertToOriginal.size());
@@ -923,7 +964,7 @@ public:
             int IndexVOr=SubPatchVertToOriginal[IndexPatch][i];
             if (SingValence.count(IndexVOr)==0)continue;
             if (TargetValence!=-1)return false;//multiple singularities
-            TargetValence=SingValence[IndexVOr];
+            TargetValence=SingValence.at(IndexVOr);
         }
         //std::cout<<"Target Val 0 "<<TargetValence<<std::endl;
 
@@ -958,7 +999,7 @@ public:
             SingValence[SingIndex[i]]=SingValue[i];
     }
 
-    int NumSides(const int &IndexPatch)
+    int NumSides(const int &IndexPatch)const
     {
         int sideNum=0;
         for (size_t i=0;i<EdgePatchSides[IndexPatch].size();i++)
@@ -966,7 +1007,7 @@ public:
         return sideNum;
     }
 
-    int NumCorners(const int &IndexPatch)
+    int NumCorners(const int &IndexPatch)const
     {
         int cornNum=0;
         for (size_t i=0;i<PatchCorners[IndexPatch].size();i++)
@@ -974,13 +1015,13 @@ public:
         return cornNum;
     }
 
-    int NumBorders(const int &IndexPatch)
+    int NumBorders(const int &IndexPatch)const
     {
         assert(IndexPatch<NumPatches());
         return EdgePatchSides[IndexPatch].size();
     }
 
-    int Genus(const int &IndexPatch)
+    int Genus(const int &IndexPatch)const
     {
         assert(IndexPatch<NumPatches());
         int NHoles=NumBorders(IndexPatch);
@@ -992,11 +1033,17 @@ public:
         return Gen;
     }
 
-    bool isDiskLike(const int &IndexPatch)
+    bool isDiskLike(const int &IndexPatch)const
     {
         if (NumBorders(IndexPatch)!=1)return false;
         if (Genus(IndexPatch)!=0)return false;
         return true;
+    }
+
+    bool isEmpty(const int &IndexPatch)const
+    {
+        assert(IndexPatch<NumPatches());
+        return(PatchOriginalFaces[IndexPatch].empty());
     }
 
     void InitVisualCornersEdges()
@@ -1134,14 +1181,16 @@ public:
         }
     }
 
-    void Update()
+    void Update(std::vector<int> &UpdatedPatches)
     {
+        UpdatedPatches.clear();
+
         std::vector<int> ToAdd,ToRemove;
         std::set<int> ToUpdPatches;
         FindAddRemovePaths(ToAdd,ToRemove);
 
-        std::cout<<"Adding "<<ToAdd.size()<<" Paths"<<std::endl;
-        std::cout<<"Removing "<<ToRemove.size()<<" Paths"<<std::endl;
+//        std::cout<<"Adding "<<ToAdd.size()<<" Paths"<<std::endl;
+//        std::cout<<"Removing "<<ToRemove.size()<<" Paths"<<std::endl;
 
         for (size_t i=0;i<ToRemove.size();i++)
         {
@@ -1155,7 +1204,7 @@ public:
             AddTouchedPatchesToSet(PathNodes[IndexPath],ToUpdPatches);
         }
 
-        std::cout<<"To Update "<<ToUpdPatches.size()<<" Patches"<<std::endl;
+//        std::cout<<"To Update "<<ToUpdPatches.size()<<" Patches"<<std::endl;
 
         for (size_t i=0;i<ToRemove.size();i++)
         {
@@ -1184,15 +1233,19 @@ public:
         UpdateSubMeshes(ToUpdatePatches);
         //        if (UpdateCorners)
 
+
         FindPatchCorners(ToUpdatePatches);
 
-        UpdateSideLenghs(ToUpdatePatches);
-        //        if (UpdateVisual)
-        //            InitVisualCornersEdges(ToUpdatePatches);
 
+        UpdateSideLenghs(ToUpdatePatches);
+
+
+        if (UpdateVisual)
+            InitVisualCornersEdges(ToUpdatePatches);
+
+        UpdatedPatches=ToUpdatePatches;
 
         OLDPathNodes=PathNodes;
-
 
         assert(SideLenghts.size()==NumPatches());
         assert(PatchOriginalFaces.size()==NumPatches());
@@ -1204,7 +1257,7 @@ public:
         assert(EdgePatchSides.size()==NumPatches());
     }
 
-    int NumPatches()
+    int NumPatches()const
     {
         return PatchOriginalFaces.size();
     }
@@ -1274,7 +1327,8 @@ public:
 
         InitEdgeToFace();
 
-        //InitVisualCornersEdges();
+        if (UpdateVisual)
+            InitVisualCornersEdges();
 
         WriteStats();
     }

@@ -13,7 +13,7 @@ enum TypeRendMesh{TRTriangle,TrQuad,TrPolygon};
 
 template <class ScalarType>
 void DrawVertices(std::vector< Geo::Point3<ScalarType> > &VertPos,
-                  const std::vector<size_t> &To_Draw)
+                  const std::vector<int> &To_Draw)
 {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glDisable(GL_LIGHTING);
