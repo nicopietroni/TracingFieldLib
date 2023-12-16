@@ -574,29 +574,7 @@ private:
             }
     }
 
-    void AddTouchedPatchesToSet(const std::vector<int> &PathN,
-                                std::set<int> &PatchIdx)
-    {
-        if (PathN.size()==0)return;
-        //loop repeat the last two times so no need to check
-        for (int i=0;i<PathN.size()-1;i++)
-        {
-            int IndexN0=PathN[i];
-            int IndexN1=PathN[i+1];
-            int IndexV0=Field::CrossFieldGraph::ElemOfNode(IndexN0);
-            int IndexV1=Field::CrossFieldGraph::ElemOfNode(IndexN1);
-            std::pair<int,int> key(std::min(IndexV0,IndexV1),std::max(IndexV0,IndexV1));
-            assert(EdgesToFace.count(key)>0);
-            for (size_t j=0;j<EdgesToFace[key].size();j++)
-            {
-                int IndexF=EdgesToFace[key][j];
-                assert(IndexF>=0);
-                assert(IndexF<Faces.size());
-                assert(IndexF<OriginalFaceToPatch.size());
-                PatchIdx.insert(OriginalFaceToPatch[IndexF]);
-            }
-        }
-    }
+
 
     void RemovePath(const std::vector<int> &ToRem)
     {
@@ -905,6 +883,52 @@ private:
     std::map<int,int> SingValence;
 
 public:
+
+    void getMeshOfPatches(const std::vector<int> &To_CopyFrom,
+                          std::vector<Geo::Point3<ScalarType> > &CopiedMeshesVert,
+                          std::vector<std::vector<int> > &CopiedMeshesElem,
+                          std::vector<int> &OriginalVert,std::vector<int> &OriginalElem)
+    {
+        std::vector<int> ToCopyFace;
+        for (int i=0;i<To_CopyFrom.size();i++)
+        {
+            int IndexPatch=To_CopyFrom[i];
+            ToCopyFace.insert(ToCopyFace.end(),
+                              SubPatchFacesToOriginal[IndexPatch].begin(),
+                              SubPatchFacesToOriginal[IndexPatch].end());
+        }
+        CopiedMeshesVert.clear();
+        CopiedMeshesElem.clear();
+        OriginalVert.clear();
+        OriginalElem.clear();
+        CopySubMesh<ScalarType>(VertPos,Faces,ToCopyFace,
+                                CopiedMeshesVert,CopiedMeshesElem,
+                                OriginalVert,OriginalElem);
+    }
+
+    void AddTouchedPatchesToSet(const std::vector<int> &PathN,
+                                std::set<int> &PatchIdx)
+    {
+        if (PathN.size()==0)return;
+        //loop repeat the last two times so no need to check
+        for (int i=0;i<PathN.size()-1;i++)
+        {
+            int IndexN0=PathN[i];
+            int IndexN1=PathN[i+1];
+            int IndexV0=Field::CrossFieldGraph::ElemOfNode(IndexN0);
+            int IndexV1=Field::CrossFieldGraph::ElemOfNode(IndexN1);
+            std::pair<int,int> key(std::min(IndexV0,IndexV1),std::max(IndexV0,IndexV1));
+            assert(EdgesToFace.count(key)>0);
+            for (size_t j=0;j<EdgesToFace[key].size();j++)
+            {
+                int IndexF=EdgesToFace[key][j];
+                assert(IndexF>=0);
+                assert(IndexF<Faces.size());
+                assert(IndexF<OriginalFaceToPatch.size());
+                PatchIdx.insert(OriginalFaceToPatch[IndexF]);
+            }
+        }
+    }
 
     void CompactEmptyPatches()
     {
@@ -1260,6 +1284,11 @@ public:
     int NumPatches()const
     {
         return PatchOriginalFaces.size();
+    }
+
+    int NumFaces()const
+    {
+        return Faces.size();
     }
 
     void WriteStats()

@@ -43,10 +43,15 @@ class CrossPathSampling
     bool updatePatches;
     std::vector<std::pair<ScalarType,int> > Candidates;
 
-    std::unordered_set<int> ConflictNodes;
+    //    std::unordered_set<int> ConflictNodes;
+
+    //    //these are used to detect when two path shared an edge and to solve it
+    //    std::unordered_set<std::pair<int,int>,Geo::hashPairIntFunction > ConflictEdges;
+
+    std::set<int> ConflictNodes;
 
     //these are used to detect when two path shared an edge and to solve it
-    std::unordered_set<std::pair<int,int>,Geo::hashPairIntFunction > ConflictEdges;
+    std::set<std::pair<int,int> > ConflictEdges;
 
 public:
 
@@ -59,6 +64,7 @@ public:
     int GlobalTMark[VERT_MARK_SIZE];
     bool check_pass_on[VERT_MARK_SIZE];
     bool limit_path_to[VERT_MARK_SIZE];
+    bool sample_only_on[VERT_MARK_SIZE];
 
     void InitMarkVector()
     {
@@ -71,11 +77,11 @@ public:
 
 private:
 
-    ScalarType TimeTracing;
-    ScalarType TimeUpdDist;
-    ScalarType TimeConflict;
-    ScalarType TimeInitData;
-    ScalarType TimeUpdPatches;
+    //    ScalarType TimeTracing;
+    //    ScalarType TimeUpdDist;
+    //    ScalarType TimeConflict;
+    //    ScalarType TimeInitData;
+    //    ScalarType TimeUpdPatches;
 
     bool IsTraceable(int &IndexN)
     {
@@ -86,18 +92,60 @@ private:
         return true;
     }
 
-    void InitTracingNodes(int NumSources)
+
+    //    void InitTracingNodes(int NumSources)
+    //    {
+    //        int RadiusStar=VertPos.size()/NumSources;
+    //        std::vector<int> SampledVert;
+
+    //        //Geo::MeshSampling<ScalarType>::SampleVert(Connectivity,VertPos.size(),
+    //        //                                          RadiusStar,SampledVert,true);
+    //        //std::vector<std::vector<int> > NextF,NextE;
+    //        //Geo::getFFAdjacency(Connectivity,NextF,NextE);
+    //        //Geo::MeshSampling<ScalarType>::SampleBordersRegularly(Connectivity,NextF,NextE,RadiusStar,4,SampledVert);
+
+    //        Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,RadiusStar,4,SampledVert);
+
+    //        std::cout<<"Sampled "<<SampledVert.size()<<" Starting vertices"<<std::endl;
+    //        std::set<int> SingSetId(SingIndex.begin(),SingIndex.end());
+    //        //get nodes from sampled vertices
+    //        for (size_t i=0;i<SampledVert.size();i++)
+    //        {
+    //            //not start tracing from singularities
+    //            if (avoidSingularities)
+    //                if (SingSetId.count(SampledVert[i])>0)continue;
+
+    //            std::vector<int> IndexN;
+    //            Field::CrossFieldGraph::NodesOfElem(SampledVert[i],IndexN);
+    //            bool AddedDir2[2]={false,false};
+    //            //then put two orthogonal ones
+    //            for (size_t j=0;j<IndexN.size();j++)
+    //            {
+    //                if (AddedDir2[j%2]==true)continue;//already added in this or opposite dir
+    //                if (!IsTraceable(IndexN[j]))continue;
+    //                AddedDir2[j%2]=true;
+    //                StartingNodes.push_back(IndexN[j]);
+    //            }
+    //        }
+    //    }
+
+
+    void InitTracingNodes(int NumSources,const int &IndexMark=-1)
     {
         int RadiusStar=VertPos.size()/NumSources;
         std::vector<int> SampledVert;
+        if (IndexMark!=-1)
+        {
+            std::vector<int> MarkedV;
+            GetMarkedVert(IndexMark,MarkedV);
+            std::cout<<" There are "<< MarkedV.size()<<"places to sample "<<std::endl;
+            RadiusStar=MarkedV.size()/NumSources;
+            //std::cout<<" Radius "<< RadiusStar<<std::endl;
+            Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,RadiusStar,4,SampledVert,&MarkedV);
+        }
+        else
+            Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,RadiusStar,4,SampledVert);
 
-        //        Geo::MeshSampling<ScalarType>::SampleVert(Connectivity,VertPos.size(),
-        //                                                  RadiusStar,SampledVert,true);
-        //        std::vector<std::vector<int> > NextF,NextE;
-        //        Geo::getFFAdjacency(Connectivity,NextF,NextE);
-        //        Geo::MeshSampling<ScalarType>::SampleBordersRegularly(Connectivity,NextF,NextE,RadiusStar,4,SampledVert);
-
-        Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,RadiusStar,4,SampledVert);
 
         std::cout<<"Sampled "<<SampledVert.size()<<" Starting vertices"<<std::endl;
         std::set<int> SingSetId(SingIndex.begin(),SingIndex.end());
@@ -116,6 +164,7 @@ private:
             {
                 if (AddedDir2[j%2]==true)continue;//already added in this or opposite dir
                 if (!IsTraceable(IndexN[j]))continue;
+                if (ConflictNodes.count(IndexN[j])>0)continue;
                 AddedDir2[j%2]=true;
                 StartingNodes.push_back(IndexN[j]);
             }
@@ -217,17 +266,53 @@ private:
 
     void SamplePaths(int NumSamples)
     {
-        auto start = std::chrono::high_resolution_clock::now();
 
         std::cout<<"Sampling starting Nnodes"<<std::endl;
-        InitTracingNodes(NumSamples);
-        std::cout<<"Sampled "<<StartingNodes.size()<<" Starting Nodes"<<std::endl;
 
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        TimeInitData += duration.count() * 1e-6;
+        //get if need to sample on a subset
+        int IndexMark=-1;
+        for (size_t i=0;i<VERT_MARK_SIZE;i++)
+            if (sample_only_on[i])IndexMark=i;
+
+
+        InitTracingNodes(NumSamples,IndexMark);
+
+        int IndexLimit=-1;
+        for (size_t i=0;i<VERT_MARK_SIZE;i++)
+            if (limit_path_to[i])IndexLimit=i;
+
+        //then set exit nodes if needed to stop the tracing
+        std::vector<std::pair<int,NType> > SwapNodeType;
+        if (IndexLimit!=-1)
+        {
+            //can't use the same flags
+            assert(IndexLimit!=IndexMark);
+
+            std::vector<int> MarkedV;
+            GetMarkedVert(IndexLimit,MarkedV);
+
+            for (size_t i=0;i<MarkedV.size();i++)
+            {
+                std::vector<int> IndexN;
+                Field::CrossFieldGraph::NodesOfElem(MarkedV[i],IndexN);
+
+                //std::vector<int> StartingNodesSet()
+                for (size_t j=0;j<IndexN.size();j++)
+                {
+                    int currN=IndexN[j];
+                    if (ConflictNodes.count(currN)>0)continue;
+                    std::pair<int,NType> Entry(currN,TGraph.NodeType(currN));
+                    SwapNodeType.push_back(Entry);
+                    TGraph.NodeType(currN)=Geo::ExitDomain;
+                }
+            }
+        }
 
         std::vector<int> NewStartingNodes;
+
+        int non_traced=0;
+        int self_intersected=0;
+
         for (size_t i=0;i<StartingNodes.size();i++)
         {
             std::vector<int> CurrPath;
@@ -238,9 +323,9 @@ private:
 
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-            TimeTracing += duration.count() * 1e-6;
+            //TimeTracing += duration.count() * 1e-6;
 
-            if (!has_traced)continue;
+            if (!has_traced){non_traced++;continue;}
 
             start = std::chrono::high_resolution_clock::now();
 
@@ -249,16 +334,31 @@ private:
             end = std::chrono::high_resolution_clock::now();
             duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
-            TimeConflict += duration.count() * 1e-6;
+            //TimeConflict += duration.count() * 1e-6;
 
-            if (self_intersect)continue;
+            if (self_intersect){self_intersected++;continue;}
             SampledPaths.push_back(CurrPath);
             NewStartingNodes.push_back(StartingNodes[i]);
         }
+
+//        //then restore
+//        if (IndexLimit!=-1)
+//        {
+//            for (size_t i=0;i<SwapNodeType.size();i++)
+//            {
+//                int IndexN=SwapNodeType[i].first;
+//                NType TypeNode=SwapNodeType[i].second;
+//                TGraph.NodeType(IndexN)=TypeNode;
+//            }
+//        }
+
         StartingNodes=NewStartingNodes;
         SampledPaths_Status.clear();
         SampledPaths_Status.resize(SampledPaths.size(),SP_Evaluate);
+
         std::cout<<"Sampled "<<SampledPaths.size()<<" Paths"<<std::endl;
+        std::cout<<"self intersected "<<self_intersected<<std::endl;
+        std::cout<<"Non traced "<<non_traced<<std::endl;
     }
 
     void InitCandidates()
@@ -442,14 +542,14 @@ private:
 
     void WriteTiming()
     {
-        std::cout<<"*** TIMINGS ***"<<std::endl;
-        std::cout<<"* Time Init:"<<TimeInitData<<std::endl;
-        std::cout<<"* Time tracing:"<<TimeTracing<<std::endl;
-        std::cout<<"* Time upd Dist:"<<TimeUpdDist<<std::endl;
-        std::cout<<"* Time Conflicts:"<<TimeConflict<<std::endl;
+        //        std::cout<<"*** TIMINGS ***"<<std::endl;
+        //        std::cout<<"* Time Init:"<<TimeInitData<<std::endl;
+        //        std::cout<<"* Time tracing:"<<TimeTracing<<std::endl;
+        //        std::cout<<"* Time upd Dist:"<<TimeUpdDist<<std::endl;
+        //        std::cout<<"* Time Conflicts:"<<TimeConflict<<std::endl;
     }
 
-    bool IsMarkeVert(const int &IndexV,const int &IndexMark)
+    bool IsMarkedVert(const int &IndexV,const int &IndexMark)
     {
         assert(IndexMark>=0);
         assert(IndexMark<VERT_MARK_SIZE);
@@ -465,7 +565,7 @@ private:
         assert(IndexNode>=0);
         assert(IndexNode<TGraph.NumNodes());
         int IndexV=Field::CrossFieldGraph::ElemOfNode(IndexNode);
-        return (IsMarkeVert(IndexV,IndexMark));
+        return (IsMarkedVert(IndexV,IndexMark));
     }
 
 
@@ -480,6 +580,18 @@ private:
     //    }
 
 public:
+
+    void GetMarkedVert(const int &IndexMark,std::vector<int> &MarkedV)
+    {
+        assert(IndexMark>=0);
+        assert(IndexMark<VERT_MARK_SIZE);
+        MarkedV.clear();
+        for (size_t i=0;i<VertPos.size();i++)
+        {
+            if (!IsMarkedVert(i,IndexMark))continue;
+            MarkedV.push_back(i);
+        }
+    }
 
     void UnMarkAll(int IndexMark)
     {
@@ -510,14 +622,14 @@ public:
         return false;
     }
 
-    void ClearSamples()
+    void ClearSampledPaths()
     {
         StartingNodes.clear();
         SampledPaths.clear();
         SampledPaths_Status.clear();
         Candidates.clear();
-        ConflictNodes.clear();
-        SelectedPaths.clear();
+        //ConflictNodes.clear();
+        //SelectedPaths.clear();
     }
 
     void WriteStats()
@@ -593,7 +705,7 @@ public:
 
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-            TimeConflict += duration.count() * 1e-6;
+            //TimeConflict += duration.count() * 1e-6;
 
             //UPDATE DISTANCES WITH LAST ADDED
             if (avoidSingularities)
@@ -607,8 +719,9 @@ public:
 
             end = std::chrono::high_resolution_clock::now();
             duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-            TimeUpdDist += duration.count() * 1e-6;
+            //TimeUpdDist += duration.count() * 1e-6;
 
+            //DisableGraphNodes(SelectedPaths.back());
             //UPDATE CANDIDATES IF NEEDED
             if (dynamicUpdates)
             {
@@ -621,7 +734,7 @@ public:
 
                 end = std::chrono::high_resolution_clock::now();
                 duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-                TimeTracing += duration.count() * 1e-6;
+                //TimeTracing += duration.count() * 1e-6;
 
                 TGraph.CurrDistIndex()=0;
             }
@@ -641,7 +754,7 @@ public:
         assert(IndexMark<VERT_MARK_SIZE);
         MarkedV.clear();
         for (size_t i=0;i<VertPos.size();i++)
-            if (IsMarkeVert(i,IndexMark))MarkedV.push_back(i);
+            if (IsMarkedVert(i,IndexMark))MarkedV.push_back(i);
     }
 
     void InsertAllPaths()
@@ -651,59 +764,91 @@ public:
         WriteTiming();
     }
 
-    void Init()
+    void SampleCandidates(bool Init_Distances=true)
     {
-        TimeTracing=0;
-        TimeUpdDist=0;
-        TimeConflict=0;
-        TimeInitData=0;
-        TimeUpdPatches=0;
-
-        auto start = std::chrono::high_resolution_clock::now();
-
-        TGraph.EnableAllNodes();
-
-        ClearSamples();
-
-        InitBorderNodes();
-
-        InitSingularityNodes();
+        ClearSampledPaths();
 
         if (avoidSingularities)
             DisableSingularities();
-
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        TimeInitData += duration.count() * 1e-6;
 
         SamplePaths(NumSamples);
 
         if (avoidSingularities)
             EnableSingularities();
 
-        start = std::chrono::high_resolution_clock::now();
-
-        InitializeDistance();
-
-        end = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        TimeUpdDist += duration.count() * 1e-6;
+        if (Init_Distances)
+            InitializeDistance();
 
         InitCandidates();
 
         UpdateCandidatePriority();
 
-        start = std::chrono::high_resolution_clock::now();
+    }
 
+    void Init()
+    {
+        //        TimeTracing=0;
+        //        TimeUpdDist=0;
+        //        TimeConflict=0;
+        //        TimeInitData=0;
+        //        TimeUpdPatches=0;
 
-        end = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        TimeUpdPatches += duration.count() * 1e-6;
+        //auto start = std::chrono::high_resolution_clock::now();
 
         InitMarkVector();
 
+        TGraph.EnableAllNodes();
+
+        //       ClearSampledPaths();
+
+        InitBorderNodes();
+
+        InitSingularityNodes();
+
+        SampleCandidates();
+        //        if (avoidSingularities)
+        //            DisableSingularities();
+
+        ////        auto end = std::chrono::high_resolution_clock::now();
+        ////        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        ////        TimeInitData += duration.count() * 1e-6;
+
+        //        SamplePaths(NumSamples);
+
+        //        if (avoidSingularities)
+        //            EnableSingularities();
+
+        ////        start = std::chrono::high_resolution_clock::now();
+
+        //        InitializeDistance();
+
+        ////        end = std::chrono::high_resolution_clock::now();
+        ////        duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        ////        TimeUpdDist += duration.count() * 1e-6;
+
+        //        InitCandidates();
+
+        //        UpdateCandidatePriority();
+
+        //        start = std::chrono::high_resolution_clock::now();
+
+
+        //        end = std::chrono::high_resolution_clock::now();
+        //        duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        //        TimeUpdPatches += duration.count() * 1e-6;
+
         WriteTiming();
 
+    }
+
+    void GetStartingNodes(std::vector<int> &StartIDX)
+    {
+        StartIDX.clear();
+        for (size_t i=0;i<StartingNodes.size();i++)
+        {
+            int IndexV=Field::CrossFieldGraph::ElemOfNode(StartingNodes[i]);
+            StartIDX.push_back(IndexV);
+        }
     }
 
     void GetVertexSelectedPaths(std::vector<std::vector<int> > &VertPaths)
@@ -733,13 +878,14 @@ public:
         dynamicUpdates=true;
         updatePatches=true;
         NumSamples=1000;
-        TimeTracing=0;
-        TimeUpdDist=0;
-        TimeConflict=0;
+        //        TimeTracing=0;
+        //        TimeUpdDist=0;
+        //        TimeConflict=0;
         for (size_t i=0;i<VERT_MARK_SIZE;i++)
         {
             check_pass_on[i]=false;
             limit_path_to[i]=false;
+            sample_only_on[i]=false;
         }
 
     }

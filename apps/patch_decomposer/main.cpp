@@ -40,6 +40,10 @@ ImVec4 clear_color = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);
 float line_thick=1.f;
 int selected_rend_item = 5;
 
+bool DrawInitalPos=true;
+bool DrawSamplesPaths=false;
+
+
 bool showMesh=true;
 bool showCross=true;
 bool showSing=true;
@@ -119,6 +123,9 @@ void UpdateColor()
     case 4:
         PatchM.GetColorByMatchSingularity(FaceCol);
         break;
+    case 5:
+        PDeco.GetColorBySolvedPatches(FaceCol);
+        break;
     default:
         FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
         // code block
@@ -167,6 +174,7 @@ void AddAllPaths(bool upd_patches=true)
     if (upd_patches)
     {
         PatchM.Update(UpdatedPatches);
+        PDeco.UpdateAllUnsolvedPatches();
         CurrCol=1;
         UpdateColor();
     }
@@ -205,7 +213,7 @@ void InitPatches()
 {
     PatchM.Init();    
     InitConditions();
-    PDeco.Init();
+    PDeco.UpdateAllUnsolvedPatches();
 }
 
 void BatchProcess()
@@ -361,13 +369,23 @@ void LoadField(const std::string &path)
 {
     //std::cout<<"Loading Field"<<path.c_str()<<std::endl;
     has_cross_field=ReadField(VertPos,Connectivity,path,VertCurv,FaceCurv);
+    if (VertCurv.size()==0)
+    {
+        SetVertCrossFromFace(VertPos,Connectivity,VertNormals,FaceCurv,VertCurv);
+        InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv);
+    }
+    if (FaceCurv.size()==0)
+    {
+        SetFaceCrossVectorFromVert(Connectivity,FaceNormals,VertCurv,FaceCurv);
+        InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv);
+    }
     if (has_cross_field)
     {
         std::cout<<"Loaded Field"<<std::endl;
         showCross=true;
         showSing=true;
 
-        Field::CrossF<ScalarType>::getMinMaxQ(VertCurv,minQCrossVert,maxQCrossVert);
+        Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv,minQCrossVert,maxQCrossVert);
         GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
         PatchM.AddSingularities(SingIndex,SingValue);
     }
@@ -508,7 +526,8 @@ void SetRenderBar()
                                         "Color By Patch",
                                         "Color if Disk",
                                         "Color Valence",
-                                        "Color Match Sing"};
+                                        "Color Match Sing",
+                                        "Color Unsolved Patches"};
 
     ImGui::Combo("Color Patches", &CurrCol, itemsShape, IM_ARRAYSIZE(itemsShape));
     if (CurrCol!=OldCol)
@@ -564,10 +583,13 @@ void SetRenderBar()
         //PatchM.InitVisualCornersEdges();
     }
 
+    if (ImGui::Button("Resample where needed"))
+    {
+        PDeco.RetraceOnUnsolved();
+    }
+
     if (ImGui::Button("Remove one if possible"))
     {
-        bool terminated=false;
-        bool solved=false;
         PDeco.RemoveNextIfPossible();
 
         PathColors.resize(PathSampl.SelectedPaths.size());
@@ -662,6 +684,16 @@ void GLDrawMesh()
 
     if (DrawSides)
         GLGraphDraw::GLDrawPatchData<ScalarType>::DrawSides(PatchM);
+
+    if (DrawInitalPos)
+    {
+        std::vector<int> StartIDX;
+        PathSampl.GetStartingNodes(StartIDX);
+        GLDraw::DrawVertices(VertPos,StartIDX);
+    }
+//     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,
+//                                                                 Geo::ExitDomain,MeshBox.Diag()*0.005);
+    //bool DrawSamplesPaths=false;
 
 }
 

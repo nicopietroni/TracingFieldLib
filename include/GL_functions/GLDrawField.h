@@ -114,6 +114,11 @@ void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
 {
     //Geo::Point3<ScalarType> center=F.Pos;
 
+    ScalarType K0=F.K[0];
+    ScalarType K1=F.K[1];
+
+    ScalarType RatioK0=K0/std::max(K0,K1);
+    ScalarType RatioK1=K1/std::max(K0,K1);
 
     for (size_t dir=0;dir<4;dir++)
     {
@@ -127,12 +132,18 @@ void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
 
             //ratio for color
             ScalarType ratioVal=(Qval-MinQ)/(MaxQ-MinQ);
+
+            if (dir%2==0)
+                ratioVal*=RatioK0;
+            else
+                ratioVal*=RatioK1;
+
             Col=Geo::ColorRGBRamp((ScalarType)1,(ScalarType)0,ratioVal);
             //Col.InitColorRamp(ratioVal);
 
             //ratio for width
             ScalarType IntervW=MaxW-MinW;
-            lineWidth=(fabs(Qval)/MaxQ)*IntervW+MinW;
+            lineWidth=ratioVal*(fabs(Qval)/MaxQ)*IntervW+MinW;
         }
         DrawDirectionSimple(F,dir,scaleVal,lineWidth,Col);
     }

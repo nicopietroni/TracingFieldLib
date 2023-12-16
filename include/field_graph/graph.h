@@ -577,7 +577,7 @@ public:
     }
 
     const NType &NodeType(const size_t &IndexN)const
-    {
+    {     
         assert(IndexN<NT.size());
         return NT[IndexN];
     }
@@ -590,9 +590,9 @@ public:
 
     size_t NumNodes()const
     {
-        assert(TM.size()==F.size());
-        assert(CurrDIndex<DIST_SWAP_NUM);
-        assert(F.size()==D[CurrDIndex].size());
+        assert(N.size()==NT.size());
+        assert(N.size()==EnabledN.size());
+
         return (N.size());
     }
 

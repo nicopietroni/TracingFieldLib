@@ -10,7 +10,7 @@
 #include "pos3.h"
 #include <set>
 #include <connectivity.h>
-
+#include "best_rotation.h"
 
 template < typename ScalarType >
 Field::CrossF<ScalarType> InterpolateTangentCrosses(const std::vector<Field::CrossF<ScalarType> > &Crosses,
@@ -128,7 +128,6 @@ void InitCrossFieldQualityAsAnisotropy(std::vector<Field::CrossF<ScalarType> > &
         ScalarType Ani=(NMax-NMin)/2;
         Ani=std::max(Ani,minV);
 
-        //std::cout<<"Ani:"<<Ani<<std::endl;
         Crosses[i].Q=Ani;
     }
     //    vcg::tri::UpdateQuality<MeshType>::FaceFromVertex(mesh);
@@ -193,7 +192,9 @@ void SetVertCrossFromFace(const std::vector<Geo::Point3<ScalarType> > &VertPos,
             assert(IndexF<(int)FaceCurv.size());
             FaceCross.push_back(FaceCurv[IndexF]);
             if (weightByQuality)
-                W[j]=FaceCurv[IndexF].Q;
+            {
+                 W[j]=FaceCurv[IndexF].Q;
+            }
         }
         //save old Position and quality
         Geo::Point3<ScalarType> OldPos=VertCurv[i].Pos;
@@ -284,6 +285,42 @@ void GetFaceSingularities(const std::vector<Field::CrossF<ScalarType> > &FaceCro
             }
             assert(!HasBorder);
         }
+}
+
+template <class ScalarType>
+void RotateCrossesToUV(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                       const std::vector<std::vector<int> > &Faces,
+                       const std::vector<Geo::Point2<ScalarType> > &UVPos,
+                       const std::vector<Field::CrossF<ScalarType> > &Crosses,
+                       std::vector<Field::CrossF<ScalarType> > &UVCrosses)
+{
+    UVCrosses.clear();
+    assert(Faces.size()==Crosses.size());
+    for (size_t i=0;i<Faces.size();i++)
+    {
+        std::vector<Geo::Point3<ScalarType> > P3D;
+        std::vector<Geo::Point3<ScalarType> > PUV;
+        Geo::Point3<ScalarType> BaryF(0,0,0);
+        for (size_t j=0;j<Faces[i].size();j++)
+        {
+            int IndexV=Faces[i][j];
+            P3D.push_back(VertPos[IndexV]);
+            PUV.push_back(Geo::Point3<ScalarType>(UVPos[IndexV].X,UVPos[IndexV].Y,0));
+            BaryF+=PUV.back();
+        }
+        BaryF/=Faces[i].size();
+        Eigen::Matrix3<ScalarType> Matr;
+        Geo::PointMatch<ScalarType>::ComputeBestRotation(PUV,P3D,Matr);
+        Geo::Point3<ScalarType> D0Cross=Crosses[i].D[0];
+        Geo::Point3<ScalarType> D1Cross=Crosses[i].D[1];
+        D0Cross=Matr*D0Cross;
+        D1Cross=Matr*D1Cross;
+        ScalarType K0=Crosses[i].K[0];
+        ScalarType K1=Crosses[i].K[1];
+        Field::CrossF<ScalarType> RotCross(D0Cross,D1Cross,K0,K1,BaryF);
+        UVCrosses.push_back(RotCross);
+    }
+
 }
 
 #endif
