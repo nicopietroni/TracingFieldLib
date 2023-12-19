@@ -6,7 +6,8 @@
 //#include "graph.h"
 #include "patch_managing.h"
 #include "path_sampling.h"
-#include "mesh_functions.h"
+#include "catmull_clarkability.h"
+//#include "mesh_functions.h"
 
 namespace Geo{
 
@@ -68,12 +69,65 @@ public:
 };
 
 template <class ScalarType>
+class NumSidesCondition:public PatchCondition<ScalarType>
+{
+public:
+    int minCornerNum;
+    int maxCornerNum;
+
+    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+    {(void)PatchM; return true;}
+
+    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
+                   const int &IndexPatch)const override
+    {
+        assert(IndexPatch<PatchM.NumPatches());
+        if (PatchM.NumBorders(IndexPatch)>1)return false;
+        if (PatchM.NumSides(IndexPatch)>maxCornerNum)return false;
+        if (PatchM.NumSides(IndexPatch)<minCornerNum)return false;
+        return true;
+    }
+
+    NumSidesCondition()
+    {
+        minCornerNum=3;
+        maxCornerNum=6;
+    }
+};
+
+template <class ScalarType>
+class CCabilityCondition:public PatchCondition<ScalarType>
+{
+
+public:
+    ScalarType SideThr;
+
+    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+    {(void)PatchM; return true;}
+
+    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
+                   const int &IndexPatch)const override
+    {
+        assert(IndexPatch<PatchM.SideLenghts.size());
+
+        //if there is more than one hole return false
+        if (PatchM.SideLenghts[IndexPatch].size()>1)return false;
+
+        return (IsCatmullClarkable(PatchM.SideLenghts[IndexPatch][0],SideThr,true));
+    }
+
+    CCabilityCondition(const ScalarType &_Thr)
+    {
+        SideThr=_Thr;
+    }
+};
+
+template <class ScalarType>
 class PatchDecomposer
 {
     PatchManaging<ScalarType> &PatchMan;
     Geo::CrossPathSampling<ScalarType> &PathSampl;
     std::vector<Geo::PatchCondition<ScalarType>* > PConditions;
-    bool only_needed;
 
 
     std::set<int> UnsolvedPatches;
@@ -118,12 +172,14 @@ class PatchDecomposer
     }
 
 public:
+    bool only_needed;
+    bool allow_darts;
+    bool allow_concave;
 
     void ClearConditions()
     {
         PConditions.clear();
     }
-
 
     void AddCondition(Geo::PatchCondition<ScalarType> *PCond)
     {
@@ -133,6 +189,7 @@ public:
     bool SatisfyConditions()
     {
         bool has_satisfied=true;
+
         for (size_t i=0;i<PConditions.size();i++)
         {
             has_satisfied&=PConditions[i]->IsCorrect(PatchMan);
@@ -146,6 +203,21 @@ public:
         assert(!PatchMan.isEmpty(IndexPatch));
 
         bool has_satisfied=true;
+
+        //check if has concave or darts
+        if (!allow_darts)
+        {
+            std::vector<int> SpikeCorn;
+            PatchMan.CornersOfType(IndexPatch,PatchManaging<ScalarType>::CTypeSpike,SpikeCorn);
+            if (SpikeCorn.size()>0)return false;
+        }
+        if (!allow_concave)
+        {
+            std::vector<int> ConcaveCorn;
+            PatchMan.CornersOfType(IndexPatch,PatchManaging<ScalarType>::CTypeConcave,ConcaveCorn);
+            if (ConcaveCorn.size()>0)return false;
+        }
+
         for (size_t i=0;i<PConditions.size();i++)
         {
             has_satisfied&=PConditions[i]->IsCorrect(PatchMan,IndexPatch);
@@ -159,9 +231,7 @@ public:
         for (size_t i=0;i<PatchMan.NumPatches();i++)
         {
             if (PatchMan.isEmpty(i))continue;
-
             if (!SatisfyConditions(i))UnsolvedPatches.insert(i);
-
         }
     }
 
@@ -195,6 +265,9 @@ public:
 
     void RetraceOnUnsolved()
     {
+        //rremove the space around singularities
+        PathSampl.InitSingularityNodes(false);
+
         MarkUnsolvedPatches();
 
         PathSampl.sample_only_on[0]=true;
@@ -253,56 +326,6 @@ public:
             MarkUnsolvedPatches();
         all_solved=(UnsolvedPatches.size()==0);
     }
-
-    //    bool RemoveIfPossible(int &Path_To_remove)
-    //    {
-    //        assert(UnsolvedPatches.size()==0);
-    //        assert(Path_To_remove>=0);
-    //        assert(Path_To_remove<PathSampl.SelectedPaths.size());
-    //        std::vector<int> TestPath=PathSampl.SelectedPaths[Path_To_remove];
-    //        if (PathSampl.SelectedPaths[Path_To_remove].size()==0)return false;
-    //        PathSampl.SelectedPaths[Path_To_remove].clear();
-
-    //        std::vector<int> UpdatedPatches;
-    //        PatchMan.Update(UpdatedPatches);
-
-    //        bool is_removable=true;
-    //        std::cout<<"To_update:"<<UpdatedPatches.size()<<std::endl;
-    //        for (size_t i=0;i<UpdatedPatches.size();i++)
-    //        {
-    //            int TestPatch=UpdatedPatches[i];
-
-    //            if (PatchMan.isEmpty(TestPatch))continue;
-
-    //            if (SatisfyConditions(TestPatch))
-    //                continue;
-    //            else
-    //            {
-    //                is_removable=false;
-    //                break;
-    //            }
-    //        }
-    //        if (!is_removable)
-    //        {
-    //            PathSampl.SelectedPaths[Path_To_remove]=TestPath;
-    //            std::vector<int> UpdatedPatches;
-    //            PatchMan.Update(UpdatedPatches);
-    //            return false;
-    //        }
-
-    //        return true;
-    //    }
-
-
-
-    void SampleCandidatesUnsolvedPatches()
-    {
-        PathSampl.sample_only_on[0]=true;
-        PathSampl.SampleCandidates();
-        //PathSampl.SampleCandidates();
-        PathSampl.sample_only_on[0]=false;
-    }
-
 
     bool RemoveIfPossible(int &Path_To_remove)
     {
@@ -386,22 +409,13 @@ public:
         return false;
     }
 
-    //    void SatisfiedConditions(std::vector<bool> &Conditions)
-    //    {
-    //        bool has_satisfied=true;
-    //        for (size_t i=0;i<PConditions.size();i++)
-    //        {
-    //            has_satisfied&=PConditions[i].PConditions(PatchM,IndexPatch);
-    //            if (!has_satisfied)return false;
-    //        }
-    //        return true;
-    //    }
-
     PatchDecomposer(PatchManaging<ScalarType> &_PatchMan,
                     Geo::CrossPathSampling<ScalarType> &_PathSampl):
         PatchMan(_PatchMan),PathSampl(_PathSampl)
     {
         only_needed=true;
+        allow_darts=false;
+        allow_concave=false;
     }
 
     ~PatchDecomposer()

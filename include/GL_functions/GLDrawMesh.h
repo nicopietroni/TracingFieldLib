@@ -16,9 +16,10 @@ void DrawVertices(std::vector< Geo::Point3<ScalarType> > &VertPos,
                   const std::vector<int> &To_Draw)
 {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDepthRange(0.0,0.9999);
     glDisable(GL_LIGHTING);
-    glPointSize(20);
-    glColor4f(0.f,0.f,1.f,1.f);
+    glPointSize(30);
+    glColor4f(1.f,0.f,1.f,1.f);
     glBegin(GL_POINTS);
     for (size_t j=0;j<To_Draw.size();j++)
     {
@@ -29,6 +30,7 @@ void DrawVertices(std::vector< Geo::Point3<ScalarType> > &VertPos,
         glVertex(Pos);
     }
     glEnd();
+    glDepthRange(0.0,1.0);
     glPopAttrib();
 }
 

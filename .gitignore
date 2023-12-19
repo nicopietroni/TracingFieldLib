@@ -111,3 +111,6 @@ apps/cross_field_visualizer/build/CMakeFiles/Makefile2
 apps/cross_field_visualizer/build/CMakeFiles/TargetDirectories.txt
 apps/cross_field_visualizer/build/cross_field_visualizer
 apps/cross_field_visualizer/build/Makefile
+apps/arap_deformer/.qtc_clangd/compile_commands.json
+apps/arap_deformer/arap_deformer.pro.user
+apps/cross_field_visualizer/cross_field_visualizer.pro.user

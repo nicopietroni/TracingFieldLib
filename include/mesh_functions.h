@@ -604,6 +604,62 @@ int NumEdges(const std::vector<std::vector<int> > &Connectivity)
 }
 
 template <class ScalarType>
+void ComputePerVertAngle(std::vector<Geo::Point3<ScalarType> > &Pos,
+                         std::vector<std::vector<int> > &Faces,
+                         std::vector<ScalarType> &VertAngle)
+{
+    VertAngle.clear();
+    VertAngle.resize(Pos.size(),0);
+    for (size_t i=0;i<Faces.size();i++)
+    {
+        size_t FaceS=Faces[i].size();
+        for (size_t j=0;j<Faces[i].size();j++)
+        {
+           int IndexLoc0=(j+FaceS-1)%FaceS;
+           int IndexLoc1=j;
+           int IndexLoc2=(j+1)%FaceS;
+
+           int IndexV0=Faces[i][IndexLoc0];
+           int IndexV1=Faces[i][IndexLoc1];
+           int IndexV2=Faces[i][IndexLoc2];
+
+           Geo::Point3<ScalarType> P0=Pos[IndexV0];
+           Geo::Point3<ScalarType> P1=Pos[IndexV1];
+           Geo::Point3<ScalarType> P2=Pos[IndexV2];
+
+           Geo::Point3<ScalarType> Dir0=P0-P1;
+           Geo::Point3<ScalarType> Dir1=P2-P1;
+           Dir0.Normalize();
+           Dir1.Normalize();
+           VertAngle[IndexV1]+=Geo::AngleDeg(Dir0,Dir1);
+        }
+    }
+}
+
+template <class ScalarType>
+void ComputeFaceBarycenters(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                            const std::vector<std::vector<int> > &Faces,
+                            std::vector<Geo::Point3<ScalarType> > &BaryF)
+{
+    BaryF.clear();
+    //go over all faces
+    for (size_t i=0;i<Faces.size();i++)
+    {
+        size_t sizeF=Faces[i].size();
+
+        //get vertex barycenter
+        Geo::Point3<ScalarType> BaryVal(0,0,0);
+        for (size_t j=0;j<sizeF;j++)
+        {
+            int IndexV=Faces[i][j];
+            BaryVal+=VertPos[IndexV];
+        }
+        BaryVal/=sizeF;
+        BaryF.push_back(BaryVal);
+    }
+}
+
+template <class ScalarType>
 void SplitMeshFromEdges(std::vector<Geo::Point3<ScalarType> > &Pos,
                         std::vector<std::vector<int> > &Faces,
                         const  std::vector<std::vector<int> > &NextF,

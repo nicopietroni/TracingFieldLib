@@ -297,8 +297,8 @@ void DrawSingularity(const std::vector<Geo::Point3<ScalarType> > &VertPos,
 
         Geo::Point3<ScalarType> Col(0,1,0);
 
-        if (SingVal==1)Col=Geo::Point3<ScalarType>(1,0,0);
-        if (SingVal==3)Col=Geo::Point3<ScalarType>(1,1,0);
+        if (SingVal==1)Col=Geo::Point3<ScalarType>(1,1,0);
+        if (SingVal==3)Col=Geo::Point3<ScalarType>(0,0,1);
 
         glColor3f((float)Col.X,(float)Col.Y,(float)Col.Z);
         glVertex(CurrPos);

@@ -194,9 +194,6 @@ void GetSortedFacesFaceFun(const Pos3 &StartPos,
             currPos.NextE(Faces,NextF,NextE);
         }
     }while ((!HasBorder));
-
-
-    std::cout<<"Done"<<std::endl;
 }
 
 void GetSortedVertStar(const Pos3 &StartPos,

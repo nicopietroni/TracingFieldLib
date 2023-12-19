@@ -223,6 +223,24 @@ public:
         return ((int)N[IndexN0].size());
     }
 
+    int NeighSize(const int &IndexN0,
+                  const bool OnlyActive,
+                  const bool OnlyVisible,
+                  const bool OnlyDirect)
+    {
+        assert(IndexN0>=0);
+        assert(IndexN0<(int)N.size());
+        int countN=0;
+        for (size_t i=0;i<N[IndexN0].size();i++)
+        {
+           if ((OnlyActive) && (!ActiveLink(IndexN0,i)))continue;
+           if ((OnlyVisible)&& (!VisibleLink(IndexN0,i)))continue;
+           if ((OnlyDirect) && (!DirectLink(IndexN0,i)))continue;
+           countN++;
+        }
+        return countN;
+    }
+
     bool ActiveLink(const int &IndexN0,const int &LocalIdx)const
     {
         assert(IndexN0>=0);
