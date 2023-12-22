@@ -128,8 +128,8 @@ public:
 
     bool Collide(Box2<ScalarType> const &b)
     {
-        return (b.Min.X<Max.X && b.Max.X>Min.X &&
-                b.Min.Y<Max.Y && b.Max.Y>Min.Y) ;
+        return (b.Min.X<=Max.X && b.Max.X>=Min.X &&
+                b.Min.Y<=Max.Y && b.Max.Y>=Min.Y) ;
     }
 
     void Intersect(Box2<ScalarType> const &b)

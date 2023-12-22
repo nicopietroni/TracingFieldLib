@@ -215,6 +215,7 @@ bool ReadField(const std::vector<Geo::Point3<ScalarType > > &VertPos,
 
     return true;
 }
+
 template <class ScalarType>
 bool WriteField(const std::string &fieldFile,
                 const std::vector<Field::CrossF<ScalarType> > &VertField,

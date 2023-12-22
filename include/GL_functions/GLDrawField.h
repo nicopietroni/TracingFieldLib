@@ -114,6 +114,11 @@ void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
 {
     //Geo::Point3<ScalarType> center=F.Pos;
 
+    ScalarType K0=F.K[0];
+    ScalarType K1=F.K[1];
+
+    ScalarType RatioK0=K0/std::max(K0,K1);
+    ScalarType RatioK1=K1/std::max(K0,K1);
 
     for (size_t dir=0;dir<4;dir++)
     {
@@ -127,12 +132,18 @@ void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
 
             //ratio for color
             ScalarType ratioVal=(Qval-MinQ)/(MaxQ-MinQ);
+
+            if (dir%2==0)
+                ratioVal*=RatioK0;
+            else
+                ratioVal*=RatioK1;
+
             Col=Geo::ColorRGBRamp((ScalarType)1,(ScalarType)0,ratioVal);
             //Col.InitColorRamp(ratioVal);
 
             //ratio for width
             ScalarType IntervW=MaxW-MinW;
-            lineWidth=(fabs(Qval)/MaxQ)*IntervW+MinW;
+            lineWidth=ratioVal*(fabs(Qval)/MaxQ)*IntervW+MinW;
         }
         DrawDirectionSimple(F,dir,scaleVal,lineWidth,Col);
     }
@@ -240,28 +251,6 @@ void DrawCrossFields(const std::vector<Field::CrossF<ScalarType> > &Crosses,
     glPopAttrib();
 }
 
-template <class ScalarType>
-void DrawPoints(const std::vector<Geo::Point3<ScalarType> > &Samples,
-                Geo::Point3<ScalarType> pointCol=Geo::Point3<ScalarType>(1,0,1))
-{
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-
-    glDisable(GL_LIGHTING);
-    glPointSize(20);
-
-    glBegin(GL_POINTS);
-    for (size_t i=0;i<Samples.size();i++)
-    {
-        Geo::Point3<ScalarType> CurrPos=Samples[i];
-
-        glColor3f((float)pointCol.X,(float)pointCol.Y,(float)pointCol.Z);
-        glVertex(CurrPos);
-    }
-    glEnd();
-
-    glPopAttrib();
-}
 
 template <class ScalarType>
 void DrawSingularity(const std::vector<Geo::Point3<ScalarType> > &VertPos,
@@ -286,8 +275,8 @@ void DrawSingularity(const std::vector<Geo::Point3<ScalarType> > &VertPos,
 
         Geo::Point3<ScalarType> Col(0,1,0);
 
-        if (SingVal==1)Col=Geo::Point3<ScalarType>(1,0,0);
-        if (SingVal==3)Col=Geo::Point3<ScalarType>(1,1,0);
+        if (SingVal==1)Col=Geo::Point3<ScalarType>(1,1,0);
+        if (SingVal==3)Col=Geo::Point3<ScalarType>(0,0,1);
 
         glColor3f((float)Col.X,(float)Col.Y,(float)Col.Z);
         glVertex(CurrPos);

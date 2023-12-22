@@ -21,6 +21,7 @@ public:
         int IndexDir;
         bool writeDBG;
         bool useFFAdj;
+        int move_step;
         //        bool useOrtho;
         //        bool UseOpposite;
 
@@ -30,6 +31,7 @@ public:
             IndexDir=-1;
             writeDBG=true;
             useFFAdj=false;
+            move_step=10;
             //            useOrtho=true
             //            UseOpposite=false;
         }
@@ -258,6 +260,77 @@ private:
         return(it != NextPoly[IndexP0].end());
     }
 
+    //    static void CollectSources(const std::vector<std::vector<int> > &NextPoly,
+    //                               Geo::TracingGraph<ScalarType> &TGraph,
+    //                               SheetParam &SParam,Sheet &S)
+    //    {
+    //        assert(SParam.IndexT>=0);
+    //        assert(SParam.IndexDir>=0);
+    //        assert(SParam.IndexDir<6);
+
+    //        if (SParam.writeDBG)
+    //            std::cout<<"Tracing From Tet "<<SParam.IndexT<<" Dir "<<SParam.IndexDir<<std::endl;
+
+    //        S.Clear();
+
+    //        //get the current node of the tetra
+    //        int IndexN0=Field::FrameFieldGraph::NodeOfPolyFrame(SParam.IndexT,SParam.IndexDir);
+
+    //        //if not enabled return
+    //        if(!TGraph.EnabledN[IndexN0])return;
+
+    //        //get oposite node
+    //        int IndexOppN0=Field::FrameFieldGraph::OppositeNodeFrameField(IndexN0);
+    //        //if not enabled return
+    //        if(!TGraph.EnabledN[IndexOppN0])return;
+
+    //        std::vector<int> NeighCand;
+    //        std::vector<ScalarType> NeighW;
+    //        TGraph.GetNeigh(IndexOppN0,true,true,NeighCand,NeighW);
+
+    //        //int IndexN1=NeighCand[0];
+    //        //then get the closest node
+    //        //int IndexN1=TGraph.FirstActiveNeigh(IndexOppN0);
+
+    //        int IndexN1=-1;
+    //        ScalarType minW=std::numeric_limits<ScalarType>::max();
+    //        for (size_t i=0;i<NeighCand.size();i++)
+    //        {
+    //            if ((SParam.useFFAdj)&&(!AreFFAdjacent(IndexN0,NeighCand[i],NextPoly)))continue;
+    //            if (NeighW[i]>minW)continue;
+    //            minW=NeighW[i];
+    //            IndexN1=NeighCand[i];
+    //        }
+
+    //        //if there is not another opposite return false
+    //        if (IndexN1==-1)return;
+
+    //        assert(TGraph.EnabledN[IndexN0]);
+    //        assert(TGraph.EnabledN[IndexN1]);
+
+    //        //then get the ortho nodes
+    //        Field::FrameFieldGraph::OrthoNodesFrameField(IndexN0,S.SourceNode0);
+    //        Field::FrameFieldGraph::OrthoNodesFrameField(IndexN1,S.SourceNode1);
+
+    //        std::cout<<"Size 0:"<<S.SourceNode0.size()<<std::endl;
+    //        std::cout<<"Size 1:"<<S.SourceNode1.size()<<std::endl;
+
+    //        //filter to have only internals
+    //        Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode0);
+    //        Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode1);
+
+
+    //        //        //if no node remains no possible extraction
+    //        //        if (S.SourceNode0.size()==0)return;
+    //        //        if (S.SourceNode1.size()==0)return;
+
+    //        if (SParam.writeDBG)
+    //        {
+    //            std::cout<<"Size of Node Set 0:"<<S.SourceNode0.size()<<std::endl;
+    //            std::cout<<"Size of Node Set 1:"<<S.SourceNode1.size()<<std::endl;
+    //        }
+    //    }
+
     static void CollectSources(const std::vector<std::vector<int> > &NextPoly,
                                Geo::TracingGraph<ScalarType> &TGraph,
                                SheetParam &SParam,Sheet &S)
@@ -273,50 +346,52 @@ private:
 
         //get the current node of the tetra
         int IndexN0=Field::FrameFieldGraph::NodeOfPolyFrame(SParam.IndexT,SParam.IndexDir);
+        int IndexOppN0=Field::FrameFieldGraph::OppositeNodeFrameField(IndexN0);
 
         //if not enabled return
         if(!TGraph.EnabledN[IndexN0])return;
 
-        //get oposite node
-        int IndexOppN0=Field::FrameFieldGraph::OppositeNodeFrameField(IndexN0);
-        //if not enabled return
-        if(!TGraph.EnabledN[IndexOppN0])return;
+        TGraph.DeSelectAll(0);
+        TGraph.SelectNoteType(Geo::ExitDomain,0);
 
-        std::vector<int> NeighCand;
-        std::vector<ScalarType> NeighW;
-        TGraph.GetNeigh(IndexOppN0,true,true,NeighCand,NeighW);
+        typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam0;
+        SParam0.StopAtSel[0]=true;
+        SParam0.StopAtSel[1]=false;
+        ScalarType LenghtTest=0;
+        std::vector<int> SourceNodes0;
+        SourceNodes0.push_back(IndexN0);
+        std::vector<int> SourceNodes1;
+        SourceNodes1.push_back(IndexOppN0);
 
-        //int IndexN1=NeighCand[0];
-        //then get the closest node
-        //int IndexN1=TGraph.FirstActiveNeigh(IndexOppN0);
+        std::cout<<"Step 0"<<std::endl;
+        std::vector<int> PathN0,PathN1;
+        bool has_traced0=Geo::GraphQuery<ScalarType>::ShortestPaths(TGraph,SourceNodes0,PathN0,LenghtTest,SParam0);
+        bool has_traced1=Geo::GraphQuery<ScalarType>::ShortestPaths(TGraph,SourceNodes1,PathN1,LenghtTest,SParam0);
 
-        int IndexN1=-1;
-        ScalarType minW=std::numeric_limits<ScalarType>::max();
-        for (size_t i=0;i<NeighCand.size();i++)
+        int Len0=std::min((int)PathN0.size(),SParam.move_step);
+        std::cout<<"Step 1"<<std::endl;
+        for (size_t i=0;i<Len0;i++)
         {
-            if ((SParam.useFFAdj)&&(!AreFFAdjacent(IndexN0,NeighCand[i],NextPoly)))continue;
-            if (NeighW[i]>minW)continue;
-            minW=NeighW[i];
-            IndexN1=NeighCand[i];
+            int IndexT0=Field::FrameFieldGraph::PolyOfNode(PathN0[i]);
+            std::vector<int> IndexN;
+            Field::FrameFieldGraph::NodesOfPoly(IndexT0,IndexN);
+            S.SourceNode0.insert(S.SourceNode0.end(),IndexN.begin(),IndexN.end());
         }
-
-        //if there is not another opposite return false
-        if (IndexN1==-1)return;
-
-        assert(TGraph.EnabledN[IndexN0]);
-        assert(TGraph.EnabledN[IndexN1]);
-
-        //then get the ortho nodes
-        Field::FrameFieldGraph::OrthoNodesFrameField(IndexN0,S.SourceNode0);
-        Field::FrameFieldGraph::OrthoNodesFrameField(IndexN1,S.SourceNode1);
-
-        std::cout<<"Size 0:"<<S.SourceNode0.size()<<std::endl;
-        std::cout<<"Size 1:"<<S.SourceNode1.size()<<std::endl;
+        int Len1=std::min((int)PathN1.size(),SParam.move_step);
+        std::cout<<"Step 2"<<std::endl;
+        for (size_t i=0;i<Len1;i++)
+        {
+            int IndexT1=Field::FrameFieldGraph::PolyOfNode(PathN1[i]);
+            std::vector<int> IndexN;
+            Field::FrameFieldGraph::NodesOfPoly(IndexT1,IndexN);
+            S.SourceNode1.insert(S.SourceNode1.end(),IndexN.begin(),IndexN.end());
+        }
 
         //filter to have only internals
         Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode0);
         Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode1);
 
+        std::cout<<"Step 3"<<std::endl;
 
         //        //if no node remains no possible extraction
         //        if (S.SourceNode0.size()==0)return;
@@ -327,8 +402,57 @@ private:
             std::cout<<"Size of Node Set 0:"<<S.SourceNode0.size()<<std::endl;
             std::cout<<"Size of Node Set 1:"<<S.SourceNode1.size()<<std::endl;
         }
-    }
+        //        //get oposite node
+        //        int IndexOppN0=Field::FrameFieldGraph::OppositeNodeFrameField(IndexN0);
+        //        //if not enabled return
+        //        if(!TGraph.EnabledN[IndexOppN0])return;
 
+        //        std::vector<int> NeighCand;
+        //        std::vector<ScalarType> NeighW;
+        //        TGraph.GetNeigh(IndexOppN0,true,true,NeighCand,NeighW);
+
+        //        //int IndexN1=NeighCand[0];
+        //        //then get the closest node
+        //        //int IndexN1=TGraph.FirstActiveNeigh(IndexOppN0);
+
+        //        int IndexN1=-1;
+        //        ScalarType minW=std::numeric_limits<ScalarType>::max();
+        //        for (size_t i=0;i<NeighCand.size();i++)
+        //        {
+        //            if ((SParam.useFFAdj)&&(!AreFFAdjacent(IndexN0,NeighCand[i],NextPoly)))continue;
+        //            if (NeighW[i]>minW)continue;
+        //            minW=NeighW[i];
+        //            IndexN1=NeighCand[i];
+        //        }
+
+        //        //if there is not another opposite return false
+        //        if (IndexN1==-1)return;
+
+        //        assert(TGraph.EnabledN[IndexN0]);
+        //        assert(TGraph.EnabledN[IndexN1]);
+
+        //        //then get the ortho nodes
+        //        Field::FrameFieldGraph::OrthoNodesFrameField(IndexN0,S.SourceNode0);
+        //        Field::FrameFieldGraph::OrthoNodesFrameField(IndexN1,S.SourceNode1);
+
+        //        std::cout<<"Size 0:"<<S.SourceNode0.size()<<std::endl;
+        //        std::cout<<"Size 1:"<<S.SourceNode1.size()<<std::endl;
+
+        //        //filter to have only internals
+        //        Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode0);
+        //        Geo::FilterNodewOfType(TGraph,Geo::Internal,S.SourceNode1);
+
+
+        //        //        //if no node remains no possible extraction
+        //        //        if (S.SourceNode0.size()==0)return;
+        //        //        if (S.SourceNode1.size()==0)return;
+
+        //        if (SParam.writeDBG)
+        //        {
+        //            std::cout<<"Size of Node Set 0:"<<S.SourceNode0.size()<<std::endl;
+        //            std::cout<<"Size of Node Set 1:"<<S.SourceNode1.size()<<std::endl;
+        //        }
+    }
 
     static void TraceAllSources(Geo::TracingGraph<ScalarType> &TGraph, Sheet &S)
     {

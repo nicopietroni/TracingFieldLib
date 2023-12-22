@@ -30,6 +30,8 @@
 #include "tangent_space_smooth.h"
 #include <field_graph/patch_managing.h>
 #include <field_graph/patch_decomposer.h>
+#include <mesh_functions.h>
+#include <field_graph/dual_patches.h>
 
 GLFWwindow* window;
 std::string PathMesh;
@@ -40,10 +42,15 @@ ImVec4 clear_color = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);
 float line_thick=1.f;
 int selected_rend_item = 5;
 
+bool DrawInitalPos=false;
+bool DrawSamplesPaths=false;
+
+
 bool showMesh=true;
 bool showCross=true;
 bool showSing=true;
 bool has_graph=false;
+bool has_init_patches=false;
 bool DrawTangentNode=false;
 bool DrawExitNode=false;
 bool DrawCorners=false;
@@ -98,6 +105,7 @@ Geo::Point3<ScalarType> mesh_color(0.79, 0.9, 0.87);
 
 Geo::PatchDecomposer<ScalarType> PDeco(PatchM,PathSampl);
 
+std::vector<Geo::Point3<ScalarType> > SidesMidP;
 //for debugging the marked parts
 //std::vector<int> MarkedV;
 
@@ -119,6 +127,9 @@ void UpdateColor()
     case 4:
         PatchM.GetColorByMatchSingularity(FaceCol);
         break;
+    case 5:
+        PDeco.GetColorBySolvedPatches(FaceCol);
+        break;
     default:
         FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
         // code block
@@ -137,11 +148,66 @@ void InitGraph()
 int failed_trace=0;
 int tested_trace=0;
 
+bool single_boundary_cond=true;
+bool disk_like_cond=true;
+bool single_sing_cond=false;
+bool match_sing_cond=true;
+
+int MinSides=3;
+int MaxSides=6;
+ScalarType CCability=0;
+
+bool old_single_boundary_cond=single_boundary_cond;
+bool old_disk_like_cond=disk_like_cond;
+bool old_single_sing_cond=single_sing_cond;
+bool old_match_sing_cond=match_sing_cond;
+
+int old_MinSides=MinSides;
+int old_MaxSides=MaxSides;
+ScalarType old_CCability=CCability;
+
+bool UpdateConditions()
+{
+    bool has_changed=false;
+    has_changed|=old_single_boundary_cond!=single_boundary_cond;
+    has_changed|=old_disk_like_cond!=disk_like_cond;
+    has_changed|=old_single_sing_cond!=single_sing_cond;
+    has_changed|=old_match_sing_cond!=match_sing_cond;
+
+    has_changed|=old_MinSides!=MinSides;
+    has_changed|=old_MaxSides!=MaxSides;
+    has_changed|=old_CCability!=CCability;
+
+    old_single_boundary_cond=single_boundary_cond;
+    old_disk_like_cond=disk_like_cond;
+    old_single_sing_cond=single_sing_cond;
+    old_match_sing_cond=match_sing_cond;
+    old_MinSides=MinSides;
+    old_MaxSides=MaxSides;
+    old_CCability=CCability;
+    return has_changed;
+}
+
 void InitConditions()
 {
     PDeco.ClearConditions();
-    PDeco.AddCondition(new Geo::DiskLikeCondition<ScalarType>());
-    PDeco.AddCondition(new Geo::SingleSingularityCondition<ScalarType>());
+    if (single_boundary_cond)
+        PDeco.AddCondition(new Geo::SingleBoundaryCondition<ScalarType>());
+    if (disk_like_cond)
+        PDeco.AddCondition(new Geo::DiskLikeCondition<ScalarType>());
+    if (single_sing_cond)
+        PDeco.AddCondition(new Geo::SingleSingularityCondition<ScalarType>());
+    if (match_sing_cond)
+        PDeco.AddCondition(new Geo::MathchSingularityCondition<ScalarType>());
+    if ((MinSides>0)||(MaxSides>0))
+    {
+        PDeco.AddCondition(new Geo::NumSidesCondition<ScalarType>());
+    }
+    if (CCability>=1)
+    {
+        ScalarType AvVAl=AvgEdgeLen(VertPos,Connectivity);
+        PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(AvVAl));
+    }
 }
 
 void InitTracing()
@@ -167,6 +233,7 @@ void AddAllPaths(bool upd_patches=true)
     if (upd_patches)
     {
         PatchM.Update(UpdatedPatches);
+        PDeco.UpdateAllUnsolvedPatches();
         CurrCol=1;
         UpdateColor();
     }
@@ -203,9 +270,9 @@ void SmoothPaths()
 
 void InitPatches()
 {
-    PatchM.Init();    
+    PatchM.Init();
     InitConditions();
-    PDeco.Init();
+    PDeco.UpdateAllUnsolvedPatches();
 }
 
 void BatchProcess()
@@ -235,7 +302,7 @@ void BatchProcess()
     std::vector<int> UpdatedPatches;
     PatchM.Update(UpdatedPatches);
     CurrCol=1;
-    UpdateColor();  
+    UpdateColor();
     PatchM.CompactEmptyPatches();
 
     auto end4 = std::chrono::high_resolution_clock::now();
@@ -361,13 +428,23 @@ void LoadField(const std::string &path)
 {
     //std::cout<<"Loading Field"<<path.c_str()<<std::endl;
     has_cross_field=ReadField(VertPos,Connectivity,path,VertCurv,FaceCurv);
+    if (VertCurv.size()==0)
+    {
+        SetVertCrossFromFace(VertPos,Connectivity,VertNormals,FaceCurv,VertCurv);
+        InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv);
+    }
+    if (FaceCurv.size()==0)
+    {
+        SetFaceCrossVectorFromVert(Connectivity,FaceNormals,VertCurv,FaceCurv);
+        InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv);
+    }
     if (has_cross_field)
     {
         std::cout<<"Loaded Field"<<std::endl;
         showCross=true;
         showSing=true;
 
-        Field::CrossF<ScalarType>::getMinMaxQ(VertCurv,minQCrossVert,maxQCrossVert);
+        Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv,minQCrossVert,maxQCrossVert);
         GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
         PatchM.AddSingularities(SingIndex,SingValue);
     }
@@ -484,103 +561,171 @@ void InitIMGui()
 
 void SetRenderBar()
 {
-    ImGui::Begin("Patch Decomposer",NULL,ImGuiWindowFlags_AlwaysAutoResize);       // Create a window called "Hello, world!" and append into it.
+    ImGui::Begin("Render",NULL,ImGuiWindowFlags_AlwaysAutoResize);       // Create a window called "Hello, world!" and append into it.
 
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW");
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW MESH");
     ImGui::Checkbox("Draw Mesh", &showMesh);
     ImGui::Checkbox("Draw Cross", &showCross);
     ImGui::Checkbox("Draw Singularities", &showSing);
-    //    ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
-    //    ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
     ImGui::Checkbox("Draw Corners", &DrawCorners);
     ImGui::Checkbox("Draw Sides", &DrawSides);
 
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(1, 0, 1, 1), "GRAPH");
-    ImGui::SliderFloat("Drift",&drift_penalty, 0, 1000);
-    ImGui::SliderFloat("Max Angle",&maxAngle, 0, 90);
-    ImGui::InputInt("Diffuse Step",&diffuse_step);
-
-    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
+    ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
+    ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATCHES");
     static const char* itemsShape[] = { "Color Uniform",
                                         "Color By Patch",
                                         "Color if Disk",
                                         "Color Valence",
-                                        "Color Match Sing"};
+                                        "Color Match Sing",
+                                        "Color Unsolved Patches"};
 
-    ImGui::Combo("Color Patches", &CurrCol, itemsShape, IM_ARRAYSIZE(itemsShape));
-    if (CurrCol!=OldCol)
-    {
-        UpdateColor();
-        OldCol=CurrCol;
-    }
+    ImGui::End();
+}
 
+void SetDecomposeBar()
+{
+    ImGui::Begin("Decompose",NULL,ImGuiWindowFlags_AlwaysAutoResize);       // Create a window called "Hello, world!" and append into it.
+
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "INIT");
+    ImGui::SliderFloat("Drift",&drift_penalty, 0, 1000);
+    ImGui::SliderFloat("Max Angle",&maxAngle, 0, 90);
+    ImGui::InputInt("Diffuse Step",&diffuse_step);
     if (ImGui::Button("Init Graph"))
     {
         InitGraph();
         has_graph=true;
+        showCross=false;
+    }
+    if (!has_graph){
+        ImGui::End();
+        return;
     }
 
+    ImGui::InputInt("Initial Sample",&PathSampl.NumSamples);
     if (ImGui::Button("Init Tracing"))
     {
         InitTracing();
-    }
-
-    if (ImGui::Button("Init Patches"))
-    {
         InitPatches();
+        has_init_patches=true;
     }
+    if (!has_init_patches){
+        ImGui::End();
+        return;
+    }
+    //    if (ImGui::Button("Init Patches"))
+    //    {
+    //        InitPatches();
+    //    }
+
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATH SAMPLING");
 
     ImGui::Checkbox("Dynamic Update", &PathSampl.dynamicUpdates);
+    ImGui::Checkbox("Only Needed", &PDeco.add_only_needed);
 
-    if (ImGui::Button("Add One"))
-    {
-        PathSampl.AddNextPath();
-        PathColors.resize(PathSampl.SelectedPaths.size());
-        Geo::ScatterColor<ScalarType>(PathColors);
-        std::vector<int> UpdatedPatches;
-        PatchM.Update(UpdatedPatches);
-        UpdateColor();
-        //PatchM.InitVisualCornersEdges();
-    }
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "structure");
+    ImGui::Checkbox("Darts", &PDeco.allow_darts);
+    ImGui::SameLine();
+    ImGui::Checkbox("Concave", &PDeco.allow_concave);
 
-    if (ImGui::Button("Add All Paths"))
-        AddAllPaths();
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "topology");
+    ImGui::Checkbox("1 Boundary", &single_boundary_cond);
+    ImGui::SameLine();
+    ImGui::Checkbox("Disk Like", &disk_like_cond);
 
-    if (ImGui::Button("Add One If Need"))
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "singularity");
+    ImGui::Checkbox("1 Sing Patch", &single_sing_cond);
+    ImGui::SameLine();
+    ImGui::Checkbox("Sing Match", &match_sing_cond);
+
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "sides");
+    ImGui::SetNextItemWidth(50);
+    ImGui::InputInt("Min Sides",&MinSides,0);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(50);
+    ImGui::InputInt("Max Sides",&MaxSides,0);
+
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "shape");
+    ImGui::SetNextItemWidth(100);
+    float CCAbilityf=CCability;
+    ImGui::InputFloat("CC Ability", &CCAbilityf);
+    CCability=(ScalarType)CCAbilityf;
+
+    bool needUpdate=UpdateConditions();
+    if (needUpdate)
+        InitConditions();
+    //    if (ImGui::Button("Add One"))
+    //    {
+    //        PathSampl.AddNextPath();
+    //        PathColors.resize(PathSampl.SelectedPaths.size());
+    //        Geo::ScatterColor<ScalarType>(PathColors);
+    //        std::vector<int> UpdatedPatches;
+    //        PatchM.Update(UpdatedPatches);
+    //        UpdateColor();
+    //        //PatchM.InitVisualCornersEdges();
+    //    }
+
+    //    if (ImGui::Button("Add All Paths"))
+    //        AddAllPaths();
+
+    if (ImGui::Button("Add Next"))
     {
         bool terminated=false;
         bool solved=false;
-        PDeco.AddNextIfNeeded(solved,terminated);
-        //PathSampl.GetMarkedVertices(MarkedV,0);
+        PDeco.AddNext(solved,terminated);
 
         PathColors.resize(PathSampl.SelectedPaths.size());
         Geo::ScatterColor<ScalarType>(PathColors);
-//        std::vector<int> UpdatedPatches;
-//        PatchM.Update(UpdatedPatches);
         UpdateColor();
-        //PatchM.InitVisualCornersEdges();
     }
-
-    if (ImGui::Button("Remove one if possible"))
+    ImGui::SameLine();
+    if (ImGui::Button("Resample"))
     {
-        bool terminated=false;
-        bool solved=false;
+        PDeco.RetraceOnUnsolved();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Remove"))
+    {
         PDeco.RemoveNextIfPossible();
 
         PathColors.resize(PathSampl.SelectedPaths.size());
         Geo::ScatterColor<ScalarType>(PathColors);
         UpdateColor();
     }
+    //    if (ImGui::Button("Batch Process"))
+    //        BatchProcess();
+    //    ImGui::Separator();
+    //    ImGui::TextColored(ImVec4(1, 0, 1, 1), "FINALIZE");
+
+    //    ImGui::InputInt("Smooth Steps",&smooth_steps);
+    //    if (ImGui::Button("Smooth"))
+    //        SmoothPaths();
+
+    //    if (ImGui::Button("Extract Dual"))
+    //        Geo::DualPatch<ScalarType>::ExtractDual(VertPos,Connectivity,PatchM,SidesMidP);
+    //        //PatchM.ExtractDual();
+
+    //    if (ImGui::Button("Save Patches"))
+    //        PatchM.WriteSubMeshes(std::string("test.obj"));
+
+    ImGui::End();
+}
+
+void SetExportBar()
+{
+    ImGui::Begin("Export",NULL,ImGuiWindowFlags_AlwaysAutoResize);       // Create a window called "Hello, world!" and append into it.
 
     ImGui::InputInt("Smooth Steps",&smooth_steps);
     if (ImGui::Button("Smooth"))
         SmoothPaths();
 
-    if (ImGui::Button("Batch Process"))
-        BatchProcess();
+    if (ImGui::Button("Extract Dual"))
+        Geo::DualPatch<ScalarType>::ExtractDual(VertPos,Connectivity,PatchM,SidesMidP);
+    //PatchM.ExtractDual();
 
     if (ImGui::Button("Save Patches"))
         PatchM.WriteSubMeshes(std::string("test.obj"));
@@ -663,6 +808,17 @@ void GLDrawMesh()
     if (DrawSides)
         GLGraphDraw::GLDrawPatchData<ScalarType>::DrawSides(PatchM);
 
+    if (DrawInitalPos)
+    {
+        std::vector<int> StartIDX;
+        PathSampl.GetStartingNodes(StartIDX);
+        GLDraw::DrawVertices(VertPos,StartIDX);
+    }
+    GLDraw::DrawPoints(SidesMidP);
+    //     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,
+    //                                                                 Geo::ExitDomain,MeshBox.Diag()*0.005);
+    //bool DrawSamplesPaths=false;
+
 }
 
 int main(int argc, char *argv[])
@@ -701,9 +857,18 @@ int main(int argc, char *argv[])
         ImGui_ImplOpenGL2_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+        //ImGui::SetNextWindowPos(ImVec2(20, 20));
+        SetDecomposeBar();
+        int windowWidth, windowHeight;
+        glfwGetWindowSize(window, &windowWidth, &windowHeight);
+        //ImGui::SetNextWindowPos(ImVec2(windowWidth-200, 20));
         SetRenderBar();
+        //ImGui::Render();
 
-        // Rendering
+        glfwGetWindowSize(window, &windowWidth, &windowHeight);
+        //ImGui::SetNextWindowPos(ImVec2(windowWidth-400, windowHeight-200));
+        SetExportBar();
+
         ImGui::Render();
 
         GLDrawMesh();

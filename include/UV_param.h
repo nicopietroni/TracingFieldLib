@@ -5,11 +5,13 @@
 #include <point3.h>
 #include <igl/lscm.h>
 #include <igl/arap.h>
+#include <igl/harmonic.h>
 #include <eigen_interface.h>
 #include <box3.h>
 #include <box2.h>
 #include <mesh_functions.h>
 #include <connectivity.h>
+#include <UV_utils.h>
 
 namespace Geo{
 
@@ -20,8 +22,8 @@ class UVParam{
                                                  const std::vector<int> &Candidates,
                                                  const int &Vert0)
     {
-//        Geo::Point3<ScalarType> DirTarget=Geo::Point3<ScalarType>(1,0,0),
-//        Geo::Point3<ScalarType> DirOrtho=Geo::Point3<ScalarType>(0,1,0)
+        //        Geo::Point3<ScalarType> DirTarget=Geo::Point3<ScalarType>(1,0,0),
+        //        Geo::Point3<ScalarType> DirOrtho=Geo::Point3<ScalarType>(0,1,0)
         Geo::Box3<ScalarType> MeshBB;
         MeshBB.Init(VertPos);
 
@@ -242,10 +244,10 @@ public:
             FixedV.push_back(0);
             FixedUV.push_back(VertUV[0]);
         }
-//            FixedV.push_back(1);
-//            FixedUV.push_back(VertUV[1]);
-////            GetDefaultPairVertexToFix_AlongX(VertPos,FixedV,FixedUV);
-//        }
+        //            FixedV.push_back(1);
+        //            FixedUV.push_back(VertUV[1]);
+        ////            GetDefaultPairVertexToFix_AlongX(VertPos,FixedV,FixedUV);
+        //        }
 
         b.resize(FixedV.size());
         bc.resize(FixedV.size(),2);
@@ -275,7 +277,6 @@ public:
         return true;
     }
 
-
     static bool Arap(const std::vector<Geo::Point3<ScalarType> > &VertPos,
                      const std::vector<std::vector<int> > &Faces,
                      std::vector<Geo::Point2<ScalarType> > &VertUV,
@@ -284,6 +285,67 @@ public:
         std::vector<size_t> FixedV;
         std::vector<Geo::Point2<ScalarType> > FixedUV;
         return Arap(VertPos,Faces,FixedV,FixedUV,VertUV,InitializeConformal,MaxIte);
+    }
+
+    static bool TutteEmbedding(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                               const std::vector<std::vector<int> > &Faces,
+                               std::vector<Geo::Point2<ScalarType> > &VertUV)
+    {
+        VertUV.clear();
+
+        std::vector<std::vector<int> > NextF,NextE;
+        getFFAdjacency(Faces,NextF,NextE);
+        std::vector<std::vector<int> > BorderVIdx;
+        getBorderSequncesVert(Faces,NextF,NextE,BorderVIdx);
+        if (BorderVIdx.size()==0)return false;//multiple boundaries
+
+        ScalarType AreaM=Area(VertPos,Faces);
+        ScalarType Radius=sqrt(AreaM/M_PI);
+        std::vector<Geo::Point2<ScalarType> > vert_UV;
+        Geo::UVUtils<ScalarType>::MapToACircle(VertPos,BorderVIdx[0],Radius,vert_UV);
+
+        //check if there is at least one unknown or not
+        if (BorderVIdx[0].size()==VertPos.size())
+        {
+             VertUV.resize(VertPos.size());
+             for (size_t i=0;i<BorderVIdx[0].size();i++)
+             {
+                int CurrIndexV=BorderVIdx[0][i];
+                assert(CurrIndexV>=0);
+                assert(CurrIndexV<VertUV.size());
+                VertUV[CurrIndexV]=vert_UV[i];
+             }
+             return true;
+        }
+
+        Eigen::MatrixXi F;
+        typename EigenInterface<ScalarType>::MatrixXm Vf;
+        EigenInterface<ScalarType>::GetTriMeshData(VertPos,Faces,F,Vf);
+
+        Eigen::VectorXi b;
+        b.resize(BorderVIdx[0].size());
+        Eigen::MatrixXd bc;
+        bc.resize(BorderVIdx[0].size(),2);
+        for (int i=0; i<(int)BorderVIdx[0].size(); i++)
+        {
+            b(i) = BorderVIdx[0][i];
+            bc(i,0) = vert_UV[i].X;
+            bc(i,1) = vert_UV[i].Y;
+        }
+
+
+        Eigen::MatrixXd uv_harm;
+        bool solved=igl::harmonic(F, b, bc ,1, uv_harm);
+        if (!solved)return false;
+
+        VertUV.resize(VertPos.size());
+        // copy results back to mesh
+        for (int i=0; i<(int)VertUV.size(); i++) {
+            VertUV[i].X = uv_harm(i,0);
+            VertUV[i].Y = uv_harm(i,1);
+        }
+        return true;
+
     }
 };
 

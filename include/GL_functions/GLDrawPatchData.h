@@ -17,45 +17,12 @@ class GLDrawPatchData
 
 public:
 
-    //        static void DrawCorners(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-    //                                Geo::PatchManaging<ScalarType> &PM,
-    //                                const int &IndexPatch,const ScalarType PointSize=20,
-    //                                const Geo::Point3<ScalarType> &ColPoints=Geo::Point3<ScalarType>(0,1,1))
-    //        {
-    //            glPushAttrib(GL_ALL_ATTRIB_BITS);
-
-    //            glDepthRange(0.0,0.9999);
-
-    //            glDisable(GL_LIGHTING);
-    //            glPointSize((GLfloat)PointSize);
-
-    //            GLDraw::glColor(ColPoints);
-    //            glBegin(GL_POINTS);
-    //            for (size_t i=0;i<PM.PatchCorners[IndexPatch].size();i++)
-    //                for (size_t j=0;j<PM.PatchCorners[IndexPatch][i].size();j++)
-    //                {
-    //                    int IndexV=PM.PatchCorners[IndexPatch][i][j];
-    //                    Geo::Point3<ScalarType> Pos=VertPos[IndexV];
-    //                    GLDraw::glVertex(Pos);
-    //                }
-    //            glEnd();
-
-    //            glDepthRange(0.0,1.0);
-    //            glPopAttrib();
-    //        }
-
-    //        static void DrawCorners(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-    //                                Geo::PatchManaging<ScalarType> &PM,const ScalarType PointSize=20,
-    //                                const Geo::Point3<ScalarType> &ColPoints=Geo::Point3<ScalarType>(0,1,1))
-    //        {
-    //            for (size_t i=0;i<PM.PatchCorners.size();i++)
-    //                DrawCorners(VertPos,PM,i,PointSize,ColPoints);
-    //        }
-
     static void DrawCorners(Geo::PatchManaging<ScalarType> &PM,
-                            const int &IndexPatch,const ScalarType PointSize=20,
-                            const Geo::Point3<ScalarType> &ColPoints=Geo::Point3<ScalarType>(0,1,1))
+                            const int &IndexPatch,const ScalarType PointSize=20)
     {
+        assert(IndexPatch<PM.VisualCornerType.size());
+        assert(PM.VisualCorners[IndexPatch].size()==PM.VisualCornerType[IndexPatch].size());
+
         glPushAttrib(GL_ALL_ATTRIB_BITS);
 
         glDepthRange(0.0,0.9999);
@@ -63,10 +30,28 @@ public:
         glDisable(GL_LIGHTING);
         glPointSize((GLfloat)PointSize);
 
-        GLDraw::glColor(ColPoints);
+
         glBegin(GL_POINTS);
         for (size_t i=0;i<PM.VisualCorners[IndexPatch].size();i++)
         {
+
+            Geo::Point3<ScalarType> ColPoints(0,0,0);
+            typename Geo::PatchManaging<ScalarType>::CornerType CType=PM.VisualCornerType[IndexPatch][i];
+            switch(CType) {
+              case Geo::PatchManaging<ScalarType>::CTypeConvex:
+                ColPoints=Geo::Point3<ScalarType>(0,1,1);
+                break;
+              case Geo::PatchManaging<ScalarType>::CTypeConcave:
+                ColPoints=Geo::Point3<ScalarType>(1,0,1);
+                break;
+             case Geo::PatchManaging<ScalarType>::CTypeSpike:
+                ColPoints=Geo::Point3<ScalarType>(1,1,0);
+                break;
+             default:
+                ColPoints=Geo::Point3<ScalarType>(0,10,0);
+            }
+
+            GLDraw::glColor(ColPoints);
             Geo::Point3<ScalarType> Pos=PM.VisualCorners[IndexPatch][i];
             GLDraw::glVertex(Pos);
         }
@@ -76,11 +61,10 @@ public:
         glPopAttrib();
     }
 
-    static void DrawCorners(Geo::PatchManaging<ScalarType> &PM,const ScalarType PointSize=20,
-                            const Geo::Point3<ScalarType> &ColPoints=Geo::Point3<ScalarType>(0,1,1))
+    static void DrawCorners(Geo::PatchManaging<ScalarType> &PM,const ScalarType PointSize=20)
     {
         for (size_t i=0;i<PM.VisualCorners.size();i++)
-            DrawCorners(PM,i,PointSize,ColPoints);
+            DrawCorners(PM,i,PointSize);
     }
 
     static void DrawSides(Geo::PatchManaging<ScalarType> &PM,
