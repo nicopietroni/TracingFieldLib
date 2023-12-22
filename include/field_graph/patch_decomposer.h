@@ -24,6 +24,21 @@ public:
 };
 
 template <class ScalarType>
+class SingleBoundaryCondition:public PatchCondition<ScalarType>
+{
+
+public:
+
+    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+    {(void)PatchM; return true;}
+
+    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
+                   const int &IndexPatch)const override
+    {   return (PatchM.NumBorders(IndexPatch)==1);}
+
+};
+
+template <class ScalarType>
 class DiskLikeCondition:public PatchCondition<ScalarType>
 {
 
@@ -75,16 +90,36 @@ public:
     int minCornerNum;
     int maxCornerNum;
 
+    bool IsValidSetup()const
+    {
+        //one should be valid
+        if ((minCornerNum<=0)&&(maxCornerNum<=0))return false;
+
+        if (maxCornerNum>0)
+            if (maxCornerNum<5)return false;
+        if (minCornerNum>0)
+            if (minCornerNum>3)return false;
+
+        if ((maxCornerNum>0)&&(minCornerNum>0))
+            if (minCornerNum>=maxCornerNum)return false;
+        return true;
+    }
+
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
     {(void)PatchM; return true;}
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
     {
+        if (!IsValidSetup())
+        {
+            std::cout<<"WARNING CONDITIONS ON EDGE SIZE INCORRECT"<<std::endl;
+            return true;
+        }
         assert(IndexPatch<PatchM.NumPatches());
         if (PatchM.NumBorders(IndexPatch)>1)return false;
-        if (PatchM.NumSides(IndexPatch)>maxCornerNum)return false;
-        if (PatchM.NumSides(IndexPatch)<minCornerNum)return false;
+        if ((maxCornerNum>0)&&(PatchM.NumSides(IndexPatch)>maxCornerNum))return false;
+        if ((minCornerNum>0)&&(PatchM.NumSides(IndexPatch)<minCornerNum))return false;
         return true;
     }
 
@@ -123,13 +158,47 @@ public:
 };
 
 template <class ScalarType>
+class EqualSideCondition:public PatchCondition<ScalarType>
+{
+
+public:
+    ScalarType SideThr;
+
+    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+    {(void)PatchM; return true;}
+
+    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
+                   const int &IndexPatch)const override
+    {
+        //if there is more than one hole return false
+        if (PatchM.SideLenghts[IndexPatch].size()>1)return false;
+
+        if (PatchM.SideLenghts[IndexPatch][0].size()==4)return true;
+
+        ScalarType AvgL=0;
+        for (size_t i=0;i<PatchM.SideLenghts[IndexPatch][0].size();i++)
+            AvgL+=PatchM.SideLenghts[IndexPatch][0][i];
+
+        AvgL/=PatchM.SideLenghts[IndexPatch][0].size();
+
+        for (size_t i=0;i<PatchM.SideLenghts[IndexPatch][0].size();i++)
+            if (fabs(PatchM.SideLenghts[IndexPatch][0][i]-AvgL)>SideThr)return false;
+
+        return true;
+    }
+
+    EqualSideCondition(const ScalarType &_Thr)
+    {
+        SideThr=_Thr;
+    }
+};
+
+template <class ScalarType>
 class PatchDecomposer
 {
     PatchManaging<ScalarType> &PatchMan;
     Geo::CrossPathSampling<ScalarType> &PathSampl;
     std::vector<Geo::PatchCondition<ScalarType>* > PConditions;
-
-
     std::set<int> UnsolvedPatches;
 
     void RemoveEmptyPatches()
@@ -151,9 +220,11 @@ class PatchDecomposer
         for (Ite=UnsolvedPatches.begin();Ite!=UnsolvedPatches.end();Ite++)
         {
             int IndexPatch=(*Ite);
+            assert(IndexPatch<PatchMan.NumPatches());
             for (int i=0;i<PatchMan.SubPatchVertToOriginal[IndexPatch].size();i++)
             {
                 int IndexV=PatchMan.SubPatchVertToOriginal[IndexPatch][i];
+                assert(IndexV>=0);
                 to_mark_vert.push_back(IndexV);
             }
         }
@@ -172,7 +243,8 @@ class PatchDecomposer
     }
 
 public:
-    bool only_needed;
+
+    bool add_only_needed;
     bool allow_darts;
     bool allow_concave;
 
@@ -265,6 +337,10 @@ public:
 
     void RetraceOnUnsolved()
     {
+        //remove empty selected paths
+        PathSampl.CleanEmptySelectedPaths();
+        PatchMan.CompactEmptyPatches();
+
         //rremove the space around singularities
         PathSampl.InitSingularityNodes(false);
 
@@ -286,12 +362,53 @@ public:
         PathSampl.sample_only_on[1]=false;
     }
 
-    void AddNextIfNeeded(bool &all_solved,
-                         bool &added_sample)
+    //    void AddNextIfNeeded(bool &all_solved,
+    //                         bool &added_sample)
+    //    {
+    //        all_solved=false;
+    //        added_sample=false;
+    //        if (add_only_needed)
+    //            PathSampl.check_pass_on[0]=true;
+
+    //        if (UnsolvedPatches.size()==0)
+    //        {
+    //            all_solved=true;
+    //            added_sample=false;
+    //            return;
+    //        }
+
+    //        added_sample=PathSampl.AddNextPath();
+    //        if (!added_sample){return;}
+
+    //        //verify local conditions
+    //        std::vector<int> UpdatedPatches;
+    //        PatchMan.Update(UpdatedPatches);
+
+    //        for (size_t i=0;i<UpdatedPatches.size();i++)
+    //        {
+    //            int TestPatch=UpdatedPatches[i];
+
+    //            if (PatchMan.isEmpty(TestPatch))continue;
+
+    //            if (SatisfyConditions(TestPatch))
+    //                UnsolvedPatches.erase(TestPatch);
+    //            else
+    //                UnsolvedPatches.insert(TestPatch);
+    //        }
+
+    //        RemoveEmptyPatches();
+
+    //        if (add_only_needed)
+    //            MarkUnsolvedPatches();
+    //        all_solved=(UnsolvedPatches.size()==0);
+    //    }
+
+    void AddNext(bool &all_solved,
+                 bool &added_sample)
     {
         all_solved=false;
         added_sample=false;
-        if (only_needed)
+        if (add_only_needed)
             PathSampl.check_pass_on[0]=true;
 
         if (UnsolvedPatches.size()==0)
@@ -322,7 +439,7 @@ public:
 
         RemoveEmptyPatches();
 
-        if (only_needed)
+        if (add_only_needed)
             MarkUnsolvedPatches();
         all_solved=(UnsolvedPatches.size()==0);
     }
@@ -413,7 +530,7 @@ public:
                     Geo::CrossPathSampling<ScalarType> &_PathSampl):
         PatchMan(_PatchMan),PathSampl(_PathSampl)
     {
-        only_needed=true;
+        add_only_needed=true;
         allow_darts=false;
         allow_concave=false;
     }

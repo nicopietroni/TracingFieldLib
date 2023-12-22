@@ -218,7 +218,33 @@ public:
         return true;
     }
 
-    /*! \brief Base constructor */
+    void TrianglesInBox(const Geo::Box2<ScalarType> &test_box,
+                        std::vector<int> &FacesIn)
+    {
+        FacesIn.clear();
+
+        if (!bbox.Collide(test_box))return;
+
+        Geo::Box2<ScalarType> bb_filtered=test_box;
+        bb_filtered.Intersect(bbox);
+
+        Box2<int> intBox;
+        BoxToIBox(bb_filtered,intBox);
+
+        for (int xi=intBox.Min.X;xi<=intBox.Max.X;xi++)
+            for (int yi=intBox.Min.Y;yi<=intBox.Max.Y;yi++)
+            {
+                if(xi>=Grid.size())continue;
+                if(yi>=Grid[xi].size())continue;
+                FacesIn.insert(FacesIn.end(),
+                               Grid[xi][yi].entries.begin(),
+                               Grid[xi][yi].entries.end());
+            }
+        std::sort(FacesIn.begin(), FacesIn.end());
+        std::vector<int>::iterator last = std::unique(FacesIn.begin(), FacesIn.end());
+        FacesIn.erase(last, FacesIn.end());
+    }
+
     TriangleSpatialIndex2D()
     {TMark=0;}
 

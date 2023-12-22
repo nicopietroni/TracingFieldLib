@@ -9,8 +9,10 @@
 #include <set>
 #include "point3.h"
 #include "point2.h"
+#include "segment2.h"
 #include "connectivity.h"
 #include <pos3.h>
+#include "Space_Query/triangle_grid_2D.h"
 
 template <class ScalarType>
 bool HasUnfererencedVert(const std::vector<Geo::Point3<ScalarType> > &VertPos,
@@ -61,6 +63,69 @@ void RemoveUnfererencedVert(std::vector<Geo::Point3<ScalarType> > &VertPos,
         }
 }
 
+template <class ScalarType>
+void RemoveDuplicatedVert(std::vector<Geo::Point3<ScalarType> > &VertPos,
+                          std::vector<std::vector<int> > &Faces)
+{
+    std::map<Geo::Point3<ScalarType>,int> PosIdxMap;
+    std::vector<Geo::Point3<ScalarType> > NewVertPos;
+    for (size_t i=0;i<VertPos.size();i++)
+    {
+        if (PosIdxMap.count(VertPos[i])>0)continue;
+        NewVertPos.push_back(VertPos[i]);
+        PosIdxMap[VertPos[i]]=NewVertPos.size()-1;
+    }
+
+    for (size_t i=0;i<Faces.size();i++)
+        for (size_t j=0;j<3;j++)
+        {
+            int IndexV=Faces[i][j];
+            Geo::Point3<ScalarType> Pos=VertPos[IndexV];
+            assert(PosIdxMap.count(Pos)>0);
+            int NewIdx=PosIdxMap[Pos];
+            Faces[i][j]=NewIdx;
+        }
+    VertPos=NewVertPos;
+}
+
+template <class ScalarType>
+void RemoveDuplicatedVert(std::vector<Geo::Point3<ScalarType> > &VertPos,
+                          std::vector<Geo::Point2<ScalarType> > &VertUVs,
+                          std::vector<std::vector<int> > &Faces)
+{
+    typedef std::pair<Geo::Point2<ScalarType>,Geo::Point3<ScalarType> > UV_3DKey;
+    std::map<UV_3DKey,int> PosUVIdxMap;
+    std::vector<Geo::Point3<ScalarType> > NewVertPos;
+    std::vector<Geo::Point2<ScalarType> > NewVertUV;
+
+    assert(VertPos.size()==VertUVs.size());
+    for (size_t i=0;i<VertPos.size();i++)
+    {
+        Geo::Point3<ScalarType> Pos3D=VertPos[i];
+        Geo::Point2<ScalarType> PosUV=VertUVs[i];
+        UV_3DKey Key(PosUV,Pos3D);
+
+        if (PosUVIdxMap.count(Key)>0)continue;
+
+        NewVertPos.push_back(VertPos[i]);
+        NewVertUV.push_back(VertUVs[i]);
+        PosUVIdxMap[Key]=NewVertPos.size()-1;
+    }
+
+    for (size_t i=0;i<Faces.size();i++)
+        for (size_t j=0;j<3;j++)
+        {
+            int IndexV=Faces[i][j];
+            Geo::Point3<ScalarType> Pos3D=VertPos[IndexV];
+            Geo::Point2<ScalarType> PosUV=VertUVs[IndexV];
+            UV_3DKey Key(PosUV,Pos3D);
+            assert(PosUVIdxMap.count(Key)>0);
+            int NewIdx=PosUVIdxMap[Key];
+            Faces[i][j]=NewIdx;
+        }
+    VertUVs=NewVertUV;
+    VertPos=NewVertPos;
+}
 
 void NumFaceValences(const std::vector<std::vector<int> > &Faces,
                      std::map<int,int> &ValMap)
@@ -494,6 +559,21 @@ void FFConnectedComponenent(const std::vector<std::vector<int> > &Elements,
 }
 
 template <class ScalarType>
+void AppendMesh(std::vector<Geo::Point3<ScalarType> > &Vert,
+                std::vector<std::vector<int> > &Elements,
+                const std::vector<Geo::Point3<ScalarType> > &To_append_Vert,
+                const std::vector<std::vector<int> > &To_append_Elements)
+{
+    int NumV0=Vert.size();
+    Vert.insert(Vert.end(),To_append_Vert.begin(), To_append_Vert.end());
+    int NumF0=Elements.size();
+    Elements.insert(Elements.end(),To_append_Elements.begin(),To_append_Elements.end());
+    for (size_t i=NumF0;i<Elements.size();i++)
+        for (size_t j=0;j<Elements[i].size();j++)
+            Elements[i][j]+=NumV0;
+}
+
+template <class ScalarType>
 void CopySubMesh(const std::vector<Geo::Point3<ScalarType> > &Vert,
                  const std::vector<std::vector<int> > &Elements,
                  const std::vector<int> &ToCopyEl,
@@ -534,18 +614,18 @@ void CopySubMesh(const std::vector<Geo::Point3<ScalarType> > &Vert,
             }
             int NewIndexV=VertToVert[IndexV];
             CopiedMeshesElem[i][j]=NewIndexV;
-    }
+        }
 }
 
 template <class ScalarType>
 void SplitByFFConnectedComponenent(const std::vector<Geo::Point3<ScalarType> > &Vert,
-                            const std::vector<std::vector<int> > &Elements,
-                            const std::vector<std::vector<int> > &NextP,
-                            const std::vector<std::vector<int> > &NextE,
-                            std::vector<std::vector<Geo::Point3<ScalarType> > > &SubMeshesV,
-                            std::vector<std::vector<std::vector<int> > > &SubMeshesF,
-                            std::vector<std::vector<int> > &OriginalV,
-                            std::vector<std::vector<int> > &OriginalF)
+                                   const std::vector<std::vector<int> > &Elements,
+                                   const std::vector<std::vector<int> > &NextP,
+                                   const std::vector<std::vector<int> > &NextE,
+                                   std::vector<std::vector<Geo::Point3<ScalarType> > > &SubMeshesV,
+                                   std::vector<std::vector<std::vector<int> > > &SubMeshesF,
+                                   std::vector<std::vector<int> > &OriginalV,
+                                   std::vector<std::vector<int> > &OriginalF)
 {
     std::vector<std::vector<int> > Components;
     FFConnectedComponenent(Elements,NextP,NextE,Components);
@@ -569,11 +649,11 @@ void SplitByFFConnectedComponenent(const std::vector<Geo::Point3<ScalarType> > &
 
 template <class ScalarType>
 void SplitByFFConnectedComponenent(const std::vector<Geo::Point3<ScalarType> > &Vert,
-                            const std::vector<std::vector<int> > &Elements,
-                            std::vector<std::vector<Geo::Point3<ScalarType> > > &SubMeshesV,
-                            std::vector<std::vector<std::vector<int> > > &SubMeshesF,
-                            std::vector<std::vector<int> > &OriginalV,
-                            std::vector<std::vector<int> > &OriginalF)
+                                   const std::vector<std::vector<int> > &Elements,
+                                   std::vector<std::vector<Geo::Point3<ScalarType> > > &SubMeshesV,
+                                   std::vector<std::vector<std::vector<int> > > &SubMeshesF,
+                                   std::vector<std::vector<int> > &OriginalV,
+                                   std::vector<std::vector<int> > &OriginalF)
 {
     std::vector<std::vector<int> > NextF,NextE;
     Geo::getFFAdjacency(Elements, NextF,NextE);
@@ -615,23 +695,23 @@ void ComputePerVertAngle(std::vector<Geo::Point3<ScalarType> > &Pos,
         size_t FaceS=Faces[i].size();
         for (size_t j=0;j<Faces[i].size();j++)
         {
-           int IndexLoc0=(j+FaceS-1)%FaceS;
-           int IndexLoc1=j;
-           int IndexLoc2=(j+1)%FaceS;
+            int IndexLoc0=(j+FaceS-1)%FaceS;
+            int IndexLoc1=j;
+            int IndexLoc2=(j+1)%FaceS;
 
-           int IndexV0=Faces[i][IndexLoc0];
-           int IndexV1=Faces[i][IndexLoc1];
-           int IndexV2=Faces[i][IndexLoc2];
+            int IndexV0=Faces[i][IndexLoc0];
+            int IndexV1=Faces[i][IndexLoc1];
+            int IndexV2=Faces[i][IndexLoc2];
 
-           Geo::Point3<ScalarType> P0=Pos[IndexV0];
-           Geo::Point3<ScalarType> P1=Pos[IndexV1];
-           Geo::Point3<ScalarType> P2=Pos[IndexV2];
+            Geo::Point3<ScalarType> P0=Pos[IndexV0];
+            Geo::Point3<ScalarType> P1=Pos[IndexV1];
+            Geo::Point3<ScalarType> P2=Pos[IndexV2];
 
-           Geo::Point3<ScalarType> Dir0=P0-P1;
-           Geo::Point3<ScalarType> Dir1=P2-P1;
-           Dir0.Normalize();
-           Dir1.Normalize();
-           VertAngle[IndexV1]+=Geo::AngleDeg(Dir0,Dir1);
+            Geo::Point3<ScalarType> Dir0=P0-P1;
+            Geo::Point3<ScalarType> Dir1=P2-P1;
+            Dir0.Normalize();
+            Dir1.Normalize();
+            VertAngle[IndexV1]+=Geo::AngleDeg(Dir0,Dir1);
         }
     }
 }
@@ -657,6 +737,48 @@ void ComputeFaceBarycenters(const std::vector<Geo::Point3<ScalarType> > &VertPos
         BaryVal/=sizeF;
         BaryF.push_back(BaryVal);
     }
+}
+
+template <class ScalarType>
+Geo::Point3<ScalarType> InterpolatePosTriMesh(const std::vector<Geo::Point3<ScalarType> > &Pos3D,
+                                              const std::vector<std::vector<int> > &Faces,
+                                              const int &FaceIdx,
+                                              const Geo::Point3<ScalarType> &bary)
+{
+    assert(FaceIdx>=0);
+    assert(FaceIdx<Faces.size());
+    int IndexV0=Faces[FaceIdx][0];
+    int IndexV1=Faces[FaceIdx][1];
+    int IndexV2=Faces[FaceIdx][2];
+
+    Geo::Point3<ScalarType> FaceP0=Pos3D[IndexV0];
+    Geo::Point3<ScalarType> FaceP1=Pos3D[IndexV1];
+    Geo::Point3<ScalarType> FaceP2=Pos3D[IndexV2];
+    Geo::Point3<ScalarType> InterpP=FaceP0*bary.X+
+            FaceP1*bary.Y+
+            FaceP2*bary.Z;
+    return InterpP;
+}
+
+template <class ScalarType>
+Geo::Point2<ScalarType> InterpolateUVTriMesh(const std::vector<Geo::Point2<ScalarType> > &PosUV,
+                                             const std::vector<std::vector<int> > &Faces,
+                                             const int &FaceIdx,
+                                             const Geo::Point3<ScalarType> &bary)
+{
+    assert(FaceIdx>=0);
+    assert(FaceIdx<Faces.size());
+    int IndexV0=Faces[FaceIdx][0];
+    int IndexV1=Faces[FaceIdx][1];
+    int IndexV2=Faces[FaceIdx][2];
+
+    Geo::Point2<ScalarType> FaceP0=PosUV[IndexV0];
+    Geo::Point2<ScalarType> FaceP1=PosUV[IndexV1];
+    Geo::Point2<ScalarType> FaceP2=PosUV[IndexV2];
+    Geo::Point2<ScalarType> InterpP=FaceP0*bary.X+
+            FaceP1*bary.Y+
+            FaceP2*bary.Z;
+    return InterpP;
 }
 
 template <class ScalarType>
@@ -751,6 +873,5 @@ void SplitMeshFromEdges(std::vector<Geo::Point3<ScalarType> > &Pos,
     Pos=NewPos;
     Faces=NewFaces;
 }
-
 
 #endif

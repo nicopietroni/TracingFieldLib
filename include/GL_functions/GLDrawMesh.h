@@ -11,6 +11,52 @@ namespace GLDraw
 
 enum TypeRendMesh{TRTriangle,TrQuad,TrPolygon};
 
+//template <class ScalarType>
+//void DrawPoints(const std::vector< Geo::Point3<ScalarType> > &VertPos)
+//{
+//    glPushAttrib(GL_ALL_ATTRIB_BITS);
+//    glDepthRange(0.0,0.9999);
+//    glDisable(GL_LIGHTING);
+//    glPointSize(30);
+//    glColor4f(1.f,0.f,1.f,1.f);
+//    glBegin(GL_POINTS);
+//    for (size_t i=0;i<VertPos.size();i++)
+//    {
+//        Geo::Point3<ScalarType> Pos=VertPos[i];
+//        glVertex(Pos);
+//    }
+//    glEnd();
+//    glDepthRange(0.0,1.0);
+//    glPopAttrib();
+//}
+
+
+template <class ScalarType>
+void DrawPoints(const std::vector<Geo::Point3<ScalarType> > &Samples,
+                Geo::Point3<ScalarType> pointCol=Geo::Point3<ScalarType>(1,0,1),
+                int size=20)
+{
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+    glDisable(GL_LIGHTING);
+    glDepthRange(0.0,0.9999);
+
+    glPointSize(30);
+
+    glBegin(GL_POINTS);
+    for (size_t i=0;i<Samples.size();i++)
+    {
+        Geo::Point3<ScalarType> CurrPos=Samples[i];
+
+        glColor3f((float)pointCol.X,(float)pointCol.Y,(float)pointCol.Z);
+        glVertex(CurrPos);
+    }
+    glEnd();
+    glDepthRange(0.0,1.0);
+    glPopAttrib();
+}
+
 template <class ScalarType>
 void DrawVertices(std::vector< Geo::Point3<ScalarType> > &VertPos,
                   const std::vector<int> &To_Draw)

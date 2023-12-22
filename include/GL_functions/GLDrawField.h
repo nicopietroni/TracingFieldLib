@@ -251,28 +251,6 @@ void DrawCrossFields(const std::vector<Field::CrossF<ScalarType> > &Crosses,
     glPopAttrib();
 }
 
-template <class ScalarType>
-void DrawPoints(const std::vector<Geo::Point3<ScalarType> > &Samples,
-                Geo::Point3<ScalarType> pointCol=Geo::Point3<ScalarType>(1,0,1))
-{
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-
-    glDisable(GL_LIGHTING);
-    glPointSize(20);
-
-    glBegin(GL_POINTS);
-    for (size_t i=0;i<Samples.size();i++)
-    {
-        Geo::Point3<ScalarType> CurrPos=Samples[i];
-
-        glColor3f((float)pointCol.X,(float)pointCol.Y,(float)pointCol.Z);
-        glVertex(CurrPos);
-    }
-    glEnd();
-
-    glPopAttrib();
-}
 
 template <class ScalarType>
 void DrawSingularity(const std::vector<Geo::Point3<ScalarType> > &VertPos,

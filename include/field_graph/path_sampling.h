@@ -32,7 +32,6 @@ class CrossPathSampling
 
     std::vector<int> StartingNodes;
     //std::vector<ScalarType> NodeDistances;
-    int NumSamples;
 
 
     std::vector<std::vector<int> > SampledPaths;
@@ -53,7 +52,8 @@ class CrossPathSampling
     //these are used to detect when two path shared an edge and to solve it
     std::set<std::pair<int,int> > ConflictEdges;
 
-public:
+public:   
+    int NumSamples;
 
     bool dynamicUpdates;
     std::vector<std::vector<int> > SelectedPaths;
@@ -84,14 +84,17 @@ public:
     void SampleTracingVert(int NumSources,std::vector<int> &SampledVert,
                            const int IndexMark=-1)
     {
-        int RadiusStar=VertPos.size()/NumSources;
+        //ScalarType AreaC=VertPos.size()/NumSources
+        int RadiusStar=Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(VertPos.size(),NumSources);
+        //int RadiusStar=VertPos.size()/NumSources;
         SampledVert.clear();
         if (IndexMark!=-1)
         {
             std::vector<int> MarkedV;
             GetMarkedVert(IndexMark,MarkedV);
             std::cout<<" There are "<< MarkedV.size()<<"places to sample "<<std::endl;
-            RadiusStar=MarkedV.size()/NumSources;
+            //RadiusStar=MarkedV.size()/NumSources;
+            RadiusStar=Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(MarkedV.size(),NumSources);
             Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,
                                                                    RadiusStar,4,SampledVert,&MarkedV);
         }
@@ -173,8 +176,6 @@ private:
         if (TGraph.NodeType(IndexN)==Geo::TangentDomain)return false;
         return true;
     }
-
-
 
     void DisableSingularities()
     {
@@ -275,10 +276,6 @@ private:
         SampledPaths.clear();
 
         std::cout<<"Sampling starting Nnodes"<<std::endl;
-
-//        std::vector<int> IndexMark;
-//        for (size_t i=0;i<VERT_MARK_SIZE;i++)
-//            if (sample_only_on[i])IndexMark.push_back(i);
 
         int MarkSample=-1;
         for (size_t i=0;i<VERT_MARK_SIZE;i++)
@@ -526,11 +523,11 @@ private:
 
     void WriteTiming()
     {
-        //        std::cout<<"*** TIMINGS ***"<<std::endl;
-        //        std::cout<<"* Time Init:"<<TimeInitData<<std::endl;
-        //        std::cout<<"* Time tracing:"<<TimeTracing<<std::endl;
-        //        std::cout<<"* Time upd Dist:"<<TimeUpdDist<<std::endl;
-        //        std::cout<<"* Time Conflicts:"<<TimeConflict<<std::endl;
+        //std::cout<<"*** TIMINGS ***"<<std::endl;
+        //std::cout<<"* Time Init:"<<TimeInitData<<std::endl;
+        //std::cout<<"* Time tracing:"<<TimeTracing<<std::endl;
+        //std::cout<<"* Time upd Dist:"<<TimeUpdDist<<std::endl;
+        //std::cout<<"* Time Conflicts:"<<TimeConflict<<std::endl;
     }
 
     bool IsMarkedVert(const int &IndexV,const int &IndexMark)
@@ -554,6 +551,32 @@ private:
 
 
 public:
+
+    void CleanEmptySelectedPaths()
+    {
+        std::map<int,int> NewPathIdx;
+        std::vector<std::vector<int> > SelectedPathsSwap;
+        for (size_t i=0;i<SelectedPaths.size();i++)
+        {
+            if (SelectedPaths[i].size()==0)continue;
+            SelectedPathsSwap.push_back(SelectedPaths[i]);
+            NewPathIdx[i]=SelectedPathsSwap.size()-1;
+        }
+        SelectedPaths=SelectedPathsSwap;
+
+        std::vector<std::pair<ScalarType,int> > CandidatesSwap;
+        for (size_t i=0;i<Candidates.size();i++)
+        {
+            int IndexPath=Candidates[i].second;
+            if (NewPathIdx.count(IndexPath)==0)continue;
+
+            ScalarType Priority=Candidates[i].first;
+            IndexPath=NewPathIdx[IndexPath];
+
+            CandidatesSwap.push_back(std::pair<ScalarType,int>(Priority,IndexPath));
+        }
+        Candidates=CandidatesSwap;
+    }
 
     void InitSingularityNodes(bool use_star=true)
     {
@@ -613,7 +636,7 @@ public:
             int IndexV=To_MarkVert[i];
             assert(IndexV>=0);
             assert(IndexV<VertTMark[IndexMark].size());
-            assert(IndexV<VertPos.size());
+            assert(IndexV<(int)VertPos.size());
             VertTMark[IndexMark][IndexV]=GlobalTMark[IndexMark];
         }
     }

@@ -10,41 +10,52 @@ namespace Geo{
 template <class ScalarType >
 class UVUtils{
 
-    //        static void SampleUVIntegralLines(const std::vector<Geo::Point2<ScalarType> > &vert,
-    //                                         const std::vector<std::vector<int> > &face,
-    //                                         const Geo::Point2<ScalarType> &Ori,
-    //                                         const Geo::Point2<ScalarType> &Dir,
-    //                                         std::vector<int> &baryFIdx,
-    //                                         std::vector<Geo::Point2<ScalarType> > &bary)
-    //        {
-    //            baryFIdx.clear();
-    //            bary.clear();
-
-    //            //            Geo::Box2<ScalarType> BB_2D;
-    //            //            BB_2D.Init(vert);
-    //            //            if (edgeSize<=0)
-    //            //                edgeSize=BB_2D.Diag()*0.05;
-    //            //            BB_2D.Inflate(edgeSize);
-
-    //            //            Geo::TriangleSpatialIndex2D<ScalarType> Grid_2D;
-    //            //            Grid_2D.Init(vert,face);
-
-    //            //            int DivX=ceil(BB_2D.DimX()/edgeSize);
-    //            //            int DivY=ceil(BB_2D.DimY()/edgeSize);
-    //            //            DivX=std::max(DivX,1);
-    //            //            DivY=std::max(DivY,1);
-
-    //        }
-
-
-    //    static void MapCrossFieldToUV(const std::vector<Geo::Point3<ScalarType> > &VertNormal3D,
-    //                                  const std::vector<Geo::Point2<ScalarType> > &vert,
-    //                                  const std::vector<Field::CrossF<ScalarType> > &VertField)
-    //    {
-
-    //    }
-
 public:
+
+    static void MapToACircle(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                             const std::vector<int> &CircleSeq,
+                             const ScalarType &Radius,
+                             std::vector<Geo::Point2<ScalarType> > &vert_UV)
+    {
+        vert_UV.clear();
+        //compute total lenght
+        ScalarType TotL=0;
+
+        for (size_t i=0;i<CircleSeq.size();i++)
+        {
+            int IndexV0=CircleSeq[i];
+            int IndexV1=CircleSeq[(i+1)%CircleSeq.size()];
+
+            assert(IndexV0<(int)VertPos.size());
+            assert(IndexV1<(int)VertPos.size());
+            assert(IndexV0>=0);
+            assert(IndexV1>=0);
+
+            Geo::Point3<ScalarType> P0=VertPos[IndexV0];
+            Geo::Point3<ScalarType> P1=VertPos[IndexV1];
+            ScalarType Dist=(P0-P1).Norm();
+            TotL+=Dist;
+        }
+
+        ScalarType CurrL=0;
+        vert_UV.clear();
+        for (size_t i=0;i<CircleSeq.size();i++)
+        {
+            ScalarType frac = CurrL * (ScalarType) 2 * M_PI / TotL;
+            vert_UV.push_back(Geo::Point2<ScalarType>(cos(frac), sin(frac)));
+
+            int IndexV0=CircleSeq[i];
+            int IndexV1=CircleSeq[(i+1)%CircleSeq.size()];
+            Geo::Point3<ScalarType> P0=VertPos[IndexV0];
+            Geo::Point3<ScalarType> P1=VertPos[IndexV1];
+            ScalarType Dist=(P0-P1).Norm();
+
+            CurrL+=Dist;
+        }
+
+        for (size_t i=0;i<vert_UV.size();i++)
+            vert_UV[i]=vert_UV[i]*Radius;
+    }
 
     static bool MapBetween(const std::vector<Geo::Point2<ScalarType> > &vert0,
                            const std::vector<Geo::Point2<ScalarType> > &vert1,

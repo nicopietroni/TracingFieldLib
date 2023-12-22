@@ -14,7 +14,7 @@ set(TRACEFIELD_DIR = "../../include" CACHE INTERNAL "")
 set(GLDRAW_DIR = "../GLFunctions/" CACHE INTERNAL "")
 set(EIGENPATH  = "../../external_lib/eigen-3.4.0/" CACHE INTERNAL "")
 set(DIRECTIONALPATH  = "../../external_lib/Directional/include/" CACHE INTERNAL "")
-#set(IGLLIB  = "../../external_lib/libigl/include/" CACHE INTERNAL "")
+set(IGLLIB  = "../../external_lib/libigl/include/" CACHE INTERNAL "")
 #set(BROWS_DIR  = "../../external_lib/FileBrowser" CACHE INTERNAL "")
 
 include_directories(${TRACEFIELD_DIR})
@@ -24,7 +24,7 @@ include_directories(/opt/homebrew/include)
 include_directories(${GLEWPATH}/include)
 include_directories(${EIGENPATH})
 #include_directories(${DIRECTIONALPATH})
-#include_directories(${IGLLIB})
+include_directories(${IGLLIB})
 #include_directories(${BROWS_DIR})
 
 
