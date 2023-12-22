@@ -114,3 +114,7 @@ apps/cross_field_visualizer/build/Makefile
 apps/arap_deformer/.qtc_clangd/compile_commands.json
 apps/arap_deformer/arap_deformer.pro.user
 apps/cross_field_visualizer/cross_field_visualizer.pro.user
+apps/patch_decomposer/.qtc_clangd/compile_commands.json
+apps/patch_decomposer/build/dualized.obj
+include/field_graph/OLD/graph_frame_field_sheet_tracing.h
+include/OLD/mesh_functionsOLD.h
