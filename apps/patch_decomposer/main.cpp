@@ -110,42 +110,6 @@ std::vector<Geo::Point3<ScalarType> > SidesMidP;
 //for debugging the marked parts
 //std::vector<int> MarkedV;
 
-void UpdateColor()
-{
-    switch(CurrCol) {
-    case 0:
-        FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
-        break;
-    case 1:
-        PatchM.GetColorFaceByPatch(FaceCol);
-        break;
-    case 2:
-        PatchM.GetColorFaceIfDiskLike(FaceCol);
-        break;
-    case 3:
-        PatchM.GetColorByValence(FaceCol);
-        break;
-    case 4:
-        PatchM.GetColorByMatchSingularity(FaceCol);
-        break;
-    case 5:
-        PDeco.GetColorBySolvedPatches(FaceCol);
-        break;
-    default:
-        FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
-        // code block
-    }
-}
-
-void InitGraph()
-{
-    Geo::TragingGraphFunctions<ScalarType>::InitFromVertCrossField(TGraph,VertPos,Connectivity,VertCurv,
-                                                                   drift_penalty,maxAngle,diffuse_step);
-    TGraph.DeSelectAll(0);
-    TGraph.SelectNoteType(Geo::ExitDomain,0);
-    TGraph.SelectNoteType(Geo::TangentDomain,0);
-}
-
 int failed_trace=0;
 int tested_trace=0;
 
@@ -173,6 +137,52 @@ ScalarType old_max_uvDist=max_uvDist;
 int old_MinSides=MinSides;
 int old_MaxSides=MaxSides;
 ScalarType old_CCability=CCability;
+
+void UpdateColor()
+{
+    bool has_uv=false;
+    std::vector<ScalarType> FaceVal;
+
+    switch(CurrCol) {
+    case 0:
+        FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
+        break;
+    case 1:
+        PatchM.GetColorFaceByPatch(FaceCol);
+        break;
+    case 2:
+        PatchM.GetColorFaceIfDiskLike(FaceCol);
+        break;
+    case 3:
+        PatchM.GetColorByValence(FaceCol);
+        break;
+    case 4:
+        PatchM.GetColorByMatchSingularity(FaceCol);
+        break;
+    case 5:
+        PDeco.GetColorBySolvedPatches(FaceCol);
+        break;
+    case 6:
+        has_uv=PDeco.GetConditionPerFaceScalar(FaceVal,std::string("uv_distortion"));
+        if (has_uv)
+        {
+            Geo::GetColorByScalar<ScalarType>(FaceVal,max_uvDist,0,FaceCol);
+        }
+        break;
+    default:
+        FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
+        // code block
+    }
+}
+
+void InitGraph()
+{
+    Geo::TragingGraphFunctions<ScalarType>::InitFromVertCrossField(TGraph,VertPos,Connectivity,VertCurv,
+                                                                   drift_penalty,maxAngle,diffuse_step);
+    TGraph.DeSelectAll(0);
+    TGraph.SelectNoteType(Geo::ExitDomain,0);
+    TGraph.SelectNoteType(Geo::TangentDomain,0);
+}
 
 bool UpdateConditions()
 {
@@ -609,7 +619,8 @@ void SetRenderBar()
                                         "if Disk",
                                         "Valence",
                                         "Match Sing",
-                                        "Unsolved"};
+                                        "Unsolved",
+                                        "Uv Distortion"};
     ImGui::SetNextItemWidth(100);
     ImGui::Combo("Color Patches", &CurrCol, itemsShape, IM_ARRAYSIZE(itemsShape));
     if (CurrCol!=OldCol)

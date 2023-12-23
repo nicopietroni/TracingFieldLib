@@ -188,6 +188,36 @@ public:
         PathSampl.sample_only_on[1]=false;
     }
 
+    bool GetConditionPerFaceScalar(std::vector<ScalarType> &FaceV,
+                                   const std::string &name_cond)
+    {
+        for (size_t i=0;i<PConditions.size();i++)
+        {
+            if (PConditions[i]->Name()!=name_cond)continue;
+            FaceV.clear();
+            FaceV=std::vector<ScalarType>(PatchMan.NumFaces(),0);
+            //std::cout<<"Test 0 "<<std::endl;
+            for (size_t pi=0;pi<PatchMan.NumPatches();pi++)
+            {
+                if (PatchMan.isEmpty(pi))continue;
+                std::vector<ScalarType> FaceVPatch;
+                PConditions[i]->GetPerFaceScalar(PatchMan,pi,FaceVPatch);
+                if (FaceVPatch.size()==0)continue;
+//                std::cout<<"Size 0 "<<FaceVPatch.size()<<std::endl;
+//                std::cout<<"Size 1 "<<PatchMan.SubPatchFacesToOriginal[i].size()<<std::endl;
+//                std::cout<<"Size 2 "<<PatchMan.SubPatchFaces[i].size()<<std::endl;
+                assert(FaceVPatch.size()==PatchMan.SubPatchFacesToOriginal[pi].size());
+                assert(FaceVPatch.size()==PatchMan.SubPatchFaces[pi].size());
+                for (size_t j=0;j<FaceVPatch.size();j++)
+                {
+                    int IndexGLobF=PatchMan.MapFaceToOriginal(pi,j);
+                    FaceV[IndexGLobF]=FaceVPatch[j];
+                }
+            }
+            return true;
+        }
+        return false;
+    }
     //    void AddNextIfNeeded(bool &all_solved,
     //                         bool &added_sample)
     //    {
@@ -322,6 +352,9 @@ public:
             PathSampl.SelectedPaths[Path_To_remove]=TestPath;
             std::vector<int> UpdatedPatches;
             PatchMan.Update(UpdatedPatches);
+            for (size_t i=0;i<UpdatedPatches.size();i++)
+                UpdateCondition(UpdatedPatches[i]);
+
             return false;
         }
 

@@ -1015,6 +1015,14 @@ private:
 
 public:
 
+    int MapFaceToOriginal(const int &IndexPatch,const int &FIndexLocal)const
+    {
+        assert(IndexPatch<SubPatchFacesToOriginal.size());
+        assert(FIndexLocal<SubPatchFacesToOriginal[IndexPatch].size());
+        return (SubPatchFacesToOriginal[IndexPatch][FIndexLocal]);
+    }
+
+
     int MapToOriginal(const int &IndexPatch,const int &VIndexLocal)const
     {
         assert(IndexPatch<SubPatchVertToOriginal.size());

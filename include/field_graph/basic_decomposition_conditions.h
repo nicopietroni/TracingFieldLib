@@ -25,6 +25,11 @@ public:
 
     virtual std::string Name()const
     {return std::string("basic");}
+
+    virtual void GetPerFaceScalar(const PatchManaging<ScalarType> &PatchM,
+                                  const int &IndexPatch,
+                                  std::vector<ScalarType> &FaceV)const
+    {(void)PatchM;(void)IndexPatch;(void)FaceV;}
 };
 
 template <class ScalarType>
