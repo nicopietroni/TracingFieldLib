@@ -22,6 +22,8 @@ class UVParam{
                                                  const std::vector<int> &Candidates,
                                                  const int &Vert0)
     {
+        assert(Vert0>=0);
+        assert(Vert0<VertPos.size());
         //        Geo::Point3<ScalarType> DirTarget=Geo::Point3<ScalarType>(1,0,0),
         //        Geo::Point3<ScalarType> DirOrtho=Geo::Point3<ScalarType>(0,1,0)
         Geo::Box3<ScalarType> MeshBB;
@@ -39,15 +41,15 @@ class UVParam{
         Geo::Point3<ScalarType> DirTarget=DimDir[2].second;
         Geo::Point3<ScalarType> DirOrtho=DimDir[1].second;
 
-        ScalarType BestDot=-std::numeric_limits<ScalarType>::min();
+        ScalarType BestDot=std::numeric_limits<double>::lowest();;
         int Vert1=-1;
+
         for (int i=0;i<(int)Candidates.size();i++)
         {
             int IndexVTest=Candidates[i];
             if (IndexVTest==Vert0)continue;
 
             Geo::Point3<ScalarType> DirTest(VertPos[IndexVTest]-VertPos[Vert0]);
-            //            DirTest.Normalize();
             ScalarType AlignDot=Dot(DirTest,DirTarget);
             ScalarType OrthoDot=fabs(Geo::Dot(DirTest,DirOrtho));
             ScalarType TestDot=AlignDot-OrthoDot;

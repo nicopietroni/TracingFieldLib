@@ -6,192 +6,10 @@
 //#include "graph.h"
 #include "patch_managing.h"
 #include "path_sampling.h"
-#include "catmull_clarkability.h"
+#include "basic_decomposition_conditions.h"
 //#include "mesh_functions.h"
 
 namespace Geo{
-
-template <class ScalarType>
-class PatchCondition
-{
-public:
-    virtual bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const
-    {(void)PatchM;return true;}
-
-    virtual bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
-                           const int &IndexPatch)const
-    {(void)PatchM;(void)IndexPatch;return true;}
-};
-
-template <class ScalarType>
-class SingleBoundaryCondition:public PatchCondition<ScalarType>
-{
-
-public:
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
-                   const int &IndexPatch)const override
-    {   return (PatchM.NumBorders(IndexPatch)==1);}
-
-};
-
-template <class ScalarType>
-class DiskLikeCondition:public PatchCondition<ScalarType>
-{
-
-public:
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
-                   const int &IndexPatch)const override
-    {   return PatchM.isDiskLike(IndexPatch);}
-
-};
-
-template <class ScalarType>
-class SingleSingularityCondition:public PatchCondition<ScalarType>
-{
-
-public:
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
-                   const int &IndexPatch)const override
-    {   return (!PatchM.HasMultipleSingularities(IndexPatch));}
-
-};
-
-template <class ScalarType>
-class MathchSingularityCondition:public PatchCondition<ScalarType>
-{
-
-public:
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
-                   const int &IndexPatch)const override
-    {   return (PatchM.MatchSingularity(IndexPatch));}
-
-};
-
-template <class ScalarType>
-class NumSidesCondition:public PatchCondition<ScalarType>
-{
-public:
-    int minCornerNum;
-    int maxCornerNum;
-
-    bool IsValidSetup()const
-    {
-        //one should be valid
-        if ((minCornerNum<=0)&&(maxCornerNum<=0))return false;
-
-        if (maxCornerNum>0)
-            if (maxCornerNum<5)return false;
-        if (minCornerNum>0)
-            if (minCornerNum>3)return false;
-
-        if ((maxCornerNum>0)&&(minCornerNum>0))
-            if (minCornerNum>=maxCornerNum)return false;
-        return true;
-    }
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
-                   const int &IndexPatch)const override
-    {
-        if (!IsValidSetup())
-        {
-            std::cout<<"WARNING CONDITIONS ON EDGE SIZE INCORRECT"<<std::endl;
-            return true;
-        }
-        assert(IndexPatch<PatchM.NumPatches());
-        if (PatchM.NumBorders(IndexPatch)>1)return false;
-        if ((maxCornerNum>0)&&(PatchM.NumSides(IndexPatch)>maxCornerNum))return false;
-        if ((minCornerNum>0)&&(PatchM.NumSides(IndexPatch)<minCornerNum))return false;
-        return true;
-    }
-
-    NumSidesCondition()
-    {
-        minCornerNum=3;
-        maxCornerNum=6;
-    }
-};
-
-template <class ScalarType>
-class CCabilityCondition:public PatchCondition<ScalarType>
-{
-
-public:
-    ScalarType SideThr;
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
-                   const int &IndexPatch)const override
-    {
-        assert(IndexPatch<PatchM.SideLenghts.size());
-
-        //if there is more than one hole return false
-        if (PatchM.SideLenghts[IndexPatch].size()>1)return false;
-
-        return (IsCatmullClarkable(PatchM.SideLenghts[IndexPatch][0],SideThr,true));
-    }
-
-    CCabilityCondition(const ScalarType &_Thr)
-    {
-        SideThr=_Thr;
-    }
-};
-
-template <class ScalarType>
-class EqualSideCondition:public PatchCondition<ScalarType>
-{
-
-public:
-    ScalarType SideThr;
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
-
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
-                   const int &IndexPatch)const override
-    {
-        //if there is more than one hole return false
-        if (PatchM.SideLenghts[IndexPatch].size()>1)return false;
-
-        if (PatchM.SideLenghts[IndexPatch][0].size()==4)return true;
-
-        ScalarType AvgL=0;
-        for (size_t i=0;i<PatchM.SideLenghts[IndexPatch][0].size();i++)
-            AvgL+=PatchM.SideLenghts[IndexPatch][0][i];
-
-        AvgL/=PatchM.SideLenghts[IndexPatch][0].size();
-
-        for (size_t i=0;i<PatchM.SideLenghts[IndexPatch][0].size();i++)
-            if (fabs(PatchM.SideLenghts[IndexPatch][0][i]-AvgL)>SideThr)return false;
-
-        return true;
-    }
-
-    EqualSideCondition(const ScalarType &_Thr)
-    {
-        SideThr=_Thr;
-    }
-};
 
 template <class ScalarType>
 class PatchDecomposer
@@ -268,6 +86,14 @@ public:
             if (!has_satisfied)return false;
         }
         return true;
+    }
+
+    void UpdateCondition(const int &IndexPatch)
+    {
+        for (size_t i=0;i<PConditions.size();i++)
+        {
+            PConditions[i]->UpdatePatchData(PatchMan,IndexPatch);
+        }
     }
 
     bool SatisfyConditions(const int &IndexPatch)
@@ -428,8 +254,10 @@ public:
         for (size_t i=0;i<UpdatedPatches.size();i++)
         {
             int TestPatch=UpdatedPatches[i];
-
+            assert(TestPatch<PatchMan.NumPatches());
             if (PatchMan.isEmpty(TestPatch))continue;
+
+            UpdateCondition(TestPatch);
 
             if (SatisfyConditions(TestPatch))
                 UnsolvedPatches.erase(TestPatch);
@@ -478,6 +306,8 @@ public:
             int TestPatch=UpdatedPatches[i];
 
             if (PatchMan.isEmpty(TestPatch))continue;
+
+            UpdateCondition(TestPatch);
 
             if (SatisfyConditions(TestPatch))
                 continue;

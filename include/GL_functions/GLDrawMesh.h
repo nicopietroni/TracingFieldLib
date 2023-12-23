@@ -57,6 +57,7 @@ void DrawPoints(const std::vector<Geo::Point3<ScalarType> > &Samples,
     glPopAttrib();
 }
 
+
 template <class ScalarType>
 void DrawVertices(std::vector< Geo::Point3<ScalarType> > &VertPos,
                   const std::vector<int> &To_Draw)
@@ -78,6 +79,18 @@ void DrawVertices(std::vector< Geo::Point3<ScalarType> > &VertPos,
     glEnd();
     glDepthRange(0.0,1.0);
     glPopAttrib();
+}
+
+
+template <class ScalarType>
+void DrawVertices(std::vector< Geo::Point3<ScalarType> > &VertPos,
+                  const std::vector<size_t> &To_Draw)
+{
+    std::vector<int> To_DrawInt;
+    for (size_t j=0;j<To_Draw.size();j++)
+        To_DrawInt.push_back(To_Draw[j]);
+
+    DrawVertices(VertPos,To_DrawInt);
 }
 
 template <class ScalarType>

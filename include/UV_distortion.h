@@ -40,7 +40,7 @@ public:
         {
             ScalarType Angle_3D=FaceVertAngleDeg(Vert3D,Faces,IndexF,j);
             ScalarType Angle_UV=FaceVertAngleDeg(VertUV,Faces,IndexF,j);
-            ScalarType diffTest=(fabs(Angle_3D-Angle_UV)/(Angle_3D+Angle_UV));
+            ScalarType diffTest=(fabs(Angle_3D-Angle_UV)/Angle_3D);//+Angle_UV));
             diffMax=std::max(diffMax,diffTest);
         }
         return diffMax;
@@ -59,7 +59,7 @@ public:
         {
             ScalarType edgeUV=EdgeLenght(VertUV,Faces,IndexF,j);
             ScalarType edge3D=EdgeLenght(Vert3D,Faces,IndexF,j);
-            ScalarType diffTest=(fabs(edge3D-edgeUV)/(edge3D+edgeUV));
+            ScalarType diffTest=(fabs(edge3D-edgeUV)/edge3D);//(edge3D+edgeUV));
             diffMax=std::max(diffMax,diffTest);
         }
         return diffMax;
@@ -72,7 +72,7 @@ public:
     {
         ScalarType areaUV=Area(VertUV,Faces,IndexF);
         ScalarType area3D=Area(Vert3D,Faces,IndexF);
-        ScalarType diff=(fabs(area3D-areaUV)/(area3D+areaUV));
+        ScalarType diff=(fabs(area3D-areaUV)/area3D);//(area3D+areaUV));
         return diff;
     }
 
@@ -102,9 +102,9 @@ public:
     }
 
     static ScalarType ScaledJacobianDistortion(const std::vector<Geo::Point3<ScalarType> > &Vert3D,
-                                              const std::vector<Geo::Point2<ScalarType> > &VertUV,
-                                              const std::vector<std::vector<int> > &Faces,
-                                              int IndexF)
+                                               const std::vector<Geo::Point2<ScalarType> > &VertUV,
+                                               const std::vector<std::vector<int> > &Faces,
+                                               int IndexF)
     {
         assert(IndexF>=0);
         assert(IndexF<(int)Faces.size());
@@ -134,7 +134,7 @@ public:
             return AreaDistortion(Vert3D,VertUV,Faces,IndexF);
             break;
         case EdgeDist:
-             return EdgeLenghtDistortion(Vert3D,VertUV,Faces,IndexF);
+            return EdgeLenghtDistortion(Vert3D,VertUV,Faces,IndexF);
             break;
         case AngleDist:
             return AngleDistortion(Vert3D,VertUV,Faces,IndexF);
@@ -157,6 +157,33 @@ public:
             FaceDistorion[i]=ComputeDistortion(Vert3D,VertUV,Faces,DType,i);
     }
 
+    static ScalarType ComputeAvgDistortion(const std::vector<Geo::Point3<ScalarType> > &Vert3D,
+                                           const std::vector<Geo::Point2<ScalarType> > &VertUV,
+                                           const std::vector<std::vector<int> > &Faces,
+                                           const DistType DType)
+    {
+        ScalarType avgDist=0;
+        for (size_t i=0;i<Faces.size();i++)
+            avgDist+=ComputeDistortion(Vert3D,VertUV,Faces,DType,i);
+        avgDist/=Faces.size();
+        return avgDist;
+    }
+
+    static ScalarType ComputeMaxDistortion(const std::vector<Geo::Point3<ScalarType> > &Vert3D,
+                                           const std::vector<Geo::Point2<ScalarType> > &VertUV,
+                                           const std::vector<std::vector<int> > &Faces,
+                                           const DistType DType,
+                                           const ScalarType percentile=0.1)
+    {
+        assert(percentile>=0);
+        assert(percentile<1);
+
+        std::vector<ScalarType> FaceDistortion;
+        ComputeDistortion(Vert3D,VertUV,Faces,DType,FaceDistortion);
+        std::sort(FaceDistortion.begin(),FaceDistortion.end());
+        int IndexMax=floor(((ScalarType)FaceDistortion.size()*(1-percentile))+0.5);
+        return (FaceDistortion[IndexMax]);
+    }
 };
 
 }

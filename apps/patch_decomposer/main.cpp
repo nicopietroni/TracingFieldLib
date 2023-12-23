@@ -32,6 +32,7 @@
 #include <field_graph/patch_decomposer.h>
 #include <mesh_functions.h>
 #include <field_graph/dual_patches.h>
+#include <field_graph/UV_decomposition_conditions.h>
 
 GLFWwindow* window;
 std::string PathMesh;
@@ -152,6 +153,10 @@ bool single_boundary_cond=true;
 bool disk_like_cond=true;
 bool single_sing_cond=false;
 bool match_sing_cond=true;
+bool use_uv=false;
+bool isometric_uv=false;
+bool conformal_uv=false;
+ScalarType max_uvDist=0.1;
 
 int MinSides=3;
 int MaxSides=6;
@@ -161,6 +166,9 @@ bool old_single_boundary_cond=single_boundary_cond;
 bool old_disk_like_cond=disk_like_cond;
 bool old_single_sing_cond=single_sing_cond;
 bool old_match_sing_cond=match_sing_cond;
+bool old_isometric_uv=isometric_uv;
+bool old_conformal_uv=conformal_uv;
+ScalarType old_max_uvDist=max_uvDist;
 
 int old_MinSides=MinSides;
 int old_MaxSides=MaxSides;
@@ -177,6 +185,9 @@ bool UpdateConditions()
     has_changed|=old_MinSides!=MinSides;
     has_changed|=old_MaxSides!=MaxSides;
     has_changed|=old_CCability!=CCability;
+    has_changed|=isometric_uv!=old_isometric_uv;
+    has_changed|=conformal_uv!=old_conformal_uv;
+    has_changed|=max_uvDist!=old_max_uvDist;
 
     old_single_boundary_cond=single_boundary_cond;
     old_disk_like_cond=disk_like_cond;
@@ -185,6 +196,11 @@ bool UpdateConditions()
     old_MinSides=MinSides;
     old_MaxSides=MaxSides;
     old_CCability=CCability;
+
+    old_isometric_uv=isometric_uv;
+    old_conformal_uv=conformal_uv;
+    old_max_uvDist=max_uvDist;
+
     return has_changed;
 }
 
@@ -207,6 +223,18 @@ void InitConditions()
     {
         ScalarType AvVAl=AvgEdgeLen(VertPos,Connectivity);
         PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(AvVAl));
+    }
+    if (isometric_uv)
+    {
+        Geo::UVCondition<ScalarType>::UVType uv_type=Geo::UVCondition<ScalarType>::UVArap;
+        Geo::UVDistortion<ScalarType>::DistType dist_type=Geo::UVDistortion<ScalarType>::EdgeDist;
+        PDeco.AddCondition(new Geo::UVCondition<ScalarType>(uv_type,dist_type,max_uvDist));
+    }
+    if (conformal_uv)
+    {
+        Geo::UVCondition<ScalarType>::UVType uv_type=Geo::UVCondition<ScalarType>::UVLSqConformal;
+        Geo::UVDistortion<ScalarType>::DistType dist_type=Geo::UVDistortion<ScalarType>::AngleDist;
+        PDeco.AddCondition(new Geo::UVCondition<ScalarType>(uv_type,dist_type,max_uvDist));
     }
 }
 
@@ -575,14 +603,20 @@ void SetRenderBar()
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
     ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
     ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
-    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATCHES");
-    static const char* itemsShape[] = { "Color Uniform",
-                                        "Color By Patch",
-                                        "Color if Disk",
-                                        "Color Valence",
-                                        "Color Match Sing",
-                                        "Color Unsolved Patches"};
-
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "COLOR PATCHES");
+    static const char* itemsShape[] = { "Uniform",
+                                        "By Patch",
+                                        "if Disk",
+                                        "Valence",
+                                        "Match Sing",
+                                        "Unsolved"};
+    ImGui::SetNextItemWidth(100);
+    ImGui::Combo("Color Patches", &CurrCol, itemsShape, IM_ARRAYSIZE(itemsShape));
+    if (CurrCol!=OldCol)
+    {
+        UpdateColor();
+        OldCol=CurrCol;
+    }
     ImGui::End();
 }
 
@@ -654,6 +688,43 @@ void SetDecomposeBar()
     float CCAbilityf=CCability;
     ImGui::InputFloat("CC Ability", &CCAbilityf);
     CCability=(ScalarType)CCAbilityf;
+
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "UV");
+
+    // Use ImGui::RadioButton for each option
+    ImGui::Checkbox("UV", &use_uv);
+    if (!use_uv)
+    {
+        isometric_uv=false;
+        conformal_uv=false;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Isometric", isometric_uv)) {
+        isometric_uv = true;
+        conformal_uv = false;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Conformal", conformal_uv)) {
+        isometric_uv = false;
+        conformal_uv = true;
+    }
+
+    float max_uvDistf=max_uvDist;
+    ImGui::SetNextItemWidth(100);
+    ImGui::InputFloat("Max UV Distortion", &max_uvDistf);
+    max_uvDist=max_uvDistf;
+
+    //    ImGui::SetNextItemWidth(100);
+    //    float CCAbilityf=CCability;
+    //    ImGui::InputFloat("CC Ability", &CCAbilityf);
+    //    CCability=(ScalarType)CCAbilityf;
+
+    //    ImGui::TextColored(ImVec4(0, 0, 1, 1), "shape");
+    //    ImGui::SetNextItemWidth(100);
+    //    float CCAbilityf=CCability;
+    //    ImGui::InputFloat("CC Ability", &CCAbilityf);
+    //    CCability=(ScalarType)CCAbilityf;
+
 
     bool needUpdate=UpdateConditions();
     if (needUpdate)
