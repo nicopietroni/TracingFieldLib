@@ -23,6 +23,33 @@ public:
     ScalarType Percentile;
     typename Geo::UVDistortion<ScalarType>::DistType DType;
 
+    virtual void UpdatePatchIndex(std::map<int,int> &PatchIdxRemap)override
+    {
+        std::vector<std::vector<Point2<ScalarType> > > New_PerPatchUVs;
+        std::vector<std::vector<ScalarType > > NewPerPatchUVDists;
+        assert(PerPatchUVs.size()==PerPatchUVDists.size());
+        for(int i=0;i<PerPatchUVs.size();i++)
+        {
+            int OldPatchIDx=i;
+
+            //if no index, was an empty patcj
+            if (PatchIdxRemap.count(OldPatchIDx)==0)continue;
+
+            int NewPatchIDx=PatchIdxRemap[OldPatchIDx];
+
+            //allocate if needed
+            if (New_PerPatchUVs.size()<(NewPatchIDx+1))
+            {
+                New_PerPatchUVs.resize(NewPatchIDx+1);
+                NewPerPatchUVDists.resize(NewPatchIDx+1);
+            }
+            New_PerPatchUVs[NewPatchIDx]=PerPatchUVs[OldPatchIDx];
+            NewPerPatchUVDists[NewPatchIDx]=PerPatchUVDists[OldPatchIDx];
+        }
+        PerPatchUVs=New_PerPatchUVs;
+        PerPatchUVDists=NewPerPatchUVDists;
+    }
+
     void UpdatePatchData(const PatchManaging<ScalarType> &PatchM,
                          const int &IndexPatch) override
     {

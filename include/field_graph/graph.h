@@ -333,6 +333,17 @@ public:
     }
 
 
+    void GetNodeType(const NType &TypeNode,
+                     std::vector<int> &IdxNode)const
+    {
+        IdxNode.clear();
+        for (size_t i=0;i<NumNodes();i++)
+        {
+            if (NodeType(i)!=TypeNode)continue;
+            IdxNode.push_back(i);
+        }
+    }
+
     void SelectNoteType(NType TypeNode,int IndexS)
     {
         assert(AllocatedSelected());
@@ -668,6 +679,7 @@ void FilterNodewOfType(const TracingGraph<ScalarType> &Tgraph,
     }
     Nodes=NodesTemp;
 }
+
 
 template <class ScalarType>
 void FilterNonActiveNodes(const TracingGraph<ScalarType> &Tgraph,

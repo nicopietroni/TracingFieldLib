@@ -1114,165 +1114,165 @@ public:
     }
 
 
-//    std::vector<Geo::Point3<ScalarType> > SidesMidP;
-//    bool ExtractDual()
-//    {
-//        CompactEmptyPatches();
+    //    std::vector<Geo::Point3<ScalarType> > SidesMidP;
+    //    bool ExtractDual()
+    //    {
+    //        CompactEmptyPatches();
 
-//        SidesMidP.clear();
+    //        SidesMidP.clear();
 
-//        //first get all corners
-//        std::set<int> CornerSet;
-//        for (int i=0;i<NumPatches();i++)
-//        {
-//            std::vector<int> CornerVert;
-//            std::vector<CornerType> CurrType;
-//            GetAllCorners(i,CornerVert,CurrType);
-//            MapToOriginal(i,CornerVert);
-//            CornerSet.insert(CornerVert.begin(),CornerVert.end());
-//        }
+    //        //first get all corners
+    //        std::set<int> CornerSet;
+    //        for (int i=0;i<NumPatches();i++)
+    //        {
+    //            std::vector<int> CornerVert;
+    //            std::vector<CornerType> CurrType;
+    //            GetAllCorners(i,CornerVert,CurrType);
+    //            MapToOriginal(i,CornerVert);
+    //            CornerSet.insert(CornerVert.begin(),CornerVert.end());
+    //        }
 
-//        //compute mid point of edge
-//        std::set<std::pair<int,int> > AddedMidP;
+    //        //compute mid point of edge
+    //        std::set<std::pair<int,int> > AddedMidP;
 
-//        //std::set<EdgeInt> InterPEdge;
+    //        //std::set<EdgeInt> InterPEdge;
 
-//        std::map<std::pair<int,int> , ScalarType> EdgeAlpha;
+    //        std::map<std::pair<int,int> , ScalarType> EdgeAlpha;
 
-//        assert(SubPatchFaces.size()==SubPatchVertPos.size());
-//        for (size_t i=0;i<SubPatchFaces.size();i++)
-//        {
-//            //avoid empty patches
-//            if (SubPatchFaces[i].size()==0)continue;
+    //        assert(SubPatchFaces.size()==SubPatchVertPos.size());
+    //        for (size_t i=0;i<SubPatchFaces.size();i++)
+    //        {
+    //            //avoid empty patches
+    //            if (SubPatchFaces[i].size()==0)continue;
 
-//            std::vector<std::pair<int,int> > CornersExtremes;
-//            //std::vector<EdgeInt> CurrMidP;
+    //            std::vector<std::pair<int,int> > CornersExtremes;
+    //            //std::vector<EdgeInt> CurrMidP;
 
-//            std::vector<std::pair<int,int> > EdgeInt;
-//            std::vector<ScalarType> Alpha;
-//            bool foundMidP=GetSideMidpoints(i,CornerSet,CornersExtremes,EdgeInt,Alpha);
-//            if (!foundMidP)return false;
+    //            std::vector<std::pair<int,int> > EdgeInt;
+    //            std::vector<ScalarType> Alpha;
+    //            bool foundMidP=GetSideMidpoints(i,CornerSet,CornersExtremes,EdgeInt,Alpha);
+    //            if (!foundMidP)return false;
 
-//            assert(CornersExtremes.size()==EdgeInt.size());
-//            assert(CornersExtremes.size()==Alpha.size());
+    //            assert(CornersExtremes.size()==EdgeInt.size());
+    //            assert(CornersExtremes.size()==Alpha.size());
 
-//            for (size_t j=0;j<CornersExtremes.size();j++)
-//            {
-//                int IndexC0=CornersExtremes[j].first;
-//                int IndexC1=CornersExtremes[j].second;
-//                std::pair<int,int> Entry(std::min(IndexC0,IndexC1),std::max(IndexC0,IndexC1));
-//                if (AddedMidP.count(Entry)>0)continue;
-//                AddedMidP.insert(Entry);
+    //            for (size_t j=0;j<CornersExtremes.size();j++)
+    //            {
+    //                int IndexC0=CornersExtremes[j].first;
+    //                int IndexC1=CornersExtremes[j].second;
+    //                std::pair<int,int> Entry(std::min(IndexC0,IndexC1),std::max(IndexC0,IndexC1));
+    //                if (AddedMidP.count(Entry)>0)continue;
+    //                AddedMidP.insert(Entry);
 
-//                int IndexV0=EdgeInt[j].first;
-//                int IndexV1=EdgeInt[j].second;
-//                assert(IndexV0<IndexV1);
-//                ScalarType CurrAlpha=Alpha[j];
-//                assert(IndexV0>=0);
-//                assert(IndexV1>=0);
-//                assert(IndexV0<VertPos.size());
-//                assert(IndexV1<VertPos.size());
-//                EdgeAlpha[EdgeInt[j]]=CurrAlpha;
+    //                int IndexV0=EdgeInt[j].first;
+    //                int IndexV1=EdgeInt[j].second;
+    //                assert(IndexV0<IndexV1);
+    //                ScalarType CurrAlpha=Alpha[j];
+    //                assert(IndexV0>=0);
+    //                assert(IndexV1>=0);
+    //                assert(IndexV0<VertPos.size());
+    //                assert(IndexV1<VertPos.size());
+    //                EdgeAlpha[EdgeInt[j]]=CurrAlpha;
 
-//                Geo::Point3<ScalarType> P0=VertPos[IndexV0];
-//                Geo::Point3<ScalarType> P1=VertPos[IndexV1];
-//                Geo::Point3<ScalarType> NewPos= (P0*CurrAlpha+P1*(1-CurrAlpha));
+    //                Geo::Point3<ScalarType> P0=VertPos[IndexV0];
+    //                Geo::Point3<ScalarType> P1=VertPos[IndexV1];
+    //                Geo::Point3<ScalarType> NewPos= (P0*CurrAlpha+P1*(1-CurrAlpha));
 
-//                SidesMidP.push_back(NewPos);
-//            }
-//        }
-
-
-//        std::vector<Geo::Point3<ScalarType> > SaveMPos;
-//        std::vector<std::vector<int> > SaveMFaces;
-
-//        //compute tutte embedding and split faces
-//        for (size_t i=0;i<SubPatchFaces.size();i++)
-//        {
-//            //avoid empty patches
-//            if (SubPatchFaces[i].size()==0)continue;
-
-//            //compute tutte's embedding
-//            std::vector<Geo::Point2<ScalarType> > VertUV;
-//            bool done_param=Geo::UVParam<ScalarType>::TutteEmbedding(SubPatchVertPos[i],SubPatchFaces[i],VertUV);
-//            assert(done_param);
-
-//            //get the split segments
-//            //std::vector<Geo::Segment2<ScalarType> > SplitSeg;
-//            std::vector<std::vector<Geo::Point2<ScalarType> > > SplitPoly;
-//            for (size_t j=0;j<SubPatchFaces[i].size();j++)
-//            {
-//                for (size_t k=0;k<3;k++)
-//                {
-//                    int IndexV0=SubPatchFaces[i][j][k];
-//                    int IndexV1=SubPatchFaces[i][j][(k+1)%3];
-
-//                    Geo::Point2<ScalarType> UV0=VertUV[IndexV0];
-//                    Geo::Point2<ScalarType> UV1=VertUV[IndexV1];
-
-//                    IndexV0=MapToOriginal(i,IndexV0);
-//                    IndexV1=MapToOriginal(i,IndexV1);
-
-//                    std::pair<int,int> Key(std::min(IndexV0,IndexV1),
-//                                           std::max(IndexV0,IndexV1));
-
-//                    if (EdgeAlpha.count(Key)==0)continue;
-//                    ScalarType alpha=EdgeAlpha[Key];
-
-//                    Geo::Point2<ScalarType> InterpPUV=UV0*alpha+UV1*(1-alpha);
-//                    //inflate a bit
-//                    InterpPUV=InterpPUV*1.01;
-//                    SplitPoly.resize(SplitPoly.size()+1);
-//                    SplitPoly.back().push_back(Geo::Point2<ScalarType>(0,0));
-//                    SplitPoly.back().push_back(InterpPUV);
-////                    Geo::Segment2<ScalarType> CurrSeg(Geo::Point2<ScalarType>(0,0),InterpPUV);
-////                    SplitSeg.push_back(CurrSeg);
-//                }
-//            }
-//            //std::cout<<"Size split:"<<SplitP.size()<<std::endl;
-
-////            std::vector<Geo::Point3<ScalarType> > TestPos;
-////            for (size_t i=0;i<VertUV.size();i++)
-////            {
-////                Geo::Point2<ScalarType> uvP=VertUV[i];
-////                TestPos.push_back(Geo::Point3<ScalarType>(uvP.X,uvP.Y,0));
-////            }
-//            std::vector<std::pair<int,int> > NewEdges;
-//            //SplitMeshWithUVPolyline(TestPos,VertUV,SubPatchFaces[i],SplitSeg,NewEdges);
-//            SplitMeshWithUVPolylines(SubPatchVertPos[i],VertUV,SubPatchFaces[i],SplitPoly,NewEdges);
-
-//            std::vector<std::vector<int> > NextFP;
-//            std::vector<std::vector<int> > NextEP;
-//            getFFAdjacency(SubPatchFaces[i],NextFP,NextEP);
-
-//            SplitMeshFromEdges(SubPatchVertPos[i],SubPatchFaces[i],NextFP,NextEP,NewEdges);
-
-//            AppendMesh(SaveMPos,SaveMFaces,SubPatchVertPos[i],SubPatchFaces[i]);
-
-////            std::string NameF= "Test_split" + std::to_string(i) + ".obj";
-////            WriteOBJ(NameF,SubPatchVertPos[i],SubPatchFaces[i]);
+    //                SidesMidP.push_back(NewPos);
+    //            }
+    //        }
 
 
-////            SplitMeshFromEdges(TestPos,SubPatchFaces[i],NextFP,NextEP,NewEdges);
-////            std::string NameF= "Test_split" + std::to_string(i) + ".obj";
-////            WriteOBJ(NameF,TestPos,SubPatchFaces[i]);
+    //        std::vector<Geo::Point3<ScalarType> > SaveMPos;
+    //        std::vector<std::vector<int> > SaveMFaces;
+
+    //        //compute tutte embedding and split faces
+    //        for (size_t i=0;i<SubPatchFaces.size();i++)
+    //        {
+    //            //avoid empty patches
+    //            if (SubPatchFaces[i].size()==0)continue;
+
+    //            //compute tutte's embedding
+    //            std::vector<Geo::Point2<ScalarType> > VertUV;
+    //            bool done_param=Geo::UVParam<ScalarType>::TutteEmbedding(SubPatchVertPos[i],SubPatchFaces[i],VertUV);
+    //            assert(done_param);
+
+    //            //get the split segments
+    //            //std::vector<Geo::Segment2<ScalarType> > SplitSeg;
+    //            std::vector<std::vector<Geo::Point2<ScalarType> > > SplitPoly;
+    //            for (size_t j=0;j<SubPatchFaces[i].size();j++)
+    //            {
+    //                for (size_t k=0;k<3;k++)
+    //                {
+    //                    int IndexV0=SubPatchFaces[i][j][k];
+    //                    int IndexV1=SubPatchFaces[i][j][(k+1)%3];
+
+    //                    Geo::Point2<ScalarType> UV0=VertUV[IndexV0];
+    //                    Geo::Point2<ScalarType> UV1=VertUV[IndexV1];
+
+    //                    IndexV0=MapToOriginal(i,IndexV0);
+    //                    IndexV1=MapToOriginal(i,IndexV1);
+
+    //                    std::pair<int,int> Key(std::min(IndexV0,IndexV1),
+    //                                           std::max(IndexV0,IndexV1));
+
+    //                    if (EdgeAlpha.count(Key)==0)continue;
+    //                    ScalarType alpha=EdgeAlpha[Key];
+
+    //                    Geo::Point2<ScalarType> InterpPUV=UV0*alpha+UV1*(1-alpha);
+    //                    //inflate a bit
+    //                    InterpPUV=InterpPUV*1.01;
+    //                    SplitPoly.resize(SplitPoly.size()+1);
+    //                    SplitPoly.back().push_back(Geo::Point2<ScalarType>(0,0));
+    //                    SplitPoly.back().push_back(InterpPUV);
+    ////                    Geo::Segment2<ScalarType> CurrSeg(Geo::Point2<ScalarType>(0,0),InterpPUV);
+    ////                    SplitSeg.push_back(CurrSeg);
+    //                }
+    //            }
+    //            //std::cout<<"Size split:"<<SplitP.size()<<std::endl;
+
+    ////            std::vector<Geo::Point3<ScalarType> > TestPos;
+    ////            for (size_t i=0;i<VertUV.size();i++)
+    ////            {
+    ////                Geo::Point2<ScalarType> uvP=VertUV[i];
+    ////                TestPos.push_back(Geo::Point3<ScalarType>(uvP.X,uvP.Y,0));
+    ////            }
+    //            std::vector<std::pair<int,int> > NewEdges;
+    //            //SplitMeshWithUVPolyline(TestPos,VertUV,SubPatchFaces[i],SplitSeg,NewEdges);
+    //            SplitMeshWithUVPolylines(SubPatchVertPos[i],VertUV,SubPatchFaces[i],SplitPoly,NewEdges);
+
+    //            std::vector<std::vector<int> > NextFP;
+    //            std::vector<std::vector<int> > NextEP;
+    //            getFFAdjacency(SubPatchFaces[i],NextFP,NextEP);
+
+    //            SplitMeshFromEdges(SubPatchVertPos[i],SubPatchFaces[i],NextFP,NextEP,NewEdges);
+
+    //            AppendMesh(SaveMPos,SaveMFaces,SubPatchVertPos[i],SubPatchFaces[i]);
+
+    ////            std::string NameF= "Test_split" + std::to_string(i) + ".obj";
+    ////            WriteOBJ(NameF,SubPatchVertPos[i],SubPatchFaces[i]);
 
 
-////            std::vector<std::pair<int,int> > NewEdges;
-////            SplitMeshWithUVPolyline(SubPatchVertPos[i],VertUV,SubPatchFaces[i],
-////                                    SplitSeg,NewEdges);
+    ////            SplitMeshFromEdges(TestPos,SubPatchFaces[i],NextFP,NextEP,NewEdges);
+    ////            std::string NameF= "Test_split" + std::to_string(i) + ".obj";
+    ////            WriteOBJ(NameF,TestPos,SubPatchFaces[i]);
 
-////            std::vector<std::vector<int> > NextFP;
-////            std::vector<std::vector<int> > NextEP;
-////            getFFAdjacency(SubPatchFaces[i],NextFP,NextEP);
 
-////            SplitMeshFromEdges(SubPatchVertPos[i],SubPatchFaces[i],NextFP,NextEP,NewEdges);
-////            std::string NameF= "Test_split" + std::to_string(i) + ".obj";
-////            WriteOBJ(NameF,SubPatchVertPos[i],SubPatchFaces[i]);
-//        }
-//        WriteOBJ("./dualized.obj",SaveMPos,SaveMFaces);
-//        return true;
-//    }
+    ////            std::vector<std::pair<int,int> > NewEdges;
+    ////            SplitMeshWithUVPolyline(SubPatchVertPos[i],VertUV,SubPatchFaces[i],
+    ////                                    SplitSeg,NewEdges);
+
+    ////            std::vector<std::vector<int> > NextFP;
+    ////            std::vector<std::vector<int> > NextEP;
+    ////            getFFAdjacency(SubPatchFaces[i],NextFP,NextEP);
+
+    ////            SplitMeshFromEdges(SubPatchVertPos[i],SubPatchFaces[i],NextFP,NextEP,NewEdges);
+    ////            std::string NameF= "Test_split" + std::to_string(i) + ".obj";
+    ////            WriteOBJ(NameF,SubPatchVertPos[i],SubPatchFaces[i]);
+    //        }
+    //        WriteOBJ("./dualized.obj",SaveMPos,SaveMFaces);
+    //        return true;
+    //    }
 
 
     void CornersOfType(const int &IndexPatch,
@@ -1339,61 +1339,63 @@ public:
         }
     }
 
-    //TO BE IMPLEMENTED AND CHECK WRT UNSOLVED PATCH IN DECOMPOSER
-    void CompactEmptyPatches()
+    void CompactEmptyPatches(std::map<int,int> &PatchIdxRemap)
     {
-        //        std::vector<std::vector<std::vector<ScalarType> > > SideLenghts_Swap;
-        //        std::vector<std::vector<int> > PatchOriginalFaces_Swap;
-        //        std::vector<std::vector<Geo::Point3<ScalarType> > > SubPatchVertPos_Swap;
-        //        std::vector<std::vector<std::vector<int> > > SubPatchFaces_Swap;
-        //        std::vector<std::vector<int > > SubPatchVertToOriginal_Swap;
-        //        std::vector<std::vector<int > > SubPatchFacesToOriginal_Swap;
-        //        std::vector<std::vector<std::vector<int> > > PatchCorners_Swap;
-        //        std::vector<std::vector<std::vector<CornerType> > > TypeOfCorner_Swap;
-        //        std::vector<std::vector<std::vector<std::vector<std::pair<int,int> > > > > EdgePatchSides_Swap;
-        //        std::vector<std::vector<Geo::Point3<ScalarType> > > VisualCorners_Swap;
-        //        std::vector<std::vector<CornerType> > VisualCornerType_Swap;
-        //        std::vector<std::vector<std::vector<Geo::Point3<ScalarType> > > > VisualPaths_Swap;
+        std::vector<std::vector<std::vector<ScalarType> > > SideLenghts_Swap;
+        std::vector<std::vector<int> > PatchOriginalFaces_Swap;
+        std::vector<std::vector<Geo::Point3<ScalarType> > > SubPatchVertPos_Swap;
+        std::vector<std::vector<std::vector<int> > > SubPatchFaces_Swap;
+        std::vector<std::vector<int > > SubPatchVertToOriginal_Swap;
+        std::vector<std::vector<int > > SubPatchFacesToOriginal_Swap;
+        std::vector<std::vector<std::vector<int> > > PatchCorners_Swap;
+        std::vector<std::vector<std::vector<CornerType> > > TypeOfCorner_Swap;
+        std::vector<std::vector<std::vector<std::vector<std::pair<int,int> > > > > EdgePatchSides_Swap;
+        std::vector<std::vector<Geo::Point3<ScalarType> > > VisualCorners_Swap;
+        std::vector<std::vector<CornerType> > VisualCornerType_Swap;
+        std::vector<std::vector<std::vector<Geo::Point3<ScalarType> > > > VisualPaths_Swap;
 
 
-        //        for (size_t i=0;i<PatchOriginalFaces.size();i++)
-        //        {
-        //            if (PatchOriginalFaces[i].size()==0)continue;
+        for (size_t i=0;i<PatchOriginalFaces.size();i++)
+        {
+            if (PatchOriginalFaces[i].size()==0)continue;
 
-        //            SideLenghts_Swap.push_back(SideLenghts[i]);
-        //            PatchOriginalFaces_Swap.push_back(PatchOriginalFaces[i]);
-        //            SubPatchVertPos_Swap.push_back(SubPatchVertPos[i]);
-        //            SubPatchFaces_Swap.push_back(SubPatchFaces[i]);
-        //            SubPatchVertToOriginal_Swap.push_back(SubPatchVertToOriginal[i]);
-        //            SubPatchFacesToOriginal_Swap.push_back( SubPatchFacesToOriginal[i]);
-        //            PatchCorners_Swap.push_back(PatchCorners[i]);
-        //            TypeOfCorner_Swap.push_back(TypeOfCorner[i]);
-        //            EdgePatchSides_Swap.push_back(EdgePatchSides[i]);
-        //            if (UpdateVisual)
-        //            {
-        //                VisualCorners_Swap.push_back(VisualCorners[i]);
-        //                VisualCornerType_Swap.push_back(VisualCornerType[i]);
-        //                VisualPaths_Swap.push_back(VisualPaths[i]);
-        //            }
-        //        }
+            SideLenghts_Swap.push_back(SideLenghts[i]);
+            PatchOriginalFaces_Swap.push_back(PatchOriginalFaces[i]);
+            SubPatchVertPos_Swap.push_back(SubPatchVertPos[i]);
+            SubPatchFaces_Swap.push_back(SubPatchFaces[i]);
+            SubPatchVertToOriginal_Swap.push_back(SubPatchVertToOriginal[i]);
+            SubPatchFacesToOriginal_Swap.push_back( SubPatchFacesToOriginal[i]);
+            PatchCorners_Swap.push_back(PatchCorners[i]);
+            TypeOfCorner_Swap.push_back(TypeOfCorner[i]);
+            EdgePatchSides_Swap.push_back(EdgePatchSides[i]);
 
-        //        SideLenghts=SideLenghts_Swap;
-        //        PatchOriginalFaces=PatchOriginalFaces_Swap;
-        //        SubPatchVertPos=SubPatchVertPos_Swap;
-        //        SubPatchFaces=SubPatchFaces_Swap;
-        //        SubPatchVertToOriginal=SubPatchVertToOriginal_Swap;
-        //        SubPatchFacesToOriginal=SubPatchFacesToOriginal_Swap;
-        //        PatchCorners=PatchCorners_Swap;
-        //        TypeOfCorner=TypeOfCorner_Swap;
-        //        EdgePatchSides=EdgePatchSides_Swap;
-        //        if (UpdateVisual)
-        //        {
-        //            VisualCorners=VisualCorners_Swap;
-        //            VisualCornerType=VisualCornerType_Swap;
-        //            VisualPaths=VisualPaths_Swap;
-        //        }
+            PatchIdxRemap[i]=EdgePatchSides_Swap.size()-1;
 
-        //        UpdateFaceToPatch();
+            if (UpdateVisual)
+            {
+                VisualCorners_Swap.push_back(VisualCorners[i]);
+                VisualCornerType_Swap.push_back(VisualCornerType[i]);
+                VisualPaths_Swap.push_back(VisualPaths[i]);
+            }
+        }
+
+        SideLenghts=SideLenghts_Swap;
+        PatchOriginalFaces=PatchOriginalFaces_Swap;
+        SubPatchVertPos=SubPatchVertPos_Swap;
+        SubPatchFaces=SubPatchFaces_Swap;
+        SubPatchVertToOriginal=SubPatchVertToOriginal_Swap;
+        SubPatchFacesToOriginal=SubPatchFacesToOriginal_Swap;
+        PatchCorners=PatchCorners_Swap;
+        TypeOfCorner=TypeOfCorner_Swap;
+        EdgePatchSides=EdgePatchSides_Swap;
+        if (UpdateVisual)
+        {
+            VisualCorners=VisualCorners_Swap;
+            VisualCornerType=VisualCornerType_Swap;
+            VisualPaths=VisualPaths_Swap;
+        }
+
+        UpdateFaceToPatch();
     }
 
     bool HasMultipleSingularities(int IndexPatch)const
@@ -1516,6 +1518,56 @@ public:
         for (size_t i=0;i<NumPatches();i++)
             UpdateSubPatchPos(i);
     }
+
+    bool WriteDecomposition(const std::string meshFile)
+    {
+        CompactEmptyPatches();
+        std::ofstream fout(meshFile.c_str());
+        if(!fout) return false;
+        //first set the number of patches
+
+        //        for (size_t i=0;i<VertPos.size();i++)
+        //        {
+        //            assert(VertPos[i].size()==3);
+        //            fout<<"v "<<VertPos[i][0]<<" "<<VertPos[i][1]<<" "<<VertPos[i][2]<<"\n";
+        //        }
+
+        //        for (size_t i=0;i<Connectivity.size();i++)
+        //        {
+        //            fout<<"f";
+        //            for (size_t j=0;j<Connectivity[i].size();j++)
+        //                fout<<" "<<Connectivity[i][j]+1;
+        //            fout<<"\n";
+        //        }
+
+        //        fout.close();
+        //        return true;
+        //for (size_t i=0;i<)
+        //        UpdateSubPatchPos();
+
+        //        std::vector<Geo::Point3<ScalarType> > PosVect;
+        //        std::vector<std::vector<int> >  FaceVect;
+        //        assert(SubPatchVertPos.size()==SubPatchFaces.size());
+
+        //        for (size_t i=0;i<SubPatchVertPos.size();i++)
+        //        {
+        //            int baseIdx=PosVect.size();
+        //            PosVect.insert(PosVect.end(),SubPatchVertPos[i].begin(),SubPatchVertPos[i].end());
+
+        //            for (size_t j=0;j<SubPatchFaces[i].size();j++)
+        //            {
+        //                FaceVect.push_back(std::vector<int>(3,-1));
+        //                assert(SubPatchFaces[i][j].size()==3);
+        //                for (size_t k=0;k<3;k++)
+        //                {
+        //                    int IndexV=SubPatchFaces[i][j][k];
+        //                    FaceVect.back()[k]=IndexV+baseIdx;
+        //                }
+        //            }
+        //        }
+        //        WriteOBJ(PathSave.c_str(),PosVect,FaceVect);
+    }
+
 
     void WriteSubMeshes(const std::string PathSave)
     {

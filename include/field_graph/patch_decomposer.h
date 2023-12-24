@@ -161,11 +161,49 @@ public:
         }
     }
 
+    void CompactData()
+    {
+        PathSampl.CleanEmptySelectedPaths();
+        std::map<int,int> PatchIdxRemap;
+        PatchMan.CompactEmptyPatches(PatchIdxRemap);
+
+        //remap unsolved one
+        std::set<int>::iterator IteUnsolved;
+        std::set<int> UnsolvedPatchesNew;
+        for(IteUnsolved=UnsolvedPatches.begin();IteUnsolved!=UnsolvedPatches.end();IteUnsolved++)
+        {
+            int IndexPatch=(*IteUnsolved);
+            assert(PatchIdxRemap.count(IndexPatch)>0);
+            int newIndex=PatchIdxRemap[(*IteUnsolved)];
+            UnsolvedPatchesNew.insert(newIndex);
+        }
+        UnsolvedPatches=UnsolvedPatchesNew;
+        for (size_t i=0;i<PConditions.size();i++)
+            (*PConditions[i]).UpdatePatchIndex(PatchIdxRemap);
+    }
+
     void RetraceOnUnsolved()
     {
         //remove empty selected paths
-        PathSampl.CleanEmptySelectedPaths();
-        PatchMan.CompactEmptyPatches();
+//        PathSampl.CleanEmptySelectedPaths();
+//        std::map<int,int> PatchIdxRemap;
+//        PatchMan.CompactEmptyPatches(PatchIdxRemap);
+
+//        //remap unsolved one
+//        std::set<int>::iterator IteUnsolved;
+//        std::set<int> UnsolvedPatchesNew;
+//        for(IteUnsolved=UnsolvedPatches.begin();IteUnsolved!=UnsolvedPatches.end();IteUnsolved++)
+//        {
+//            int IndexPatch=(*IteUnsolved);
+//            assert(PatchIdxRemap.count(IndexPatch)>0);
+//            int newIndex=PatchIdxRemap[(*IteUnsolved)];
+//            UnsolvedPatchesNew.insert(newIndex);
+//        }
+//        UnsolvedPatches=UnsolvedPatchesNew;
+//        for (size_t i=0;i<PConditions.size();i++)
+//            (*PConditions[i]).UpdatePatchIndex(PatchIdxRemap);
+
+        CompactData();
 
         //rremove the space around singularities
         PathSampl.InitSingularityNodes(false);

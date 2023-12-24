@@ -503,15 +503,15 @@ class TragingGraphFunctions
         }
     }
 
-    static void RemoveBorderExitNeigh(TracingGraph<ScalarType> &TGraph,
-                                      bool RemoveTangent=true)
+    static void RemoveBorderExitNeigh(TracingGraph<ScalarType> &TGraph)
+                                      //bool RemoveTangent=true)
     {
         for (size_t i=0;i<TGraph.NumNodes();i++)
         {
             if (TGraph.NodeType(i)==ExitDomain)
                 TGraph.RemoveNeighbours(i);
-            if ((RemoveTangent)&&(TGraph.NodeType(i)==TangentDomain))
-                TGraph.RemoveNeighbours(i);
+//            if ((RemoveTangent)&&(TGraph.NodeType(i)==TangentDomain))
+//                TGraph.RemoveNeighbours(i);
         }
     }
 

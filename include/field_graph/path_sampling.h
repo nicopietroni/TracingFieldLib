@@ -27,20 +27,17 @@ class CrossPathSampling
     std::vector<int> &SingIndex,&SingValue;
     std::vector<int> SingNodes;
 
-    std::vector<size_t> BorderV;
-    std::vector<int> BorderNodes;
+//    std::vector<size_t> BorderV;
+//    std::vector<int> BorderNodes;
 
     std::vector<int> StartingNodes;
     //std::vector<ScalarType> NodeDistances;
 
 
-    std::vector<std::vector<int> > SampledPaths;
     enum SP_Status{SP_Selected,SP_Discarded,SP_Evaluate};
-    std::vector<SP_Status> SampledPaths_Status;
 
     bool avoidSingularities;
     bool updatePatches;
-    std::vector<std::pair<ScalarType,int> > Candidates;
 
     //    std::unordered_set<int> ConflictNodes;
 
@@ -53,6 +50,10 @@ class CrossPathSampling
     std::set<std::pair<int,int> > ConflictEdges;
 
 public:   
+    std::vector<std::vector<int> > SampledPaths;
+    std::vector<SP_Status> SampledPaths_Status;
+    std::vector<std::pair<ScalarType,int> > Candidates;
+
     int NumSamples;
 
     bool dynamicUpdates;
@@ -71,6 +72,16 @@ public:
 
     //limit the path to pass only on those marked one
     bool limit_path_to[VERT_MARK_SIZE];
+
+    Geo::TracingGraph<ScalarType> &Graph()const
+    {
+        return TGraph;
+    }
+
+    std::vector<Field::CrossF<ScalarType> > CrossF()const
+    {
+        return VertCurv;
+    }
 
     void InitMarkVector()
     {
@@ -92,7 +103,7 @@ public:
         {
             std::vector<int> MarkedV;
             GetMarkedVert(IndexMark,MarkedV);
-            std::cout<<" There are "<< MarkedV.size()<<"places to sample "<<std::endl;
+ //           std::cout<<" There are "<< MarkedV.size()<<"places to sample "<<std::endl;
             //RadiusStar=MarkedV.size()/NumSources;
             RadiusStar=Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(MarkedV.size(),NumSources);
             Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,
@@ -199,6 +210,59 @@ private:
         }
     }
 
+
+//    void InitializeDistance()
+//    {
+//        TGraph.CurrDistIndex()=0;
+
+//        std::vector<int> StartN;
+
+//        //first add singularities
+//        if (avoidSingularities)
+//            StartN.insert(StartN.end(),SingNodes.begin(),SingNodes.end());
+
+//        //add border nodes
+//        StartN.insert(StartN.end(),BorderNodes.begin(),BorderNodes.end());
+
+//        //then add all the previously added nodes
+//        for (size_t i=0;i<SelectedPaths.size();i++)
+//        {
+//            //add the path and opposite
+//            StartN.insert(StartN.end(),SelectedPaths[i].begin(),SelectedPaths[i].end());
+//            std::vector<int> OppNodes;
+//            Field::CrossFieldGraph::OppositeNodeCrossField(SelectedPaths[i],OppNodes);
+//            StartN.insert(StartN.end(),OppNodes.begin(),OppNodes.end());
+//        }
+
+//        if (StartN.size()==0)
+//        {
+//            //add the ones with smaller X
+//            int IndexV=-1;
+//            ScalarType minX=std::numeric_limits<ScalarType>::max();
+//            for (size_t i=0;i<VertPos.size();i++)
+//            {
+//                if (VertPos[i].X>minX)continue;
+//                IndexV=i;
+//                minX=VertPos[i].X;
+//            }
+//            assert(IndexV>=0);
+//            StartN.push_back(IndexV);
+//        }
+
+//        typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
+//        SParam.avoid_zero_path=true;
+//        for (size_t i=0;i<SELECTED_GRAPH_FLAG;i++)
+//            SParam.StopAtSel[i]=false;
+//        SParam.MaxL=std::numeric_limits<ScalarType>::max();
+//        SParam.onlyDirect=false;
+//        SParam.onlyVisible=false;
+//        SParam.stopAtPrevDist=false;
+//        SParam.stopAtPrevDist=false;
+
+//        int StopNode;
+//        Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,StartN,SParam,StopNode);
+//    }
+
     void InitializeDistance()
     {
         TGraph.CurrDistIndex()=0;
@@ -209,6 +273,11 @@ private:
         if (avoidSingularities)
             StartN.insert(StartN.end(),SingNodes.begin(),SingNodes.end());
 
+//        GetNodeType(const NType &TypeNode,
+//                    std::vector<int> &IdxNode)
+
+        std::vector<int> BorderNodes;
+        TGraph.GetNodeType(Geo::TangentDomain,BorderNodes);
         //add border nodes
         StartN.insert(StartN.end(),BorderNodes.begin(),BorderNodes.end());
 
@@ -243,8 +312,7 @@ private:
             SParam.StopAtSel[i]=false;
         SParam.MaxL=std::numeric_limits<ScalarType>::max();
         SParam.onlyDirect=false;
-        SParam.onlyVisible=false;
-        SParam.stopAtPrevDist=false;
+        SParam.onlyVisible=true;
         SParam.stopAtPrevDist=false;
 
         int StopNode;
@@ -260,8 +328,8 @@ private:
             int N1=Field::CrossFieldGraph::OppositeNodeCrossField(N0);
             assert(N0>=0);
             assert(N1>=0);
-            assert(N0<TGraph.NumNodes());
-            assert(N1<TGraph.NumNodes());
+            assert(N0<(int)TGraph.NumNodes());
+            assert(N1<(int)TGraph.NumNodes());
             CurrD+=TGraph.Distance(N0);
             CurrD+=TGraph.Distance(N1);
         }
@@ -311,6 +379,7 @@ private:
                 {
                     int currN=IndexN[j];
                     if (ConflictNodes.count(currN)>0)continue;
+                    if (!IsTraceable(currN))continue;
                     std::pair<int,NType> Entry(currN,TGraph.NodeType(currN));
                     SwapNodeType.push_back(Entry);
                     TGraph.NodeType(currN)=Geo::ExitDomain;
@@ -415,26 +484,26 @@ private:
         return false;
     }
 
-    void InitBorderNodes()
-    {
-        std::vector<std::vector<int> > NextF,NextE;
-        Geo::getFFAdjacency(Connectivity,NextF,NextE);
+//    void InitBorderNodes()
+//    {
+//        std::vector<std::vector<int> > NextF,NextE;
+//        Geo::getFFAdjacency(Connectivity,NextF,NextE);
 
-        //then add the borders
-        Geo::getBorderVert(Connectivity,NextF,BorderV);
+//        //then add the borders
+//        Geo::getBorderVert(Connectivity,NextF,BorderV);
 
-        BorderNodes.clear();
-        for (size_t j=0;j<BorderV.size();j++)
-        {
-            std::vector<int> IndexN;
-            Field::CrossFieldGraph::NodesOfElem(BorderV[j],IndexN);
-            for (size_t j=0;j<IndexN.size();j++)
-            {
-                if (!IsTraceable(IndexN[j]))continue;
-                BorderNodes.push_back(IndexN[j]);
-            }
-        }
-    }
+//        BorderNodes.clear();
+//        for (size_t j=0;j<BorderV.size();j++)
+//        {
+//            std::vector<int> IndexN;
+//            Field::CrossFieldGraph::NodesOfElem(BorderV[j],IndexN);
+//            for (size_t j=0;j<IndexN.size();j++)
+//            {
+//                if (!IsTraceable(IndexN[j]))continue;
+//                BorderNodes.push_back(IndexN[j]);
+//            }
+//        }
+//    }
 
 
     void AddToConflictNodes(const std::vector<int> &NodesPath)
@@ -791,6 +860,26 @@ public:
         WriteTiming();
     }
 
+//    void SampleCandidates(bool Init_Distances=true)
+//    {
+//        ClearSampledPaths();
+//
+//        if (avoidSingularities)
+//            DisableSingularities();
+//        SamplePaths(NumSamples);
+//
+//        if (avoidSingularities)
+//            EnableSingularities();
+//
+//        if (Init_Distances)
+//            InitializeDistance();
+//
+//        InitCandidates();
+//
+//        UpdateCandidatePriority();
+
+//    }
+
     void SampleCandidates(bool Init_Distances=true)
     {
         ClearSampledPaths();
@@ -798,14 +887,21 @@ public:
         if (avoidSingularities)
             DisableSingularities();
 
+        TGraph.DisableNodeType(TangentDomain);
+
+        //save the distance on another flag
+        TGraph.CurrDistIndex()=1;
         SamplePaths(NumSamples);
+        TGraph.CurrDistIndex()=0;
 
         if (avoidSingularities)
             EnableSingularities();
 
         if (Init_Distances)
+        {
+            TGraph.EnableAllNodes();
             InitializeDistance();
-
+        }
         InitCandidates();
 
         UpdateCandidatePriority();
@@ -819,11 +915,11 @@ public:
 
         TGraph.EnableAllNodes();
 
-        InitBorderNodes();
+        //InitBorderNodes();
 
         InitSingularityNodes();
 
-        SampleCandidates();
+        SampleCandidates(true);
 
 
         WriteTiming();

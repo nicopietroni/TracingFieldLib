@@ -44,6 +44,8 @@ float line_thick=1.f;
 int selected_rend_item = 5;
 
 bool DrawInitalPos=false;
+bool DrawCandidates=false;
+
 bool DrawSamplesPaths=false;
 
 
@@ -120,7 +122,7 @@ bool match_sing_cond=true;
 bool use_uv=false;
 bool isometric_uv=false;
 bool conformal_uv=false;
-ScalarType max_uvDist=0.1;
+ScalarType max_uvDist=0.05;
 
 int MinSides=3;
 int MaxSides=6;
@@ -315,60 +317,60 @@ void InitPatches()
 
 void BatchProcess()
 {
-    std::cout << "*** INIT GRAPHS *** " <<std::endl;
-    auto start = std::chrono::high_resolution_clock::now();
-    InitGraph();
-    auto end0 = std::chrono::high_resolution_clock::now();
-    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
+//    std::cout << "*** INIT GRAPHS *** " <<std::endl;
+//    auto start = std::chrono::high_resolution_clock::now();
+//    InitGraph();
+//    auto end0 = std::chrono::high_resolution_clock::now();
+//    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
 
-    std::cout << "*** INIT PATCHES *** " <<std::endl;
-    InitPatches();
-    auto end1 = std::chrono::high_resolution_clock::now();
-    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - end0);
+//    std::cout << "*** INIT PATCHES *** " <<std::endl;
+//    InitPatches();
+//    auto end1 = std::chrono::high_resolution_clock::now();
+//    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - end0);
 
-    std::cout << "*** INIT TRACING *** " <<std::endl;
-    InitTracing();
-    auto end2 = std::chrono::high_resolution_clock::now();
-    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
+//    std::cout << "*** INIT TRACING *** " <<std::endl;
+//    InitTracing();
+//    auto end2 = std::chrono::high_resolution_clock::now();
+//    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
 
-    std::cout << "*** ADD ALL PATHS *** " <<std::endl;
-    AddAllPaths(false);
-    auto end3 = std::chrono::high_resolution_clock::now();
-    auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
+//    std::cout << "*** ADD ALL PATHS *** " <<std::endl;
+//    AddAllPaths(false);
+//    auto end3 = std::chrono::high_resolution_clock::now();
+//    auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
 
-    std::cout << "*** UPDATING PATCHES *** " <<std::endl;
-    std::vector<int> UpdatedPatches;
-    PatchM.Update(UpdatedPatches);
-    CurrCol=1;
-    UpdateColor();
-    PatchM.CompactEmptyPatches();
+//    std::cout << "*** UPDATING PATCHES *** " <<std::endl;
+//    std::vector<int> UpdatedPatches;
+//    PatchM.Update(UpdatedPatches);
+//    CurrCol=1;
+//    UpdateColor();
+//    PatchM.CompactEmptyPatches();
 
-    auto end4 = std::chrono::high_resolution_clock::now();
-    auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
+//    auto end4 = std::chrono::high_resolution_clock::now();
+//    auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
 
-    std::cout << "*** SMOOTH PATCHES *** " <<std::endl;
-    SmoothPaths();
-    auto end5 = std::chrono::high_resolution_clock::now();
-    auto elapsed5 = std::chrono::duration_cast<std::chrono::microseconds>(end5 - end4);
+//    std::cout << "*** SMOOTH PATCHES *** " <<std::endl;
+//    SmoothPaths();
+//    auto end5 = std::chrono::high_resolution_clock::now();
+//    auto elapsed5 = std::chrono::duration_cast<std::chrono::microseconds>(end5 - end4);
 
-    //PatchM.InitVisualCornersEdges();
+//    //PatchM.InitVisualCornersEdges();
 
-    double elapsed_seconds0 = elapsed0.count() * 1e-6; // Convert microseconds to seconds
-    double elapsed_seconds1 = elapsed1.count() * 1e-6; // Convert microseconds to seconds
-    double elapsed_seconds2 = elapsed2.count() * 1e-6; // Convert microseconds to seconds
-    double elapsed_seconds3 = elapsed3.count() * 1e-6; // Convert microseconds to seconds
-    double elapsed_seconds4 = elapsed4.count() * 1e-6; // Convert microseconds to seconds
-    double elapsed_seconds5 = elapsed5.count() * 1e-6; // Convert microseconds to seconds
+//    double elapsed_seconds0 = elapsed0.count() * 1e-6; // Convert microseconds to seconds
+//    double elapsed_seconds1 = elapsed1.count() * 1e-6; // Convert microseconds to seconds
+//    double elapsed_seconds2 = elapsed2.count() * 1e-6; // Convert microseconds to seconds
+//    double elapsed_seconds3 = elapsed3.count() * 1e-6; // Convert microseconds to seconds
+//    double elapsed_seconds4 = elapsed4.count() * 1e-6; // Convert microseconds to seconds
+//    double elapsed_seconds5 = elapsed5.count() * 1e-6; // Convert microseconds to seconds
 
-    showCross=false;
+//    showCross=false;
 
-    std::cout << "*** TIMINGS (sec) *** " <<std::endl;
-    std::cout << "* Init Graph Elapsed time: " << elapsed_seconds0 <<std::endl;
-    std::cout << "* Init Patches: " << elapsed_seconds1 <<std::endl;
-    std::cout << "* Init Tracing: " << elapsed_seconds2  <<std::endl;
-    std::cout << "* Adding Paths: " << elapsed_seconds3  <<std::endl;
-    std::cout << "* Updating Patches: " << elapsed_seconds4  <<std::endl;
-    std::cout << "* Smooth Patches: " << elapsed_seconds5  <<std::endl;
+//    std::cout << "*** TIMINGS (sec) *** " <<std::endl;
+//    std::cout << "* Init Graph Elapsed time: " << elapsed_seconds0 <<std::endl;
+//    std::cout << "* Init Patches: " << elapsed_seconds1 <<std::endl;
+//    std::cout << "* Init Tracing: " << elapsed_seconds2  <<std::endl;
+//    std::cout << "* Adding Paths: " << elapsed_seconds3  <<std::endl;
+//    std::cout << "* Updating Patches: " << elapsed_seconds4  <<std::endl;
+//    std::cout << "* Smooth Patches: " << elapsed_seconds5  <<std::endl;
 }
 
 //void TestTrace()
@@ -608,6 +610,8 @@ void SetRenderBar()
     ImGui::Checkbox("Draw Singularities", &showSing);
     ImGui::Checkbox("Draw Corners", &DrawCorners);
     ImGui::Checkbox("Draw Sides", &DrawSides);
+    ImGui::Checkbox("Draw Candidates", &DrawCandidates);
+
 
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
@@ -778,21 +782,6 @@ void SetDecomposeBar()
         Geo::ScatterColor<ScalarType>(PathColors);
         UpdateColor();
     }
-    //    if (ImGui::Button("Batch Process"))
-    //        BatchProcess();
-    //    ImGui::Separator();
-    //    ImGui::TextColored(ImVec4(1, 0, 1, 1), "FINALIZE");
-
-    //    ImGui::InputInt("Smooth Steps",&smooth_steps);
-    //    if (ImGui::Button("Smooth"))
-    //        SmoothPaths();
-
-    //    if (ImGui::Button("Extract Dual"))
-    //        Geo::DualPatch<ScalarType>::ExtractDual(VertPos,Connectivity,PatchM,SidesMidP);
-    //        //PatchM.ExtractDual();
-
-    //    if (ImGui::Button("Save Patches"))
-    //        PatchM.WriteSubMeshes(std::string("test.obj"));
 
     ImGui::End();
 }
@@ -896,7 +885,12 @@ void GLDrawMesh()
         PathSampl.GetStartingNodes(StartIDX);
         GLDraw::DrawVertices(VertPos,StartIDX);
     }
-    GLDraw::DrawPoints(SidesMidP);
+
+    if (DrawCandidates)
+        GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCandidates(PathSampl,MeshBox.Diag()*0.005);
+
+    //GLDraw::DrawPoints(SidesMidP);
+
     //     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,
     //                                                                 Geo::ExitDomain,MeshBox.Diag()*0.005);
     //bool DrawSamplesPaths=false;

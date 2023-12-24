@@ -12,9 +12,12 @@ class PatchCondition
 {
 public:
 
+    virtual void UpdatePatchIndex(std::map<int,int> &PatchIdxRemap)
+    {(void)PatchIdxRemap;}
+
     virtual void UpdatePatchData(const PatchManaging<ScalarType> &PatchM,
                                  const int &IndexPatch)
-    {}
+    {(void)PatchM;(void)IndexPatch;}
 
     virtual bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const
     {(void)PatchM;return true;}

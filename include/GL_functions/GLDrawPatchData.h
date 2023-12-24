@@ -4,7 +4,10 @@
 #include <vector>
 #include <GL/glew.h>
 #include "../field_graph/patch_managing.h"
+#include "../field_graph/path_sampling.h"
 #include "GLDrawBase.h"
+#include "GLDrawGraph.h"
+
 #include "color_functions.h"
 
 
@@ -101,6 +104,21 @@ public:
         for (size_t i=0;i<PM.VisualCorners.size();i++)
         {
             DrawSides(PM,i,LineSize);
+        }
+    }
+
+    static void DrawCandidates(const Geo::CrossPathSampling<ScalarType> &PathSampl,ScalarType ScaleSize)
+    {
+        for (size_t i=0;i<PathSampl.Candidates.size();i++)
+        {
+            int IndexC=PathSampl.Candidates[i].second;
+            assert(IndexC<PathSampl.SampledPaths.size());
+            assert(IndexC<PathSampl.SampledPaths_Status.size());
+            Geo::Point3<ScalarType> PathColors=Geo::ColorRGBRamp((ScalarType)0,(ScalarType)PathSampl.Candidates.size(),(ScalarType)i);
+            typename GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDparam;
+            GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(PathSampl.Graph(),PathSampl.CrossF(),PathSampl.
+                                                                  SampledPaths[IndexC],ScaleSize,
+                                                                  PDparam,PathColors);
         }
     }
 };
