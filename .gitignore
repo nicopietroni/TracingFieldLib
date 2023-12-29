@@ -118,3 +118,4 @@ apps/patch_decomposer/.qtc_clangd/compile_commands.json
 apps/patch_decomposer/build/dualized.obj
 include/field_graph/OLD/graph_frame_field_sheet_tracing.h
 include/OLD/mesh_functionsOLD.h
+apps/patch_decomposer/.qtc_clangd/compile_commands.json
