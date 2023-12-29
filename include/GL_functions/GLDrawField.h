@@ -117,11 +117,15 @@ void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
     ScalarType K0=F.K[0];
     ScalarType K1=F.K[1];
 
+//    size_t drawOnly=0;
+//    if (K1>K0)drawOnly=1;
+
     ScalarType RatioK0=K0/std::max(K0,K1);
     ScalarType RatioK1=K1/std::max(K0,K1);
 
     for (size_t dir=0;dir<4;dir++)
     {
+        //if (dir!=drawOnly)continue;
         ScalarType lineWidth=1;
         Geo::Point3<ScalarType> Col(0,0,0);
         if (MaxQ>MinQ)

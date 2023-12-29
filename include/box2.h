@@ -45,7 +45,7 @@ public:
         return(std::min(DimX(),DimY()));
     }
 
-    ScalarType Diag()
+    ScalarType Diag()const
     {
         return (Max-Min).Norm();
     }
@@ -126,7 +126,7 @@ public:
         return true;
     }
 
-    bool Collide(Box2<ScalarType> const &b)
+    bool Collide(Box2<ScalarType> const &b)const
     {
         return (b.Min.X<=Max.X && b.Max.X>=Min.X &&
                 b.Min.Y<=Max.Y && b.Max.Y>=Min.Y) ;

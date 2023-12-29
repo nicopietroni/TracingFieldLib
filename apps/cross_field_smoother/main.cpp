@@ -16,8 +16,9 @@
 #include <GL_functions/GLDrawField.h>
 #//include "eigen_interface.h"
 #include "IO/io_field.h"
-#include "IO/path_functions.h"
+#include "IO/file_path_functions.h"
 #include <connectivity.h>
+#include <cross_field_functions.h>
 #include <smooth_cross_field.h>
 
 GLFWwindow* window;
@@ -93,9 +94,16 @@ void SaveField()
 void SmoothGlobal()
 {
     if (!has_cross_field)return;
+
+    std::vector<Field::CrossF<ScalarType> > OldVCurv=VertCurv;
+    std::vector<Field::CrossF<ScalarType> > OldFCurv=FaceCurv;
+
     SmoothGlobalPolyvector(VertPos,Connectivity,FaceNormals,FaceCurv,SParam);
     GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
     SetVertCrossFromFace(VertPos,Connectivity,VertNormals,FaceCurv,VertCurv);
+
+    RedistributeAnisotropy<ScalarType>(OldVCurv,VertCurv);
+    RedistributeAnisotropy<ScalarType>(OldFCurv,FaceCurv);
 }
 
 

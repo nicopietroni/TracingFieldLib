@@ -1,6 +1,7 @@
 ﻿#ifndef GRID_BASICS_2D
 #define GRID_BASICS_2D
 
+#include "segment2.h"
 #include <point2.h>
 #include <box2.h>
 
@@ -55,6 +56,15 @@ Geo::Box2<ScalarType> TriangleBBox(const  typename std::vector< Geo::Point2<Scal
         MyCoordType pos=vert[IndexV];
         Ret.Add(pos);
     }
+    return Ret;
+}
+
+template <class ScalarType>
+Geo::Box2<ScalarType> SegmentBBox(const Geo::Segment2<ScalarType> &seg)
+{
+    Geo::Box2<ScalarType> Ret;
+    Ret.Add(seg.P(0));
+    Ret.Add(seg.P(1));
     return Ret;
 }
 

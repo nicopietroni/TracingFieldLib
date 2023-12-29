@@ -314,6 +314,12 @@ Point3<ScalarType> Normal(const std::vector<Point3<ScalarType> > &Vert,
         int IndexV0=Faces[IndexF][0];
         int IndexV1=Faces[IndexF][1];
         int IndexV2=Faces[IndexF][2];
+        assert(IndexV0>=0);
+        assert(IndexV0<Vert.size());
+        assert(IndexV1>=0);
+        assert(IndexV1<Vert.size());
+        assert(IndexV2>=0);
+        assert(IndexV2<Vert.size());
         Point3<ScalarType> P0=Vert[IndexV0];
         Point3<ScalarType> P1=Vert[IndexV1];
         Point3<ScalarType> P2=Vert[IndexV2];

@@ -45,6 +45,32 @@ public:
         }
     }
 
+    static void GetTriMeshData(const std::vector<Geo::Point2<ScalarType> > &VertPos,
+                               const std::vector<std::vector<int> > &Faces,
+                               Eigen::MatrixXi &faces,
+                               MatrixXm &vert)
+    {
+        assert(!HasUnfererencedVert(VertPos,Faces));
+
+        // create eigen matrix of vertices
+        vert=MatrixXm(VertPos.size(), 2);
+
+        // copy vertices
+        for (int i = 0; i < (int)VertPos.size(); i++)
+            for (int j = 0; j < 2; j++)
+                vert(i,j) = VertPos[i].cV(j);
+
+        // create eigen matrix of faces
+        faces=Eigen::MatrixXi(Faces.size(), 3);
+
+        // copy faces
+        for (int i = 0; i < (int)Faces.size(); i++)
+        {
+            assert(Faces[i].size()==3);
+            for (int j = 0; j < 3; j++)
+                faces(i,j) = Faces[i][j];
+        }
+    }
 
     static Eigen::Vector3<ScalarType> ToEigen(const Geo::Point3<ScalarType> &V)
     {

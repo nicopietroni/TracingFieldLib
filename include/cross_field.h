@@ -89,6 +89,20 @@ public:
         return (K[(IndexK%2)]);
     }
 
+    Geo::Point3<ScalarType> GetSmallestKDir()const
+    {
+       if (fabs(K[0])<fabs(K[1]))
+            return (D[0]);
+       return (D[1]);
+    }
+
+    Geo::Point3<ScalarType> GetBiggestKDir()const
+    {
+       if (fabs(K[0])>fabs(K[1]))
+            return (D[0]);
+       return (D[1]);
+    }
+
     Geo::Point3<ScalarType> OrthoDir()const
     {
         const ScalarType eps=(ScalarType)0.000000001;

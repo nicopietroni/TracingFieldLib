@@ -60,9 +60,9 @@ public:
                                   std::vector<Geo::Point2<ScalarType> > &PosUV,
                                   std::vector<std::vector<int> > &Faces,
                                   int To_splitIDX,bool to_split[3],
-    Geo::Point3<ScalarType> Interp[3],
-    Geo::Point2<ScalarType> InterpUV[3],
-    std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &MarkedE)
+                                  Geo::Point3<ScalarType> Interp[3],
+                                  Geo::Point2<ScalarType> InterpUV[3],
+                                  std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &MarkedE)
     {
         typedef typename std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > KeyType;
 
@@ -578,9 +578,9 @@ public:
                 }
             }
         }
-        std::cout<<"Do Splitting"<<std::endl;
+        //std::cout<<"Do Splitting"<<std::endl;
         SplitTriangleFaces(Pos3D,PosUV,Faces,To_split,Alpha,MarkedE);
-        std::cout<<"Done"<<std::endl;
+        //std::cout<<"Done"<<std::endl;
         //then add the new UVs
         assert(Pos3D.size()==PosUV.size());
     }
@@ -615,7 +615,7 @@ public:
         }
         for (size_t i=0;i<PolyL.size();i++)
         {
-            std::cout<<"Splitting Polyline:"<<i<<std::endl;
+            //std::cout<<"Splitting Polyline:"<<i<<std::endl;
             RefineEdgesWithPolyLine(Pos3D,PosUV,Faces,PolyL[i],RefinedPos,MarkedE,minAlpha);
         }
 

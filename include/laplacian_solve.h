@@ -136,21 +136,21 @@ void FindLaplacianCotangentWeight(const std::vector<Point3<ScalarType> > &VertPo
 {
     switch (TypeMesh)
     {
-        case MT_Triangle:
-            //std::cout<<"Using cotangent Tris"<<std::endl;
-            FindLaplacianCotangentWeightForTriMesh(VertPos,Connections,Kernel,Weights);
-            break;
+    case MT_Triangle:
+        //std::cout<<"Using cotangent Tris"<<std::endl;
+        FindLaplacianCotangentWeightForTriMesh(VertPos,Connections,Kernel,Weights);
+        break;
 
-        case MT_Tetra:
-            //std::cout<<"Using cotangent Tetra"<<std::endl;
-            FindLaplacianCotangentWeightForTetMesh(VertPos,Connections,Kernel,Weights);
-            break;
+    case MT_Tetra:
+        //std::cout<<"Using cotangent Tetra"<<std::endl;
+        FindLaplacianCotangentWeightForTetMesh(VertPos,Connections,Kernel,Weights);
+        break;
 
-        default:
-            //std::cout<<"No Cotangent"<<std::endl;
-            SetUniformLaplacianWeightForMesh(Kernel,Weights);
-            // code to be executed if
-            // expression doesn't match any constant
+    default:
+        //std::cout<<"No Cotangent"<<std::endl;
+        SetUniformLaplacianWeightForMesh(Kernel,Weights);
+        // code to be executed if
+        // expression doesn't match any constant
     }
 }
 
@@ -175,6 +175,22 @@ void FindLaplaciaDataForMesh(const std::vector<Point3<ScalarType> > &pos,
     }
 }
 
+template <class ScalarType>
+void RemoveLaplacianAlongNormal(const std::vector<Point3<ScalarType> > &pos,
+                                const std::vector<std::vector<int> > &connections,
+                                std::vector< std::vector<Point3<ScalarType> > > &Laplacian)
+{
+    std::vector<Point3<ScalarType> > perFaceNormals,perVertexNormals;
+    Geo::ComputeNormals(pos,connections,perFaceNormals,perVertexNormals);
+    for (size_t i=0;i<Laplacian.size();i++)
+    {
+        for (size_t j=0;j<Laplacian[i].size();j++)
+        {
+            ScalarType DotVal=Geo::Dot<ScalarType>(Laplacian[i][j],perVertexNormals[i]);
+            Laplacian[i][j]-=(perFaceNormals[i]*DotVal);
+        }
+    }
+}
 
 template <class ScalarType>
 class LaplacianSolve
@@ -273,8 +289,8 @@ public:
     int NumVariables()
     {
         assert(Kernels.size()==Weights.size());
-//        for (size_t i=0;i<FixedVert.size();i++)
-//        {assert(FixedVert[i]<Kernels.size());}
+        //        for (size_t i=0;i<FixedVert.size();i++)
+        //        {assert(FixedVert[i]<Kernels.size());}
         return Kernels.size();
     }
 
@@ -355,8 +371,6 @@ public:
             VertPos[i].Y=V(indexV+1,0);
             VertPos[i].Z=V(indexV+2,0);
         }
-
-
     }
 
     LaplacianSolve()

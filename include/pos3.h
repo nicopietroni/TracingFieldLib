@@ -270,4 +270,12 @@ void getBorderSequncesVert(const std::vector<std::vector<int> > &Faces,
     }
 }
 
+void getBorderSequncesVert(const std::vector<std::vector<int> > &Faces,
+                           std::vector<std::vector<int > > &BorderVIdx)
+{
+    std::vector<std::vector<int> > NextF,NextE;
+    Geo::getFFAdjacency(Faces,NextF,NextE);
+    getBorderSequncesVert(Faces,NextF,NextE,BorderVIdx);
+}
+
 #endif

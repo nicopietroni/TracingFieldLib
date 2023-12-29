@@ -5,6 +5,7 @@
 #include "GLDrawBase.h"
 #include <GL/glew.h>
 #include "../point3.h"
+#include "connectivity.h"
 
 namespace GLDraw
 {
@@ -269,6 +270,30 @@ void GLDrawEdges(const std::vector<Geo::Point2<ScalarType> > &Pos,
     glEnd ();
 
     glPopAttrib();
+}
+
+template <class ScalarType>
+void GLDrawBorders(const std::vector<Geo::Point3<ScalarType> > &Pos,
+                   const std::vector<std::vector<int> > &Connectivity,
+                   const std::vector<std::vector<int> > &NextF,
+                   const ScalarType LineWidth,
+                   const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0))
+{
+    std::vector<std::pair<int,int> > BorderE;
+    Geo::getBorderEdges(Connectivity,NextF,BorderE);
+    GLDrawEdges<ScalarType>(Pos,BorderE,LineWidth,colorLine);
+}
+
+template <class ScalarType>
+void GLDrawBorders(const std::vector<Geo::Point2<ScalarType> > &Pos,
+                   const std::vector<std::vector<int> > &Connectivity,
+                   const std::vector<std::vector<int> > &NextF,
+                   const ScalarType LineWidth,
+                   const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0))
+{
+    std::vector<std::pair<int,int> > BorderE;
+    Geo::getBorderEdges(Connectivity,NextF,BorderE);
+    GLDrawEdges<ScalarType>(Pos,BorderE,LineWidth,colorLine);
 }
 
 template <class ScalarType>

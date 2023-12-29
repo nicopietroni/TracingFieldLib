@@ -12,10 +12,25 @@
 #include "segment2.h"
 #include "connectivity.h"
 #include <pos3.h>
-#include "Space_Query/triangle_grid_2D.h"
+//#include "Space_Query/triangle_grid_2D.h"
 
 template <class ScalarType>
 bool HasUnfererencedVert(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                         const std::vector<std::vector<int> > &Faces)
+{
+    std::vector<bool> Referred(VertPos.size(),false);
+    for (size_t i=0;i<Faces.size();i++)
+        for (size_t j=0;j<Faces[i].size();j++)
+            Referred[Faces[i][j]]=true;
+
+    for (size_t i=0;i<Referred.size();i++)
+        if (!Referred[i])return true;
+
+    return false;
+}
+
+template <class ScalarType>
+bool HasUnfererencedVert(const std::vector<Geo::Point2<ScalarType> > &VertPos,
                          const std::vector<std::vector<int> > &Faces)
 {
     std::vector<bool> Referred(VertPos.size(),false);
@@ -97,7 +112,7 @@ void RemoveDuplicatedVert(std::vector<Geo::Point3<ScalarType> > &VertPos,
     std::map<UV_3DKey,int> PosUVIdxMap;
     std::vector<Geo::Point3<ScalarType> > NewVertPos;
     std::vector<Geo::Point2<ScalarType> > NewVertUV;
-
+    //std::cout<<"Size0:"<<VertPos.size()<<std::endl;
     assert(VertPos.size()==VertUVs.size());
     for (size_t i=0;i<VertPos.size();i++)
     {
@@ -125,6 +140,7 @@ void RemoveDuplicatedVert(std::vector<Geo::Point3<ScalarType> > &VertPos,
         }
     VertUVs=NewVertUV;
     VertPos=NewVertPos;
+    //std::cout<<"Size2:"<<VertPos.size()<<std::endl;
 }
 
 void NumFaceValences(const std::vector<std::vector<int> > &Faces,
@@ -253,8 +269,24 @@ ScalarType Area(const std::vector<Geo::Point2<ScalarType> > &VertPos,
     return AreaVal;
 }
 
+//template <class ScalarType>
+//int ClosestVert(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+//                const Geo::Point3<ScalarType> &TargetPos)
+//{
+//    ScalarType DistMin=std::numeric_limits<ScalarType>::max();
+//    int IndexV=-1;
+//    for (size_t i=0;i<VertPos.size();i++)
+//    {
+//        ScalarType TestDist=(VertPos[i]-TargetPos).Norm();
+//        if (TestDist>DistMin)continue;
+//        DistMin=TestDist;
+//        IndexV=i;
+//    }
+//    return IndexV;
+//}
+
 template <class ScalarType>
-int ClosestVert(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+static int ClosestVertFromVect(const std::vector<Geo::Point3<ScalarType> > &VertPos,
                 const Geo::Point3<ScalarType> &TargetPos)
 {
     ScalarType DistMin=std::numeric_limits<ScalarType>::max();
@@ -566,8 +598,10 @@ void AppendMesh(std::vector<Geo::Point3<ScalarType> > &Vert,
 {
     int NumV0=Vert.size();
     Vert.insert(Vert.end(),To_append_Vert.begin(), To_append_Vert.end());
+
     int NumF0=Elements.size();
     Elements.insert(Elements.end(),To_append_Elements.begin(),To_append_Elements.end());
+
     for (size_t i=NumF0;i<Elements.size();i++)
         for (size_t j=0;j<Elements[i].size();j++)
             Elements[i][j]+=NumV0;

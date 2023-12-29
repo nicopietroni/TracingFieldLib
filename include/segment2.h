@@ -23,6 +23,12 @@ public:
         return Pos[IndexV];
     }
 
+    CoordType &P(const int &IndexV)
+    {
+        assert(IndexV>=0);
+        assert(IndexV<2);
+        return Pos[IndexV];
+    }
 
     Segment2(const CoordType &P0,const CoordType &P1)
     {
@@ -30,8 +36,12 @@ public:
         Pos[1]=P1;
     }
 
+    Segment2()
+    {
+        Pos[0]=CoordType(0,0);
+        Pos[1]=CoordType(0,0);
+    }
 };
-
 
 template <class ScalarType>
 Geo::Point2<ScalarType> ClosestPoint( const Segment2<ScalarType> &s,
@@ -97,6 +107,79 @@ bool Intersect(const Segment2<ScalarType> &seg0,
     lambda0=1-lambda0;
     //p_inters = p0*(1-lambda0)+p1*lambda0;
     return true;
+}
+
+template <class ScalarType>
+void Scale(Segment2<ScalarType> &s,ScalarType value)
+{
+    assert(value>0);
+    Geo::Point2<ScalarType> MidP=(s.P(0)*0.5+s.P(1)*0.5);
+    Geo::Point2<ScalarType> DirS=s.P(0)-MidP;
+    DirS=DirS*value;
+    s.P(0)=MidP+DirS;
+    s.P(1)=MidP-DirS;
+}
+
+template <class ScalarType>
+ScalarType Lenght(const Segment2<ScalarType> &s)
+{
+   return (s.P(0)-s.P(1)).Norm();
+}
+
+template <class ScalarType>
+void ScaleToLenght(Segment2<ScalarType> &s,ScalarType targetL)
+{
+    ScalarType currL=Lenght(s);
+    ScalarType scale_val=targetL/currL;
+    Scale(s,scale_val);
+}
+
+template <class ScalarType>
+ScalarType ClosestPoint( const Segment2<ScalarType> &s0,
+                         const Segment2<ScalarType> &s1,
+                         Geo::Point2<ScalarType> &p0,
+                         Geo::Point2<ScalarType> &p1)
+{
+    ScalarType lambda;
+    if (Intersect<ScalarType>(s0,s1,lambda))
+    {
+        p0=s0.P(0)*lambda+s0.P(1)*(1-lambda);
+        p1=p0;
+        return 0;
+    }
+
+    ScalarType Dists[4];
+    Geo::Point2<ScalarType> p0Clos[4],p1Clos[4];
+    p0Clos[0]=ClosestPoint(s0,s1.P(0));
+    p1Clos[0]=s1.P(0);
+
+    p0Clos[1]=ClosestPoint(s0,s1.P(1));
+    p1Clos[1]=s1.P(1);
+
+    p0Clos[2]=s0.P(0);
+    p1Clos[2]=ClosestPoint(s1,s0.P(0));
+
+    p0Clos[3]=s0.P(1);
+    p1Clos[3]=ClosestPoint(s1,s0.P(1));
+
+    ScalarType MinD=std::numeric_limits<ScalarType>::max();
+    for (int i=0;i<4;i++)
+    {
+       ScalarType CurrD=(p0Clos[i]-p1Clos[i]).Norm();
+       if (CurrD>MinD)continue;
+       MinD=CurrD;
+       p0=p0Clos[i];
+       p1=p1Clos[i];
+    }
+    return MinD;
+}
+
+template <class ScalarType>
+ScalarType Distance( const Segment2<ScalarType> &s0,
+                     const Segment2<ScalarType> &s1)
+{
+    Geo::Point2<ScalarType> p0,p1;
+    return ClosestPoint(s0,s1,p0,p1);
 }
 
 //const SCALAR_TYPE Eps= SCALAR_TYPE(1e-8);

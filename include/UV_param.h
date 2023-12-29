@@ -63,6 +63,21 @@ class UVParam{
         return Vert1;
     }
 
+    //    static int ClosestVert(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+    //                    const Geo::Point3<ScalarType> &TargetPos)
+    //    {
+    //        ScalarType DistMin=std::numeric_limits<ScalarType>::max();
+    //        int IndexV=-1;
+    //        for (size_t i=0;i<VertPos.size();i++)
+    //        {
+    //            ScalarType TestDist=(VertPos[i]-TargetPos).Norm();
+    //            if (TestDist>DistMin)continue;
+    //            DistMin=TestDist;
+    //            IndexV=i;
+    //        }
+    //        return IndexV;
+    //    }
+
     static void GetDefaultPairVertexToFix_AlongX(const std::vector<Geo::Point3<ScalarType> > &VertPos,
                                                  std::vector<size_t> &FixedV,
                                                  std::vector<Geo::Point2<ScalarType> > &FixedUV)
@@ -71,7 +86,7 @@ class UVParam{
         Geo::Box3<ScalarType> BB;
         BB.Init(VertPos);
 
-        int Vert0=ClosestVert(VertPos,BB.Center());
+        int Vert0=ClosestVertFromVect<ScalarType>(VertPos,BB.Center());
         std::vector<int> Candidates;
         for (int i=0;i<(int)VertPos.size();i++)
             Candidates.push_back(i);
@@ -309,15 +324,15 @@ public:
         //check if there is at least one unknown or not
         if (BorderVIdx[0].size()==VertPos.size())
         {
-             VertUV.resize(VertPos.size());
-             for (size_t i=0;i<BorderVIdx[0].size();i++)
-             {
+            VertUV.resize(VertPos.size());
+            for (size_t i=0;i<BorderVIdx[0].size();i++)
+            {
                 int CurrIndexV=BorderVIdx[0][i];
                 assert(CurrIndexV>=0);
                 assert(CurrIndexV<VertUV.size());
                 VertUV[CurrIndexV]=vert_UV[i];
-             }
-             return true;
+            }
+            return true;
         }
 
         Eigen::MatrixXi F;

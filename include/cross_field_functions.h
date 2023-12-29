@@ -11,6 +11,7 @@
 #include <set>
 #include <connectivity.h>
 #include "best_rotation.h"
+#include "mesh_functions.h"
 
 template < typename ScalarType >
 Field::CrossF<ScalarType> InterpolateTangentCrosses(const std::vector<Field::CrossF<ScalarType> > &Crosses,
@@ -288,6 +289,39 @@ void GetFaceSingularities(const std::vector<Field::CrossF<ScalarType> > &FaceCro
 }
 
 template <class ScalarType>
+void AdaptFieldToMesh(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                      const std::vector<std::vector<int> > &Faces,
+                      std::vector<Field::CrossF<ScalarType> > &VertCurv,
+                      std::vector<Field::CrossF<ScalarType> > &FaceCurv)
+{
+    assert(VertCurv.size()==VertPos.size());
+    assert(FaceCurv.size()==Faces.size());
+
+    std::vector<Geo::Point3<ScalarType> > FaceNormals;
+    std::vector<Geo::Point3<ScalarType> > VertNormals;
+    Geo::ComputeNormals(VertPos,Faces,FaceNormals,VertNormals);
+
+    for (size_t i=0;i<VertCurv.size();i++)
+    {
+        //reset center
+        VertCurv[i].Pos=VertPos[i];
+        //make it tangent
+        VertCurv[i].MakeTangentTo(VertNormals[i]);
+    }
+
+    std::vector<Geo::Point3<ScalarType> > BaryF;
+    ComputeFaceBarycenters(VertPos,Faces,BaryF);
+
+    for (size_t i=0;i<Faces.size();i++)
+    {
+        //reset center
+        FaceCurv[i].Pos=BaryF[i];
+        //make it tangent
+        FaceCurv[i].MakeTangentTo(FaceNormals[i]);
+    }
+}
+
+template <class ScalarType>
 void RotateCrossesToUV(const std::vector<Geo::Point3<ScalarType> > &VertPos,
                        const std::vector<std::vector<int> > &Faces,
                        const std::vector<Geo::Point2<ScalarType> > &UVPos,
@@ -318,9 +352,44 @@ void RotateCrossesToUV(const std::vector<Geo::Point3<ScalarType> > &VertPos,
         ScalarType K0=Crosses[i].K[0];
         ScalarType K1=Crosses[i].K[1];
         Field::CrossF<ScalarType> RotCross(D0Cross,D1Cross,K0,K1,BaryF);
+        RotCross.Q=Crosses[i].Q;
         UVCrosses.push_back(RotCross);
     }
 
+}
+
+template <class ScalarType>
+void RedistributeAnisotropy(const std::vector<Field::CrossF<ScalarType> > &Source,
+                            std::vector<Field::CrossF<ScalarType> > &Target)
+{
+    assert(Source.size()==Target.size());
+    for (size_t i=0;i<Source.size();i++)
+    {
+        Geo::Point3<ScalarType> Dir0S=Source[i].D[0];
+        Geo::Point3<ScalarType> Dir1S=Source[i].D[1];
+        ScalarType K0S=Source[i].K[0];
+        ScalarType K1S=Source[i].K[1];
+
+        Geo::Point3<ScalarType> Dir0T=Target[i].D[0];
+        Geo::Point3<ScalarType> Dir1T=Target[i].D[1];
+        ScalarType K0T=0;
+        ScalarType K1T=0;
+
+        ScalarType Dot0=Dot(Dir0S,Dir0T);
+        ScalarType Dot1=Dot(Dir0S,Dir1T);
+        ScalarType alpha0=Dot0/(Dot0+Dot1);
+        K0T+=alpha0*K0S;
+        K1T+=(1-alpha0)*K0S;
+
+        ScalarType Dot2=Dot(Dir1S,Dir0T);
+        ScalarType Dot3=Dot(Dir1S,Dir1T);
+        ScalarType alpha1=Dot2/(Dot2+Dot3);
+        K0T+=alpha1*K1S;
+        K1T+=(1-alpha1)*K1S;
+
+        Target[i].K[0]=K0T;
+        Target[i].K[1]=K1T;
+    }
 }
 
 #endif

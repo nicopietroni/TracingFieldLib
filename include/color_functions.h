@@ -156,10 +156,15 @@ void GetColorByScalar(const std::vector<ScalarType> &ScalarVal,
                       std::vector<Geo::Point3<ScalarType> > &Color)
 {
     assert(MinVal!=MaxVal);
+
     Color.resize(ScalarVal.size(),Geo::Point3<ScalarType> (1,1,1));
+    ScalarType minThr=std::min(MinVal,MaxVal);
+    ScalarType maxThr=std::max(MinVal,MaxVal);
     for (size_t i=0;i<Color.size();i++)
     {
         ScalarType Val=ScalarVal[i];
+        Val=std::max(Val,minThr);
+        Val=std::min(Val,maxThr);
         Color[i]=ColorRGBRamp(MinVal,MaxVal ,Val );
     }
 }

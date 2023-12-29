@@ -1519,82 +1519,96 @@ public:
             UpdateSubPatchPos(i);
     }
 
-    bool WriteDecomposition(const std::string meshFile)
-    {
-        CompactEmptyPatches();
-        std::ofstream fout(meshFile.c_str());
-        if(!fout) return false;
-        //first set the number of patches
+//    bool SavePatchesLayout(const std::string meshFile)
+//    {
+//        CompactEmptyPatches();
+//        std::ofstream fout(meshFile.c_str());
+//        if(!fout) return false;
 
-        //        for (size_t i=0;i<VertPos.size();i++)
-        //        {
-        //            assert(VertPos[i].size()==3);
-        //            fout<<"v "<<VertPos[i][0]<<" "<<VertPos[i][1]<<" "<<VertPos[i][2]<<"\n";
-        //        }
+//        //first set the number of patches
+//        fout<<"#p"<<EdgePatchSides.size()<<"\n";
 
-        //        for (size_t i=0;i<Connectivity.size();i++)
-        //        {
-        //            fout<<"f";
-        //            for (size_t j=0;j<Connectivity[i].size();j++)
-        //                fout<<" "<<Connectivity[i][j]+1;
-        //            fout<<"\n";
-        //        }
+//        //for each patch
+//        for (size_t pi=0;pi<EdgePatchSides.size();pi++)
+//        {
+//            //write patch index
+//            fout<<"p "<<pi<<"\n";
 
-        //        fout.close();
-        //        return true;
-        //for (size_t i=0;i<)
-        //        UpdateSubPatchPos();
+//            //for each loops
+//            fout<<"#l "<<EdgePatchSides[pi].size()<<"\n";
+//            assert(EdgePatchSides[pi].size()==PatchCorners[pi].size());
 
-        //        std::vector<Geo::Point3<ScalarType> > PosVect;
-        //        std::vector<std::vector<int> >  FaceVect;
-        //        assert(SubPatchVertPos.size()==SubPatchFaces.size());
+//            //for each loop
+//            for (size_t li=0;li<PatchCorners[pi].size();li++)
+//            {
+//                fout<<"l "<<li<<"\n";
+//                //number of sides equal nummber of corners
+//                assert(PatchCorners[pi][li].size()==EdgePatchSides[pi][li].size());
 
-        //        for (size_t i=0;i<SubPatchVertPos.size();i++)
-        //        {
-        //            int baseIdx=PosVect.size();
-        //            PosVect.insert(PosVect.end(),SubPatchVertPos[i].begin(),SubPatchVertPos[i].end());
+//                //write corners
+//                fout<<"#c "<<PatchCorners[pi][li].size()<<"\n";
 
-        //            for (size_t j=0;j<SubPatchFaces[i].size();j++)
-        //            {
-        //                FaceVect.push_back(std::vector<int>(3,-1));
-        //                assert(SubPatchFaces[i][j].size()==3);
-        //                for (size_t k=0;k<3;k++)
-        //                {
-        //                    int IndexV=SubPatchFaces[i][j][k];
-        //                    FaceVect.back()[k]=IndexV+baseIdx;
-        //                }
-        //            }
-        //        }
-        //        WriteOBJ(PathSave.c_str(),PosVect,FaceVect);
-    }
+//                for (size_t ci=0;ci<PatchCorners[pi][li].size();ci++)
+//                {
+//                    int IndexC=PatchCorners[pi][li][ci];
+//                    assert(IndexC>=0);
+//                    assert(IndexC<VertPos.size());
+//                    fout<<"c "<<IndexC<<"\n";
+//                }
+
+//                //write number of sides
+//                fout<<"#s "<<EdgePatchSides[pi][li].size()<<"\n";
+//                for (size_t si=0;si<EdgePatchSides[pi][li].size();si++)
+//                {
+//                    fout<<"s "<<si<<"\n";
+//                    int sizeL=EdgePatchSides[pi][li][si].size();
+//                    fout<<"#e "<<sizeL<<"\n";
+
+//                    //for each edge
+//                    for (size_t ei=0;ei<EdgePatchSides[pi][li][si].size();ei++)
+//                    {
+//                        int IndexV0=EdgePatchSides[pi][li][si][ei].first;
+//                        int IndexV1=EdgePatchSides[pi][li][si][ei].second;
+//                        assert(IndexV0>=0);
+//                        assert(IndexV0<VertPos.size());
+//                        assert(IndexV1>=0);
+//                        assert(IndexV1<VertPos.size());
+//                        fout<<"e "<<IndexV0<<" "<<IndexV1<<"\n";
+//                    }
+//                }
+//            }
+//        }
+//        fout.close();
+//        return true;
+//    }
 
 
-    void WriteSubMeshes(const std::string PathSave)
-    {
-        UpdateSubPatchPos();
+//    void SaveSubMeshes(const std::string PathSave)
+//    {
+//        UpdateSubPatchPos();
 
-        std::vector<Geo::Point3<ScalarType> > PosVect;
-        std::vector<std::vector<int> >  FaceVect;
-        assert(SubPatchVertPos.size()==SubPatchFaces.size());
+//        std::vector<Geo::Point3<ScalarType> > PosVect;
+//        std::vector<std::vector<int> >  FaceVect;
+//        assert(SubPatchVertPos.size()==SubPatchFaces.size());
 
-        for (size_t i=0;i<SubPatchVertPos.size();i++)
-        {
-            int baseIdx=PosVect.size();
-            PosVect.insert(PosVect.end(),SubPatchVertPos[i].begin(),SubPatchVertPos[i].end());
+//        for (size_t i=0;i<SubPatchVertPos.size();i++)
+//        {
+//            int baseIdx=PosVect.size();
+//            PosVect.insert(PosVect.end(),SubPatchVertPos[i].begin(),SubPatchVertPos[i].end());
 
-            for (size_t j=0;j<SubPatchFaces[i].size();j++)
-            {
-                FaceVect.push_back(std::vector<int>(3,-1));
-                assert(SubPatchFaces[i][j].size()==3);
-                for (size_t k=0;k<3;k++)
-                {
-                    int IndexV=SubPatchFaces[i][j][k];
-                    FaceVect.back()[k]=IndexV+baseIdx;
-                }
-            }
-        }
-        WriteOBJ(PathSave.c_str(),PosVect,FaceVect);
-    }
+//            for (size_t j=0;j<SubPatchFaces[i].size();j++)
+//            {
+//                FaceVect.push_back(std::vector<int>(3,-1));
+//                assert(SubPatchFaces[i][j].size()==3);
+//                for (size_t k=0;k<3;k++)
+//                {
+//                    int IndexV=SubPatchFaces[i][j][k];
+//                    FaceVect.back()[k]=IndexV+baseIdx;
+//                }
+//            }
+//        }
+//        WriteOBJ(PathSave.c_str(),PosVect,FaceVect);
+//    }
 
     void FindPatchCorners()
     {

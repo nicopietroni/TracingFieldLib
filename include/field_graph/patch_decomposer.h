@@ -61,8 +61,8 @@ class PatchDecomposer
     }
 
 public:
-
-    bool add_only_needed;
+    bool stop_when_solved;
+    bool add_only_where_needed;
     bool allow_darts;
     bool allow_concave;
 
@@ -302,10 +302,10 @@ public:
     {
         all_solved=false;
         added_sample=false;
-        if (add_only_needed)
+        if (add_only_where_needed)
             PathSampl.check_pass_on[0]=true;
 
-        if (UnsolvedPatches.size()==0)
+        if ((UnsolvedPatches.size()==0)&&(stop_when_solved))
         {
             all_solved=true;
             added_sample=false;
@@ -335,7 +335,7 @@ public:
 
         RemoveEmptyPatches();
 
-        if (add_only_needed)
+        if (add_only_where_needed)
             MarkUnsolvedPatches();
         all_solved=(UnsolvedPatches.size()==0);
     }
@@ -431,9 +431,106 @@ public:
                     Geo::CrossPathSampling<ScalarType> &_PathSampl):
         PatchMan(_PatchMan),PathSampl(_PathSampl)
     {
-        add_only_needed=true;
+        add_only_where_needed=true;
+        stop_when_solved=true;
         allow_darts=false;
         allow_concave=false;
+    }
+
+    bool SavePatchesLayout(const std::string meshFile)
+    {
+        CompactData();
+        std::ofstream fout(meshFile.c_str());
+        if(!fout) return false;
+
+        //first set the number of patches
+        fout<<"#p"<<PatchMan.EdgePatchSides.size()<<"\n";
+
+        //for each patch
+        for (size_t pi=0;pi<PatchMan.EdgePatchSides.size();pi++)
+        {
+            //write patch index
+            fout<<"p "<<pi<<"\n";
+
+            //for each loops
+            fout<<"#l "<<PatchMan.EdgePatchSides[pi].size()<<"\n";
+            assert(PatchMan.EdgePatchSides[pi].size()==PatchMan.PatchCorners[pi].size());
+
+            //for each loop
+            for (size_t li=0;li<PatchMan.PatchCorners[pi].size();li++)
+            {
+                fout<<"l "<<li<<"\n";
+                //number of sides equal nummber of corners
+                assert(PatchMan.PatchCorners[pi][li].size()==PatchMan.EdgePatchSides[pi][li].size());
+
+                //write corners
+                fout<<"#c "<<PatchMan.PatchCorners[pi][li].size()<<"\n";
+
+                for (size_t ci=0;ci<PatchMan.PatchCorners[pi][li].size();ci++)
+                {
+                    int IndexC=PatchMan.PatchCorners[pi][li][ci];
+                    IndexC=PatchMan.MapToOriginal(pi,IndexC);
+                    assert(IndexC>=0);
+                    assert(IndexC<PatchMan.VertPos.size());
+                    fout<<"c "<<IndexC<<"\n";
+                }
+
+                //write number of sides
+                fout<<"#s "<<PatchMan.EdgePatchSides[pi][li].size()<<"\n";
+                for (size_t si=0;si<PatchMan.EdgePatchSides[pi][li].size();si++)
+                {
+                    fout<<"s "<<si<<"\n";
+                    int sizeL=PatchMan.EdgePatchSides[pi][li][si].size();
+                    fout<<"#e "<<sizeL<<"\n";
+
+                    //for each edge
+                    for (size_t ei=0;ei<PatchMan.EdgePatchSides[pi][li][si].size();ei++)
+                    {
+                        int IndexV0=PatchMan.EdgePatchSides[pi][li][si][ei].first;
+                        int IndexV1=PatchMan.EdgePatchSides[pi][li][si][ei].second;
+                        IndexV0=PatchMan.MapToOriginal(pi,IndexV0);
+                        IndexV1=PatchMan.MapToOriginal(pi,IndexV1);
+                        assert(IndexV0>=0);
+                        assert(IndexV0<PatchMan.VertPos.size());
+                        assert(IndexV1>=0);
+                        assert(IndexV1<PatchMan.VertPos.size());
+                        fout<<"e "<<IndexV0<<" "<<IndexV1<<"\n";
+                    }
+                }
+            }
+        }
+        fout.close();
+        return true;
+    }
+
+
+    void SaveSubMeshes(const std::string PathSave)
+    {
+        CompactData();
+
+        std::vector<Geo::Point3<ScalarType> > PosVect;
+        std::vector<std::vector<int> >  FaceVect;
+        assert(PatchMan.SubPatchVertPos.size()==PatchMan.SubPatchFaces.size());
+
+        for (size_t i=0;i<PatchMan.SubPatchVertPos.size();i++)
+        {
+            int baseIdx=PosVect.size();
+            PosVect.insert(PosVect.end(),
+                           PatchMan.SubPatchVertPos[i].begin(),
+                           PatchMan.SubPatchVertPos[i].end());
+
+            for (size_t j=0;j<PatchMan.SubPatchFaces[i].size();j++)
+            {
+                FaceVect.push_back(std::vector<int>(3,-1));
+                assert(PatchMan.SubPatchFaces[i][j].size()==3);
+                for (size_t k=0;k<3;k++)
+                {
+                    int IndexV=PatchMan.SubPatchFaces[i][j][k];
+                    FaceVect.back()[k]=IndexV+baseIdx;
+                }
+            }
+        }
+        WriteOBJ(PathSave.c_str(),PosVect,FaceVect);
     }
 
     ~PatchDecomposer()

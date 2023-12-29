@@ -511,6 +511,23 @@ public:
         return(TM[IndexN]==GlobalMark);
     }
 
+
+    ScalarType MaxDistance()const
+    {
+        typename std::vector<ScalarType>::const_iterator maxElement = std::max_element(D[CurrDIndex].begin(), D[CurrDIndex].end());
+        return (*maxElement);
+    }
+
+    void SetUnMarkedToDistance(const ScalarType &DefaultDist)
+    {
+        //ScalarType MaxVal=MaxDistance();
+        for (size_t i=0;i<NumNodes();i++)
+        {
+            if (IsMarked(i))continue;
+            Distance(i)=DefaultDist;
+        }
+    }
+
     void Select(const size_t &IndexN,const int IndexS)
     {
         assert((IndexS>=0)||(IndexS<=SELECTED_GRAPH_FLAG));

@@ -11,6 +11,7 @@
 
 #include <GLFW/glfw3.h>
 #include "IO/io_obj.h"
+#include "IO/file_path_functions.h"
 #include <point3.h>
 #include <box3.h>
 #include <GL_functions/GLDrawMesh.h>
@@ -33,10 +34,12 @@
 #include <mesh_functions.h>
 #include <field_graph/dual_patches.h>
 #include <field_graph/UV_decomposition_conditions.h>
+#include <cross_field_functions.h>
 
 GLFWwindow* window;
 std::string PathMesh;
 std::string PathField;
+std::string ProjectName;
 UI::OrbitBall trackball;
 ImVec4 clear_color = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);
 //ImVec4 mesh_color = ImVec4(0.79f, 0.9f, 0.87f, 1.00f);
@@ -300,9 +303,11 @@ void SmoothPaths()
     UVP.Steps=smooth_steps;
     Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos,Connectivity,UVP);
 
-    //update cross F poistion
-    for (size_t i=0;i<VertCurv.size();i++)
-        VertCurv[i].Pos=VertPos[i];
+//    //update cross F poistion
+//    for (size_t i=0;i<VertCurv.size();i++)
+//        VertCurv[i].Pos=VertPos[i];
+
+    AdaptFieldToMesh(VertPos,Connectivity,VertCurv,FaceCurv);
 
     PatchM.UpdateSubPatchPos();
     PatchM.InitVisualCornersEdges();
@@ -317,60 +322,60 @@ void InitPatches()
 
 void BatchProcess()
 {
-//    std::cout << "*** INIT GRAPHS *** " <<std::endl;
-//    auto start = std::chrono::high_resolution_clock::now();
-//    InitGraph();
-//    auto end0 = std::chrono::high_resolution_clock::now();
-//    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
+    //    std::cout << "*** INIT GRAPHS *** " <<std::endl;
+    //    auto start = std::chrono::high_resolution_clock::now();
+    //    InitGraph();
+    //    auto end0 = std::chrono::high_resolution_clock::now();
+    //    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
 
-//    std::cout << "*** INIT PATCHES *** " <<std::endl;
-//    InitPatches();
-//    auto end1 = std::chrono::high_resolution_clock::now();
-//    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - end0);
+    //    std::cout << "*** INIT PATCHES *** " <<std::endl;
+    //    InitPatches();
+    //    auto end1 = std::chrono::high_resolution_clock::now();
+    //    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - end0);
 
-//    std::cout << "*** INIT TRACING *** " <<std::endl;
-//    InitTracing();
-//    auto end2 = std::chrono::high_resolution_clock::now();
-//    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
+    //    std::cout << "*** INIT TRACING *** " <<std::endl;
+    //    InitTracing();
+    //    auto end2 = std::chrono::high_resolution_clock::now();
+    //    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
 
-//    std::cout << "*** ADD ALL PATHS *** " <<std::endl;
-//    AddAllPaths(false);
-//    auto end3 = std::chrono::high_resolution_clock::now();
-//    auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
+    //    std::cout << "*** ADD ALL PATHS *** " <<std::endl;
+    //    AddAllPaths(false);
+    //    auto end3 = std::chrono::high_resolution_clock::now();
+    //    auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
 
-//    std::cout << "*** UPDATING PATCHES *** " <<std::endl;
-//    std::vector<int> UpdatedPatches;
-//    PatchM.Update(UpdatedPatches);
-//    CurrCol=1;
-//    UpdateColor();
-//    PatchM.CompactEmptyPatches();
+    //    std::cout << "*** UPDATING PATCHES *** " <<std::endl;
+    //    std::vector<int> UpdatedPatches;
+    //    PatchM.Update(UpdatedPatches);
+    //    CurrCol=1;
+    //    UpdateColor();
+    //    PatchM.CompactEmptyPatches();
 
-//    auto end4 = std::chrono::high_resolution_clock::now();
-//    auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
+    //    auto end4 = std::chrono::high_resolution_clock::now();
+    //    auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
 
-//    std::cout << "*** SMOOTH PATCHES *** " <<std::endl;
-//    SmoothPaths();
-//    auto end5 = std::chrono::high_resolution_clock::now();
-//    auto elapsed5 = std::chrono::duration_cast<std::chrono::microseconds>(end5 - end4);
+    //    std::cout << "*** SMOOTH PATCHES *** " <<std::endl;
+    //    SmoothPaths();
+    //    auto end5 = std::chrono::high_resolution_clock::now();
+    //    auto elapsed5 = std::chrono::duration_cast<std::chrono::microseconds>(end5 - end4);
 
-//    //PatchM.InitVisualCornersEdges();
+    //    //PatchM.InitVisualCornersEdges();
 
-//    double elapsed_seconds0 = elapsed0.count() * 1e-6; // Convert microseconds to seconds
-//    double elapsed_seconds1 = elapsed1.count() * 1e-6; // Convert microseconds to seconds
-//    double elapsed_seconds2 = elapsed2.count() * 1e-6; // Convert microseconds to seconds
-//    double elapsed_seconds3 = elapsed3.count() * 1e-6; // Convert microseconds to seconds
-//    double elapsed_seconds4 = elapsed4.count() * 1e-6; // Convert microseconds to seconds
-//    double elapsed_seconds5 = elapsed5.count() * 1e-6; // Convert microseconds to seconds
+    //    double elapsed_seconds0 = elapsed0.count() * 1e-6; // Convert microseconds to seconds
+    //    double elapsed_seconds1 = elapsed1.count() * 1e-6; // Convert microseconds to seconds
+    //    double elapsed_seconds2 = elapsed2.count() * 1e-6; // Convert microseconds to seconds
+    //    double elapsed_seconds3 = elapsed3.count() * 1e-6; // Convert microseconds to seconds
+    //    double elapsed_seconds4 = elapsed4.count() * 1e-6; // Convert microseconds to seconds
+    //    double elapsed_seconds5 = elapsed5.count() * 1e-6; // Convert microseconds to seconds
 
-//    showCross=false;
+    //    showCross=false;
 
-//    std::cout << "*** TIMINGS (sec) *** " <<std::endl;
-//    std::cout << "* Init Graph Elapsed time: " << elapsed_seconds0 <<std::endl;
-//    std::cout << "* Init Patches: " << elapsed_seconds1 <<std::endl;
-//    std::cout << "* Init Tracing: " << elapsed_seconds2  <<std::endl;
-//    std::cout << "* Adding Paths: " << elapsed_seconds3  <<std::endl;
-//    std::cout << "* Updating Patches: " << elapsed_seconds4  <<std::endl;
-//    std::cout << "* Smooth Patches: " << elapsed_seconds5  <<std::endl;
+    //    std::cout << "*** TIMINGS (sec) *** " <<std::endl;
+    //    std::cout << "* Init Graph Elapsed time: " << elapsed_seconds0 <<std::endl;
+    //    std::cout << "* Init Patches: " << elapsed_seconds1 <<std::endl;
+    //    std::cout << "* Init Tracing: " << elapsed_seconds2  <<std::endl;
+    //    std::cout << "* Adding Paths: " << elapsed_seconds3  <<std::endl;
+    //    std::cout << "* Updating Patches: " << elapsed_seconds4  <<std::endl;
+    //    std::cout << "* Smooth Patches: " << elapsed_seconds5  <<std::endl;
 }
 
 //void TestTrace()
@@ -674,7 +679,9 @@ void SetDecomposeBar()
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATH SAMPLING");
 
     ImGui::Checkbox("Dynamic Update", &PathSampl.dynamicUpdates);
-    ImGui::Checkbox("Only Needed", &PDeco.add_only_needed);
+    ImGui::Checkbox("Only Where Needed", &PDeco.add_only_where_needed);
+    ImGui::Checkbox("Stop When Solved", &PDeco.stop_when_solved);
+
 
     ImGui::TextColored(ImVec4(0, 0, 1, 1), "structure");
     ImGui::Checkbox("Darts", &PDeco.allow_darts);
@@ -786,6 +793,42 @@ void SetDecomposeBar()
     ImGui::End();
 }
 
+void SaveSubMeshes()
+{
+    std::string subMeshFilename=ProjectName;
+    subMeshFilename.append("_submesh.obj");
+    PDeco.SaveSubMeshes(subMeshFilename);
+}
+
+void SavePatches()
+{
+    std::string PatchFilename=ProjectName;
+    PatchFilename.append("_layout.patch");
+    PDeco.SavePatchesLayout(PatchFilename);
+}
+
+void SaveField()
+{
+    std::string FinalFieldFilename=ProjectName;
+    FinalFieldFilename.append("_layout.ffield");
+    WriteField(FinalFieldFilename.c_str(),VertCurv,FaceCurv);
+}
+
+void SaveMesh()
+{
+    std::string FinalMFilename=ProjectName;
+    FinalMFilename.append("_layout.obj");
+    WriteOBJ(FinalMFilename.c_str(),VertPos,Connectivity);
+}
+
+void SaveAll()
+{
+    SaveSubMeshes();
+    SavePatches();
+    SaveField();
+    SaveMesh();
+}
+
 void SetExportBar()
 {
     ImGui::Begin("Export",NULL,ImGuiWindowFlags_AlwaysAutoResize);       // Create a window called "Hello, world!" and append into it.
@@ -798,8 +841,26 @@ void SetExportBar()
         Geo::DualPatch<ScalarType>::ExtractDual(VertPos,Connectivity,PatchM,SidesMidP);
     //PatchM.ExtractDual();
 
-    if (ImGui::Button("Save Patches"))
-        PatchM.WriteSubMeshes(std::string("test.obj"));
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "SAVE");
+
+    if (ImGui::Button("SubMeshes"))
+        SaveSubMeshes();
+
+    ImGui::SameLine();
+    if (ImGui::Button("Patches"))
+        SavePatches();
+
+    ImGui::SameLine();
+    if (ImGui::Button("Field"))
+        SaveField();
+
+    ImGui::SameLine();
+    if (ImGui::Button("Mesh"))
+        SaveMesh();
+
+    if (ImGui::Button("Save All Data"))
+        SaveAll();
 
     ImGui::End();
 }
@@ -912,7 +973,7 @@ int main(int argc, char *argv[])
 
     PathMesh=std::string(argv[1]);
     LoadMesh(PathMesh);
-
+    ProjectName=RemoveExtension(PathMesh);
     PathField=std::string(argv[2]);
     LoadField(PathField);
     

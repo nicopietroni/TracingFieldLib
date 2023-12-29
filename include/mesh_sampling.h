@@ -1,5 +1,5 @@
 #ifndef MESH_SAMPLING
-#define SAMPLE_FOR_VIS_FRAME_FIELD
+#define MESH_SAMPLING
 
 //#include "point3.h"
 //#include "polyhedra_mesh.h"

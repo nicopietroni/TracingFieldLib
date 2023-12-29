@@ -128,7 +128,7 @@ public:
                             const std::vector<std::vector<int> > &face,
                             const CoordType &_p,
                             std::vector<int> &FacesIn,
-                            std::vector<Geo::Point3<ScalarType> > &BaryCoords)
+                            std::vector<Geo::Point3<ScalarType> > &BaryCoords)const
     {
         FacesIn.clear();
         BaryCoords.clear();
@@ -206,7 +206,7 @@ public:
     bool FirstTrianglesOverPoint(const std::vector<Geo::Point2<ScalarType> > &vert,
                                  const std::vector<std::vector<int> > &face,
                                  const CoordType &_p,int &FacesIn,
-                                 Geo::Point3<ScalarType> &BaryCoords)
+                                 Geo::Point3<ScalarType> &BaryCoords)const
     {
         std::vector<int> FacesInV;
         std::vector<Geo::Point3<ScalarType> > BaryCoordsV;
@@ -219,7 +219,7 @@ public:
     }
 
     void TrianglesInBox(const Geo::Box2<ScalarType> &test_box,
-                        std::vector<int> &FacesIn)
+                        std::vector<int> &FacesIn)const
     {
         FacesIn.clear();
 

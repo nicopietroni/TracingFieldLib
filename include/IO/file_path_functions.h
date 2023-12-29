@@ -1,5 +1,5 @@
-#ifndef PATH_FUNCTIONS
-#define PATH_FUNCTIONS
+#ifndef FILE_PATH_FUNCTIONS
+#define FILE_PATH_FUNCTIONS
 
 #include <string>
 

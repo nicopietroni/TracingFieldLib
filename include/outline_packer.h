@@ -1,6 +1,6 @@
 ﻿#ifndef _OUTLINE_PACKER
 #define _OUTLINE_PACKER
-#define _GRID_SIZE 100
+#define _GRID_SIZE 50
 #include <iostream>
 #include <vector>
 #include <point2.h>
