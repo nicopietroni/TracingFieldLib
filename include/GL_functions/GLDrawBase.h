@@ -98,6 +98,20 @@ void GLDrawSegment(const Geo::Point3<ScalarType> &p0,
 }
 
 template <class ScalarType>
+void GLDrawSegment(const Geo::Point2<ScalarType> &p0,
+                   const Geo::Point2<ScalarType> &p1,
+                   const ScalarType LineWidth,
+                   const ScalarType PointWidth=-1,
+                   const Geo::Point3<ScalarType> colorPoint=Geo::Point3<ScalarType>(0,0,0),
+                   const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0))
+{
+    Geo::Point3<ScalarType> p0_3D(p0.X,p0.Y,0);
+    Geo::Point3<ScalarType> p1_3D(p1.X,p1.Y,0);
+    GLDrawSegment<ScalarType>(p0_3D,p1_3D,LineWidth,PointWidth,
+                              colorPoint,colorLine);
+}
+
+template <class ScalarType>
 void GLDrawPolyline(const std::vector<Geo::Point3<ScalarType> > &Poly,
                     const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0),
                     const ScalarType LineWidth=5)

@@ -165,7 +165,8 @@ public:
                                       const std::vector<std::vector<int> > &Faces,
                                       std::vector<size_t> &FixedV,
                                       std::vector<Geo::Point2<ScalarType> > &FixedUV,
-                                      std::vector<Geo::Point2<ScalarType> > &VertUV)
+                                      std::vector<Geo::Point2<ScalarType> > &VertUV,
+                                      bool rescale_to_match_area=true)
     {
         assert(FixedV.size()==FixedUV.size());
 
@@ -200,6 +201,9 @@ public:
             VertUV[i].X = V_uv(i,0);
             VertUV[i].Y = V_uv(i,1);
         }
+
+        if (rescale_to_match_area)
+            Geo::UVUtils<ScalarType>::ScaleToMatchArea(VertPos,Faces,VertUV);
 
         return true;
     }
@@ -306,8 +310,10 @@ public:
 
     static bool TutteEmbedding(const std::vector<Geo::Point3<ScalarType> > &VertPos,
                                const std::vector<std::vector<int> > &Faces,
+                               const std::vector<int> &CornerIDX,
                                std::vector<Geo::Point2<ScalarType> > &VertUV)
     {
+
         VertUV.clear();
 
         std::vector<std::vector<int> > NextF,NextE;
@@ -319,8 +325,15 @@ public:
         ScalarType AreaM=Area(VertPos,Faces);
         ScalarType Radius=sqrt(AreaM/M_PI);
         std::vector<Geo::Point2<ScalarType> > vert_UV;
-        Geo::UVUtils<ScalarType>::MapToACircle(VertPos,BorderVIdx[0],Radius,vert_UV);
 
+        if (CornerIDX.size()<=2)
+        {
+            Geo::UVUtils<ScalarType>::MapToACircle(VertPos,BorderVIdx[0],Radius,vert_UV);
+        }
+        else
+        {
+             Geo::UVUtils<ScalarType>::MapToAPolygon(VertPos,BorderVIdx[0],Radius,CornerIDX,vert_UV);
+        }
         //check if there is at least one unknown or not
         if (BorderVIdx[0].size()==VertPos.size())
         {
@@ -340,8 +353,11 @@ public:
         EigenInterface<ScalarType>::GetTriMeshData(VertPos,Faces,F,Vf);
 
         Eigen::VectorXi b;
-        b.resize(BorderVIdx[0].size());
         Eigen::MatrixXd bc;
+        //set the boundary constraints
+        //        if (CornerIDX.size()<=2)
+        //        {
+        b.resize(BorderVIdx[0].size());
         bc.resize(BorderVIdx[0].size(),2);
         for (int i=0; i<(int)BorderVIdx[0].size(); i++)
         {
@@ -349,6 +365,19 @@ public:
             bc(i,0) = vert_UV[i].X;
             bc(i,1) = vert_UV[i].Y;
         }
+        //        }else
+        //        {
+        //            b.resize(CornerIDX.size());
+        //            bc.resize(CornerIDX.size(),2);
+        //            for (int i=0; i<(int)CornerIDX.size(); i++)
+        //            {
+        //                int IndexV=CornerIDX[i];
+        //                b(i) = IndexV;
+        //                bc(i,0) = vert_UV[IndexV].X;
+        //                bc(i,1) = vert_UV[IndexV].Y;
+        //            }
+
+        //        }
 
 
         Eigen::MatrixXd uv_harm;
@@ -363,6 +392,13 @@ public:
         }
         return true;
 
+    }
+    static bool TutteEmbedding(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                               const std::vector<std::vector<int> > &Faces,
+                               std::vector<Geo::Point2<ScalarType> > &VertUV)
+    {
+        std::vector<int> CornerIDX;
+        return TutteEmbedding(VertPos,Faces,CornerIDX,VertUV);
     }
 };
 

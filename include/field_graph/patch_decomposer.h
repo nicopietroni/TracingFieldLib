@@ -185,23 +185,23 @@ public:
     void RetraceOnUnsolved()
     {
         //remove empty selected paths
-//        PathSampl.CleanEmptySelectedPaths();
-//        std::map<int,int> PatchIdxRemap;
-//        PatchMan.CompactEmptyPatches(PatchIdxRemap);
+        //        PathSampl.CleanEmptySelectedPaths();
+        //        std::map<int,int> PatchIdxRemap;
+        //        PatchMan.CompactEmptyPatches(PatchIdxRemap);
 
-//        //remap unsolved one
-//        std::set<int>::iterator IteUnsolved;
-//        std::set<int> UnsolvedPatchesNew;
-//        for(IteUnsolved=UnsolvedPatches.begin();IteUnsolved!=UnsolvedPatches.end();IteUnsolved++)
-//        {
-//            int IndexPatch=(*IteUnsolved);
-//            assert(PatchIdxRemap.count(IndexPatch)>0);
-//            int newIndex=PatchIdxRemap[(*IteUnsolved)];
-//            UnsolvedPatchesNew.insert(newIndex);
-//        }
-//        UnsolvedPatches=UnsolvedPatchesNew;
-//        for (size_t i=0;i<PConditions.size();i++)
-//            (*PConditions[i]).UpdatePatchIndex(PatchIdxRemap);
+        //        //remap unsolved one
+        //        std::set<int>::iterator IteUnsolved;
+        //        std::set<int> UnsolvedPatchesNew;
+        //        for(IteUnsolved=UnsolvedPatches.begin();IteUnsolved!=UnsolvedPatches.end();IteUnsolved++)
+        //        {
+        //            int IndexPatch=(*IteUnsolved);
+        //            assert(PatchIdxRemap.count(IndexPatch)>0);
+        //            int newIndex=PatchIdxRemap[(*IteUnsolved)];
+        //            UnsolvedPatchesNew.insert(newIndex);
+        //        }
+        //        UnsolvedPatches=UnsolvedPatchesNew;
+        //        for (size_t i=0;i<PConditions.size();i++)
+        //            (*PConditions[i]).UpdatePatchIndex(PatchIdxRemap);
 
         CompactData();
 
@@ -241,9 +241,9 @@ public:
                 std::vector<ScalarType> FaceVPatch;
                 PConditions[i]->GetPerFaceScalar(PatchMan,pi,FaceVPatch);
                 if (FaceVPatch.size()==0)continue;
-//                std::cout<<"Size 0 "<<FaceVPatch.size()<<std::endl;
-//                std::cout<<"Size 1 "<<PatchMan.SubPatchFacesToOriginal[i].size()<<std::endl;
-//                std::cout<<"Size 2 "<<PatchMan.SubPatchFaces[i].size()<<std::endl;
+                //                std::cout<<"Size 0 "<<FaceVPatch.size()<<std::endl;
+                //                std::cout<<"Size 1 "<<PatchMan.SubPatchFacesToOriginal[i].size()<<std::endl;
+                //                std::cout<<"Size 2 "<<PatchMan.SubPatchFaces[i].size()<<std::endl;
                 assert(FaceVPatch.size()==PatchMan.SubPatchFacesToOriginal[pi].size());
                 assert(FaceVPatch.size()==PatchMan.SubPatchFaces[pi].size());
                 for (size_t j=0;j<FaceVPatch.size();j++)
@@ -333,6 +333,11 @@ public:
                 UnsolvedPatches.insert(TestPatch);
         }
 
+        for (size_t i=0;i<PConditions.size();i++)
+        {
+            PConditions[i]->UpdateGlobalData(PatchMan);
+        }
+
         RemoveEmptyPatches();
 
         if (add_only_where_needed)
@@ -369,6 +374,24 @@ public:
         PatchMan.Update(UpdatedPatches);
 
         bool is_removable=true;
+        //        for (size_t i=0;i<UpdatedPatches.size();i++)
+        //        {
+        //            int TestPatch=UpdatedPatches[i];
+
+        //            if (PatchMan.isEmpty(TestPatch))continue;
+
+        //            UpdateCondition(TestPatch);
+
+        //            if (SatisfyConditions(TestPatch))
+        //                continue;
+        //            else
+        //            {
+        //                is_removable=false;
+        //                break;
+        //            }
+        //        }
+
+        //LOCAL UPDATE
         for (size_t i=0;i<UpdatedPatches.size();i++)
         {
             int TestPatch=UpdatedPatches[i];
@@ -377,6 +400,18 @@ public:
 
             UpdateCondition(TestPatch);
 
+        }
+
+        //GLOBAL UPDATE
+        for (size_t i=0;i<PConditions.size();i++)
+        {
+            PConditions[i]->UpdateGlobalData(PatchMan);
+        }
+
+        //CHECK LOCAL CONDITIONS
+        for (size_t i=0;i<UpdatedPatches.size();i++)
+        {
+            int TestPatch=UpdatedPatches[i];
             if (SatisfyConditions(TestPatch))
                 continue;
             else
@@ -533,11 +568,11 @@ public:
         WriteOBJ(PathSave.c_str(),PosVect,FaceVect);
     }
 
-    ~PatchDecomposer()
-    {
-        for (size_t i=0;i<PConditions.size();i++)
-            delete(PConditions[i]);
-    }
+    //    ~PatchDecomposer()
+    //    {
+    //        for (size_t i=0;i<PConditions.size();i++)
+    //            delete(PConditions[i]);
+    //    }
 };
 
 }

@@ -402,6 +402,7 @@ private:
 
             if ((!do_features)&&(IsFeature[i]))continue;
             if ((!do_nonfeatures)&&(!IsFeature[i]))continue;
+            if (FixedSet.count(i)>0)continue;
 
             std::vector<Geo::Traingle2<ScalarType> > TrisUV;
             std::vector<Geo::Traingle3<ScalarType> > Tris3D;
@@ -465,6 +466,7 @@ private:
         {
             if ((!do_features)&&(IsFeature[i]))continue;
             if ((!do_nonfeatures)&&(!IsFeature[i]))continue;
+            if (FixedSet.count(i))continue;
             VertPos[i]=VertPos[i]*UVP.Damp+TargetP[i]*(1-UVP.Damp);
         }
 

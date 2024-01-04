@@ -106,7 +106,7 @@ public:
 
         //then compute the max (considering the percentile)
         ScalarType testD=MaxPercentile(PerPatchUVDists[IndexPatch],Percentile);
-        std::cout<<"test distortion:"<<testD<<std::endl;
+        //std::cout<<"test distortion:"<<testD<<std::endl;
         if (testD>MaxDist)return false;
 
         return true;
@@ -124,15 +124,15 @@ public:
         //        assert(IndexPatch<PerPatchUVDists.size());
         if (IndexPatch>=PerPatchUVDists.size())
         {
-            std::cout<<"Index Patch:"<<IndexPatch<<std::endl;
-            std::cout<<"Size All Patches:"<<PerPatchUVDists.size()<<std::endl;
+//            std::cout<<"Index Patch:"<<IndexPatch<<std::endl;
+//            std::cout<<"Size All Patches:"<<PerPatchUVDists.size()<<std::endl;
             int NumFPatch=PatchM.SubPatchFaces[IndexPatch].size();
             FaceV=std::vector<ScalarType>(NumFPatch,MaxDist);
             return;
         }
         if (PerPatchUVDists[IndexPatch].size()==0)
         {
-            std::cout<<"Size All Data:"<<PerPatchUVDists[IndexPatch].size()<<std::endl;
+            //std::cout<<"Size All Data:"<<PerPatchUVDists[IndexPatch].size()<<std::endl;
             int NumFPatch=PatchM.SubPatchFaces[IndexPatch].size();
             FaceV=std::vector<ScalarType>(NumFPatch,MaxDist);
             return;

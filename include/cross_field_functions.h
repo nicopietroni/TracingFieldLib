@@ -90,32 +90,40 @@ void InitCrossFieldQualityAsAnisotropy(std::vector<Field::CrossF<ScalarType> > &
 
     if (Crosses.size()==0)return;
 
-    //ScalarType minV=0.00001;
-    std::vector<ScalarType> KVal;
-    for (size_t i=0;i<Crosses.size();i++)
+    ScalarType trimUp=1;
+    ScalarType trimDown=1;
+    if (filter_percentile>0)
     {
-        KVal.push_back(Crosses[i].K[0]);
-        KVal.push_back(Crosses[i].K[1]);
-    }
-    assert(KVal.size()>0);
+        std::vector<ScalarType> KVal;
+        for (size_t i=0;i<Crosses.size();i++)
+        {
+            KVal.push_back(Crosses[i].K[0]);
+            KVal.push_back(Crosses[i].K[1]);
+        }
+        assert(KVal.size()>0);
 
-    std::sort(KVal.begin(),KVal.end());
-    int percUp=int(floor((ScalarType)KVal.size()*(1-filter_percentile)+0.5));
-    percUp=std::min(percUp,(int)KVal.size()-1);
-    int percDown=int(floor((ScalarType)KVal.size()*filter_percentile+0.5));
-    percDown=std::min(percDown,(int)KVal.size()-1);
-    ScalarType trimUp=KVal[percUp];
-    ScalarType trimDown=KVal[percDown];
+        std::sort(KVal.begin(),KVal.end());
+        int percUp=int(floor((ScalarType)KVal.size()*(1-filter_percentile)+0.5));
+        percUp=std::min(percUp,(int)KVal.size()-1);
+        int percDown=int(floor((ScalarType)KVal.size()*filter_percentile+0.5));
+        percDown=std::min(percDown,(int)KVal.size()-1);
+        trimUp=KVal[percUp];
+        trimDown=KVal[percDown];
+    }
 
     for (size_t i=0;i<Crosses.size();i++)
     {
         ScalarType N0=(Crosses[i].K[0]);
         ScalarType N1=(Crosses[i].K[1]);
+
         //clamp
-        N0=std::min(N0,trimUp);
-        N0=std::max(N0,trimDown);
-        N1=std::min(N1,trimUp);
-        N1=std::max(N1,trimDown);
+        if (filter_percentile>0)
+        {
+            N0=std::min(N0,trimUp);
+            N0=std::max(N0,trimDown);
+            N1=std::min(N1,trimUp);
+            N1=std::max(N1,trimDown);
+        }
 
         ScalarType NMax=std::max(N0,N1)/trimUp;
         ScalarType NMin=std::min(N0,N1)/trimUp;
@@ -194,7 +202,7 @@ void SetVertCrossFromFace(const std::vector<Geo::Point3<ScalarType> > &VertPos,
             FaceCross.push_back(FaceCurv[IndexF]);
             if (weightByQuality)
             {
-                 W[j]=FaceCurv[IndexF].Q;
+                W[j]=FaceCurv[IndexF].Q;
             }
         }
         //save old Position and quality

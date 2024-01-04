@@ -41,7 +41,7 @@ public:
         vert_UV.clear();
         for (size_t i=0;i<CircleSeq.size();i++)
         {
-            ScalarType frac = CurrL * (ScalarType) 2 * M_PI / TotL;
+            ScalarType frac = 2*M_PI-CurrL * (ScalarType) 2 * M_PI / TotL;
             vert_UV.push_back(Geo::Point2<ScalarType>(cos(frac), sin(frac)));
 
             int IndexV0=CircleSeq[i];
@@ -55,6 +55,99 @@ public:
 
         for (size_t i=0;i<vert_UV.size();i++)
             vert_UV[i]=vert_UV[i]*Radius;
+    }
+
+    static void MapToAPolygon(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                              const std::vector<int> &CircleSeq,
+                              const ScalarType &Radius,
+                              const std::vector<int> &CornerIDX,
+                              std::vector<Geo::Point2<ScalarType> > &vert_UV)
+    {
+        MapToACircle(VertPos,CircleSeq,Radius,vert_UV);
+        if (CornerIDX.size()<=0)return;
+
+//        std::set<int> CornerIDXSet(CornerIDX.begin(),CornerIDX.end());
+//        std::vector<std::vector<int> > BorderSeq;
+//        int startingIdx=-1;
+//        for (size_t i=0;i<CircleSeq.size();i++)
+//        {
+//            int IndexV=CircleSeq[i];
+//            if (CornerIDXSet.count(IndexV)==0)continue;
+//            startingIdx=i;
+//            break;
+//        }
+//        assert(startingIdx!=-1);
+
+//        for (size_t i=0;i<CircleSeq.size();i++)
+//        {
+//            int CurrIdx=(i+startingIdx)%CircleSeq.size();
+//            int IndexV=CircleSeq[CurrIdx];
+
+//            if ((CornerIDXSet.count(IndexV)>0)&&(i!=(CircleSeq.size()-1)))
+//            {
+//                if (BorderSeq.size()>0)
+//                    BorderSeq.back().push_back(IndexV);
+
+//                BorderSeq.resize(BorderSeq.size()+1);
+//            }
+
+//            BorderSeq.back().push_back(IndexV);
+//        }
+//        BorderSeq.back().push_back(CircleSeq[startingIdx]);
+
+//        std::cout<<"corner size:"<<CornerIDX.size()<<std::endl;
+//        std::cout<<"boudanry size:"<<BorderSeq.size()<<std::endl;
+//        //check
+//        for (size_t i=0;i<BorderSeq.size();i++)
+//        {
+//            int next_i=(i+1)%BorderSeq.size();
+//            int IndexVEnd=BorderSeq[i].back();
+//            int IndexVNext=BorderSeq[next_i][0];
+//            std::cout<<"Side:"<<i<<std::endl;
+//            std::cout<<IndexVEnd<<std::endl;
+//            std::cout<<IndexVNext<<std::endl;
+//            std::cout<<std::endl<<std::endl;
+//            assert(IndexVEnd==IndexVNext);
+//        }
+
+//        vert_UV.clear();
+//        //compute total lenght
+//        ScalarType TotL=0;
+
+//        for (size_t i=0;i<CircleSeq.size();i++)
+//        {
+//            int IndexV0=CircleSeq[i];
+//            int IndexV1=CircleSeq[(i+1)%CircleSeq.size()];
+
+//            assert(IndexV0<(int)VertPos.size());
+//            assert(IndexV1<(int)VertPos.size());
+//            assert(IndexV0>=0);
+//            assert(IndexV1>=0);
+
+//            Geo::Point3<ScalarType> P0=VertPos[IndexV0];
+//            Geo::Point3<ScalarType> P1=VertPos[IndexV1];
+//            ScalarType Dist=(P0-P1).Norm();
+//            TotL+=Dist;
+//        }
+
+//        ScalarType CurrL=0;
+//        vert_UV.clear();
+//        for (size_t i=0;i<CircleSeq.size();i++)
+//        {
+//            ScalarType frac = CurrL * (ScalarType) 2 * M_PI / TotL;
+//            vert_UV.push_back(Geo::Point2<ScalarType>(cos(frac), sin(frac)));
+
+//            int IndexV0=CircleSeq[i];
+//            int IndexV1=CircleSeq[(i+1)%CircleSeq.size()];
+//            Geo::Point3<ScalarType> P0=VertPos[IndexV0];
+//            Geo::Point3<ScalarType> P1=VertPos[IndexV1];
+//            ScalarType Dist=(P0-P1).Norm();
+
+//            CurrL+=Dist;
+//        }
+
+//        for (size_t i=0;i<vert_UV.size();i++)
+//            vert_UV[i]=vert_UV[i]*Radius;
     }
 
     static bool MapBetween(const std::vector<Geo::Point2<ScalarType> > &vert0,
@@ -117,6 +210,16 @@ public:
         return true;
     }
 
+    static bool ScaleToMatchArea(const std::vector<Geo::Point3<ScalarType> > &vert_3D,
+                                 const std::vector<std::vector<int> > &Faces,
+                                 std::vector<Geo::Point2<ScalarType> > &vert_UV)
+    {
+        ScalarType Area3D=Area(vert_3D,Faces);
+        ScalarType Area2D=Area(vert_UV,Faces);
+        ScalarType ScaleFact=Area3D/Area2D;
+        for (size_t i=0;i<vert_UV.size();i++)
+            vert_UV[i]=vert_UV[i]*ScaleFact;
+    }
 };
 
 }

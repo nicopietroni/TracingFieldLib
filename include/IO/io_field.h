@@ -117,9 +117,8 @@ bool ReadField(const std::vector<Geo::Point3<ScalarType > > &VertPos,
 
         FaceField[i].Pos=Bary;
     }
-
-    InitCrossFieldQualityAsAnisotropy(VertField);
-    InitCrossFieldQualityAsAnisotropy(FaceField);
+    InitCrossFieldQualityAsAnisotropy(VertField,(ScalarType)0);
+    InitCrossFieldQualityAsAnisotropy(FaceField,(ScalarType)0);
 
     return true;
 }

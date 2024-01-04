@@ -31,8 +31,11 @@ public:
 
     virtual void GetPerFaceScalar(const PatchManaging<ScalarType> &PatchM,
                                   const int &IndexPatch,
-                                  std::vector<ScalarType> &FaceV)const
+                                  std::vector<ScalarType> &FaceV)const    
     {(void)PatchM;(void)IndexPatch;(void)FaceV;}
+
+    virtual bool UpdateGlobalData(const Geo::PatchManaging<ScalarType> &PatchM)
+    {(void)PatchM;return true;}
 };
 
 template <class ScalarType>

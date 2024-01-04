@@ -6,6 +6,7 @@
 #include <vector>
 #include <stdio.h>
 #include <iostream>
+#include <point2.h>
 
 namespace  Geo{
 
@@ -407,6 +408,21 @@ inline ScalarType AngleDeg( Point3<ScalarType> const & p1,
     return (Arad* 180.0 / M_PI);
 }
 
+template <class ScalarType>
+inline ScalarType PositiveAngleRad( const Point2<ScalarType> & p1,
+                                    const Point2<ScalarType>  & p2)
+{
+    ScalarType angle = std::atan2(p1.Y, p1.X) - std::atan2(p2.Y, p2.X);
+    return angle < (ScalarType)0.0f ? angle + 2 * M_PI : angle;
+}
+
+template <class ScalarType>
+inline ScalarType PositiveAngleDeg( Point2<ScalarType> const & p1,
+                                    Point2<ScalarType> const & p2)
+{
+    ScalarType Arad=PositiveAngleRad(p1,p2);
+    return (Arad* 180.0 / M_PI);
+}
 
 }
 

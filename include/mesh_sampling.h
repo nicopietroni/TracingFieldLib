@@ -7,7 +7,9 @@
 #include <random>
 #include <vector>
 #include "connectivity.h"
+#include "point2.h"
 #include <pos3.h>
+#include <Space_Query/point_grid_2D.h>
 
 namespace Geo{
 
@@ -124,6 +126,7 @@ public:
             return;
         }
         //initialize the kernel
+
         std::vector<std::vector<int> > KernelVert;
         Geo::FindFaceStar(Connectivity,KernelVert,RadiusStar-1);
 
@@ -142,6 +145,39 @@ public:
             {
                 int NeighV=KernelVert[CurrV][j];
                 Valid[NeighV]=false;
+            }
+        }
+    }
+
+    static void SampleRadiusUV(const std::vector<Geo::Point2<ScalarType> > &Samples,
+                               const ScalarType &RadiusStar,std::vector<int> &Selected,
+                                int RandSeed=0)
+    {
+        Geo::PointSpatialIndex2D<ScalarType> PointIdx;
+        PointIdx.Init(Samples);
+
+        Selected.clear();
+
+        std::vector<bool> Valid(Samples.size(),true);
+
+        //randomly perturb the order
+        std::vector<int> Sequence;
+        GetRandomSeq(Samples.size()-1,Sequence,RandSeed);
+
+        for (size_t i=0;i<Sequence.size();i++)
+        {
+            int CurrV=Sequence[i];
+            if (!Valid[CurrV])continue;
+
+            Selected.push_back(CurrV);
+            std::vector<int> PosIn;
+            PointIdx.PointsInRadius(Samples,Samples[CurrV],RadiusStar,PosIn);
+
+            for (size_t j=0;j<PosIn.size();j++)
+            {
+                int CurrV1=PosIn[j];
+                if (CurrV1!=CurrV)
+                    Valid[CurrV1]=false;
             }
         }
     }

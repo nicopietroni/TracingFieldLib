@@ -377,6 +377,23 @@ ScalarType AvgEdgeLen(const std::vector<Geo::Point3<ScalarType> > &VertPos,
 }
 
 template <class ScalarType>
+ScalarType AvgEdgeLen(const std::vector<Geo::Point2<ScalarType> > &VertPos,
+                      const std::vector<std::vector<int> > &Faces)
+{
+    ScalarType EdgeSum=0;
+    int Num=0;
+    for (size_t i=0; i<Faces.size(); i++)
+        for (size_t j=0; j<Faces[i].size(); j++)
+        {
+            ScalarType CurrELenght=EdgeLenght(VertPos,Faces,i,j);
+            //should consider also border but become slow
+            EdgeSum+=CurrELenght;
+            Num++;
+        }
+    return EdgeSum/Num;
+}
+
+template <class ScalarType>
 ScalarType FaceVertAngleDeg(const std::vector<Geo::Point2<ScalarType> > &VertPos,
                             const std::vector<std::vector<int> > &Faces,
                             const int &IndexF,const int &IndexV)
