@@ -210,7 +210,7 @@ public:
         return true;
     }
 
-    static bool ScaleToMatchArea(const std::vector<Geo::Point3<ScalarType> > &vert_3D,
+    static void ScaleToMatchArea(const std::vector<Geo::Point3<ScalarType> > &vert_3D,
                                  const std::vector<std::vector<int> > &Faces,
                                  std::vector<Geo::Point2<ScalarType> > &vert_UV)
     {

@@ -50,6 +50,12 @@ void ComputeCurvatureField(const std::vector<Geo::Point3<ScalarType> > &VertPos,
         ScalarType K2=PV2(i,0);
         Geo::Point3<ScalarType> Pos=VertPos[i];
 
+        D1.Normalize();
+        D2.Normalize();
+
+        assert(fabs(D1.Norm()-1)<0.00001);
+        assert(fabs(D2.Norm()-1)<0.00001);
+
         Field::CrossF<ScalarType> VertCross(D1,D2,K1,K2,Pos);
         //check for some broderline case
         if (D1.Norm()==0)
@@ -67,18 +73,24 @@ void ComputeCurvatureField(const std::vector<Geo::Point3<ScalarType> > &VertPos,
 
     //compute the anisotropy
     std::cout<<"..Init Quality as Anisotropy on Vert"<<std::endl;
-    InitCrossFieldQualityAsAnisotropy(VertCurv);
+    InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv,0);
 
     std::cout<<"..Set Face Cross From Vert"<<std::endl;
     SetFaceCrossVectorFromVert<ScalarType>(Faces,FacesNormals,VertCurv,FaceCurv,weightByAnisotropy);
 
     //compute the anisotropy
     std::cout<<"..Init Quality as Anisotropy on Faces"<<std::endl;
-    InitCrossFieldQualityAsAnisotropy(FaceCurv);
+    InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv,0);
 
     //make the directions order coherent with normal orientation
     std::cout<<"..Make Face Cross Coherent with Normals"<<std::endl;
     MakeDirectionNormalCoherent<ScalarType>(FacesNormals,FaceCurv);
+
+    for (size_t i=0;i<FaceCurv.size();i++)
+    {
+        assert(fabs(FaceCurv[i].D[0].Norm()-1)<0.00001);
+        assert(fabs(FaceCurv[i].D[1].Norm()-1)<0.00001);
+    }
 }
 
 

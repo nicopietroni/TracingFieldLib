@@ -74,11 +74,36 @@ void InitFieldByCurvature()
     ComputeCurvatureField<ScalarType>(VertPos,Connectivity,FaceNormals,VertNormals,VertCurv,FaceCurv,Nring);
     Field::CrossF<ScalarType>::getMinMaxQ(VertCurv,minQCrossVert,maxQCrossVert);
     GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
+
+//    for (size_t i=0;i<VertCurv.size();i++)
+//    {
+//        assert(fabs(VertCurv[i].D[0].Norm()-1)<0.00001);
+//        assert(fabs(VertCurv[i].D[1].Norm()-1)<0.00001);
+//    }
+
+//    for (size_t i=0;i<FaceCurv.size();i++)
+//    {
+//        assert(fabs(FaceCurv[i].D[0].Norm()-1)<0.00001);
+//        assert(fabs(FaceCurv[i].D[1].Norm()-1)<0.00001);
+//    }
+
     has_cross_field=true;
 }
 
 void SaveField()
 {
+//    for (size_t i=0;i<VertCurv.size();i++)
+//    {
+//        assert(fabs(VertCurv[i].D[0].Norm()-1)<0.00001);
+//        assert(fabs(VertCurv[i].D[1].Norm()-1)<0.00001);
+//    }
+
+//    for (size_t i=0;i<FaceCurv.size();i++)
+//    {
+//        assert(fabs(FaceCurv[i].D[0].Norm()-1)<0.00001);
+//        assert(fabs(FaceCurv[i].D[1].Norm()-1)<0.00001);
+//    }
+
     assert(!PathMesh.empty());
     std::string PathField=RemoveExtension(PathMesh);
     PathField+=std::string(".field");
@@ -89,6 +114,7 @@ void SaveField()
         std::cout<<"ERROR SAVING FIELD FILE "<<std::endl;
         exit(0);
     }
+    ReadField(VertPos,Connectivity,PathField,VertCurv,FaceCurv);
 }
 
 void SmoothGlobal()
@@ -99,11 +125,28 @@ void SmoothGlobal()
     std::vector<Field::CrossF<ScalarType> > OldFCurv=FaceCurv;
 
     SmoothGlobalPolyvector(VertPos,Connectivity,FaceNormals,FaceCurv,SParam);
+
     GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
     SetVertCrossFromFace(VertPos,Connectivity,VertNormals,FaceCurv,VertCurv);
 
     RedistributeAnisotropy<ScalarType>(OldVCurv,VertCurv);
     RedistributeAnisotropy<ScalarType>(OldFCurv,FaceCurv);
+
+    InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv,0);
+    InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv,0);
+
+//    for (size_t i=0;i<VertCurv.size();i++)
+//    {
+//        assert(fabs(VertCurv[i].D[0].Norm()-1)<0.00001);
+//        assert(fabs(VertCurv[i].D[1].Norm()-1)<0.00001);
+//    }
+
+//    for (size_t i=0;i<FaceCurv.size();i++)
+//    {
+//        assert(fabs(FaceCurv[i].D[0].Norm()-1)<0.00001);
+//        assert(fabs(FaceCurv[i].D[1].Norm()-1)<0.00001);
+//    }
+
 }
 
 

@@ -141,6 +141,12 @@ public:
     int &CurrDistIndex()
     {return CurrDIndex;}
 
+    void SetMaxDistance()
+    {
+        assert(CurrDIndex<DIST_SWAP_NUM);
+        D[CurrDIndex]=std::vector<ScalarType>(NumNodes(),std::numeric_limits<ScalarType>::max());
+    }
+
     void InitDirectEdge()
     {
         DirectE.clear();

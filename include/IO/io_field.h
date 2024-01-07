@@ -18,7 +18,9 @@
 template <class ScalarType>
 bool ReadField(const std::string &fieldFile,
                std::vector<std::vector<Geo::Point3<ScalarType> > > &VertField,
-               std::vector<std::vector<Geo::Point3<ScalarType> > > &FaceField)
+               std::vector<std::vector<ScalarType > > &VertFieldK,
+               std::vector<std::vector<Geo::Point3<ScalarType> > > &FaceField,
+               std::vector<std::vector<ScalarType > > &FaceFieldK)
 {
 
     std::ifstream fin(fieldFile.c_str());
@@ -32,6 +34,7 @@ bool ReadField(const std::string &fieldFile,
     int NumFieldV;
     fin>>NumFieldV;
     VertField.resize(NumFieldV);
+    VertFieldK.resize(NumFieldV);
     for (int i=0;i<NumFieldV;i++)
     {
         int NumDirV;
@@ -44,11 +47,18 @@ bool ReadField(const std::string &fieldFile,
              fin>>Z;
              VertField[i].push_back(Geo::Point3<ScalarType>(X,Y,Z));
         }
+        for (int j=0;j<NumDirV;j++)
+        {
+             ScalarType K;
+             fin>>K;
+             VertFieldK[i].push_back(K);
+        }
     }
 
     int NumFieldF;
     fin>>NumFieldF;
     FaceField.resize(NumFieldF);
+    FaceFieldK.resize(NumFieldF);
     for (int i=0;i<NumFieldF;i++)
     {
         int NumDirF;
@@ -60,6 +70,12 @@ bool ReadField(const std::string &fieldFile,
              fin>>Y;
              fin>>Z;
              FaceField[i].push_back(Geo::Point3<ScalarType>(X,Y,Z));
+        }
+        for (int j=0;j<NumDirF;j++)
+        {
+             ScalarType K;
+             fin>>K;
+             FaceFieldK[i].push_back(K);
         }
     }
     fin.close();
@@ -74,7 +90,8 @@ bool ReadField(const std::vector<Geo::Point3<ScalarType > > &VertPos,
                std::vector<Field::CrossF<ScalarType> > &FaceField)
 {
     std::vector<std::vector<Geo::Point3<ScalarType> > > VertFieldVect,FaceFieldVect;
-    bool loaded=ReadField(fieldFile,VertFieldVect,FaceFieldVect);
+     std::vector<std::vector<ScalarType > > VertFieldK,FaceFieldK;
+    bool loaded=ReadField(fieldFile,VertFieldVect,VertFieldK,FaceFieldVect,FaceFieldK);
     if (!loaded)return false;
 
     VertField.resize(VertFieldVect.size());
@@ -87,8 +104,11 @@ bool ReadField(const std::vector<Geo::Point3<ScalarType > > &VertPos,
         VertField[i].D[0]=VertFieldVect[i][0];
         VertField[i].D[1]=VertFieldVect[i][1];
 
-        VertField[i].K[0]=VertField[i].D[0].Norm();
-        VertField[i].K[1]=VertField[i].D[1].Norm();
+//        VertField[i].K[0]=VertField[i].D[0].Norm();
+//        VertField[i].K[1]=VertField[i].D[1].Norm();
+
+        VertField[i].K[0]=VertFieldK[i][0];
+        VertField[i].K[1]=VertFieldK[i][1];
 
         VertField[i].D[0].Normalize();
         VertField[i].D[1].Normalize();
@@ -103,8 +123,10 @@ bool ReadField(const std::vector<Geo::Point3<ScalarType > > &VertPos,
         FaceField[i].D[0]=FaceFieldVect[i][0];
         FaceField[i].D[1]=FaceFieldVect[i][1];
 
-        FaceField[i].K[0]=FaceFieldVect[i][0].Norm();
-        FaceField[i].K[1]=FaceFieldVect[i][1].Norm();
+//        FaceField[i].K[0]=FaceFieldVect[i][0].Norm();
+//        FaceField[i].K[1]=FaceFieldVect[i][1].Norm();
+        FaceField[i].K[0]=FaceFieldK[i][0];
+        FaceField[i].K[1]=FaceFieldK[i][1];
 
         FaceField[i].D[0].Normalize();
         FaceField[i].D[1].Normalize();
@@ -127,30 +149,46 @@ bool ReadField(const std::vector<Geo::Point3<ScalarType > > &VertPos,
 template <class ScalarType>
 bool WriteField(const std::string &fieldFile,
                 const std::vector<std::vector<Geo::Point3<ScalarType> > > &VertField,
-                const std::vector<std::vector<Geo::Point3<ScalarType> > > &FaceField)
+                const std::vector<std::vector<ScalarType> > &VertFieldK,
+                const std::vector<std::vector<Geo::Point3<ScalarType> > > &FaceField,
+                const std::vector<std::vector<ScalarType> > &FaceFieldK)
 {
     //    std::cout<<"Loading:"<<meshFile.c_str()<<std::endl;
     std::ofstream fout(fieldFile.c_str());
     if(!fout) return false;
 
+    assert(VertField.size()==VertFieldK.size());
     fout<<VertField.size()<<"\n";
     for (size_t i=0;i<VertField.size();i++)
     {
         fout<<VertField[i].size();
+        assert(VertField[i].size()==VertFieldK[i].size());
         for (size_t j=0;j<VertField[i].size();j++)
         {
             fout<<" "<<VertField[i][j].X<<" "<<VertField[i][j].Y<<" "<<VertField[i][j].Z;
         }
         fout<<"\n";
+        for (size_t j=0;j<VertFieldK[i].size();j++)
+        {
+            fout<<" "<<VertFieldK[i][j];
+        }
+        fout<<"\n";
     }
 
+    assert(FaceField.size()==FaceFieldK.size());
     fout<<FaceField.size()<<"\n";
     for (size_t i=0;i<FaceField.size();i++)
     {
         fout<<FaceField[i].size();
+        assert(FaceField[i].size()==FaceFieldK[i].size());
         for (size_t j=0;j<FaceField[i].size();j++)
         {
             fout<<" "<<FaceField[i][j].X<<" "<<FaceField[i][j].Y<<" "<<FaceField[i][j].Z;
+        }
+        fout<<"\n";
+        for (size_t j=0;j<FaceFieldK[i].size();j++)
+        {
+            fout<<" "<<FaceFieldK[i][j];
         }
         fout<<"\n";
     }
@@ -220,28 +258,59 @@ bool WriteField(const std::string &fieldFile,
                 const std::vector<Field::CrossF<ScalarType> > &VertField,
                 const std::vector<Field::CrossF<ScalarType> > &FaceField)
 {
-    ScalarType minDelta=0.00000001;
+    //ScalarType minDelta=0.00000001;
     std::vector<std::vector<Geo::Point3<ScalarType> > > VertFieldVect,FaceFieldVect;
+    std::vector<std::vector<ScalarType> > VertFieldK,FaceFieldK;
+
     VertFieldVect.resize(VertField.size());
+    VertFieldK.resize(VertField.size());
     for (size_t i=0;i<VertField.size();i++)
     {
-        Geo::Point3<ScalarType> D0=VertField[i].D[0]*std::max(VertField[i].K[0],minDelta);
-        Geo::Point3<ScalarType> D1=VertField[i].D[1]*std::max(VertField[i].K[1],minDelta);
+        Geo::Point3<ScalarType> D0Norm=VertField[i].D[0];
+        D0Norm.Normalize();
+        Geo::Point3<ScalarType> D1Norm=VertField[i].D[1];
+        D1Norm.Normalize();
+//        Geo::Point3<ScalarType> D0=D0Norm;//*std::max(VertField[i].K[0],minDelta);
+//        Geo::Point3<ScalarType> D1=D1Norm;//*std::max(VertField[i].K[1],minDelta);
 
-        VertFieldVect[i].push_back(D0);
-        VertFieldVect[i].push_back(D1);
+        assert(fabs(D0Norm.Norm()-1)<0.00001);
+        assert(fabs(D1Norm.Norm()-1)<0.00001);
+
+        ScalarType K0=VertField[i].K[0];
+        ScalarType K1=VertField[i].K[1];
+
+        VertFieldVect[i].push_back(D0Norm);
+        VertFieldVect[i].push_back(D1Norm);
+
+        VertFieldK[i].push_back(K0);
+        VertFieldK[i].push_back(K1);
     }
 
     FaceFieldVect.resize(FaceField.size());
+    FaceFieldK.resize(FaceField.size());
     for (size_t i=0;i<FaceField.size();i++)
     {
-        Geo::Point3<ScalarType> D0=FaceField[i].D[0]*std::max(FaceField[i].K[0],minDelta);
-        Geo::Point3<ScalarType> D1=FaceField[i].D[1]*std::max(FaceField[i].K[1],minDelta);
+        Geo::Point3<ScalarType> D0Norm=FaceField[i].D[0];
+        D0Norm.Normalize();
+        Geo::Point3<ScalarType> D1Norm=FaceField[i].D[1];
+        D1Norm.Normalize();
 
-        FaceFieldVect[i].push_back(D0);
-        FaceFieldVect[i].push_back(D1);
+//        Geo::Point3<ScalarType> D0=D0Norm;//*std::max(FaceField[i].K[0],minDelta);
+//        Geo::Point3<ScalarType> D1=D1Norm;//*std::max(FaceField[i].K[1],minDelta);
+
+        assert(fabs(D0Norm.Norm()-1)<0.00001);
+        assert(fabs(D1Norm.Norm()-1)<0.00001);
+
+        FaceFieldVect[i].push_back(D0Norm);
+        FaceFieldVect[i].push_back(D1Norm);
+
+        ScalarType K0=FaceField[i].K[0];
+        ScalarType K1=FaceField[i].K[1];
+
+        FaceFieldK[i].push_back(K0);
+        FaceFieldK[i].push_back(K1);
     }
-    return(WriteField(fieldFile,VertFieldVect,FaceFieldVect));
+    return(WriteField(fieldFile,VertFieldVect,VertFieldK,FaceFieldVect,FaceFieldK));
 }
 
 

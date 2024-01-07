@@ -19,6 +19,7 @@ public:
     struct UVSmoothParam
     {
         std::vector<int> Fixed;
+        std::vector<int> SmoothOnly;
         std::vector<std::pair<int,int> > FeatureLines;
         ScalarType Damp;
         size_t Steps;
@@ -347,6 +348,7 @@ private:
             IsFeature[IndexV1]=true;
         }
 
+        std::set<int> SmoothOnlySet(UVP.SmoothOnly.begin(),UVP.SmoothOnly.end());
         std::set<int> FixedSet(UVP.Fixed.begin(),UVP.Fixed.end());
         std::set<std::pair<int,int> > FeatureSet(UVP.FeatureLines.begin(),
                                                  UVP.FeatureLines.end());
@@ -403,6 +405,7 @@ private:
             if ((!do_features)&&(IsFeature[i]))continue;
             if ((!do_nonfeatures)&&(!IsFeature[i]))continue;
             if (FixedSet.count(i)>0)continue;
+            if ((SmoothOnlySet.size()>0)&&(SmoothOnlySet.count(i)==0))continue;
 
             std::vector<Geo::Traingle2<ScalarType> > TrisUV;
             std::vector<Geo::Traingle3<ScalarType> > Tris3D;
@@ -467,6 +470,8 @@ private:
             if ((!do_features)&&(IsFeature[i]))continue;
             if ((!do_nonfeatures)&&(!IsFeature[i]))continue;
             if (FixedSet.count(i))continue;
+            if ((SmoothOnlySet.size()>0)&&(SmoothOnlySet.count(i)==0))continue;
+
             VertPos[i]=VertPos[i]*UVP.Damp+TargetP[i]*(1-UVP.Damp);
         }
 

@@ -1,12 +1,15 @@
 #ifndef PATCH_DECOMPOSER
 #define PATCH_DECOMPOSER
 
+#define SMOOTH_KERNEL 3
 #include <vector>
 //#include "../point3.h"
 //#include "graph.h"
 #include "patch_managing.h"
 #include "path_sampling.h"
 #include "basic_decomposition_conditions.h"
+#include "connectivity.h"
+#include "tangent_space_smooth.h"
 //#include "mesh_functions.h"
 
 namespace Geo{
@@ -18,6 +21,10 @@ class PatchDecomposer
     Geo::CrossPathSampling<ScalarType> &PathSampl;
     std::vector<Geo::PatchCondition<ScalarType>* > PConditions;
     std::set<int> UnsolvedPatches;
+    std::vector<std::vector<int> > SmoothKernel;
+    std::vector<std::vector<int> > VFAdj;
+    std::vector<Field::CrossF<ScalarType> > &VertCurv;
+    std::vector<Field::CrossF<ScalarType> > &FaceCurv;
 
     void RemoveEmptyPatches()
     {
@@ -61,10 +68,12 @@ class PatchDecomposer
     }
 
 public:
+
     bool stop_when_solved;
     bool add_only_where_needed;
     bool allow_darts;
     bool allow_concave;
+    bool dynamic_smooth;
 
     void ClearConditions()
     {
@@ -256,46 +265,102 @@ public:
         }
         return false;
     }
-    //    void AddNextIfNeeded(bool &all_solved,
-    //                         bool &added_sample)
-    //    {
-    //        all_solved=false;
-    //        added_sample=false;
-    //        if (add_only_needed)
-    //            PathSampl.check_pass_on[0]=true;
 
-    //        if (UnsolvedPatches.size()==0)
-    //        {
-    //            all_solved=true;
-    //            added_sample=false;
-    //            return;
-    //        }
+    void SmoothAround(const std::vector<int> &PathsIDX,
+                      const std::set<int> InvolvedPatches,
+                      int smooth_steps=10)
+    {
+        //initialize the kernel if needed
+        if (SmoothKernel.size()!=PatchMan.VertPos.size())
+            Geo::FindVertexStar(PatchMan.Faces,PatchMan.VertPos.size(),SmoothKernel,SMOOTH_KERNEL);
 
-    //        added_sample=PathSampl.AddNextPath();
-    //        if (!added_sample){return;}
+        std::vector<std::vector<int> > VFIndex;
+        if (VFAdj.size()!=PatchMan.VertPos.size())
+            getVFAdjacency(PatchMan.Faces,VFAdj,VFIndex);
 
-    //        //verify local conditions
-    //        std::vector<int> UpdatedPatches;
-    //        PatchMan.Update(UpdatedPatches);
+        //then find vertex paths
+        std::vector<std::vector<int> > ModVertPaths;
+        PathSampl.GetVertexSelectedPaths(PathsIDX,ModVertPaths);
 
-    //        for (size_t i=0;i<UpdatedPatches.size();i++)
-    //        {
-    //            int TestPatch=UpdatedPatches[i];
+        std::vector<int> ToSmoothVert;
+        for (size_t i=0;i<ModVertPaths.size();i++)
+            for (size_t j=0;j<ModVertPaths[i].size();j++)
+            {
+                int IndexV=ModVertPaths[i][j];
+                assert(IndexV>=0);
+                assert(IndexV<SmoothKernel.size());
+                std::vector<int> CurrKern=SmoothKernel[IndexV];
+                ToSmoothVert.insert(ToSmoothVert.end(),CurrKern.begin(),CurrKern.end());
+            }
 
-    //            if (PatchMan.isEmpty(TestPatch))continue;
+        std::sort(ToSmoothVert.begin(),ToSmoothVert.end());
+        std::vector<int>::iterator last = std::unique(ToSmoothVert.begin(), ToSmoothVert.end());
+        ToSmoothVert.erase(last, ToSmoothVert.end());
 
-    //            if (SatisfyConditions(TestPatch))
-    //                UnsolvedPatches.erase(TestPatch);
-    //            else
-    //                UnsolvedPatches.insert(TestPatch);
-    //        }
+        //then filter the one belonging to other patches
+        std::vector<int> ToSmoothVertSwap;
+        for (size_t i=0;i<ToSmoothVert.size();i++)
+        {
+            int IndexV=ToSmoothVert[i];
+            assert(IndexV>=0);
+            assert(IndexV<VFAdj.size());
+            bool has_other_patch=false;
+            for (size_t j=0;j<VFAdj[IndexV].size();j++)
+            {
+                int IndexF=VFAdj[IndexV][j];
 
-    //        RemoveEmptyPatches();
+                assert(IndexF>=0);
+                assert(IndexF<PatchMan.Faces.size());
+                assert(IndexF<PatchMan.OriginalFaceToPatch.size());
 
-    //        if (add_only_needed)
-    //            MarkUnsolvedPatches();
-    //        all_solved=(UnsolvedPatches.size()==0);
-    //    }
+                int IndexP=PatchMan.OriginalFaceToPatch[IndexF];
+
+                assert(IndexP>=0);
+                assert(IndexP<PatchMan.NumPatches());
+
+                if (InvolvedPatches.count(IndexP)==0)
+                {has_other_patch=true;break;}
+            }
+            if (has_other_patch)continue;
+            ToSmoothVertSwap.push_back(IndexV);
+        }
+        ToSmoothVert=ToSmoothVertSwap;
+
+//        for (size_t i=0;i<InvolvedPatches.size();i++)
+//        {
+//            int IndexP=InvolvedPatches[i];
+//            assert(IndexP>=0);
+//            assert(IndexP<PatchMan.NumPatches());
+//        }
+
+        //then add the kernel to only smooth ones
+        typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
+        UVP.SmoothOnly=ToSmoothVert;
+
+        //get all paths
+        std::vector<std::vector<int> > VertPaths;
+        PathSampl.GetVertexSelectedPaths(VertPaths);
+        for (size_t i=0;i<VertPaths.size();i++)
+        {
+            if (VertPaths[i].size()==0)continue;
+            for (int j=0;j<(int)VertPaths[i].size()-1;j++)
+            {
+                int IndexV0=VertPaths[i][j];
+                int IndexV1=VertPaths[i][j+1];
+                std::pair<int,int> key(std::min(IndexV0,IndexV1),
+                                       std::max(IndexV0,IndexV1));
+                UVP.FeatureLines.push_back(key);
+            }
+        }
+
+        UVP.Steps=smooth_steps;
+        Geo::Local_Param_Smooth<ScalarType>::Smooth(PatchMan.VertPos,PatchMan.Faces,UVP);
+
+        AdaptFieldToMesh(PatchMan.VertPos,PatchMan.Faces,VertCurv,FaceCurv);
+
+        PatchMan.UpdateSubPatchPos();
+        PatchMan.InitVisualCornersEdges();
+    }
 
     void AddNext(bool &all_solved,
                  bool &added_sample)
@@ -316,8 +381,22 @@ public:
         if (!added_sample){return;}
 
         //verify local conditions
+        std::vector<int> ToAdd,ToRemove;
+        //std::set<int> ToUpdPatches;
+        PatchMan.FindAddRemovePaths(ToAdd,ToRemove);
+
+        if (dynamic_smooth)
+        {
+           std::vector<int> PathsIDX=ToAdd;
+           PathsIDX.insert(PathsIDX.end(),ToRemove.begin(),ToRemove.end());
+
+           std::set<int> TouchedPatches;
+           PatchMan.GetTouchedPatchesFromPathIndex(PathsIDX,TouchedPatches);
+           SmoothAround(PathsIDX,TouchedPatches);
+        }
+
         std::vector<int> UpdatedPatches;
-        PatchMan.Update(UpdatedPatches);
+        PatchMan.Update(ToAdd,ToRemove,UpdatedPatches);
 
         for (size_t i=0;i<UpdatedPatches.size();i++)
         {
@@ -326,22 +405,43 @@ public:
             if (PatchMan.isEmpty(TestPatch))continue;
 
             UpdateCondition(TestPatch);
-
-            if (SatisfyConditions(TestPatch))
-                UnsolvedPatches.erase(TestPatch);
-            else
-                UnsolvedPatches.insert(TestPatch);
         }
+
+        //            if (SatisfyConditions(TestPatch))
+        //                UnsolvedPatches.erase(TestPatch);
+        //            else
+        //                UnsolvedPatches.insert(TestPatch);
+        //
 
         for (size_t i=0;i<PConditions.size();i++)
         {
             PConditions[i]->UpdateGlobalData(PatchMan);
         }
 
+//        for (size_t i=0;i<UpdatedPatches.size();i++)
+//        {
+//            int TestPatch=UpdatedPatches[i];
+
+//            if (SatisfyConditions(TestPatch))
+//                UnsolvedPatches.erase(TestPatch);
+//            else
+//                UnsolvedPatches.insert(TestPatch);
+//        }
+
+        for (size_t i=0;i<PatchMan.NumPatches();i++)
+        {
+            if (PatchMan.isEmpty(i))continue;
+            if (SatisfyConditions(i))
+                UnsolvedPatches.erase(i);
+            else
+                UnsolvedPatches.insert(i);
+        }
+
         RemoveEmptyPatches();
 
         if (add_only_where_needed)
             MarkUnsolvedPatches();
+
         all_solved=(UnsolvedPatches.size()==0);
     }
 
@@ -374,22 +474,6 @@ public:
         PatchMan.Update(UpdatedPatches);
 
         bool is_removable=true;
-        //        for (size_t i=0;i<UpdatedPatches.size();i++)
-        //        {
-        //            int TestPatch=UpdatedPatches[i];
-
-        //            if (PatchMan.isEmpty(TestPatch))continue;
-
-        //            UpdateCondition(TestPatch);
-
-        //            if (SatisfyConditions(TestPatch))
-        //                continue;
-        //            else
-        //            {
-        //                is_removable=false;
-        //                break;
-        //            }
-        //        }
 
         //LOCAL UPDATE
         for (size_t i=0;i<UpdatedPatches.size();i++)
@@ -420,6 +504,7 @@ public:
                 break;
             }
         }
+
         if (!is_removable)
         {
             PathSampl.SelectedPaths[Path_To_remove]=TestPath;
@@ -450,26 +535,63 @@ public:
         }
     }
 
+    int current_rem_cand;
+
+//    bool RemoveNextIfPossible()
+//    {
+//        if ((current_rem_cand<0)||(current_rem_cand>PathSampl.SelectedPaths.size()))
+//            current_rem_cand=PathSampl.SelectedPaths.size()-1;
+
+//        bool has_removed=false;
+//        int Path_To_remove=PathSampl.SelectedPaths.size()-1;
+//        do{
+//            has_removed|=RemoveIfPossible(Path_To_remove);
+//            if (has_removed)return true;
+//            Path_To_remove--;
+//        }while ((!has_removed)&&(Path_To_remove>=0));
+//        return false;
+//    }
+
     bool RemoveNextIfPossible()
     {
+        if ((current_rem_cand<0)||(current_rem_cand>PathSampl.SelectedPaths.size()))
+            current_rem_cand=PathSampl.SelectedPaths.size()-1;
+
         bool has_removed=false;
-        int Path_To_remove=PathSampl.SelectedPaths.size()-1;
         do{
-            has_removed|=RemoveIfPossible(Path_To_remove);
+            has_removed|=RemoveIfPossible(current_rem_cand);
+            current_rem_cand--;
             if (has_removed)return true;
-            Path_To_remove--;
-        }while ((!has_removed)&&(Path_To_remove>=0));
+        }while ((!has_removed)&&(current_rem_cand>=0));
         return false;
     }
 
     PatchDecomposer(PatchManaging<ScalarType> &_PatchMan,
-                    Geo::CrossPathSampling<ScalarType> &_PathSampl):
-        PatchMan(_PatchMan),PathSampl(_PathSampl)
+                    Geo::CrossPathSampling<ScalarType> &_PathSampl,
+                    std::vector<Field::CrossF<ScalarType> > &_VertCurv,
+                    std::vector<Field::CrossF<ScalarType> > &_FaceCurv):
+                    PatchMan(_PatchMan),PathSampl(_PathSampl),
+                    VertCurv(_VertCurv),FaceCurv(_FaceCurv)
     {
         add_only_where_needed=true;
         stop_when_solved=true;
         allow_darts=false;
         allow_concave=false;
+        current_rem_cand=-1;
+        dynamic_smooth=false;
+    }
+
+    void Decompose(bool Do_remove)
+    {
+        bool all_solved=false;
+        bool added_sample=false;
+        do
+        {
+            AddNext(all_solved,added_sample);
+        }while ((!all_solved)&&(added_sample));
+
+        if (Do_remove)
+            while (RemoveNextIfPossible()){};
     }
 
     bool SavePatchesLayout(const std::string meshFile)

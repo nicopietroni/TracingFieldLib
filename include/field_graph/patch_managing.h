@@ -52,9 +52,13 @@ public:
     //END SUBMESHES
 
     //the original mesh
-    const std::vector<Geo::Point3<ScalarType> > &VertPos;
-    const std::vector<std::vector<int> > &Faces;
+    std::vector<Geo::Point3<ScalarType> > &VertPos;
+    std::vector<std::vector<int> > &Faces;
     const Geo::TracingGraph<ScalarType> &TGraph;
+
+    //mapping patch to faces and viceversa
+    std::vector<std::vector<int> > PatchOriginalFaces;
+    std::vector<int> OriginalFaceToPatch;
 
 private:
 
@@ -67,10 +71,6 @@ private:
 
     //the old nodes used to check if need to update
     std::vector<std::vector<int> > OLDPathNodes;
-
-    //mapping patch to faces and viceversa
-    std::vector<std::vector<int> > PatchOriginalFaces;
-    std::vector<int> OriginalFaceToPatch;
 
     //for each edge the nodes that are passed with respect to the first node
     // std::unordered_map<std::pair<int,int>,int[2],Geo::hashPairIntFunction > PathsEdges;
@@ -575,36 +575,36 @@ private:
 
     }
 
-    void FindAddRemovePaths(std::vector<int> &ToAdd,
-                            std::vector<int> &ToRemove)
-    {
-        ToAdd.clear();
-        ToRemove.clear();
-        for (size_t i=0;i<PathNodes.size();i++)
-        {
-            bool found=false;
-            for (size_t j=0;j<OLDPathNodes.size();j++)
-            {
-                if (PathNodes[i]!=OLDPathNodes[j])continue;
-                found=true;
-                break;
-            }
-            if (!found)
-                ToAdd.push_back(i);
-        }
-        for (size_t i=0;i<OLDPathNodes.size();i++)
-        {
-            bool found=false;
-            for (size_t j=0;j<PathNodes.size();j++)
-            {
-                if (OLDPathNodes[i]!=(PathNodes[j]))continue;
-                found=true;
-                break;
-            }
-            if (!found)
-                ToRemove.push_back(i);
-        }
-    }
+//    void FindAddRemovePaths(std::vector<int> &ToAdd,
+//                            std::vector<int> &ToRemove)
+//    {
+//        ToAdd.clear();
+//        ToRemove.clear();
+//        for (size_t i=0;i<PathNodes.size();i++)
+//        {
+//            bool found=false;
+//            for (size_t j=0;j<OLDPathNodes.size();j++)
+//            {
+//                if (PathNodes[i]!=OLDPathNodes[j])continue;
+//                found=true;
+//                break;
+//            }
+//            if (!found)
+//                ToAdd.push_back(i);
+//        }
+//        for (size_t i=0;i<OLDPathNodes.size();i++)
+//        {
+//            bool found=false;
+//            for (size_t j=0;j<PathNodes.size();j++)
+//            {
+//                if (OLDPathNodes[i]!=(PathNodes[j]))continue;
+//                found=true;
+//                break;
+//            }
+//            if (!found)
+//                ToRemove.push_back(i);
+//        }
+//    }
 
     void InitEdgeToFace()
     {
@@ -1015,6 +1015,37 @@ private:
 
 public:
 
+    void FindAddRemovePaths(std::vector<int> &ToAdd,
+                            std::vector<int> &ToRemove)
+    {
+        ToAdd.clear();
+        ToRemove.clear();
+        for (size_t i=0;i<PathNodes.size();i++)
+        {
+            bool found=false;
+            for (size_t j=0;j<OLDPathNodes.size();j++)
+            {
+                if (PathNodes[i]!=OLDPathNodes[j])continue;
+                found=true;
+                break;
+            }
+            if (!found)
+                ToAdd.push_back(i);
+        }
+        for (size_t i=0;i<OLDPathNodes.size();i++)
+        {
+            bool found=false;
+            for (size_t j=0;j<PathNodes.size();j++)
+            {
+                if (OLDPathNodes[i]!=(PathNodes[j]))continue;
+                found=true;
+                break;
+            }
+            if (!found)
+                ToRemove.push_back(i);
+        }
+    }
+
     int MapFaceToOriginal(const int &IndexPatch,const int &FIndexLocal)const
     {
         assert(IndexPatch<SubPatchFacesToOriginal.size());
@@ -1347,6 +1378,40 @@ public:
                                 OriginalVert,OriginalElem);
     }
 
+    void ComposeMeshFromPatches(std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                std::vector<std::vector<int> >  &Faces)const
+    {
+        VertPos.clear();
+        Faces.clear();
+
+        //append all faces
+        std::vector<std::pair<int,int> >  PatchF;
+        for (size_t i=0;i<NumPatches();i++)
+        {
+            if (isEmpty(i))continue;
+
+            AppendMesh(VertPos,Faces,SubPatchVertPos[i],SubPatchFaces[i]);
+            for (size_t j=0;j<SubPatchFaces[i].size();j++)
+                PatchF.push_back(std::pair<int,int>(i,j));
+        }
+
+        assert(PatchF.size()==Faces.size());
+
+        //then reorder
+        std::vector<std::vector<int> >  NewFaces=Faces;
+        for (size_t i=0;i<PatchF.size();i++)
+        {
+            int IndexP=PatchF[i].first;
+            int IndexF=PatchF[i].second;
+            assert(IndexP<NumPatches());
+            assert(IndexP>=0);
+            assert(IndexF<SubPatchFacesToOriginal[IndexP].size());
+            int NewFIdx=SubPatchFacesToOriginal[IndexP][IndexF];
+            NewFaces[NewFIdx]=Faces[i];
+        }
+        Faces=NewFaces;
+    }
+
     void AddTouchedPatchesToSet(const std::vector<int> &PathN,
                                 std::set<int> &PatchIdx)
     {
@@ -1369,6 +1434,54 @@ public:
                 PatchIdx.insert(OriginalFaceToPatch[IndexF]);
             }
         }
+    }
+
+    void GetTouchedPatchesFromPathIndex(const std::vector<int> &PathIDX,
+                                         std::set<int> &PatchIdx)
+    {
+        PatchIdx.clear();
+        for (size_t i=0;i<PathIDX.size();i++)
+        {
+            int IndexPath=PathIDX[i];
+            assert(IndexPath>=0);
+            assert(IndexPath<PathNodes.size());
+            AddTouchedPatchesToSet(PathNodes[IndexPath],PatchIdx);
+        }
+    }
+
+    void GetFaceOnPath(const int IndexPath,std::vector<int> &Faces)
+    {
+        Faces.clear();
+        assert(IndexPath>=0);
+        assert(IndexPath<PathNodes.size());
+        for (int i=0;i<PathNodes[IndexPath].size()-1;i++)
+        {
+            int IndexN0=PathNodes[IndexPath][i];
+            int IndexN1=PathNodes[IndexPath][i+1];
+            int IndexV0=Field::CrossFieldGraph::ElemOfNode(IndexN0);
+            int IndexV1=Field::CrossFieldGraph::ElemOfNode(IndexN1);
+            std::pair<int,int> key(std::min(IndexV0,IndexV1),std::max(IndexV0,IndexV1));
+            assert(EdgesToFace.count(key)>0);
+            for (size_t j=0;j<EdgesToFace[key].size();j++)
+            {
+                int IndexF=EdgesToFace[key][j];
+                assert(IndexF>=0);
+                assert(IndexF<(int)Faces.size());
+                assert(IndexF<(int)OriginalFaceToPatch.size());
+                Faces.push_back(OriginalFaceToPatch[IndexF]);
+            }
+        }
+    }
+
+    void GetFaceOnPaths(const std::vector<int> &IndexPaths,std::vector<int> &Faces)
+    {
+       Faces.clear();
+       for (size_t i=0;i<IndexPaths.size();i++)
+       {
+           std::vector<int> PathF;
+           GetFaceOnPath(IndexPaths[i],PathF);
+           Faces.insert(PathF.end(),PathF.begin(),PathF.end());
+       }
     }
 
     void CompactEmptyPatches(std::map<int,int> &PatchIdxRemap)
@@ -1741,40 +1854,42 @@ public:
         }
     }
 
-    void Update(std::vector<int> &UpdatedPatches)
+    void Update(const std::vector<int> &AddedPaths,
+                const std::vector<int> &RemovedPaths,
+                std::vector<int> &UpdatedPatches)
     {
         UpdatedPatches.clear();
 
-        std::vector<int> ToAdd,ToRemove;
+//        std::vector<int> ToAdd,ToRemove;
         std::set<int> ToUpdPatches;
-        FindAddRemovePaths(ToAdd,ToRemove);
+//        FindAddRemovePaths(ToAdd,ToRemove);
 
         //        std::cout<<"Adding "<<ToAdd.size()<<" Paths"<<std::endl;
         //        std::cout<<"Removing "<<ToRemove.size()<<" Paths"<<std::endl;
 
-        for (size_t i=0;i<ToRemove.size();i++)
+        for (size_t i=0;i<RemovedPaths.size();i++)
         {
-            int IndexPath=ToRemove[i];
+            int IndexPath=RemovedPaths[i];
             AddTouchedPatchesToSet(OLDPathNodes[IndexPath],ToUpdPatches);
         }
 
-        for (size_t i=0;i<ToAdd.size();i++)
+        for (size_t i=0;i<AddedPaths.size();i++)
         {
-            int IndexPath=ToAdd[i];
+            int IndexPath=AddedPaths[i];
             AddTouchedPatchesToSet(PathNodes[IndexPath],ToUpdPatches);
         }
 
         //        std::cout<<"To Update "<<ToUpdPatches.size()<<" Patches"<<std::endl;
 
-        for (size_t i=0;i<ToRemove.size();i++)
+        for (size_t i=0;i<RemovedPaths.size();i++)
         {
-            int IndexPath=ToRemove[i];
+            int IndexPath=RemovedPaths[i];
             RemovePath(OLDPathNodes[IndexPath]);
         }
 
-        for (size_t i=0;i<ToAdd.size();i++)
+        for (size_t i=0;i<AddedPaths.size();i++)
         {
-            int IndexPath=ToAdd[i];
+            int IndexPath=AddedPaths[i];
             AddPath(PathNodes[IndexPath]);
         }
 
@@ -1813,6 +1928,14 @@ public:
         assert(PatchCorners.size()==NumPatches());
         assert(TypeOfCorner.size()==NumPatches());
         assert(EdgePatchSides.size()==NumPatches());
+    }
+
+
+    void Update(std::vector<int> &UpdatedPatches)
+    {
+        std::vector<int> ToAdd,ToRemove;
+        FindAddRemovePaths(ToAdd,ToRemove);
+        Update(ToAdd,ToRemove,UpdatedPatches);
     }
 
     int NumPatches()const
@@ -1903,8 +2026,8 @@ public:
         WriteStats();
     }
 
-    PatchManaging(const std::vector<Geo::Point3<ScalarType> > &_VertPos,
-                  const std::vector<std::vector<int> > &_Faces,
+    PatchManaging(std::vector<Geo::Point3<ScalarType> > &_VertPos,
+                  std::vector<std::vector<int> > &_Faces,
                   const Geo::TracingGraph<ScalarType> &_TGraph,
                   const std::vector<std::vector<int> > &_PathNodes):
         VertPos(_VertPos),Faces(_Faces),

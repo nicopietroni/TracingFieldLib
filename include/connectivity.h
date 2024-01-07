@@ -221,6 +221,28 @@ void getFFAdjacency(const std::vector<std::vector<int> > &Faces,
     }
 }
 
+void getVFAdjacency(const std::vector<std::vector<int> > &Faces,
+                    std::vector<std::vector<int> > &VF,
+                    std::vector<std::vector<int> > &VFIndex)
+{
+    int NumV=FindMaxVertIdx(Faces);
+
+    VF.clear();
+    VFIndex.clear();
+    VF.resize(NumV+1);
+    VFIndex.resize(NumV+1);
+
+    for (size_t i=0;i<Faces.size();i++)
+    {
+        for (size_t j=0;j<Faces[i].size();j++)
+        {
+            int indexV=Faces[i][j];
+            VF[indexV].push_back(i);
+            VFIndex[indexV].push_back(j);
+        }
+    }
+}
+
 void getFFAdjacencyNonManifold(const std::vector<std::vector<int> > &Faces,
                                std::vector<std::vector<std::vector<int> > > &NextF,
                                std::vector<std::vector<std::vector<int> > > &NextE)

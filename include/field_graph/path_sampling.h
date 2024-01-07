@@ -266,6 +266,7 @@ private:
     void InitializeDistance()
     {
         TGraph.CurrDistIndex()=0;
+        //TGraph.SetMaxDistance();
 
         std::vector<int> StartN;
 
@@ -355,8 +356,8 @@ private:
 //            }
 //        }
 //        //then get the maximum value and set to it the untouched
-//        ScalarType MaxVal=TGraph.MaxDistance();
-//        TGraph.SetUnMarkedToDistance(MaxVal*10);
+        ScalarType MaxVal=TGraph.MaxDistance();
+        TGraph.SetUnMarkedToDistance(MaxVal);
     }
 
     ScalarType Distance(const std::vector<int> &TestPath)
@@ -987,6 +988,25 @@ public:
                 int IndexV=Field::CrossFieldGraph::ElemOfNode(SelectedPaths[i][j]);
                 VertPaths[i].push_back(IndexV);
             }
+    }
+
+    void GetVertexSelectedPaths(const std::vector<int> &IndexPaths,
+                                std::vector<std::vector<int> > &VertPaths)
+    {
+        VertPaths.clear();
+        VertPaths.resize(IndexPaths.size());
+
+        for (size_t i=0;i<IndexPaths.size();i++)
+        {
+            int currPIdx=IndexPaths[i];
+            assert(currPIdx>=0);
+            assert(currPIdx<SelectedPaths.size());
+            for (size_t j=0;j<SelectedPaths[currPIdx].size();j++)
+            {
+                int IndexV=Field::CrossFieldGraph::ElemOfNode(SelectedPaths[currPIdx][j]);
+                VertPaths[i].push_back(IndexV);
+            }
+        }
     }
 
     CrossPathSampling(std::vector<Geo::Point3<ScalarType > > &_VertPos,

@@ -92,23 +92,30 @@ void InitCrossFieldQualityAsAnisotropy(std::vector<Field::CrossF<ScalarType> > &
 
     ScalarType trimUp=1;
     ScalarType trimDown=1;
+
+    std::vector<ScalarType> KVal;
+    for (size_t i=0;i<Crosses.size();i++)
+    {
+        KVal.push_back(Crosses[i].K[0]);
+        KVal.push_back(Crosses[i].K[1]);
+    }
+    assert(KVal.size()>0);
+
+    std::sort(KVal.begin(),KVal.end());
+    int percUp=int(floor((ScalarType)KVal.size()*(1-filter_percentile)+0.5));
+    percUp=std::min(percUp,(int)KVal.size()-1);
+    int percDown=int(floor((ScalarType)KVal.size()*filter_percentile+0.5));
+    percDown=std::min(percDown,(int)KVal.size()-1);
+
     if (filter_percentile>0)
     {
-        std::vector<ScalarType> KVal;
-        for (size_t i=0;i<Crosses.size();i++)
-        {
-            KVal.push_back(Crosses[i].K[0]);
-            KVal.push_back(Crosses[i].K[1]);
-        }
-        assert(KVal.size()>0);
-
-        std::sort(KVal.begin(),KVal.end());
-        int percUp=int(floor((ScalarType)KVal.size()*(1-filter_percentile)+0.5));
-        percUp=std::min(percUp,(int)KVal.size()-1);
-        int percDown=int(floor((ScalarType)KVal.size()*filter_percentile+0.5));
-        percDown=std::min(percDown,(int)KVal.size()-1);
         trimUp=KVal[percUp];
         trimDown=KVal[percDown];
+    }
+    else
+    {
+        trimUp=KVal.back();
+        trimDown=KVal[0];
     }
 
     for (size_t i=0;i<Crosses.size();i++)
@@ -167,6 +174,8 @@ void SetFaceCrossVectorFromVert(const std::vector<std::vector<int> > &Faces,
         //save old quality
         ScalarType OldQ=FaceCurv[i].Q;
         FaceCurv[i]=InterpolateCross(VertCross,FacesNormals[i],W);
+        assert(fabs(FaceCurv[i].D[0].Norm()-1)<0.00001);
+        assert(fabs(FaceCurv[i].D[1].Norm()-1)<0.00001);
         //restore old quality
         FaceCurv[i].Q=OldQ;
     }
@@ -373,30 +382,60 @@ void RedistributeAnisotropy(const std::vector<Field::CrossF<ScalarType> > &Sourc
     assert(Source.size()==Target.size());
     for (size_t i=0;i<Source.size();i++)
     {
+//        Geo::Point3<ScalarType> Dir0S=Source[i].D[0];
+//        Geo::Point3<ScalarType> Dir1S=Source[i].D[1];
+//        Dir0S.Normalize();
+//        Dir1S.Normalize();
+//        ScalarType K0S=Source[i].K[0];
+//        ScalarType K1S=Source[i].K[1];
+
+//        Geo::Point3<ScalarType> Dir0T=Target[i].D[0];
+//        Geo::Point3<ScalarType> Dir1T=Target[i].D[1];
+//        Dir0T.Normalize();
+//        Dir1T.Normalize();
+//        ScalarType K0T=0;
+//        ScalarType K1T=0;
+
+//        ScalarType Dot0=fabs(Dot(Dir0S,Dir0T));
+//        ScalarType Dot1=fabs(Dot(Dir0S,Dir1T));
+//        ScalarType alpha0=Dot0/(Dot0+Dot1);
+//        K0T+=alpha0*K0S;
+//        K1T+=(1-alpha0)*K0S;
+
+//        ScalarType Dot2=fabs(Dot(Dir1S,Dir0T));
+//        ScalarType Dot3=fabs(Dot(Dir1S,Dir1T));
+//        ScalarType alpha1=Dot2/(Dot2+Dot3);
+//        K0T+=alpha1*K1S;
+//        K1T+=(1-alpha1)*K1S;
+
+//        Target[i].K[0]=K0T;
+//        Target[i].K[1]=K1T;
+
         Geo::Point3<ScalarType> Dir0S=Source[i].D[0];
         Geo::Point3<ScalarType> Dir1S=Source[i].D[1];
+        Dir0S.Normalize();
+        Dir1S.Normalize();
         ScalarType K0S=Source[i].K[0];
         ScalarType K1S=Source[i].K[1];
 
         Geo::Point3<ScalarType> Dir0T=Target[i].D[0];
         Geo::Point3<ScalarType> Dir1T=Target[i].D[1];
-        ScalarType K0T=0;
-        ScalarType K1T=0;
+        Dir0T.Normalize();
+        Dir1T.Normalize();
 
-        ScalarType Dot0=Dot(Dir0S,Dir0T);
-        ScalarType Dot1=Dot(Dir0S,Dir1T);
-        ScalarType alpha0=Dot0/(Dot0+Dot1);
-        K0T+=alpha0*K0S;
-        K1T+=(1-alpha0)*K0S;
+        ScalarType Dot0=fabs(Dot(Dir0S,Dir0T));
+        ScalarType Dot1=fabs(Dot(Dir0S,Dir1T));
 
-        ScalarType Dot2=Dot(Dir1S,Dir0T);
-        ScalarType Dot3=Dot(Dir1S,Dir1T);
-        ScalarType alpha1=Dot2/(Dot2+Dot3);
-        K0T+=alpha1*K1S;
-        K1T+=(1-alpha1)*K1S;
-
-        Target[i].K[0]=K0T;
-        Target[i].K[1]=K1T;
+        if (Dot0>Dot1)
+        {
+             Target[i].K[0]=K0S;
+             Target[i].K[1]=K1S;
+        }
+        else
+        {
+            Target[i].K[0]=K1S;
+            Target[i].K[1]=K0S;
+        }
     }
 }
 
