@@ -12,6 +12,9 @@ namespace GLDraw
 {
 inline void glScale(float const & p){ glScalef(p,p,p);}
 inline void glScale(double const & p){ glScaled(p,p,p);}
+inline void glRotate(float const & angleDeg,Geo::Point3<float> const &Axis){ glRotatef(angleDeg,Axis.X,Axis.Y,Axis.Z);}
+inline void glRotate(double const & angleDeg,Geo::Point3<double> const &Axis){ glRotated(angleDeg,Axis.X,Axis.Y,Axis.Z);}
+
 
 template <class ScalarType>
 inline void glColor(const Geo::Point3<ScalarType> &c)

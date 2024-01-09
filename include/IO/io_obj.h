@@ -152,4 +152,19 @@ bool WriteOBJ(std::string meshFile,
     return (WriteOBJ(meshFile,VertPosVect,Connectivity));
 }
 
+template <class ScalarType>
+bool WriteOBJ(std::string meshFile,
+              const std::vector<Geo::Point2<ScalarType> > &VertPos,
+              const std::vector<std::vector<int> > &Connectivity)
+{
+    std::vector<std::vector<ScalarType > > VertPosVect(VertPos.size());
+    for (size_t i=0;i<VertPos.size();i++)
+    {
+        VertPosVect[i].push_back(VertPos[i].X);
+        VertPosVect[i].push_back(VertPos[i].Y);
+        VertPosVect[i].push_back(0);
+    }
+    return (WriteOBJ(meshFile,VertPosVect,Connectivity));
+}
+
 #endif

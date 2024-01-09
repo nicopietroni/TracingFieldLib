@@ -400,6 +400,12 @@ public:
         std::vector<int> CornerIDX;
         return TutteEmbedding(VertPos,Faces,CornerIDX,VertUV);
     }
+
+    static bool Byjective(const std::vector<std::vector<int> > &Faces,
+                          std::vector<Geo::Point2<ScalarType> > &VertUV)
+    {
+
+    }
 };
 
 }

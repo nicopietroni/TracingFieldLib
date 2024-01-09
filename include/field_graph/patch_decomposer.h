@@ -1,7 +1,7 @@
 #ifndef PATCH_DECOMPOSER
 #define PATCH_DECOMPOSER
 
-#define SMOOTH_KERNEL 3
+#define SMOOTH_KERNEL 2
 #include <vector>
 //#include "../point3.h"
 //#include "graph.h"
@@ -268,7 +268,7 @@ public:
 
     void SmoothAround(const std::vector<int> &PathsIDX,
                       const std::set<int> InvolvedPatches,
-                      int smooth_steps=10)
+                      int smooth_steps=5)
     {
         //initialize the kernel if needed
         if (SmoothKernel.size()!=PatchMan.VertPos.size())
@@ -590,8 +590,13 @@ public:
             AddNext(all_solved,added_sample);
         }while ((!all_solved)&&(added_sample));
 
+        CompactData();
+
         if (Do_remove)
             while (RemoveNextIfPossible()){};
+
+        CompactData();
+
     }
 
     bool SavePatchesLayout(const std::string meshFile)

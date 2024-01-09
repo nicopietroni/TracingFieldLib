@@ -74,6 +74,13 @@ ScalarType Distance( const Segment2<ScalarType> &s,
 }
 
 template <class ScalarType>
+ScalarType Distance( const Geo::Point2<ScalarType> &p,
+                     const Segment2<ScalarType> &s)
+{
+   return Distance(s,p);
+}
+
+template <class ScalarType>
 bool Intersect(const Segment2<ScalarType> &seg0,
                const Segment2<ScalarType> &seg1,
                ScalarType &lambda0)
