@@ -13,7 +13,7 @@
 #include <box3.h>
 #include <GL_functions/GLDrawMesh.h>
 #include <GL_functions/GLPick.h>
-#include <IO/path_functions.h>
+#include <IO/file_path_functions.h>
 #include <UV_param.h>
 #include <UV_distortion.h>
 #include <color_functions.h>
