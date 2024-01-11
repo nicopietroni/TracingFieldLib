@@ -23,6 +23,11 @@ public:
         return Pos[IndexV];
     }
 
+    void Sort()
+    {
+        if (Pos[1]<Pos[0])
+           std::swap(Pos[0],Pos[1]);
+    }
 
     Segment3(const CoordType &P0,const CoordType &P1)
     {
@@ -30,6 +35,26 @@ public:
         Pos[1]=P1;
     }
 
+    inline bool operator ==(const Segment3<ScalarType> &S1)const
+    {
+        if (P(0)!=S1.P(0))return false;
+        if (P(1)!=S1.P(1))return false;
+        return true;
+    }
+
+    inline bool operator <(const Segment3<ScalarType> &S1)const
+    {
+        if (P(0)!=S1.P(0))return (P(0)<S1.P(0));
+        if (P(1)!=S1.P(1))return (P(1)<S1.P(1));
+        return false;
+    }
+
+    inline bool operator !=(const Segment3<ScalarType> &S1)
+    {
+        if (P(0)!=S1.P(0))return true;
+        if (P(1)!=S1.P(1))return true;
+        return false;
+    }
 };
 
 template <class ScalarType>
@@ -72,6 +97,13 @@ Geo::Point3<ScalarType> ClosestPoint( const Segment3<ScalarType> &s,
        return closest;
 }
 
+template <class ScalarType>
+ScalarType Distance(const Segment3<ScalarType> &s,
+                    const Geo::Point3<ScalarType> &p)
+{
+    Geo::Point3<ScalarType> clos=ClosestPoint(s,p);
+    return (clos-p).Norm();
+}
 
 } //namespace
 

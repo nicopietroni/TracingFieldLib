@@ -125,7 +125,7 @@ public:
         return false;
     }
 
-    inline bool operator !=(const Point3<ScalarType> &P1)
+    inline bool operator !=(const Point3<ScalarType> &P1)const
     {
         if (X!=P1.X)return true;
         if (Y!=P1.Y)return true;

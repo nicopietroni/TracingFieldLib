@@ -1,9 +1,10 @@
 #ifndef UV_UTILS
 #define UV_UTILS
 
+#include "Space_Query/triangle_grid_2D.h"
 #include <point2.h>
 #include <cross_field.h>
-#include <Space_Query/triangle_grid_2D.h>
+#include <Space_Query/segment_grid_2D.h>
 
 namespace Geo{
 
@@ -66,88 +67,88 @@ public:
         MapToACircle(VertPos,CircleSeq,Radius,vert_UV);
         if (CornerIDX.size()<=0)return;
 
-//        std::set<int> CornerIDXSet(CornerIDX.begin(),CornerIDX.end());
-//        std::vector<std::vector<int> > BorderSeq;
-//        int startingIdx=-1;
-//        for (size_t i=0;i<CircleSeq.size();i++)
-//        {
-//            int IndexV=CircleSeq[i];
-//            if (CornerIDXSet.count(IndexV)==0)continue;
-//            startingIdx=i;
-//            break;
-//        }
-//        assert(startingIdx!=-1);
+        //        std::set<int> CornerIDXSet(CornerIDX.begin(),CornerIDX.end());
+        //        std::vector<std::vector<int> > BorderSeq;
+        //        int startingIdx=-1;
+        //        for (size_t i=0;i<CircleSeq.size();i++)
+        //        {
+        //            int IndexV=CircleSeq[i];
+        //            if (CornerIDXSet.count(IndexV)==0)continue;
+        //            startingIdx=i;
+        //            break;
+        //        }
+        //        assert(startingIdx!=-1);
 
-//        for (size_t i=0;i<CircleSeq.size();i++)
-//        {
-//            int CurrIdx=(i+startingIdx)%CircleSeq.size();
-//            int IndexV=CircleSeq[CurrIdx];
+        //        for (size_t i=0;i<CircleSeq.size();i++)
+        //        {
+        //            int CurrIdx=(i+startingIdx)%CircleSeq.size();
+        //            int IndexV=CircleSeq[CurrIdx];
 
-//            if ((CornerIDXSet.count(IndexV)>0)&&(i!=(CircleSeq.size()-1)))
-//            {
-//                if (BorderSeq.size()>0)
-//                    BorderSeq.back().push_back(IndexV);
+        //            if ((CornerIDXSet.count(IndexV)>0)&&(i!=(CircleSeq.size()-1)))
+        //            {
+        //                if (BorderSeq.size()>0)
+        //                    BorderSeq.back().push_back(IndexV);
 
-//                BorderSeq.resize(BorderSeq.size()+1);
-//            }
+        //                BorderSeq.resize(BorderSeq.size()+1);
+        //            }
 
-//            BorderSeq.back().push_back(IndexV);
-//        }
-//        BorderSeq.back().push_back(CircleSeq[startingIdx]);
+        //            BorderSeq.back().push_back(IndexV);
+        //        }
+        //        BorderSeq.back().push_back(CircleSeq[startingIdx]);
 
-//        std::cout<<"corner size:"<<CornerIDX.size()<<std::endl;
-//        std::cout<<"boudanry size:"<<BorderSeq.size()<<std::endl;
-//        //check
-//        for (size_t i=0;i<BorderSeq.size();i++)
-//        {
-//            int next_i=(i+1)%BorderSeq.size();
-//            int IndexVEnd=BorderSeq[i].back();
-//            int IndexVNext=BorderSeq[next_i][0];
-//            std::cout<<"Side:"<<i<<std::endl;
-//            std::cout<<IndexVEnd<<std::endl;
-//            std::cout<<IndexVNext<<std::endl;
-//            std::cout<<std::endl<<std::endl;
-//            assert(IndexVEnd==IndexVNext);
-//        }
+        //        std::cout<<"corner size:"<<CornerIDX.size()<<std::endl;
+        //        std::cout<<"boudanry size:"<<BorderSeq.size()<<std::endl;
+        //        //check
+        //        for (size_t i=0;i<BorderSeq.size();i++)
+        //        {
+        //            int next_i=(i+1)%BorderSeq.size();
+        //            int IndexVEnd=BorderSeq[i].back();
+        //            int IndexVNext=BorderSeq[next_i][0];
+        //            std::cout<<"Side:"<<i<<std::endl;
+        //            std::cout<<IndexVEnd<<std::endl;
+        //            std::cout<<IndexVNext<<std::endl;
+        //            std::cout<<std::endl<<std::endl;
+        //            assert(IndexVEnd==IndexVNext);
+        //        }
 
-//        vert_UV.clear();
-//        //compute total lenght
-//        ScalarType TotL=0;
+        //        vert_UV.clear();
+        //        //compute total lenght
+        //        ScalarType TotL=0;
 
-//        for (size_t i=0;i<CircleSeq.size();i++)
-//        {
-//            int IndexV0=CircleSeq[i];
-//            int IndexV1=CircleSeq[(i+1)%CircleSeq.size()];
+        //        for (size_t i=0;i<CircleSeq.size();i++)
+        //        {
+        //            int IndexV0=CircleSeq[i];
+        //            int IndexV1=CircleSeq[(i+1)%CircleSeq.size()];
 
-//            assert(IndexV0<(int)VertPos.size());
-//            assert(IndexV1<(int)VertPos.size());
-//            assert(IndexV0>=0);
-//            assert(IndexV1>=0);
+        //            assert(IndexV0<(int)VertPos.size());
+        //            assert(IndexV1<(int)VertPos.size());
+        //            assert(IndexV0>=0);
+        //            assert(IndexV1>=0);
 
-//            Geo::Point3<ScalarType> P0=VertPos[IndexV0];
-//            Geo::Point3<ScalarType> P1=VertPos[IndexV1];
-//            ScalarType Dist=(P0-P1).Norm();
-//            TotL+=Dist;
-//        }
+        //            Geo::Point3<ScalarType> P0=VertPos[IndexV0];
+        //            Geo::Point3<ScalarType> P1=VertPos[IndexV1];
+        //            ScalarType Dist=(P0-P1).Norm();
+        //            TotL+=Dist;
+        //        }
 
-//        ScalarType CurrL=0;
-//        vert_UV.clear();
-//        for (size_t i=0;i<CircleSeq.size();i++)
-//        {
-//            ScalarType frac = CurrL * (ScalarType) 2 * M_PI / TotL;
-//            vert_UV.push_back(Geo::Point2<ScalarType>(cos(frac), sin(frac)));
+        //        ScalarType CurrL=0;
+        //        vert_UV.clear();
+        //        for (size_t i=0;i<CircleSeq.size();i++)
+        //        {
+        //            ScalarType frac = CurrL * (ScalarType) 2 * M_PI / TotL;
+        //            vert_UV.push_back(Geo::Point2<ScalarType>(cos(frac), sin(frac)));
 
-//            int IndexV0=CircleSeq[i];
-//            int IndexV1=CircleSeq[(i+1)%CircleSeq.size()];
-//            Geo::Point3<ScalarType> P0=VertPos[IndexV0];
-//            Geo::Point3<ScalarType> P1=VertPos[IndexV1];
-//            ScalarType Dist=(P0-P1).Norm();
+        //            int IndexV0=CircleSeq[i];
+        //            int IndexV1=CircleSeq[(i+1)%CircleSeq.size()];
+        //            Geo::Point3<ScalarType> P0=VertPos[IndexV0];
+        //            Geo::Point3<ScalarType> P1=VertPos[IndexV1];
+        //            ScalarType Dist=(P0-P1).Norm();
 
-//            CurrL+=Dist;
-//        }
+        //            CurrL+=Dist;
+        //        }
 
-//        for (size_t i=0;i<vert_UV.size();i++)
-//            vert_UV[i]=vert_UV[i]*Radius;
+        //        for (size_t i=0;i<vert_UV.size();i++)
+        //            vert_UV[i]=vert_UV[i]*Radius;
     }
 
     static bool MapBetween(const std::vector<Geo::Point2<ScalarType> > &vert0,
@@ -203,8 +204,8 @@ public:
             Geo::Point3<ScalarType> P2=vert1_3D[VIdx2];
 
             Geo::Point3<ScalarType> PInterp=P0*bary[i].X+
-                                            P1*bary[i].Y+
-                                            P2*bary[i].Z;
+                    P1*bary[i].Y+
+                    P2*bary[i].Z;
             interp_vert0_3D[i]=PInterp;
         }
         return true;
@@ -219,6 +220,85 @@ public:
         ScalarType ScaleFact=Area3D/Area2D;
         for (size_t i=0;i<vert_UV.size();i++)
             vert_UV[i]=vert_UV[i]*ScaleFact;
+    }
+
+
+
+    static bool Bijective(const std::vector<Geo::Point2<ScalarType> > &VertUV,
+                          const std::vector<std::vector<int> > &Faces)
+    {
+        const ScalarType eps=0.000001;
+        //first test, simply check if a coordinate appear twice
+        std::set<Geo::Point2<ScalarType> > TestVertUV(VertUV.begin(),VertUV.end());
+        if (TestVertUV.size()!=VertUV.size())return false;
+
+        //check if there are folded tris
+        int PosA=0;
+        int NegA=0;
+
+        for (int i=0;i<Faces.size();i++)
+        {
+            Geo::Point2<ScalarType> P0=VertUV[Faces[i][0]];
+            Geo::Point2<ScalarType> P1=VertUV[Faces[i][1]];
+            Geo::Point2<ScalarType> P2=VertUV[Faces[i][2]];
+            ScalarType FaceArea=(Geo::Cross((P1-P0),(P2-P0))/2);
+            if (FaceArea==0)return false;
+            if (FaceArea<0)
+                NegA++;
+            else
+                PosA++;
+        }
+        //if not all positive or all negative has fold
+        if ((NegA>0)&&(PosA>0))return false;
+
+        //check if the border intersect itself
+        std::vector<Geo::Segment2<ScalarType> > BorderSeg;
+        Geo::SegmentSpatialIndex2D<ScalarType> SegIndex2D;
+        std::vector<std::pair<int,int> > BorderE;
+        Geo::getBorderEdges(Faces,BorderE);
+
+        for (size_t i=0;i<BorderE.size();i++)
+        {
+            int IndexV0=BorderE[i].first;
+            int IndexV1=BorderE[i].second;
+            assert(IndexV0>=0);
+            assert(IndexV1>=0);
+            assert(IndexV0<VertUV.size());
+            assert(IndexV1<VertUV.size());
+            Geo::Point2<ScalarType> P0=VertUV[IndexV0];
+            Geo::Point2<ScalarType> P1=VertUV[IndexV1];
+            Geo::Segment2<ScalarType> s(P0,P1);
+
+            //scale a bit to not intersect the adjacent
+            Scale(s,1-eps);
+            BorderSeg.push_back(Geo::Segment2<ScalarType>(P0,P1));
+        }
+        SegIndex2D.Init(BorderSeg);
+
+        for (size_t i=0;i<BorderSeg.size();i++)
+        {
+            std::vector<int> IntSegIdx;
+            std::vector<Geo::Point2<ScalarType> > IntSegPos;
+            SegIndex2D.InteresectSeg(BorderSeg,BorderSeg[i],IntSegIdx,IntSegPos);
+            if (IntSegIdx.size()==0)continue;
+            for (size_t j=0;j<IntSegIdx.size();j++)
+            {
+                int SegIdx=IntSegIdx[j];
+                assert(SegIdx>=0);
+                assert(SegIdx<BorderSeg.size());
+
+                //check same segment
+                if (IntSegIdx[j]==(int)i)continue;
+
+                //check if adjacent one
+                if (BorderSeg[SegIdx].P(0)==BorderSeg[i].P(0))continue;
+                if (BorderSeg[SegIdx].P(0)==BorderSeg[i].P(1))continue;
+                if (BorderSeg[SegIdx].P(1)==BorderSeg[i].P(0))continue;
+                if (BorderSeg[SegIdx].P(1)==BorderSeg[i].P(1))continue;
+                return false;
+            }
+        }
+        return true;
     }
 };
 

@@ -208,6 +208,27 @@ public:
         return true;
     }
 
+    bool FirstInteresect(const std::vector<Geo::Segment2<ScalarType> > &segs,
+                        const Geo::Point2<ScalarType> &Orig,
+                        const Geo::Point2<ScalarType> &Dir,
+                        int &FirstIntSegIdx,ScalarType &lambda)const
+    {
+        Geo::Point2<ScalarType> FirstIntSegPos;
+        bool has_int=FirstInteresect(segs,Orig,Dir,FirstIntSegIdx,FirstIntSegPos);
+        if (has_int)
+        {
+            assert(FirstIntSegIdx>=0);
+            assert(FirstIntSegIdx<segs.size());
+            Geo::Segment2<ScalarType> curr_s=segs[FirstIntSegIdx];
+            ScalarType L=Lenght(curr_s);
+            ScalarType D0=(FirstIntSegPos-curr_s.P(0)).Norm();
+            assert(D0<=L);
+            lambda=1-D0/L;
+            return true;
+        }
+        return false;
+    }
+
     /*! \brief Initialize the search structure
      *  \param vert The vertex vector of the input mesh
      *  \param face The face vector of the input mesh

@@ -337,6 +337,14 @@ void getBorderVert(const std::vector<std::vector<int> > &connections,
     BorderV.erase(last, BorderV.end());
 }
 
+void getBorderVert(const std::vector<std::vector<int> > &connections,
+                   std::vector<size_t> &BorderV)
+{
+    std::vector<std::vector<int> > NextF,NextE;
+    Geo::getFFAdjacency(connections, NextF,NextE);
+    getBorderVert(connections,NextF,BorderV);
+}
+
 void getBorderEdges(const std::vector<std::vector<int> > &Faces,
                     const std::vector<std::vector<int> > &NextF,
                     std::vector<std::pair<int,int> > &BorderE)
@@ -357,6 +365,7 @@ void getBorderEdges(const std::vector<std::vector<int> > &Faces,
     std::vector<std::pair<int,int> >::iterator last = std::unique(BorderE.begin(), BorderE.end());
     BorderE.erase(last, BorderE.end());
 }
+
 
 void getBorderEdges(const std::vector<std::vector<int> > &Faces,
                     std::vector<std::pair<int,int> > &BorderE)
@@ -385,6 +394,14 @@ void getBorderVert(const std::vector<std::vector<int> > &connections,
 }
 
 
+void getBorderVert(const std::vector<std::vector<int> > &connections,
+                   std::vector<bool> &IsB)
+{
+    std::vector<std::vector<int> > NextF,NextE;
+    Geo::getFFAdjacency(connections, NextF,NextE);
+    int NumV=Geo::FindMaxVertIdx(connections);
+    getBorderVert(connections,NextF,NumV+1,IsB);
+}
 
 
 }

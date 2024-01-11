@@ -137,7 +137,10 @@ public:
     {
         for (size_t i=0;i<PatchMan.NumPatches();i++)
         {
+            std::cout<<"Checking Patch "<<i<<std::endl;
+
             if (PatchMan.isEmpty(i))continue;
+
             if (!SatisfyConditions(i))UnsolvedPatches.insert(i);
         }
     }
@@ -585,16 +588,20 @@ public:
     {
         bool all_solved=false;
         bool added_sample=false;
+        std::cout<<"ADDING PATHS"<<std::endl;
         do
         {
             AddNext(all_solved,added_sample);
+
         }while ((!all_solved)&&(added_sample));
 
         CompactData();
 
         if (Do_remove)
+        {
+            std::cout<<"REMOVING PATHS"<<std::endl;
             while (RemoveNextIfPossible()){};
-
+        }
         CompactData();
 
     }
