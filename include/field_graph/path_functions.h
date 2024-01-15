@@ -203,6 +203,108 @@ public:
         std::reverse(OppPathN.begin(),OppPathN.end());
         PathN=OppPathN;
     }
+
+    static bool BestConnectionFrom(const TracingGraph<ScalarType> &TGraph,
+                                   const int &Node0,const int &VertIdx1,
+                                   int &NodeIdx1,ScalarType &bestW)
+    {
+        NodeIdx1=-1;
+
+        bool found=false;
+
+        bestW=std::numeric_limits<ScalarType>::max();
+
+        std::vector<int> Neigh;
+        std::vector<ScalarType> NeighW;
+        TGraph.GetNeigh(Node0,true,true,Neigh,NeighW);
+
+        for (size_t j=0;j<Neigh.size();j++)
+        {
+            int NeighV=-1;
+
+            if (TGraph.TypeofGraph()==GT_CrossField)
+                NeighV=Field::CrossFieldGraph::ElemOfNode(Neigh[j]);
+            else
+                NeighV=Field::CrossFieldGraph::ElemOfNode(Neigh[j]);
+
+            if (NeighV!=VertIdx1)continue;
+
+            found=true;
+
+            if (NeighW[j]>bestW)continue;
+
+            bestW=NeighW[j];
+            NodeIdx1=Neigh[j];
+        }
+
+        return found;
+    }
+
+    static bool BestConnectionNodePair(const TracingGraph<ScalarType> &TGraph,
+                                       const int &VertIdx0,
+                                       const int &VertIdx1,
+                                       int &NodeIdx0,
+                                       int &NodeIdx1)
+    {
+        NodeIdx0=-1;
+        NodeIdx1=-1;
+
+        assert(VertIdx0!=VertIdx1);
+        std::vector<int> IndexN0;
+
+        //if (TGraph.TypeofGraph()==GT_CrossField)
+            Field::CrossFieldGraph::NodesOfElem(VertIdx0,IndexN0);
+//        else
+//            Field::FrameFieldGraph::NodesOfElem(VertIdx0,IndexN0);
+
+        ScalarType bestW=std::numeric_limits<ScalarType>::max();
+        bool found=false;
+        for (size_t i=0;i<IndexN0.size();i++)
+        {
+            int TestNodeIdx1;
+            ScalarType TestbestW;
+            bool found_this=BestConnectionFrom(TGraph,IndexN0[i],VertIdx1,
+                                               TestNodeIdx1,TestbestW);
+            if (!found_this)continue;
+
+            if (TestbestW>bestW)continue;
+
+            found=true;
+            bestW=TestbestW;
+            NodeIdx0=IndexN0[i];
+            NodeIdx1=TestNodeIdx1;
+        }
+        return found;
+    }
+
+    //should work generic but to be tested
+    static bool ReconstructPathFromElem(const TracingGraph<ScalarType> &Tgraph,
+                                             const std::vector<int> &Elems,
+                                             std::vector<int> &Nodes)
+    {
+        Nodes.clear();
+        assert(Elems.size()>=2);
+
+        int E0=Elems[0];
+        int E1=Elems[1];
+
+        int NodeIdx0,NodeIdx1;
+        bool found=BestConnectionNodePair(Tgraph,E0,E1,NodeIdx0,NodeIdx1);
+        if (!found){return false;}
+
+        Nodes.push_back(NodeIdx0);
+        for (size_t i=1;i<Elems.size();i++)
+        {
+            int NodeIdx1;
+            ScalarType bestW;
+            bool found=BestConnectionFrom(Tgraph,Nodes.back(),
+                                          Elems[i],NodeIdx1,
+                                          bestW);
+            if (!found)return true;
+            Nodes.push_back(NodeIdx1);
+        }
+        return true;
+    }
 };
 
 }

@@ -23,8 +23,8 @@ public:
     static void DrawCorners(Geo::PatchManaging<ScalarType> &PM,
                             const int &IndexPatch,const ScalarType PointSize=20)
     {
-        assert(IndexPatch<PM.VisualCornerType.size());
-        assert(PM.VisualCorners[IndexPatch].size()==PM.VisualCornerType[IndexPatch].size());
+        assert(IndexPatch<PM.PData.VisualCornerType.size());
+        assert(PM.PData.VisualCorners[IndexPatch].size()==PM.PData.VisualCornerType[IndexPatch].size());
 
         glPushAttrib(GL_ALL_ATTRIB_BITS);
 
@@ -35,11 +35,11 @@ public:
 
 
         glBegin(GL_POINTS);
-        for (size_t i=0;i<PM.VisualCorners[IndexPatch].size();i++)
+        for (size_t i=0;i<PM.PData.VisualCorners[IndexPatch].size();i++)
         {
 
             Geo::Point3<ScalarType> ColPoints(0,0,0);
-            typename Geo::PatchManaging<ScalarType>::CornerType CType=PM.VisualCornerType[IndexPatch][i];
+            typename Geo::PatchManaging<ScalarType>::CornerType CType=PM.PData.VisualCornerType[IndexPatch][i];
             switch(CType) {
               case Geo::PatchManaging<ScalarType>::CTypeConvex:
                 ColPoints=Geo::Point3<ScalarType>(0,1,1);
@@ -55,7 +55,7 @@ public:
             }
 
             GLDraw::glColor(ColPoints);
-            Geo::Point3<ScalarType> Pos=PM.VisualCorners[IndexPatch][i];
+            Geo::Point3<ScalarType> Pos=PM.PData.VisualCorners[IndexPatch][i];
             GLDraw::glVertex(Pos);
         }
         glEnd();
@@ -66,7 +66,7 @@ public:
 
     static void DrawCorners(Geo::PatchManaging<ScalarType> &PM,const ScalarType PointSize=20)
     {
-        for (size_t i=0;i<PM.VisualCorners.size();i++)
+        for (size_t i=0;i<PM.PData.VisualCorners.size();i++)
             DrawCorners(PM,i,PointSize);
     }
 
@@ -82,14 +82,14 @@ public:
         glLineWidth((GLfloat)LineSize);
 
 
-        for (size_t i=0;i<PM.VisualPaths[IndexPatch].size();i++)
+        for (size_t i=0;i<PM.PData.VisualPaths[IndexPatch].size();i++)
         {
-            Geo::Point3<ScalarType> ColLine=Geo::ScatterColor<ScalarType>((int)PM.VisualPaths[IndexPatch].size(),i);
+            Geo::Point3<ScalarType> ColLine=Geo::ScatterColor<ScalarType>((int)PM.PData.VisualPaths[IndexPatch].size(),i);
             GLDraw::glColor(ColLine);
             glBegin(GL_LINE_STRIP);
-            for (size_t j=0;j<PM.VisualPaths[IndexPatch][i].size();j++)
+            for (size_t j=0;j<PM.PData.VisualPaths[IndexPatch][i].size();j++)
             {
-                Geo::Point3<ScalarType> Pos=PM.VisualPaths[IndexPatch][i][j];
+                Geo::Point3<ScalarType> Pos=PM.PData.VisualPaths[IndexPatch][i][j];
                 GLDraw::glVertex(Pos);
             }
              glEnd();
@@ -101,7 +101,7 @@ public:
 
     static void DrawSides(Geo::PatchManaging<ScalarType> &PM,const ScalarType LineSize=10)
     {
-        for (size_t i=0;i<PM.VisualCorners.size();i++)
+        for (size_t i=0;i<PM.PData.VisualCorners.size();i++)
         {
             DrawSides(PM,i,LineSize);
         }

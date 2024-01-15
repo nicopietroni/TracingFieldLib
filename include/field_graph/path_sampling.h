@@ -36,7 +36,7 @@ class CrossPathSampling
 
     enum SP_Status{SP_Selected,SP_Discarded,SP_Evaluate};
 
-    bool avoidSingularities;
+
     bool updatePatches;
     //bool orthoBorderDist;
 
@@ -49,7 +49,9 @@ class CrossPathSampling
     //these are used to detect when two path shared an edge and to solve it
     std::set<std::pair<int,int> > ConflictEdges;
 
-public:   
+public:
+    bool avoidSingularities;
+
     std::vector<std::vector<int> > SampledPaths;
     std::vector<SP_Status> SampledPaths_Status;
     std::vector<std::pair<ScalarType,int> > Candidates;
@@ -335,27 +337,27 @@ private:
         int StopNode;
         Geo::GraphQuery<ScalarType>::Dijkstra(TGraph,StartN,SParam,StopNode);
 
-//        //then check of some has not been reached
-//        for (size_t i=0;i<TGraph.NumNodes();i++)
-//        {
-//            if (TGraph.IsMarked(i))continue;
-//            std::vector<int> IndexN;
-//            Field::CrossFieldGraph::NodesOfElem(i,IndexN);
-//            ScalarType AvgDist=0;
-//            int Num=0;
-//            for (size_t j=0;j<IndexN.size();j++)
-//            {
-//                if (TGraph.IsMarked(IndexN[j]))continue;
-//                AvgDist+=TGraph.Distance(IndexN[j]);
-//                Num++;
-//            }
-//            if (Num>0)
-//            {
-//                AvgDist/=Num;
-//                TGraph.Distance(i)=AvgDist;
-//            }
-//        }
-//        //then get the maximum value and set to it the untouched
+        //        //then check of some has not been reached
+        //        for (size_t i=0;i<TGraph.NumNodes();i++)
+        //        {
+        //            if (TGraph.IsMarked(i))continue;
+        //            std::vector<int> IndexN;
+        //            Field::CrossFieldGraph::NodesOfElem(i,IndexN);
+        //            ScalarType AvgDist=0;
+        //            int Num=0;
+        //            for (size_t j=0;j<IndexN.size();j++)
+        //            {
+        //                if (TGraph.IsMarked(IndexN[j]))continue;
+        //                AvgDist+=TGraph.Distance(IndexN[j]);
+        //                Num++;
+        //            }
+        //            if (Num>0)
+        //            {
+        //                AvgDist/=Num;
+        //                TGraph.Distance(i)=AvgDist;
+        //            }
+        //        }
+        //        //then get the maximum value and set to it the untouched
         ScalarType MaxVal=TGraph.MaxDistance();
         TGraph.SetUnMarkedToDistance(MaxVal);
     }
@@ -1007,6 +1009,269 @@ public:
                 VertPaths[i].push_back(IndexV);
             }
         }
+    }
+
+    void SplitPaths(bool sort_path=false)
+    {
+        //for each vertex the path passing by
+        std::map<int,std::set<int> > VertexPath;
+
+        //find the splitting vertices
+        for (int i=0;i<(int)SelectedPaths.size();i++)
+            for (int j=0;j<(int)SelectedPaths[i].size();j++)
+            {
+                int PathN=SelectedPaths[i][j];
+                int PathV=Field::CrossFieldGraph::ElemOfNode(PathN);
+                VertexPath[PathV].insert(i);
+            }
+
+        std::set<int> SplitVert;
+        std::map<int,std::set<int> >::iterator IteM;
+        for (IteM=VertexPath.begin();IteM!=VertexPath.end();IteM++)
+        {
+            if ((*IteM).second.size()==1)continue;
+            SplitVert.insert((*IteM).first);
+        }
+
+        //then split
+        struct NewPathsPrio
+        {
+            int OrigP;
+            ScalarType Prio;
+            std::vector<int> Path;
+
+            void InitPriorityByY(std::vector<Geo::Point3<ScalarType > > &VertPos)
+            {
+                ScalarType minY=std::numeric_limits<ScalarType>::max();
+                for (size_t i=0;i<Path.size();i++)
+                {
+                    int NodeIdx=Path[i];
+                    int PathV=Field::CrossFieldGraph::ElemOfNode(NodeIdx);
+                    assert(PathV>=0);
+                    assert(PathV<(int)VertPos.size());
+                    minY=std::min(VertPos[PathV].Y,minY);
+                }
+                Prio=minY;
+            }
+
+            NewPathsPrio(const std::vector<int> &_CurrPath,
+                         const int &_OrigP)
+            {
+                Path=_CurrPath;
+                OrigP=_OrigP;
+            }
+
+            inline bool operator <(const NewPathsPrio &oth)const
+            {
+                if (Prio!=oth.Prio)return(Prio<oth.Prio);
+                if (OrigP!=oth.OrigP)return(OrigP<oth.OrigP);
+                return false;
+            }
+
+            inline bool operator ==(const NewPathsPrio &oth)const
+            {
+                if (OrigP!=oth.OrigP)return false;
+                if (Prio!=oth.Prio)return false;
+                return (Path!=oth.Path);
+            }
+        };
+
+        std::vector<NewPathsPrio> NewPaths;
+        for (int i=0;i<(int)SelectedPaths.size();i++)
+        {
+            bool is_loop=Geo::PathFunctions<ScalarType>::IsLoop(SelectedPaths[i]);
+            int numInters=0;
+            int sizeP=(int)SelectedPaths[i].size()-1;
+            int first_inters=-1;
+            for (int j=0;j<sizeP;j++)
+            {
+                int PathN=SelectedPaths[i][j];
+                int PathV=Field::CrossFieldGraph::ElemOfNode(PathN);
+
+                //not loop not check first and last
+                if (!is_loop)//no split begin and end
+                {
+                    if ((j==0)||(j==(sizeP-1)))continue;
+                }
+
+                //if loop check only one among start/end
+                if (is_loop)//no split begin and end
+                {
+                    if (j==(sizeP-1))continue;
+                }
+
+                if (SplitVert.count(PathV)==0)continue;
+
+                numInters++;
+                first_inters=j;
+            }
+
+            //one split on the loop does nothing
+            if ((is_loop)&&(numInters<2))
+            {
+                NewPaths.push_back(NewPathsPrio(SelectedPaths[i],i));
+                NewPaths.back().InitPriorityByY(VertPos);
+                continue;
+            }
+
+            //one split on the loop does nothing
+            if ((!is_loop)&&(numInters==0))
+            {
+                NewPaths.push_back(NewPathsPrio(SelectedPaths[i],i));
+                NewPaths.back().InitPriorityByY(VertPos);
+                continue;
+            }
+
+            std::vector<int> to_splitPath=SelectedPaths[i];
+            assert(first_inters>=0);
+            assert(first_inters<to_splitPath.size());
+            if (is_loop)
+            {
+                //remove the last one
+                assert(to_splitPath[0]==to_splitPath.back());
+                to_splitPath.pop_back();
+
+                if (first_inters>0)
+                    std::rotate(to_splitPath.begin(), to_splitPath.begin() + first_inters, to_splitPath.end());
+
+                //replicate the last one
+                to_splitPath.push_back(to_splitPath[0]);
+            }
+
+            std::vector<std::vector<int> > SplittedP;
+            SplittedP.resize(1);
+            for (int j=0;j<to_splitPath.size();j++)
+            {
+                int PathN=to_splitPath[j];
+                int PathV=Field::CrossFieldGraph::ElemOfNode(PathN);
+                SplittedP.back().push_back(PathN);
+                if ((j==0)||(j==(to_splitPath.size()-1)))continue;//no split begin and end
+                if (SplitVert.count(PathV)==0)continue;
+                //otherwise split
+                SplittedP.resize(SplittedP.size()+1);
+                SplittedP.back().push_back(PathN);
+            }
+            for (size_t j=0;j<SplittedP.size();j++)
+            {
+                NewPathsPrio NPP(SplittedP[j],i);
+                NPP.InitPriorityByY(VertPos);
+                NewPaths.push_back(NPP);
+            }
+            //NewPaths.insert(NewPaths.end(),SplittedP.begin(),SplittedP.end());
+        }
+        if (sort_path)
+            std::sort(NewPaths.begin(),NewPaths.end());
+
+        SelectedPaths.clear();
+        for (size_t i=0;i<NewPaths.size();i++)
+            SelectedPaths.push_back(NewPaths[i].Path);
+    }
+
+    void MergeCollinearPath()
+    {
+        //find the possible merging vertex
+
+
+        //std::vector<std::vector<int> > NewPaths;
+        //find the splitting vertices
+        bool has_joined=false;
+        do{
+
+            has_joined=false;
+            //std::map<int,std::set<int> > ExtrVertPath;
+            std::map<int,std::vector<int> > ExtrVertPath;
+            for (int i=0;i<(int)SelectedPaths.size();i++)
+            {
+                bool is_loop=Geo::PathFunctions<ScalarType>::IsLoop(SelectedPaths[i]);
+                if (is_loop)
+                {
+                    //NewPaths.push_back(SelectedPaths[i]);
+                    continue;
+                }
+                int Node0=SelectedPaths[i][0];
+                int Node1=SelectedPaths[i].back();
+
+                int PathV0=Field::CrossFieldGraph::ElemOfNode(Node0);
+                int PathV1=Field::CrossFieldGraph::ElemOfNode(Node1);
+                ExtrVertPath[PathV0].push_back(i);
+                ExtrVertPath[PathV1].push_back(i);
+
+//                int Node0Opp=Field::CrossFieldGraph::OppositeNodeCrossField(Node0);
+//                int Node1Opp=Field::CrossFieldGraph::OppositeNodeCrossField(Node1);
+
+//                assert(Node0!=Node1);
+//                assert(Node0Opp!=Node1Opp);
+//                ExtrNodePath[Node0].push_back(i);
+//                ExtrNodePath[Node1].push_back(i);
+//                ExtrNodePath[Node0Opp].push_back(i);
+//                ExtrNodePath[Node1Opp].push_back(i);
+            }
+
+            std::map<int,std::vector<int> >::iterator IteM;
+            for (IteM=ExtrVertPath.begin();IteM!=ExtrVertPath.end();IteM++)
+            {
+                if ((*IteM).second.size()!=2)continue;
+
+                int IndexP0=(*IteM).second[0];
+                int IndexP1=(*IteM).second[1];
+
+                if (SelectedPaths[IndexP0].size()==0)continue;
+                if (SelectedPaths[IndexP1].size()==0)continue;
+
+                assert(IndexP0!=IndexP1);
+
+                std::vector<int> JoinedPath;
+                std::vector<int> P0=SelectedPaths[IndexP0];
+                std::vector<int> P1=SelectedPaths[IndexP1];
+                has_joined=true;
+
+                if (P0.back()==P1[0])
+                {
+
+                    JoinedPath=P0;
+                    JoinedPath.insert(JoinedPath.end(),P1.begin(),P1.end());
+                    SelectedPaths[IndexP0].clear();
+                    SelectedPaths[IndexP1].clear();
+                    SelectedPaths.push_back(JoinedPath);
+                    continue;
+                }
+
+                if (P0.back()==Field::CrossFieldGraph::OppositeNodeCrossField(P1.back()))
+                {
+                    JoinedPath=P0;
+                    Geo::PathFunctions<ScalarType>::ReversePath(TGraph,P1);
+                    JoinedPath.insert(JoinedPath.end(),P1.begin(),P1.end());
+                    SelectedPaths[IndexP0].clear();
+                    SelectedPaths[IndexP1].clear();
+                    SelectedPaths.push_back(JoinedPath);
+                    continue;
+                }
+
+                if (P1.back()==P0[0])
+                {
+                    JoinedPath=P1;
+                    JoinedPath.insert(JoinedPath.end(),P0.begin(),P0.end());
+                    SelectedPaths[IndexP0].clear();
+                    SelectedPaths[IndexP1].clear();
+                    SelectedPaths.push_back(JoinedPath);
+                    continue;
+                }
+
+                if (P1.back()==Field::CrossFieldGraph::OppositeNodeCrossField(P0.back()))
+                {
+                    JoinedPath=P1;
+                    Geo::PathFunctions<ScalarType>::ReversePath(TGraph,P0);
+                    JoinedPath.insert(JoinedPath.end(),P0.begin(),P0.end());
+                    SelectedPaths[IndexP0].clear();
+                    SelectedPaths[IndexP1].clear();
+                    SelectedPaths.push_back(JoinedPath);
+                    continue;
+                }
+                //assert(0);
+            }
+        }while (has_joined);
+        //SelectedPaths=NewPaths;
+        CleanEmptySelectedPaths();
     }
 
     CrossPathSampling(std::vector<Geo::Point3<ScalarType > > &_VertPos,

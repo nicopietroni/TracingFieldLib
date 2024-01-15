@@ -74,6 +74,20 @@ public:
         }
     }
 
+    void GetMinAbsCoord(ScalarType &minV,size_t &minInd)const
+    {
+        minV = std::numeric_limits<ScalarType>::max();
+        minInd = 0;
+        for (int i = 0; i < 3; ++i)
+        {
+            if (std::abs(cV(i)) <minV)
+            {
+                minV    = cV(i);
+                minInd = i;
+            }
+        }
+    }
+
     void Normalize()
     {
         ScalarType n = Norm();

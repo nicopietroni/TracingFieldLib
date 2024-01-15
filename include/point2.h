@@ -188,5 +188,11 @@ inline ScalarType AngleDeg( Geo::Point2<ScalarType> const & p1,
     return (Arad* 180.0 / M_PI);
 }
 
+template <class ScalarType>
+inline Geo::Point2<ScalarType> Orthogonal( Geo::Point2<ScalarType> const & v)
+{
+    return Geo::Point2<ScalarType>(-v.Y,v.X);
+}
+
 }//namespace
 #endif

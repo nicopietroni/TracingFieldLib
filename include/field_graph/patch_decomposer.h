@@ -46,9 +46,9 @@ class PatchDecomposer
         {
             int IndexPatch=(*Ite);
             assert(IndexPatch<PatchMan.NumPatches());
-            for (int i=0;i<PatchMan.SubPatchVertToOriginal[IndexPatch].size();i++)
+            for (int i=0;i<PatchMan.PData.SubPatchVertToOriginal[IndexPatch].size();i++)
             {
-                int IndexV=PatchMan.SubPatchVertToOriginal[IndexPatch][i];
+                int IndexV=PatchMan.PData.SubPatchVertToOriginal[IndexPatch][i];
                 assert(IndexV>=0);
                 to_mark_vert.push_back(IndexV);
             }
@@ -74,6 +74,7 @@ public:
     bool allow_darts;
     bool allow_concave;
     bool dynamic_smooth;
+    bool split_removal;
 
     void ClearConditions()
     {
@@ -85,17 +86,17 @@ public:
         PConditions.push_back(PCond);
     }
 
-    bool SatisfyConditions()
-    {
-        bool has_satisfied=true;
+    //    bool SatisfyConditions()
+    //    {
+    //        bool has_satisfied=true;
 
-        for (size_t i=0;i<PConditions.size();i++)
-        {
-            has_satisfied&=PConditions[i]->IsCorrect(PatchMan);
-            if (!has_satisfied)return false;
-        }
-        return true;
-    }
+    //        for (size_t i=0;i<PConditions.size();i++)
+    //        {
+    //            has_satisfied&=PConditions[i]->IsCorrect(PatchMan);
+    //            if (!has_satisfied)return false;
+    //        }
+    //        return true;
+    //    }
 
     void UpdateCondition(const int &IndexPatch)
     {
@@ -133,8 +134,22 @@ public:
         return true;
     }
 
+    bool SatisfyConditionsAfterGlobalUpdate(const int &IndexPatch)
+    {
+        assert(!PatchMan.isEmpty(IndexPatch));
+
+        bool has_satisfied=true;
+        for (size_t i=0;i<PConditions.size();i++)
+        {
+            has_satisfied&=PConditions[i]->IsCorrectAfterGlobalData(PatchMan,IndexPatch);
+            if (!has_satisfied)return false;
+        }
+        return true;
+    }
+
     void UpdateAllUnsolvedPatches()
     {
+        UnsolvedPatches.clear();
         for (size_t i=0;i<PatchMan.NumPatches();i++)
         {
             std::cout<<"Checking Patch "<<i<<std::endl;
@@ -142,6 +157,7 @@ public:
             if (PatchMan.isEmpty(i))continue;
 
             if (!SatisfyConditions(i))UnsolvedPatches.insert(i);
+            if (!SatisfyConditionsAfterGlobalUpdate(i))UnsolvedPatches.insert(i);
         }
     }
 
@@ -256,8 +272,8 @@ public:
                 //                std::cout<<"Size 0 "<<FaceVPatch.size()<<std::endl;
                 //                std::cout<<"Size 1 "<<PatchMan.SubPatchFacesToOriginal[i].size()<<std::endl;
                 //                std::cout<<"Size 2 "<<PatchMan.SubPatchFaces[i].size()<<std::endl;
-                assert(FaceVPatch.size()==PatchMan.SubPatchFacesToOriginal[pi].size());
-                assert(FaceVPatch.size()==PatchMan.SubPatchFaces[pi].size());
+                assert(FaceVPatch.size()==PatchMan.PData.SubPatchFacesToOriginal[pi].size());
+                assert(FaceVPatch.size()==PatchMan.PData.SubPatchFaces[pi].size());
                 for (size_t j=0;j<FaceVPatch.size();j++)
                 {
                     int IndexGLobF=PatchMan.MapFaceToOriginal(pi,j);
@@ -314,9 +330,9 @@ public:
 
                 assert(IndexF>=0);
                 assert(IndexF<PatchMan.Faces.size());
-                assert(IndexF<PatchMan.OriginalFaceToPatch.size());
+                assert(IndexF<PatchMan.PData.OriginalFaceToPatch.size());
 
-                int IndexP=PatchMan.OriginalFaceToPatch[IndexF];
+                int IndexP=PatchMan.PData.OriginalFaceToPatch[IndexF];
 
                 assert(IndexP>=0);
                 assert(IndexP<PatchMan.NumPatches());
@@ -329,12 +345,12 @@ public:
         }
         ToSmoothVert=ToSmoothVertSwap;
 
-//        for (size_t i=0;i<InvolvedPatches.size();i++)
-//        {
-//            int IndexP=InvolvedPatches[i];
-//            assert(IndexP>=0);
-//            assert(IndexP<PatchMan.NumPatches());
-//        }
+        //        for (size_t i=0;i<InvolvedPatches.size();i++)
+        //        {
+        //            int IndexP=InvolvedPatches[i];
+        //            assert(IndexP>=0);
+        //            assert(IndexP<PatchMan.NumPatches());
+        //        }
 
         //then add the kernel to only smooth ones
         typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
@@ -365,6 +381,89 @@ public:
         PatchMan.InitVisualCornersEdges();
     }
 
+    //    void AddNext(bool &all_solved,
+    //                 bool &added_sample)
+    //    {
+    //        all_solved=false;
+    //        added_sample=false;
+    //        if (add_only_where_needed)
+    //            PathSampl.check_pass_on[0]=true;
+
+    //        if ((UnsolvedPatches.size()==0)&&(stop_when_solved))
+    //        {
+    //            all_solved=true;
+    //            added_sample=false;
+    //            return;
+    //        }
+
+    //        added_sample=PathSampl.AddNextPath();
+    //        if (!added_sample){return;}
+
+    //        //verify local conditions
+    //        std::vector<int> ToAdd,ToRemove;
+    //        //std::set<int> ToUpdPatches;
+    //        PatchMan.FindAddRemovePaths(ToAdd,ToRemove);
+
+    //        if (dynamic_smooth)
+    //        {
+    //            std::vector<int> PathsIDX=ToAdd;
+    //            PathsIDX.insert(PathsIDX.end(),ToRemove.begin(),ToRemove.end());
+
+    //            std::set<int> TouchedPatches;
+    //            PatchMan.GetTouchedPatchesFromPathIndex(PathsIDX,TouchedPatches);
+    //            SmoothAround(PathsIDX,TouchedPatches);
+    //        }
+
+    //        std::vector<int> UpdatedPatches;
+    //        PatchMan.Update(ToAdd,ToRemove,UpdatedPatches);
+
+    //        for (size_t i=0;i<UpdatedPatches.size();i++)
+    //        {
+    //            int TestPatch=UpdatedPatches[i];
+    //            assert(TestPatch<PatchMan.NumPatches());
+    //            if (PatchMan.isEmpty(TestPatch))continue;
+
+    //            UpdateCondition(TestPatch);
+    //        }
+
+    //        //            if (SatisfyConditions(TestPatch))
+    //        //                UnsolvedPatches.erase(TestPatch);
+    //        //            else
+    //        //                UnsolvedPatches.insert(TestPatch);
+    //        //
+
+    //        for (size_t i=0;i<PConditions.size();i++)
+    //        {
+    //            PConditions[i]->UpdateGlobalData(PatchMan);
+    //        }
+
+    //        //        for (size_t i=0;i<UpdatedPatches.size();i++)
+    //        //        {
+    //        //            int TestPatch=UpdatedPatches[i];
+
+    //        //            if (SatisfyConditions(TestPatch))
+    //        //                UnsolvedPatches.erase(TestPatch);
+    //        //            else
+    //        //                UnsolvedPatches.insert(TestPatch);
+    //        //        }
+
+    //        for (size_t i=0;i<PatchMan.NumPatches();i++)
+    //        {
+    //            if (PatchMan.isEmpty(i))continue;
+    //            if (SatisfyConditions(i))
+    //                UnsolvedPatches.erase(i);
+    //            else
+    //                UnsolvedPatches.insert(i);
+    //        }
+
+    //        RemoveEmptyPatches();
+
+    //        if (add_only_where_needed)
+    //            MarkUnsolvedPatches();
+
+    //        all_solved=(UnsolvedPatches.size()==0);
+    //    }
+
     void AddNext(bool &all_solved,
                  bool &added_sample)
     {
@@ -390,12 +489,12 @@ public:
 
         if (dynamic_smooth)
         {
-           std::vector<int> PathsIDX=ToAdd;
-           PathsIDX.insert(PathsIDX.end(),ToRemove.begin(),ToRemove.end());
+            std::vector<int> PathsIDX=ToAdd;
+            PathsIDX.insert(PathsIDX.end(),ToRemove.begin(),ToRemove.end());
 
-           std::set<int> TouchedPatches;
-           PatchMan.GetTouchedPatchesFromPathIndex(PathsIDX,TouchedPatches);
-           SmoothAround(PathsIDX,TouchedPatches);
+            std::set<int> TouchedPatches;
+            PatchMan.GetTouchedPatchesFromPathIndex(PathsIDX,TouchedPatches);
+            SmoothAround(PathsIDX,TouchedPatches);
         }
 
         std::vector<int> UpdatedPatches;
@@ -410,35 +509,46 @@ public:
             UpdateCondition(TestPatch);
         }
 
-        //            if (SatisfyConditions(TestPatch))
-        //                UnsolvedPatches.erase(TestPatch);
-        //            else
-        //                UnsolvedPatches.insert(TestPatch);
-        //
+        UnsolvedPatches.clear();
+        for (size_t i=0;i<PatchMan.NumPatches();i++)
+        {
+            if (PatchMan.isEmpty(i))continue;
+
+            if (!SatisfyConditions(i))
+                UnsolvedPatches.insert(i);
+        }
 
         for (size_t i=0;i<PConditions.size();i++)
         {
             PConditions[i]->UpdateGlobalData(PatchMan);
         }
 
-//        for (size_t i=0;i<UpdatedPatches.size();i++)
-//        {
-//            int TestPatch=UpdatedPatches[i];
+        //        for (size_t i=0;i<UpdatedPatches.size();i++)
+        //        {
+        //            int TestPatch=UpdatedPatches[i];
 
-//            if (SatisfyConditions(TestPatch))
-//                UnsolvedPatches.erase(TestPatch);
-//            else
-//                UnsolvedPatches.insert(TestPatch);
-//        }
+        //            if (SatisfyConditions(TestPatch))
+        //                UnsolvedPatches.erase(TestPatch);
+        //            else
+        //                UnsolvedPatches.insert(TestPatch);
+        //        }
 
         for (size_t i=0;i<PatchMan.NumPatches();i++)
         {
             if (PatchMan.isEmpty(i))continue;
-            if (SatisfyConditions(i))
-                UnsolvedPatches.erase(i);
-            else
+
+            if (!SatisfyConditionsAfterGlobalUpdate(i))
                 UnsolvedPatches.insert(i);
         }
+
+        //        for (size_t i=0;i<PatchMan.NumPatches();i++)
+        //        {
+        //            if (PatchMan.isEmpty(i))continue;
+        //            if (SatisfyConditions(i))
+        //                UnsolvedPatches.erase(i);
+        //            else
+        //                UnsolvedPatches.insert(i);
+        //        }
 
         RemoveEmptyPatches();
 
@@ -448,11 +558,138 @@ public:
         all_solved=(UnsolvedPatches.size()==0);
     }
 
+    int time_rem0;
+    int time_rem1;
+    int time_rem2;
+    int time_rem3;
+    int time_rem4;
+
+    //    bool RemoveIfPossible(int &Path_To_remove)
+    //    {
+
+    //        assert(Path_To_remove>=0);
+    //        assert(Path_To_remove<PathSampl.SelectedPaths.size());
+
+    //        if (UnsolvedPatches.size()>0)
+    //        {
+    //            //check if passing from unsolved patch then can't do it
+    //            std::set<int> PatchIdx;
+    //            PatchMan.AddTouchedPatchesToSet(PathSampl.SelectedPaths[Path_To_remove],PatchIdx);
+    //            std::set<int> intersectionIdx;
+    //            std::set_intersection(PatchIdx.begin(), PatchIdx.end(),
+    //                                  UnsolvedPatches.begin(), UnsolvedPatches.end(),
+    //                                  std::inserter(intersectionIdx, intersectionIdx.begin()));
+
+    //            // Check if the intersection is empty
+    //            if (!intersectionIdx.empty())return false;
+    //        }
+
+    //        std::vector<int> TestPath=PathSampl.SelectedPaths[Path_To_remove];
+
+    //        if (PathSampl.SelectedPaths[Path_To_remove].size()==0)return false;
+    //        PathSampl.SelectedPaths[Path_To_remove].clear();
+
+    //        // Get the current time point before the first instruction
+    //        auto time0 = std::chrono::high_resolution_clock::now();
+
+    //        std::vector<int> UpdatedPatches;
+    //        PatchMan.Update(UpdatedPatches);
+    //        std::cout<<"Updating:"<<UpdatedPatches.size()<<std::endl<<std::endl;
+    //        bool is_removable=true;
+
+    //        // Get the current time point before the first instruction
+    //        auto time1 = std::chrono::high_resolution_clock::now();
+
+    //        //LOCAL UPDATE
+    //        for (size_t i=0;i<UpdatedPatches.size();i++)
+    //        {
+    //            int TestPatch=UpdatedPatches[i];
+
+    //            if (PatchMan.isEmpty(TestPatch))continue;
+
+    //            UpdateCondition(TestPatch);
+
+    //        }
+
+    //        //check correctness locally
+    //        bool IsOkLocally=true;
+    //        for (size_t i=0;i<UpdatedPatches.size();i++)
+    //        {
+    //            if (PatchMan.isEmpty(UpdatedPatches[i]))continue;
+
+    //            IsOkLocally&=SatisfyConditions(UpdatedPatches[i]);
+    //            if (!IsOkLocally)break;
+    //        }
+
+    //        // Get the current time point before the first instruction
+    //        auto time2 = std::chrono::high_resolution_clock::now();
+
+    //        //GLOBAL UPDATE
+    //        for (size_t i=0;i<PConditions.size();i++)
+    //        {
+    //            PConditions[i]->UpdateGlobalData(PatchMan);
+    //        }
+
+    //        // Get the current time point before the first instruction
+    //        auto time3 = std::chrono::high_resolution_clock::now();
+
+    //        //CHECK LOCAL CONDITIONS
+    //        for (size_t i=0;i<UpdatedPatches.size();i++)
+    //        {
+    //            int TestPatch=UpdatedPatches[i];
+    //            if (SatisfyConditions(TestPatch))
+    //                continue;
+    //            else
+    //            {
+    //                is_removable=false;
+    //                break;
+    //            }
+    //        }
+
+    //        // Get the current time point before the first instruction
+    //        auto time4 = std::chrono::high_resolution_clock::now();
+
+    //        if (!is_removable)
+    //        {
+    //            PathSampl.SelectedPaths[Path_To_remove]=TestPath;
+    //            std::vector<int> UpdatedPatches;
+    //            PatchMan.Update(UpdatedPatches);
+    //            std::cout<<"Updating Rollback:"<<UpdatedPatches.size()<<std::endl<<std::endl;
+    //            for (size_t i=0;i<UpdatedPatches.size();i++)
+    //                UpdateCondition(UpdatedPatches[i]);
+
+    //        }
+    //        // Get the current time point before the first instruction
+    //        auto time5 = std::chrono::high_resolution_clock::now();
+
+    //        time_rem0+=(std::chrono::duration_cast<std::chrono::milliseconds>(time1 - time0)).count();
+    //        time_rem1+=(std::chrono::duration_cast<std::chrono::milliseconds>(time2 - time1)).count();
+    //        time_rem2+=(std::chrono::duration_cast<std::chrono::milliseconds>(time3 - time2)).count();
+    //        time_rem3+=(std::chrono::duration_cast<std::chrono::milliseconds>(time4 - time3)).count();
+    //        time_rem4+=(std::chrono::duration_cast<std::chrono::milliseconds>(time5 - time4)).count();
+
+
+    //        // Print the duration in microseconds
+    //        std::cout << "Time 0: " << time_rem0 << " milli microseconds" << std::endl;
+    //        std::cout << "Time 1: " << time_rem1 << " milli microseconds" << std::endl;
+    //        std::cout << "Time 2: " << time_rem2 << " milli microseconds" << std::endl;
+    //        std::cout << "Time 3: " << time_rem3 << " milli microseconds" << std::endl;
+    //        std::cout << "Time 4: " << time_rem4 << " milli microseconds" << std::endl;
+
+    //        return is_removable;
+    //    }
+
     bool RemoveIfPossible(int &Path_To_remove)
     {
 
+        std::cout<<"Checking Path:"<<Path_To_remove<<std::endl;
+
         assert(Path_To_remove>=0);
         assert(Path_To_remove<PathSampl.SelectedPaths.size());
+
+        //check if already removed
+        if (PathSampl.SelectedPaths[Path_To_remove].size()==0)return false;
+
 
         if (UnsolvedPatches.size()>0)
         {
@@ -468,15 +705,30 @@ public:
             if (!intersectionIdx.empty())return false;
         }
 
+        //SAVING STATUS
+        for (size_t i=0;i<PConditions.size();i++)
+            PConditions[i]->SaveStatus();
+        PatchMan.SaveStatus();
+
+        //END SAVING STATUS
+
         std::vector<int> TestPath=PathSampl.SelectedPaths[Path_To_remove];
 
         if (PathSampl.SelectedPaths[Path_To_remove].size()==0)return false;
+
         PathSampl.SelectedPaths[Path_To_remove].clear();
+
+        // Get the current time point before the first instruction
+        auto time0 = std::chrono::high_resolution_clock::now();
 
         std::vector<int> UpdatedPatches;
         PatchMan.Update(UpdatedPatches);
 
+        //std::cout<<"Updating:"<<UpdatedPatches.size()<<std::endl<<std::endl;
         bool is_removable=true;
+
+        // Get the current time point before the first instruction
+        auto time1 = std::chrono::high_resolution_clock::now();
 
         //LOCAL UPDATE
         for (size_t i=0;i<UpdatedPatches.size();i++)
@@ -489,37 +741,85 @@ public:
 
         }
 
-        //GLOBAL UPDATE
-        for (size_t i=0;i<PConditions.size();i++)
-        {
-            PConditions[i]->UpdateGlobalData(PatchMan);
-        }
-
-        //CHECK LOCAL CONDITIONS
+        //check correctness locally
+        bool IsOkLocally=true;
         for (size_t i=0;i<UpdatedPatches.size();i++)
         {
-            int TestPatch=UpdatedPatches[i];
-            if (SatisfyConditions(TestPatch))
-                continue;
-            else
+            if (PatchMan.isEmpty(UpdatedPatches[i]))continue;
+
+            IsOkLocally&=SatisfyConditions(UpdatedPatches[i]);
+            if (!IsOkLocally)break;
+        }
+
+        // Get the current time point before the first instruction
+        auto time2 = std::chrono::high_resolution_clock::now();
+
+        //GLOBAL UPDATE
+        if (IsOkLocally)
+        {
+            for (size_t i=0;i<PConditions.size();i++)
+                PConditions[i]->UpdateGlobalData(PatchMan);
+        }
+
+        // Get the current time point before the first instruction
+        auto time3 = std::chrono::high_resolution_clock::now();
+
+        //CHECK GLOBAL CONDITIONS
+        if (!IsOkLocally)
+            is_removable=false;
+        else
+        {
+            for (size_t i=0;i<UpdatedPatches.size();i++)
             {
-                is_removable=false;
-                break;
+                int TestPatch=UpdatedPatches[i];
+                if (SatisfyConditionsAfterGlobalUpdate(TestPatch))
+                    continue;
+                else
+                {
+                    is_removable=false;
+                    break;
+                }
             }
         }
+        // Get the current time point before the first instruction
+        auto time4 = std::chrono::high_resolution_clock::now();
 
         if (!is_removable)
         {
             PathSampl.SelectedPaths[Path_To_remove]=TestPath;
-            std::vector<int> UpdatedPatches;
-            PatchMan.Update(UpdatedPatches);
-            for (size_t i=0;i<UpdatedPatches.size();i++)
-                UpdateCondition(UpdatedPatches[i]);
 
-            return false;
+            //RESTORING STATUS
+            for (size_t i=0;i<PConditions.size();i++)
+                PConditions[i]->RestoreStatus();
+            PatchMan.RestoreStatus();
+            //END RESTORING STATUS
+
+//          std::vector<int> UpdatedPatches;
+//          PatchMan.Update(UpdatedPatches);
+//          std::cout<<"Updating Rollback:"<<UpdatedPatches.size()<<std::endl<<std::endl;
+//          for (size_t i=0;i<UpdatedPatches.size();i++)
+//              UpdateCondition(UpdatedPatches[i]);
+
         }
 
-        return true;
+        // Get the current time point before the first instruction
+        auto time5 = std::chrono::high_resolution_clock::now();
+
+        time_rem0+=(std::chrono::duration_cast<std::chrono::milliseconds>(time1 - time0)).count();
+        time_rem1+=(std::chrono::duration_cast<std::chrono::milliseconds>(time2 - time1)).count();
+        time_rem2+=(std::chrono::duration_cast<std::chrono::milliseconds>(time3 - time2)).count();
+        time_rem3+=(std::chrono::duration_cast<std::chrono::milliseconds>(time4 - time3)).count();
+        time_rem4+=(std::chrono::duration_cast<std::chrono::milliseconds>(time5 - time4)).count();
+
+
+        // Print the duration in microseconds
+        std::cout << "Time 0: " << time_rem0 << " milli microseconds" << std::endl;
+        std::cout << "Time 1: " << time_rem1 << " milli microseconds" << std::endl;
+        std::cout << "Time 2: " << time_rem2 << " milli microseconds" << std::endl;
+        std::cout << "Time 3: " << time_rem3 << " milli microseconds" << std::endl;
+        std::cout << "Time 4: " << time_rem4 << " milli microseconds" << std::endl;
+
+        return is_removable;
     }
 
     void GetColorBySolvedPatches(std::vector<Geo::Point3<ScalarType> > &FaceCol)
@@ -530,9 +830,9 @@ public:
         for (IteUns=UnsolvedPatches.begin();IteUns!=UnsolvedPatches.end();IteUns++)
         {
             int IndexP=(*IteUns);
-            for (size_t i=0;i<PatchMan.SubPatchFacesToOriginal[IndexP].size();i++)
+            for (size_t i=0;i<PatchMan.PData.SubPatchFacesToOriginal[IndexP].size();i++)
             {
-                int IndexF=PatchMan.SubPatchFacesToOriginal[IndexP][i];
+                int IndexF=PatchMan.PData.SubPatchFacesToOriginal[IndexP][i];
                 FaceCol[IndexF]=Geo::Point3<ScalarType>(1,0,0);
             }
         }
@@ -540,31 +840,50 @@ public:
 
     int current_rem_cand;
 
-//    bool RemoveNextIfPossible()
-//    {
-//        if ((current_rem_cand<0)||(current_rem_cand>PathSampl.SelectedPaths.size()))
-//            current_rem_cand=PathSampl.SelectedPaths.size()-1;
+    //    bool RemoveNextIfPossible()
+    //    {
+    //        if ((current_rem_cand<0)||(current_rem_cand>PathSampl.SelectedPaths.size()))
+    //            current_rem_cand=PathSampl.SelectedPaths.size()-1;
 
-//        bool has_removed=false;
-//        int Path_To_remove=PathSampl.SelectedPaths.size()-1;
-//        do{
-//            has_removed|=RemoveIfPossible(Path_To_remove);
-//            if (has_removed)return true;
-//            Path_To_remove--;
-//        }while ((!has_removed)&&(Path_To_remove>=0));
-//        return false;
-//    }
+    //        bool has_removed=false;
+    //        int Path_To_remove=PathSampl.SelectedPaths.size()-1;
+    //        do{
+    //            has_removed|=RemoveIfPossible(Path_To_remove);
+    //            if (has_removed)return true;
+    //            Path_To_remove--;
+    //        }while ((!has_removed)&&(Path_To_remove>=0));
+    //        return false;
+    //    }
 
     bool RemoveNextIfPossible()
     {
-        if ((current_rem_cand<0)||(current_rem_cand>PathSampl.SelectedPaths.size()))
+//        if ((current_rem_cand<0)||(current_rem_cand>PathSampl.SelectedPaths.size()))
+//              current_rem_cand=PathSampl.SelectedPaths.size()-1;
+//        //std::cout<<"starting:"<<current_rem_cand<<" num paths:"<<PathSampl.SelectedPaths.size()<<std::endl;
+        if (current_rem_cand>PathSampl.SelectedPaths.size())
             current_rem_cand=PathSampl.SelectedPaths.size()-1;
+
 
         bool has_removed=false;
         do{
+//            if (TestedRemovedPath.count(current_rem_cand)>0)
+//            {
+//                assert(TestedRemovedPathNeigh.count(current_rem_cand)>0);
+
+//                //check if some of the neighbours has been modified
+//                for (size_t i=0;i<TestedRemovedPathNeigh[current_rem_cand].size();i++)
+//                current_rem_cand--;
+//                continue;
+//            }
+
             has_removed|=RemoveIfPossible(current_rem_cand);
+            //TestedRemovedPath.insert(current_rem_cand);
             current_rem_cand--;
-            if (has_removed)return true;
+
+            if (has_removed)
+            {
+                return (current_rem_cand>=0);
+            }
         }while ((!has_removed)&&(current_rem_cand>=0));
         return false;
     }
@@ -573,8 +892,8 @@ public:
                     Geo::CrossPathSampling<ScalarType> &_PathSampl,
                     std::vector<Field::CrossF<ScalarType> > &_VertCurv,
                     std::vector<Field::CrossF<ScalarType> > &_FaceCurv):
-                    PatchMan(_PatchMan),PathSampl(_PathSampl),
-                    VertCurv(_VertCurv),FaceCurv(_FaceCurv)
+        PatchMan(_PatchMan),PathSampl(_PathSampl),
+        VertCurv(_VertCurv),FaceCurv(_FaceCurv)
     {
         add_only_where_needed=true;
         stop_when_solved=true;
@@ -582,9 +901,18 @@ public:
         allow_concave=false;
         current_rem_cand=-1;
         dynamic_smooth=false;
+        split_removal=false;
+        time_rem0=0;
+        time_rem1=0;
+        time_rem2=0;
+        time_rem3=0;
+        time_rem4=0;
     }
 
-    void Decompose(bool Do_remove)
+//    std::set<int> TestedRemovedPath;
+//    std::map<int,std::vector<int> > TestedRemovedPathNeigh;
+
+    void AddAllPaths()
     {
         bool all_solved=false;
         bool added_sample=false;
@@ -592,17 +920,56 @@ public:
         do
         {
             AddNext(all_solved,added_sample);
-
         }while ((!all_solved)&&(added_sample));
 
         CompactData();
+    }
+
+    void RemovePaths()
+    {
+        current_rem_cand=PathSampl.SelectedPaths.size()-1;
+        std::cout<<"REMOVING PATHS"<<std::endl;
+        while (RemoveNextIfPossible()){};
+        CompactData();
+    }
+
+    void RemoveSplitted()
+    {
+        PathSampl.SplitPaths();
+
+        //TestedRemovedPath.clear();
+
+        PatchMan.PData.OLDPathNodes=PathSampl.SelectedPaths;
+        std::cout<<"After Split: "<<PathSampl.SelectedPaths.size()<<" paths"<<std::endl;
+
+        std::cout<<"REMOVING SPlitted PATHS"<<std::endl;
+
+        bool has_removed=false;
+        do{
+            std::cout<<"REMOVING cycle"<<std::endl;
+            current_rem_cand=PathSampl.SelectedPaths.size()-1;
+            has_removed=false;
+            while (RemoveNextIfPossible()){has_removed=true;}
+            PathSampl.MergeCollinearPath();
+        }while (has_removed);
+         CompactData();
+        //PathSampl.MergeCollinearPath();
+    }
+
+    void Decompose(bool Do_remove)
+    {
+
+        AddAllPaths();
 
         if (Do_remove)
         {
-            std::cout<<"REMOVING PATHS"<<std::endl;
-            while (RemoveNextIfPossible()){};
+            RemovePaths();
         }
-        CompactData();
+
+        if (split_removal)
+        {
+            RemoveSplitted();
+        }
 
     }
 
@@ -613,31 +980,31 @@ public:
         if(!fout) return false;
 
         //first set the number of patches
-        fout<<"#p"<<PatchMan.EdgePatchSides.size()<<"\n";
+        fout<<"#p"<<PatchMan.PData.EdgePatchSides.size()<<"\n";
 
         //for each patch
-        for (size_t pi=0;pi<PatchMan.EdgePatchSides.size();pi++)
+        for (size_t pi=0;pi<PatchMan.PData.EdgePatchSides.size();pi++)
         {
             //write patch index
             fout<<"p "<<pi<<"\n";
 
             //for each loops
-            fout<<"#l "<<PatchMan.EdgePatchSides[pi].size()<<"\n";
-            assert(PatchMan.EdgePatchSides[pi].size()==PatchMan.PatchCorners[pi].size());
+            fout<<"#l "<<PatchMan.PData.EdgePatchSides[pi].size()<<"\n";
+            assert(PatchMan.PData.EdgePatchSides[pi].size()==PatchMan.PData.PatchCorners[pi].size());
 
             //for each loop
-            for (size_t li=0;li<PatchMan.PatchCorners[pi].size();li++)
+            for (size_t li=0;li<PatchMan.PData.PatchCorners[pi].size();li++)
             {
                 fout<<"l "<<li<<"\n";
                 //number of sides equal nummber of corners
-                assert(PatchMan.PatchCorners[pi][li].size()==PatchMan.EdgePatchSides[pi][li].size());
+                assert(PatchMan.PData.PatchCorners[pi][li].size()==PatchMan.PData.EdgePatchSides[pi][li].size());
 
                 //write corners
-                fout<<"#c "<<PatchMan.PatchCorners[pi][li].size()<<"\n";
+                fout<<"#c "<<PatchMan.PData.PatchCorners[pi][li].size()<<"\n";
 
-                for (size_t ci=0;ci<PatchMan.PatchCorners[pi][li].size();ci++)
+                for (size_t ci=0;ci<PatchMan.PData.PatchCorners[pi][li].size();ci++)
                 {
-                    int IndexC=PatchMan.PatchCorners[pi][li][ci];
+                    int IndexC=PatchMan.PData.PatchCorners[pi][li][ci];
                     IndexC=PatchMan.MapToOriginal(pi,IndexC);
                     assert(IndexC>=0);
                     assert(IndexC<PatchMan.VertPos.size());
@@ -645,18 +1012,18 @@ public:
                 }
 
                 //write number of sides
-                fout<<"#s "<<PatchMan.EdgePatchSides[pi][li].size()<<"\n";
-                for (size_t si=0;si<PatchMan.EdgePatchSides[pi][li].size();si++)
+                fout<<"#s "<<PatchMan.PData.EdgePatchSides[pi][li].size()<<"\n";
+                for (size_t si=0;si<PatchMan.PData.EdgePatchSides[pi][li].size();si++)
                 {
                     fout<<"s "<<si<<"\n";
-                    int sizeL=PatchMan.EdgePatchSides[pi][li][si].size();
+                    int sizeL=PatchMan.PData.EdgePatchSides[pi][li][si].size();
                     fout<<"#e "<<sizeL<<"\n";
 
                     //for each edge
-                    for (size_t ei=0;ei<PatchMan.EdgePatchSides[pi][li][si].size();ei++)
+                    for (size_t ei=0;ei<PatchMan.PData.EdgePatchSides[pi][li][si].size();ei++)
                     {
-                        int IndexV0=PatchMan.EdgePatchSides[pi][li][si][ei].first;
-                        int IndexV1=PatchMan.EdgePatchSides[pi][li][si][ei].second;
+                        int IndexV0=PatchMan.PData.EdgePatchSides[pi][li][si][ei].first;
+                        int IndexV1=PatchMan.PData.EdgePatchSides[pi][li][si][ei].second;
                         IndexV0=PatchMan.MapToOriginal(pi,IndexV0);
                         IndexV1=PatchMan.MapToOriginal(pi,IndexV1);
                         assert(IndexV0>=0);
@@ -679,22 +1046,22 @@ public:
 
         std::vector<Geo::Point3<ScalarType> > PosVect;
         std::vector<std::vector<int> >  FaceVect;
-        assert(PatchMan.SubPatchVertPos.size()==PatchMan.SubPatchFaces.size());
+        assert(PatchMan.PData.SubPatchVertPos.size()==PatchMan.PData.SubPatchFaces.size());
 
-        for (size_t i=0;i<PatchMan.SubPatchVertPos.size();i++)
+        for (size_t i=0;i<PatchMan.PData.SubPatchVertPos.size();i++)
         {
             int baseIdx=PosVect.size();
             PosVect.insert(PosVect.end(),
-                           PatchMan.SubPatchVertPos[i].begin(),
-                           PatchMan.SubPatchVertPos[i].end());
+                           PatchMan.PData.SubPatchVertPos[i].begin(),
+                           PatchMan.PData.SubPatchVertPos[i].end());
 
-            for (size_t j=0;j<PatchMan.SubPatchFaces[i].size();j++)
+            for (size_t j=0;j<PatchMan.PData.SubPatchFaces[i].size();j++)
             {
                 FaceVect.push_back(std::vector<int>(3,-1));
-                assert(PatchMan.SubPatchFaces[i][j].size()==3);
+                assert(PatchMan.PData.SubPatchFaces[i][j].size()==3);
                 for (size_t k=0;k<3;k++)
                 {
-                    int IndexV=PatchMan.SubPatchFaces[i][j][k];
+                    int IndexV=PatchMan.PData.SubPatchFaces[i][j][k];
                     FaceVect.back()[k]=IndexV+baseIdx;
                 }
             }

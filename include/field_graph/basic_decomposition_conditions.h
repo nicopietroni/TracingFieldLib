@@ -15,15 +15,20 @@ public:
     virtual void UpdatePatchIndex(std::map<int,int> &PatchIdxRemap)
     {(void)PatchIdxRemap;}
 
+//    virtual bool MatchPreconditions(const PatchManaging<ScalarType> &PatchM,
+//                                    const int &IndexPatch)const
+//    {(void)PatchM;(void)IndexPatch;return true;}
+
     virtual void UpdatePatchData(const PatchManaging<ScalarType> &PatchM,
                                  const int &IndexPatch)
     {(void)PatchM;(void)IndexPatch;}
 
-    virtual bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const
-    {(void)PatchM;return true;}
-
     virtual bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                            const int &IndexPatch)const
+    {(void)PatchM;(void)IndexPatch;return true;}
+
+    virtual bool IsCorrectAfterGlobalData(const Geo::PatchManaging<ScalarType> &PatchM,
+                                          const int &IndexPatch)const
     {(void)PatchM;(void)IndexPatch;return true;}
 
     virtual std::string Name()const
@@ -36,6 +41,12 @@ public:
 
     virtual bool UpdateGlobalData(const Geo::PatchManaging<ScalarType> &PatchM)
     {(void)PatchM;return true;}
+
+    virtual void SaveStatus()
+    {}
+
+    virtual void RestoreStatus()
+    {}
 };
 
 template <class ScalarType>
@@ -44,8 +55,8 @@ class SingleBoundaryCondition:public PatchCondition<ScalarType>
 
 public:
 
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
+//    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+//    {(void)PatchM; return true;}
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
@@ -61,8 +72,8 @@ class DiskLikeCondition:public PatchCondition<ScalarType>
 
 public:
 
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
+//    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+//    {(void)PatchM; return true;}
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
@@ -78,8 +89,8 @@ class SingleSingularityCondition:public PatchCondition<ScalarType>
 
 public:
 
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
+//    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+//    {(void)PatchM; return true;}
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
@@ -95,8 +106,8 @@ class MathchSingularityCondition:public PatchCondition<ScalarType>
 
 public:
 
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
+//    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+//    {(void)PatchM; return true;}
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
@@ -128,8 +139,8 @@ public:
         return true;
     }
 
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
+//    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+//    {(void)PatchM; return true;}
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
@@ -163,8 +174,8 @@ class CCabilityCondition:public PatchCondition<ScalarType>
 public:
     ScalarType SideThr;
 
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
+//    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+//    {(void)PatchM; return true;}
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
@@ -193,8 +204,8 @@ class EqualSideCondition:public PatchCondition<ScalarType>
 public:
     ScalarType SideThr;
 
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
+//    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+//    {(void)PatchM; return true;}
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override

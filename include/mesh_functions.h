@@ -12,6 +12,7 @@
 #include "segment2.h"
 #include "connectivity.h"
 #include <pos3.h>
+#include <plane3.h>
 //#include "Space_Query/triangle_grid_2D.h"
 
 template <class ScalarType>
@@ -923,6 +924,50 @@ void SplitMeshFromEdges(std::vector<Geo::Point3<ScalarType> > &Pos,
         }
     Pos=NewPos;
     Faces=NewFaces;
+}
+
+template <class ScalarType>
+static void RemoveFacesOnNegativeSide(std::vector<Geo::Point3<ScalarType> > &Pos3D,
+                                      std::vector<std::vector<int> > &Faces,
+                                      const Geo::Plane3<ScalarType> &SplitPl)
+{
+    std::vector<std::vector<int> > NewFaces;
+    for (size_t i=0;i<Faces.size();i++)
+    {
+        Geo::Point3<ScalarType> Bary(0,0,0);
+        for (size_t j=0;j<Faces[i].size();j++)
+            Bary+=Pos3D[Faces[i][j]];
+        Bary/=Faces[i].size();
+        if (SplitPl.SignedDistance(Bary)<0)continue;
+        NewFaces.push_back(Faces[i]);
+    }
+    Faces=NewFaces;
+    RemoveUnfererencedVert(Pos3D,Faces);
+}
+
+template <class ScalarType>
+static void MirrorMesh(std::vector<Geo::Point3<ScalarType> > &Pos3D,
+                       std::vector<std::vector<int> > &Faces,
+                       const Geo::Plane3<ScalarType> &SplitPl,
+                       const std::set<int> &MiddleV)
+{
+    std::vector<Geo::Point3<ScalarType> > MirroredPos3D=Pos3D;
+    std::vector<std::vector<int> > MirroredFaces=Faces;
+//    std::vector<bool> IsB;
+//    Geo::getBorderVert(Faces,IsB);
+    for (size_t i=0;i<MirroredPos3D.size();i++)
+    {
+        //no need to mirror on the place
+        if (MiddleV.count(i)>0)continue;
+        MirroredPos3D[i]=SplitPl.Mirror(MirroredPos3D[i]);
+    }
+
+    //invert the orientation of faces
+    for (size_t i=0;i<MirroredFaces.size();i++)
+        std::reverse(MirroredFaces[i].begin(),MirroredFaces[i].end());
+
+    AppendMesh(Pos3D,Faces,MirroredPos3D,MirroredFaces);
+
 }
 
 #endif

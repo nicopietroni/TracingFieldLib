@@ -38,11 +38,11 @@ public:
 
         std::map<std::pair<int,int> , ScalarType> EdgeAlpha;
 
-        assert(PM.SubPatchFaces.size()==PM.SubPatchVertPos.size());
-        for (size_t i=0;i<PM.SubPatchFaces.size();i++)
+        assert(PM.PData.SubPatchFaces.size()==PM.PData.SubPatchVertPos.size());
+        for (size_t i=0;i<PM.PData.SubPatchFaces.size();i++)
         {
             //avoid empty patches
-            if (PM.SubPatchFaces[i].size()==0)continue;
+            if (PM.PData.SubPatchFaces[i].size()==0)continue;
 
             std::vector<std::pair<int,int> > CornersExtremes;
             //std::vector<EdgeInt> CurrMidP;
@@ -86,26 +86,26 @@ public:
         std::vector<std::vector<int> > SaveMFaces;
 
         //compute tutte embedding and split faces
-        for (size_t i=0;i<PM.SubPatchFaces.size();i++)
+        for (size_t i=0;i<PM.PData.SubPatchFaces.size();i++)
         {
             //avoid empty patches
-            if (PM.SubPatchFaces[i].size()==0)continue;
+            if (PM.PData.SubPatchFaces[i].size()==0)continue;
 
             //compute tutte's embedding
             std::vector<Geo::Point2<ScalarType> > VertUV;
-            bool done_param=Geo::UVParam<ScalarType>::TutteEmbedding(PM.SubPatchVertPos[i],
-                                                                     PM.SubPatchFaces[i],VertUV);
+            bool done_param=Geo::UVParam<ScalarType>::TutteEmbedding(PM.PData.SubPatchVertPos[i],
+                                                                     PM.PData.SubPatchFaces[i],VertUV);
             assert(done_param);
 
             //get the split segments
             //std::vector<Geo::Segment2<ScalarType> > SplitSeg;
             std::vector<std::vector<Geo::Point2<ScalarType> > > SplitPoly;
-            for (size_t j=0;j<PM.SubPatchFaces[i].size();j++)
+            for (size_t j=0;j<PM.PData.SubPatchFaces[i].size();j++)
             {
                 for (size_t k=0;k<3;k++)
                 {
-                    int IndexV0=PM.SubPatchFaces[i][j][k];
-                    int IndexV1=PM.SubPatchFaces[i][j][(k+1)%3];
+                    int IndexV0=PM.PData.SubPatchFaces[i][j][k];
+                    int IndexV1=PM.PData.SubPatchFaces[i][j][(k+1)%3];
 
                     Geo::Point2<ScalarType> UV0=VertUV[IndexV0];
                     Geo::Point2<ScalarType> UV1=VertUV[IndexV1];
@@ -139,16 +139,16 @@ public:
 //            }
             std::vector<std::pair<int,int> > NewEdges;
             //SplitMeshWithUVPolyline(TestPos,VertUV,SubPatchFaces[i],SplitSeg,NewEdges);
-            RefineMesh<ScalarType>::SplitMeshWithUVPolylines(PM.SubPatchVertPos[i],VertUV,
-                                                            PM.SubPatchFaces[i],SplitPoly,NewEdges);
+            RefineMesh<ScalarType>::SplitMeshWithUVPolylines(PM.PData.SubPatchVertPos[i],VertUV,
+                                                            PM.PData.SubPatchFaces[i],SplitPoly,NewEdges);
 
             std::vector<std::vector<int> > NextFP;
             std::vector<std::vector<int> > NextEP;
-            getFFAdjacency(PM.SubPatchFaces[i],NextFP,NextEP);
+            getFFAdjacency(PM.PData.SubPatchFaces[i],NextFP,NextEP);
 
-            SplitMeshFromEdges(PM.SubPatchVertPos[i],PM.SubPatchFaces[i],NextFP,NextEP,NewEdges);
+            SplitMeshFromEdges(PM.PData.SubPatchVertPos[i],PM.PData.SubPatchFaces[i],NextFP,NextEP,NewEdges);
 
-            AppendMesh(SaveMPos,SaveMFaces,PM.SubPatchVertPos[i],PM.SubPatchFaces[i]);
+            AppendMesh(SaveMPos,SaveMFaces,PM.PData.SubPatchVertPos[i],PM.PData.SubPatchFaces[i]);
 
 //            std::string NameF= "Test_split" + std::to_string(i) + ".obj";
 //            WriteOBJ(NameF,SubPatchVertPos[i],SubPatchFaces[i]);

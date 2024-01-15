@@ -120,6 +120,27 @@ private:
                     Insert(IndexS,GridIndex(X,Y));
     }
 
+    void ClosestSegTest(const std::vector<Geo::Segment2<ScalarType> > &segs,
+                        const Geo::Point2<ScalarType> &testP,
+                        int &ClosSegIdx,ScalarType &dist,
+                        ScalarType &lambda)const
+    {
+        dist=std::numeric_limits<ScalarType>::max();
+        ClosSegIdx=-1;
+        lambda=-1;
+        for (size_t i=0;i<segs.size();i++)
+        {
+            Geo::Point2<ScalarType> closP=ClosestPoint(segs[i],testP);
+            ScalarType TestD=(closP-testP).Norm();
+            if (TestD>dist)continue;
+            dist=TestD;
+            ClosSegIdx=i;
+            lambda=1-(segs[ClosSegIdx].P(0)-closP).Norm()/Lenght(segs[ClosSegIdx]);
+        }
+        assert(lambda>=0);
+        assert(lambda<=1);
+    }
+
 public:
 
 
@@ -211,6 +232,56 @@ public:
     bool FirstInteresect(const std::vector<Geo::Segment2<ScalarType> > &segs,
                         const Geo::Point2<ScalarType> &Orig,
                         const Geo::Point2<ScalarType> &Dir,
+                        int &FirstIntSegIdx,ScalarType &lambda)
+    {
+        FirstIntSegIdx=-1;
+        lambda=-1;
+        Geo::Point2<ScalarType> FirstIntSegPos;
+        bool HasInt=FirstInteresect(segs,Orig,Dir,FirstIntSegIdx,FirstIntSegPos);
+        if (!HasInt)return false;
+        assert(FirstIntSegIdx>=0);
+        assert(FirstIntSegIdx<segs.size());
+        lambda=1-(segs[FirstIntSegIdx].P(0)-FirstIntSegPos).Norm()/Lenght(segs[FirstIntSegIdx]);
+        return true;
+    }
+
+    void ClosestSeg(const std::vector<Geo::Segment2<ScalarType> > &segs,
+                    const Geo::Point2<ScalarType> &test_p,
+                    int &ClosSegIdx,ScalarType &lambda)const
+    {
+        ClosSegIdx=-1;
+        ScalarType MinDist=-1;
+
+        ScalarType sizeCell=voxel.Norm();
+        Box2<ScalarType> bb_point;
+        bb_point.Min=test_p;
+        bb_point.Max=test_p;
+        bb_point.Inflate(sizeCell);
+        do
+        {
+            std::vector<int> SegIn;
+            SegmentsInBox(segs,bb_point,SegIn);
+
+            if (SegIn.size()>0)
+            {
+                std::vector<Geo::Segment2<ScalarType> > TestSeg;
+                for (size_t i=0;i<SegIn.size();i++)
+                    TestSeg.push_back(segs[SegIn[i]]);
+
+                int LocalIdx=-1;
+                ClosestSegTest(TestSeg,test_p,LocalIdx,MinDist,lambda);
+                assert(LocalIdx>=0);
+                assert(LocalIdx<SegIn.size());
+                ClosSegIdx=SegIn[LocalIdx];
+                return;
+            }
+            bb_point.Inflate(sizeCell);
+        }while (bb_point.Diag()<bbox.Diag());
+    }
+
+    bool FirstInteresect(const std::vector<Geo::Segment2<ScalarType> > &segs,
+                        const Geo::Point2<ScalarType> &Orig,
+                        const Geo::Point2<ScalarType> &Dir,
                         int &FirstIntSegIdx,ScalarType &lambda)const
     {
         Geo::Point2<ScalarType> FirstIntSegPos;
@@ -228,7 +299,6 @@ public:
         }
         return false;
     }
-
     /*! \brief Initialize the search structure
      *  \param vert The vertex vector of the input mesh
      *  \param face The face vector of the input mesh

@@ -198,12 +198,12 @@ public:
                     TGraph.Steps(NextN)=TGraph.Steps(CurrN)+1;
 
 
-//                    if ((SParam.MaxSteps>0)&&(TGraph.Steps(NextN)>SParam.MaxSteps))
-//                    {
-////                        std::cout<<"Max Steps"<<SParam.MaxSteps<<std::endl;
-////                        std::cout<<"Next Steps"<<TGraph.Steps(NextN)<<std::endl;
-//                        continue;
-//                    }
+                    //                    if ((SParam.MaxSteps>0)&&(TGraph.Steps(NextN)>SParam.MaxSteps))
+                    //                    {
+                    ////                        std::cout<<"Max Steps"<<SParam.MaxSteps<<std::endl;
+                    ////                        std::cout<<"Next Steps"<<TGraph.Steps(NextN)<<std::endl;
+                    //                        continue;
+                    //                    }
                     Heap.push_back(HeapEntry(NextN,NextWeight,CurrSource));
                     push_heap(Heap.begin(),Heap.end());
                 }
@@ -283,8 +283,8 @@ public:
             assert(TGraph.EnabledN[NextI]);
             if (!TGraph.IsSink(CurrN))
             {
-//                PathL+=TGraph.W[CurrN][NextI];
-//                CurrN=TGraph.N[CurrN][NextI];
+                //                PathL+=TGraph.W[CurrN][NextI];
+                //                CurrN=TGraph.N[CurrN][NextI];
                 PathL+=TGraph.WeightLink(CurrN,NextI);
                 CurrN=TGraph.NodeLink(CurrN,NextI);
 

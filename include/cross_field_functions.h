@@ -439,4 +439,41 @@ void RedistributeAnisotropy(const std::vector<Field::CrossF<ScalarType> > &Sourc
     }
 }
 
+template <class ScalarType>
+void UpdateCrossPositionFromMesh(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                 const std::vector<std::vector<int> > &Faces,
+                                 std::vector<Field::CrossF<ScalarType> > &VertCurv,
+                                 std::vector<Field::CrossF<ScalarType> > &FaceCurv)
+{
+    assert(VertCurv.size()==VertPos.size());
+    assert(FaceCurv.size()==Faces.size());
+
+    for (size_t i=0;i<VertPos.size();i++)
+        VertCurv[i].Pos=VertPos[i];
+
+    for (size_t i=0;i<Faces.size();i++)
+    {
+        Geo::Point3<ScalarType> bary(0,0,0);
+        for (size_t j=0;j<Faces[i].size();j++)
+            bary+=VertPos[Faces[i][j]];
+        bary/=Faces[i].size();
+        FaceCurv[i].Pos=bary;
+    }
+}
+
+template <class ScalarType>
+void MirrorCross(std::vector<Field::CrossF<ScalarType> > &Curv,
+                 const Geo::Plane3<ScalarType> &MirrPlane)
+{
+    Geo::Plane3<ScalarType> MirrDirPlane=MirrPlane;
+    MirrDirPlane.Offset()=0;
+    for (size_t i=0;i<Curv.size();i++)
+    {
+        Curv[i].D[0]=MirrDirPlane.Mirror(Curv[i].D[0]);
+        Curv[i].D[1]=MirrDirPlane.Mirror(Curv[i].D[1]);
+        Curv[i].D[0]=-Curv[i].D[0];
+        //Curv[i].D[1]=Curv[i].D[1];
+    }
+}
+
 #endif

@@ -109,7 +109,7 @@ int OldCol=CurrCol;
 
 Geo::Point3<ScalarType> mesh_color(0.79, 0.9, 0.87);
 
-Geo::PatchDecomposer<ScalarType> PDeco(PatchM,PathSampl);
+Geo::PatchDecomposer<ScalarType> PDeco(PatchM,PathSampl,VertCurv,FaceCurv);
 
 std::vector<Geo::Point3<ScalarType> > SidesMidP;
 //for debugging the marked parts
@@ -491,7 +491,7 @@ void LoadField(const std::string &path)
 
         Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv,minQCrossVert,maxQCrossVert);
         GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
-        PatchM.AddSingularities(SingIndex,SingValue);
+        PatchM.SetSingularities(SingIndex,SingValue);
     }
     else
         std::cout<<"Field not loaded"<<std::endl;
@@ -681,6 +681,7 @@ void SetDecomposeBar()
     ImGui::Checkbox("Dynamic Update", &PathSampl.dynamicUpdates);
     ImGui::Checkbox("Only Where Needed", &PDeco.add_only_where_needed);
     ImGui::Checkbox("Stop When Solved", &PDeco.stop_when_solved);
+    ImGui::Checkbox("Dynamic Smooth", &PDeco.dynamic_smooth);
 
 
     ImGui::TextColored(ImVec4(0, 0, 1, 1), "structure");
@@ -785,6 +786,13 @@ void SetDecomposeBar()
     {
         PDeco.RemoveNextIfPossible();
 
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+        UpdateColor();
+    }
+    if (ImGui::Button("Split"))
+    {
+        PathSampl.SplitPaths();
         PathColors.resize(PathSampl.SelectedPaths.size());
         Geo::ScatterColor<ScalarType>(PathColors);
         UpdateColor();

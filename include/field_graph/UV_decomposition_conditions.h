@@ -87,8 +87,8 @@ public:
                                                          DType,PerPatchUVDists[IndexPatch]);
     }
 
-    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
-    {(void)PatchM; return true;}
+//    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+//    {(void)PatchM; return true;}
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override

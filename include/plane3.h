@@ -20,6 +20,8 @@ public:
 
     inline const ScalarType &Offset() const { return planeOffset; }
 
+    inline ScalarType &Offset() { return planeOffset; }
+
     inline const CoordType &Direction() const { return planeDirection; }
 
     Plane3(const CoordType &P0,const CoordType &P1,const CoordType &P2)
@@ -37,28 +39,44 @@ public:
         planeDirection.Normalize();
     }
 
+    void Init(const CoordType &Orig,const CoordType &Dir)
+    {
+        planeDirection = Dir;
+        planeDirection.Normalize();
+        planeOffset = Geo::Dot(Orig,planeDirection);
+    }
+
+    Plane3()
+    {
+        planeOffset=0;
+        planeDirection=Geo::Point3<ScalarType>(0,0,0);
+    }
+
     // Function to project a point onto a plane
-    CoordType Project(const CoordType& p)
+    CoordType Project(const CoordType& p)const
     {
         ScalarType DotVal = Dot(p,Direction()) - Offset();
         return p - Direction() * DotVal;
     }
 
-//    //Mirror the point wrt the plane
-//    CoordType Mirror(const CoordType &p) const
-//    {
-//        CoordType mirr=Project(p);
-//        mirr+=mirr-p;
-//        return mirr;
-//    }
+    //Mirror the point wrt the plane
+    CoordType Mirror(const CoordType &p) const
+    {
+        CoordType mirr=Project(p);
+        mirr+=mirr-p;
+        return mirr;
+    }
 
 
-//    ScalarType SignedDistance(const CoordType &p) const
-//    {
-//        CoordType proj=Project(p);
-//        ScalarType dot=Dot(p-proj,planeNormal);
-//        return (sign(dot)*(p-proj).Norm());
-//    }
+    ScalarType SignedDistance(const CoordType &p) const
+    {
+        CoordType proj=Project(p);
+        ScalarType dot=Dot(p-proj,Direction());
+        if (dot<0)
+            return (-(p-proj).Norm());
+        else
+            return ((p-proj).Norm());
+    }
 
     // Function to calculate the intersection point between a plane and a line
     bool Intersection(const Line3<ScalarType> &l,CoordType &intersectionPoint)
@@ -73,6 +91,7 @@ public:
         intersectionPoint = l.Origin() + l.Direction()*r;
         return true;
     }
+
 };
 } // end namespace
 

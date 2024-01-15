@@ -5,6 +5,7 @@
 #include <GL/glew.h>
 #include "../point3.h"
 #include "../point2.h"
+#include "../plane3.h"
 #include <Eigen/Dense>
 
 
@@ -134,6 +135,34 @@ void GLDrawPolyline(const std::vector<Geo::Point3<ScalarType> > &Poly,
     for (size_t i=0;i<Poly.size();i++)
         glVertex (Poly[i]);
 
+    glEnd ();
+
+    glPopAttrib();
+}
+
+template <class ScalarType>
+void GLDrawPolyline(const std::vector<Geo::Point2<ScalarType> > &PolyPos,
+                    const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0),
+                    const ScalarType LineWidth=5)
+{
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDepthRange(0.0,0.9999);
+    glEnable(GL_COLOR_MATERIAL);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_BLEND);
+
+
+    glColor(colorLine);
+    glLineWidth (LineWidth);
+
+    glBegin (GL_LINE_STRIP);
+
+    for (size_t i=0;i<PolyPos.size();i++)
+    {
+        Geo::Point2<ScalarType> Pos=PolyPos[i];
+        glVertex(Pos);
+    }
     glEnd ();
 
     glPopAttrib();
@@ -309,6 +338,51 @@ inline void glGetv(const GLenum  pname, Eigen::Matrix4f  & m)
     m = tmp;//.transpose();
 }
 
+template <class ScalarType>
+inline void glDrawPlane(const Geo::Plane3<ScalarType> &Pl,
+                        const ScalarType size,
+                        const Geo::Point3<ScalarType> Col=Geo::Point3<ScalarType>(0,0,1))
+{
+    Geo::Point3<ScalarType> Dir=Pl.Direction();
+    ScalarType minV;
+    size_t minIdx;
+    Dir.GetMinAbsCoord(minV,minIdx);
+    Dir= Geo::Point3<ScalarType>(0,0,0);
+    Dir.V(minIdx)=1;
+    Geo::Point3<ScalarType> Dir0=Geo::Cross(Dir,Pl.Direction());
+    Geo::Point3<ScalarType> Dir1=Geo::Cross(Dir0,Pl.Direction());
+    Geo::Point3<ScalarType> Origin=Pl.Direction()*Pl.Offset();
+    Geo::Point3<ScalarType> Pos[4];
+    Dir0=Dir0*size;
+    Dir1=Dir1*size;
+    Pos[0]=Origin-Dir0-Dir1;
+    Pos[1]=Origin+Dir0-Dir1;
+    Pos[2]=Origin+Dir0+Dir1;
+    Pos[3]=Origin-Dir0+Dir1;
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+    glDisable(GL_CULL_FACE);
+    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+    glEnable(GL_BLEND);//activate blending mode
+    glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA);
+
+//    glEnable(GL_POLYGON_OFFSET_FILL);
+//    glPolygonOffset(1.0, 1);
+    glColorAlpha(Col,0.5);
+
+    glBegin(GL_QUADS);
+    glNormal(Pl.Direction());
+
+    glVertex(Pos[0]);
+    glVertex(Pos[1]);
+    glVertex(Pos[2]);
+    glVertex(Pos[3]);
+    glEnd();
+
+    glPopAttrib();
+
+}
 
 };
 

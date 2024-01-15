@@ -3,6 +3,7 @@
 
 #include "mesh_functions.h"
 #include "Space_Query/triangle_grid_2D.h"
+#include "plane3.h"
 
 template <class ScalarType>
 class RefineMesh
@@ -60,9 +61,9 @@ public:
                                   std::vector<Geo::Point2<ScalarType> > &PosUV,
                                   std::vector<std::vector<int> > &Faces,
                                   int To_splitIDX,bool to_split[3],
-                                  Geo::Point3<ScalarType> Interp[3],
-                                  Geo::Point2<ScalarType> InterpUV[3],
-                                  std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &MarkedE)
+    Geo::Point3<ScalarType> Interp[3],
+    Geo::Point2<ScalarType> InterpUV[3],
+    std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &MarkedE)
     {
         typedef typename std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > KeyType;
 
@@ -631,6 +632,59 @@ public:
                 std::pair<int,int> KeyE(std::min(IndexV0,IndexV1),std::max(IndexV0,IndexV1));
                 NewEdges.push_back(KeyE);
             }
+    }
+
+
+    static void SplitMeshWithPlane(std::vector<Geo::Point3<ScalarType> > &Pos3D,
+                                   std::vector<std::vector<int> > &Faces,
+                                   const Geo::Plane3<ScalarType> &SplitPl)
+    {
+        //ScalarType EPS=0.00000001;
+        bool has_refined=false;
+//        do
+//        {
+            has_refined=false;
+
+            //compute the signed distance of each vertex
+            std::vector<ScalarType> SignedDist;
+            for (size_t i=0;i<Pos3D.size();i++)
+                SignedDist.push_back(SplitPl.SignedDistance(Pos3D[i]));
+
+            std::vector<std::pair<int,int> > To_split;
+            std::vector<ScalarType> Alpha;
+            std::set<std::pair<int,int> >  AddedEdges;
+
+            //then split every edge with opposite sign
+            for (size_t i=0;i<Faces.size();i++)
+                for (size_t j=0;j<3;j++)
+                {
+                    int IndexV0=Faces[i][j];
+                    int IndexV1=Faces[i][(j+1)%3];
+                    ScalarType SignDist0=SignedDist[IndexV0];
+                    ScalarType SignDist1=SignedDist[IndexV1];
+
+                    bool PosV0=SignDist0>=0;//+EPS;
+                    bool PosV1=SignDist1>=0;//+EPS;
+
+                    if ((PosV0)&&(PosV1))continue;
+                    if ((!PosV0)&&(!PosV1))continue;
+
+                    ScalarType alpha_val=1-(fabs(SignDist0)/(fabs(SignDist0)+fabs(SignDist1)));
+                    std::pair<int,int> Key(IndexV0,IndexV1);
+                    if (Key.first>Key.second)
+                    {
+                        std::swap(Key.first,Key.second);
+                        alpha_val=1-alpha_val;
+                    }
+                    if (AddedEdges.count(Key)>0)continue;
+                    To_split.push_back(Key);
+                    Alpha.push_back(alpha_val);
+                }
+            has_refined=(To_split.size()>0);
+            std::vector<Geo::Point2<ScalarType> > PosUV(Pos3D.size(),Geo::Point2<ScalarType>(0,0));
+            std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > MarkedE;
+            SplitTriangleFaces(Pos3D,PosUV,Faces,To_split,Alpha,MarkedE);
+        //}while (has_refined);
     }
 
 
