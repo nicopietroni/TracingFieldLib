@@ -505,13 +505,13 @@ private:
                 return CTypeConcave;
         }
 
-        if ((CountDir[0]==2)&&(CountDir[2]==0))
+        if ((CountDir[0]==2)&&(CountDir[2]==0)&&(angleDeg>270))
             return CTypeSpike;
-        if ((CountDir[2]==2)&&(CountDir[0]==0))
+        if ((CountDir[2]==2)&&(CountDir[0]==0)&&(angleDeg>270))
             return CTypeSpike;
-        if ((CountDir[1]==2)&&(CountDir[3]==0))
+        if ((CountDir[1]==2)&&(CountDir[3]==0)&&(angleDeg>270))
             return CTypeSpike;
-        if ((CountDir[3]==2)&&(CountDir[1]==0))
+        if ((CountDir[3]==2)&&(CountDir[1]==0)&&(angleDeg>270))
             return CTypeSpike;
         //        if ((CountDir[1]==2)&&(CountDir[3]==2))
         //             return CTypeFlat;
@@ -726,6 +726,22 @@ private:
             std::pair<int,int> Key0(IndexV0,IndexV1);
             std::pair<int,int> Key1(IndexV1,IndexV0);
 
+            if (PData.PathsEdges.count(Key0)>0)
+            {
+                std::cout<<"ERROR"<<std::endl;
+//                VertPos[IndexV0]=Geo::Point3<ScalarType>(0,0,0);
+//                VertPos[IndexV1]=Geo::Point3<ScalarType>(0,0,0);
+                //WriteOBJ("test_de.obj",VertPos,Faces);
+                exit(0);
+            }
+            if (PData.PathsEdges.count(Key1)>0)
+            {
+//                VertPos[IndexV0]=Geo::Point3<ScalarType>(0,0,0);
+//                VertPos[IndexV1]=Geo::Point3<ScalarType>(0,0,0);
+                std::cout<<"ERROR"<<std::endl;
+                //WriteOBJ("test_de.obj",VertPos,Faces);
+                exit(0);
+            }
             assert(PData.PathsEdges.count(Key0)==0);
             assert(PData.PathsEdges.count(Key1)==0);
 
@@ -2019,7 +2035,7 @@ public:
         return Faces.size();
     }
 
-    void WriteStats(int IndexPatch)
+    void WriteStats(int IndexPatch)const
     {
         assert(IndexPatch<NumPatches());
         std::cout<<"Patch Has :"<<NumBorders(IndexPatch)<<" Borders"<<std::endl;
@@ -2033,7 +2049,7 @@ public:
         CornersOfType(IndexPatch,CTypeFlat,SelectCorn);
         std::cout<<"Flat Corners:"<<SelectCorn.size()<<std::endl;
         CornersOfType(IndexPatch,CTypeConvex,SelectCorn);
-        std::cout<<"Flat Convex:"<<SelectCorn.size()<<std::endl;
+        std::cout<<"Convex Corners:"<<SelectCorn.size()<<std::endl;
         CornersOfType(IndexPatch,CTypeConcave,SelectCorn);
         std::cout<<"Concave Corners:"<<SelectCorn.size()<<std::endl;
         CornersOfType(IndexPatch,CTypeSpike,SelectCorn);

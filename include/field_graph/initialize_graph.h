@@ -211,7 +211,7 @@ class TragingGraphFunctions
 
             //then get the new node
             int IndexN1=Field::CrossFieldGraph::NodeOfElemDir(IndexVert1,IndexDir1);
-;
+            ;
             //CHECK VISIBILITY
             ScalarType EdgeW;
             bool IsVisibleMaxA;
@@ -288,72 +288,72 @@ class TragingGraphFunctions
 
     }
 
-//    static void GetVertParallelExitDir(const std::vector<std::vector<int> > &FaceConnectivity,
-//                                       const std::vector<Geo::Point3<ScalarType> > &VertPos,
-//                                       std::vector<std::vector<Geo::Point3<ScalarType> > > &BorderVDirs,
-//                                       std::vector<Geo::Point3<ScalarType> > &BorderExitVDirs)
-//    {
-//        ScalarType eps=0.0000001;
-//        //update Normals
-//        std::vector<Point3<ScalarType> > FaceNormals;
-//        std::vector<Point3<ScalarType> > VertNormals;
-//        Geo::ComputeNormals(VertPos,FaceConnectivity,FaceNormals,VertNormals);
+    //    static void GetVertParallelExitDir(const std::vector<std::vector<int> > &FaceConnectivity,
+    //                                       const std::vector<Geo::Point3<ScalarType> > &VertPos,
+    //                                       std::vector<std::vector<Geo::Point3<ScalarType> > > &BorderVDirs,
+    //                                       std::vector<Geo::Point3<ScalarType> > &BorderExitVDirs)
+    //    {
+    //        ScalarType eps=0.0000001;
+    //        //update Normals
+    //        std::vector<Point3<ScalarType> > FaceNormals;
+    //        std::vector<Point3<ScalarType> > VertNormals;
+    //        Geo::ComputeNormals(VertPos,FaceConnectivity,FaceNormals,VertNormals);
 
-//        std::vector<std::vector<int> > NextF,NextE;
-//        Geo::getFFAdjacency(FaceConnectivity,NextF,NextE);
+    //        std::vector<std::vector<int> > NextF,NextE;
+    //        Geo::getFFAdjacency(FaceConnectivity,NextF,NextE);
 
-//        BorderVDirs.resize(VertPos.size());
-//        BorderExitVDirs.resize(VertPos.size(),Geo::Point3<ScalarType>(0,0,0));
+    //        BorderVDirs.resize(VertPos.size());
+    //        BorderExitVDirs.resize(VertPos.size(),Geo::Point3<ScalarType>(0,0,0));
 
-//        for (size_t i=0;i<NextF.size();i++)
-//            for (size_t j=0;j<NextF[i].size();j++)
-//            {
-//                if (NextF[i][j]!=-1)continue;//only border
-//                int sizeF=FaceConnectivity[i].size();
-//                int IndexV0=FaceConnectivity[i][j];
-//                int IndexV1=FaceConnectivity[i][(j+1)%sizeF];
-//                assert(IndexV0!=IndexV1);
-//                assert(IndexV0>=0);
-//                assert(IndexV1>=0);
-//                assert(IndexV0<(int)VertPos.size());
-//                assert(IndexV1<(int)VertPos.size());
-//                Geo::Point3<ScalarType> Pos0=VertPos[IndexV0];
-//                Geo::Point3<ScalarType> Pos1=VertPos[IndexV1];
-//                Geo::Point3<ScalarType> Dir=Pos1-Pos0;
-//                Dir.Normalize();
+    //        for (size_t i=0;i<NextF.size();i++)
+    //            for (size_t j=0;j<NextF[i].size();j++)
+    //            {
+    //                if (NextF[i][j]!=-1)continue;//only border
+    //                int sizeF=FaceConnectivity[i].size();
+    //                int IndexV0=FaceConnectivity[i][j];
+    //                int IndexV1=FaceConnectivity[i][(j+1)%sizeF];
+    //                assert(IndexV0!=IndexV1);
+    //                assert(IndexV0>=0);
+    //                assert(IndexV1>=0);
+    //                assert(IndexV0<(int)VertPos.size());
+    //                assert(IndexV1<(int)VertPos.size());
+    //                Geo::Point3<ScalarType> Pos0=VertPos[IndexV0];
+    //                Geo::Point3<ScalarType> Pos1=VertPos[IndexV1];
+    //                Geo::Point3<ScalarType> Dir=Pos1-Pos0;
+    //                Dir.Normalize();
 
-//                //bring the vector in the right space
-//                Geo::Point3<ScalarType> NormF=FaceNormals[i];
-//                Geo::Point3<ScalarType> Norm0=VertNormals[IndexV0];
-//                Geo::Point3<ScalarType> Norm1=VertNormals[IndexV1];
-//                assert(fabs(NormF.Norm()-1)<eps);
-//                assert(fabs(Norm0.Norm()-1)<eps);
-//                assert(fabs(Norm1.Norm()-1)<eps);
-//                Eigen::Matrix3<ScalarType> Rot0=Geo::PointMatch<ScalarType>::BestRotationMatrix(NormF,Norm0);
-//                Eigen::Matrix3<ScalarType> Rot1=Geo::PointMatch<ScalarType>::BestRotationMatrix(NormF,Norm0);
+    //                //bring the vector in the right space
+    //                Geo::Point3<ScalarType> NormF=FaceNormals[i];
+    //                Geo::Point3<ScalarType> Norm0=VertNormals[IndexV0];
+    //                Geo::Point3<ScalarType> Norm1=VertNormals[IndexV1];
+    //                assert(fabs(NormF.Norm()-1)<eps);
+    //                assert(fabs(Norm0.Norm()-1)<eps);
+    //                assert(fabs(Norm1.Norm()-1)<eps);
+    //                Eigen::Matrix3<ScalarType> Rot0=Geo::PointMatch<ScalarType>::BestRotationMatrix(NormF,Norm0);
+    //                Eigen::Matrix3<ScalarType> Rot1=Geo::PointMatch<ScalarType>::BestRotationMatrix(NormF,Norm0);
 
-//                //the direction should point on the other side in this case for IndexV1
-//                Geo::Point3<ScalarType> Dir0=Rot0*Dir;
-//                Geo::Point3<ScalarType> Dir1=Rot1*(Dir);
-//                BorderVDirs[IndexV0].push_back(Dir0);
-//                BorderVDirs[IndexV1].push_back(-Dir1);
+    //                //the direction should point on the other side in this case for IndexV1
+    //                Geo::Point3<ScalarType> Dir0=Rot0*Dir;
+    //                Geo::Point3<ScalarType> Dir1=Rot1*(Dir);
+    //                BorderVDirs[IndexV0].push_back(Dir0);
+    //                BorderVDirs[IndexV1].push_back(-Dir1);
 
-//                //then compute the opposite direction, but should always turn the same side
-//                Geo::Point3<ScalarType> Opp0=Cross(Dir0,NormF);
-//                Geo::Point3<ScalarType> Opp1=Cross(Dir1,NormF);
-//                Opp0.Normalize();
-//                Opp1.Normalize();
-//                BorderExitVDirs[IndexV0]+=Opp0;
-//                BorderExitVDirs[IndexV1]+=Opp1;
-//            }
+    //                //then compute the opposite direction, but should always turn the same side
+    //                Geo::Point3<ScalarType> Opp0=Cross(Dir0,NormF);
+    //                Geo::Point3<ScalarType> Opp1=Cross(Dir1,NormF);
+    //                Opp0.Normalize();
+    //                Opp1.Normalize();
+    //                BorderExitVDirs[IndexV0]+=Opp0;
+    //                BorderExitVDirs[IndexV1]+=Opp1;
+    //            }
 
-//        for (size_t i=0;i<BorderExitVDirs.size();i++)
-//            BorderExitVDirs[i].Normalize();
-//    }
+    //        for (size_t i=0;i<BorderExitVDirs.size();i++)
+    //            BorderExitVDirs[i].Normalize();
+    //    }
 
     static void GetVertBorderDir(const std::vector<std::vector<int> > &FaceConnectivity,
-                                       const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                                       std::vector<std::vector<Geo::Point3<ScalarType> > > &BorderVDirs)
+                                 const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                 std::vector<std::vector<Geo::Point3<ScalarType> > > &BorderVDirs)
     {
         ScalarType eps=0.0000001;
         //update Normals
@@ -401,51 +401,51 @@ class TragingGraphFunctions
             }
     }
 
-//    static void SetNodeTypeVertCross(TracingGraph<ScalarType> &TGraph,
-//                                     const std::vector<std::vector<int> > &FaceConnectivity,
-//                                     const std::vector<Geo::Point3<ScalarType> > &VertPos,
-//                                     const std::vector<Field::CrossF<ScalarType> > &CrossField)
-//    {
-//        std::vector<std::vector<Geo::Point3<ScalarType> > > BorderVDirs;
-//        std::vector<Geo::Point3<ScalarType> > BorderExitVDirs;
-//        GetVertParallelExitDir(FaceConnectivity,VertPos,BorderVDirs,BorderExitVDirs);
+    //    static void SetNodeTypeVertCross(TracingGraph<ScalarType> &TGraph,
+    //                                     const std::vector<std::vector<int> > &FaceConnectivity,
+    //                                     const std::vector<Geo::Point3<ScalarType> > &VertPos,
+    //                                     const std::vector<Field::CrossF<ScalarType> > &CrossField)
+    //    {
+    //        std::vector<std::vector<Geo::Point3<ScalarType> > > BorderVDirs;
+    //        std::vector<Geo::Point3<ScalarType> > BorderExitVDirs;
+    //        GetVertParallelExitDir(FaceConnectivity,VertPos,BorderVDirs,BorderExitVDirs);
 
-//        assert(BorderVDirs.size()==VertPos.size());
-//        assert(BorderExitVDirs.size()==VertPos.size());
-//        assert(CrossField.size()==VertPos.size());
-//        for (size_t i=0;i<VertPos.size();i++)
-//        {
-//            //in this case is internal
-//            if (BorderVDirs[i].size()==0)continue;
+    //        assert(BorderVDirs.size()==VertPos.size());
+    //        assert(BorderExitVDirs.size()==VertPos.size());
+    //        assert(CrossField.size()==VertPos.size());
+    //        for (size_t i=0;i<VertPos.size();i++)
+    //        {
+    //            //in this case is internal
+    //            if (BorderVDirs[i].size()==0)continue;
 
-//            //set the exit dir
-//            assert(BorderExitVDirs[i]!=Geo::Point3<ScalarType>(0,0,0));
-//            int ExitDirIdx=CrossField[i].BestDirectionI(BorderExitVDirs[i]);
-//            assert(ExitDirIdx>=0);
-//            assert(ExitDirIdx<4);
-//            int IndexNOpp=Field::CrossFieldGraph::NodeOfElemDir(i,ExitDirIdx);
-//            TGraph.NodeType(IndexNOpp)=ExitDomain;
+    //            //set the exit dir
+    //            assert(BorderExitVDirs[i]!=Geo::Point3<ScalarType>(0,0,0));
+    //            int ExitDirIdx=CrossField[i].BestDirectionI(BorderExitVDirs[i]);
+    //            assert(ExitDirIdx>=0);
+    //            assert(ExitDirIdx<4);
+    //            int IndexNOpp=Field::CrossFieldGraph::NodeOfElemDir(i,ExitDirIdx);
+    //            TGraph.NodeType(IndexNOpp)=ExitDomain;
 
-//            for (size_t j=0;j<BorderVDirs[i].size();j++)
-//            {
-//                assert(BorderVDirs[i][j]!=Geo::Point3<ScalarType>(0,0,0));
-//                int BorderDirIdx=CrossField[i].BestDirectionI(BorderVDirs[i][j]);
-//                assert(BorderDirIdx>=0);
-//                assert(BorderDirIdx<4);
-//                int IndexNBord=Field::CrossFieldGraph::NodeOfElemDir(i,BorderDirIdx);
-//                TGraph.NodeType(IndexNBord)=TangentDomain;
-//            }
-//        }
-//    }
+    //            for (size_t j=0;j<BorderVDirs[i].size();j++)
+    //            {
+    //                assert(BorderVDirs[i][j]!=Geo::Point3<ScalarType>(0,0,0));
+    //                int BorderDirIdx=CrossField[i].BestDirectionI(BorderVDirs[i][j]);
+    //                assert(BorderDirIdx>=0);
+    //                assert(BorderDirIdx<4);
+    //                int IndexNBord=Field::CrossFieldGraph::NodeOfElemDir(i,BorderDirIdx);
+    //                TGraph.NodeType(IndexNBord)=TangentDomain;
+    //            }
+    //        }
+    //    }
 
     static void SetNodeTypeVertCross(TracingGraph<ScalarType> &TGraph,
                                      const std::vector<std::vector<int> > &FaceConnectivity,
                                      const std::vector<Geo::Point3<ScalarType> > &VertPos,
                                      const std::vector<Field::CrossF<ScalarType> > &CrossField)
     {
-//        std::vector<std::vector<Geo::Point3<ScalarType> > > BorderVDirs;
-//        std::vector<Geo::Point3<ScalarType> > BorderExitVDirs;
-//        GetVertParallelExitDir(FaceConnectivity,VertPos,BorderVDirs,BorderExitVDirs);
+        //        std::vector<std::vector<Geo::Point3<ScalarType> > > BorderVDirs;
+        //        std::vector<Geo::Point3<ScalarType> > BorderExitVDirs;
+        //        GetVertParallelExitDir(FaceConnectivity,VertPos,BorderVDirs,BorderExitVDirs);
 
         std::vector<std::vector<Geo::Point3<ScalarType> > > BorderVDirs;
         GetVertBorderDir(FaceConnectivity,VertPos,BorderVDirs);
@@ -476,7 +476,7 @@ class TragingGraphFunctions
                 std::vector<ScalarType> NeighW;
                 TGraph.GetNeighType(IndexN,false,true,Geo::Internal,Neigh,NeighW);
                 if (Neigh.size()==0)
-                     TGraph.NodeType(IndexN)=ExitDomain;
+                    TGraph.NodeType(IndexN)=ExitDomain;
             }
         }
     }
@@ -504,14 +504,14 @@ class TragingGraphFunctions
     }
 
     static void RemoveBorderExitNeigh(TracingGraph<ScalarType> &TGraph)
-                                      //bool RemoveTangent=true)
+    //bool RemoveTangent=true)
     {
         for (size_t i=0;i<TGraph.NumNodes();i++)
         {
             if (TGraph.NodeType(i)==ExitDomain)
                 TGraph.RemoveNeighbours(i);
-//            if ((RemoveTangent)&&(TGraph.NodeType(i)==TangentDomain))
-//                TGraph.RemoveNeighbours(i);
+            //            if ((RemoveTangent)&&(TGraph.NodeType(i)==TangentDomain))
+            //                TGraph.RemoveNeighbours(i);
         }
     }
 
@@ -585,18 +585,52 @@ class TragingGraphFunctions
         //no link to itself
         for (size_t i=0;i<Adjacency.size();i++)
             for (size_t j=0;j<Adjacency[i].size();j++)
-               if (Adjacency[i][j]==i)
-               {std::cout<<"DE0"<<std::endl;return false;}
+                if (Adjacency[i][j]==i)
+                {std::cout<<"DE0"<<std::endl;return false;}
 
         //no double
         for (size_t i=0;i<Adjacency.size();i++)
             for (size_t j=0;j<Adjacency[i].size()-1;j++)
-                 for (size_t k=(j+1);k<Adjacency[i].size();k++)
+                for (size_t k=(j+1);k<Adjacency[i].size();k++)
                     if (Adjacency[i][j]==Adjacency[i][k])
                     {std::cout<<"DE1"<<std::endl;return false;}
 
         return true;
     }
+
+    static void RemoveBorderConnections(const std::vector<std::vector<int> > &Faces,
+                                        std::vector<std::vector<int> > &Adjacency)
+    {
+        //remove the one that are border edges
+        std::vector<std::pair<int,int> > BorderE;
+        std::set<std::pair<int,int> > BorderESet;
+        getBorderEdges(Faces,BorderE);
+
+        for (size_t i=0;i<BorderE.size();i++)
+        {
+            int IndexV0=BorderE[i].first;
+            int IndexV1=BorderE[i].second;
+            std::pair<int,int> key(std::min(IndexV0,IndexV1),
+                                   std::max(IndexV1,IndexV0));
+            BorderESet.insert(key);
+        }
+
+        std::vector<std::vector<int> > NewAdjacency;
+        NewAdjacency.resize(Adjacency.size());
+        for (size_t i=0;i<Adjacency.size();i++)
+            for (size_t j=0;j<Adjacency[i].size();j++)
+            {
+                int IndexV0=i;
+                int IndexV1=Adjacency[i][j];
+                std::pair<int,int> key(std::min(IndexV0,IndexV1),
+                                       std::max(IndexV1,IndexV0));
+
+                if (BorderESet.count(key)>0)continue;
+                NewAdjacency[IndexV0].push_back(IndexV1);
+            }
+        Adjacency=NewAdjacency;
+    }
+
 
 public:
 
@@ -612,6 +646,8 @@ public:
         assert(VertPos.size()==CrossField.size());
         std::vector<std::vector<int> > Adjacency;
         Geo::FindVertexStar(Faces,Adjacency,diffuse_step);
+
+        RemoveBorderConnections(Faces,Adjacency);
 
         std::set<std::pair<int,int> > EdgeSet;
         GetCrossAdjDirectSet(Faces,EdgeSet);

@@ -3,7 +3,11 @@
 
 
 #include "point3.h"
-#include "line3.h"
+#include "line3.h""
+//#include <Eigen/Dense>
+//#include <Eigen/Eigenvalues>
+//#include <iostream>
+//#include "point3.h"
 
 namespace  Geo{
 template <class ScalarType> class Plane3
@@ -93,6 +97,7 @@ public:
     }
 
 };
+
 } // end namespace
 
 

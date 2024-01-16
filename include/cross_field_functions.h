@@ -471,7 +471,8 @@ void MirrorCross(std::vector<Field::CrossF<ScalarType> > &Curv,
     {
         Curv[i].D[0]=MirrDirPlane.Mirror(Curv[i].D[0]);
         Curv[i].D[1]=MirrDirPlane.Mirror(Curv[i].D[1]);
-        Curv[i].D[0]=-Curv[i].D[0];
+        //Curv[i].D[0]=-Curv[i].D[0];
+        //Curv[i].D[1]=-Curv[i].D[1];
         //Curv[i].D[1]=Curv[i].D[1];
     }
 }

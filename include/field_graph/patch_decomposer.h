@@ -75,6 +75,7 @@ public:
     bool allow_concave;
     bool dynamic_smooth;
     bool split_removal;
+    std::set<int> FixedPaths;
 
     void ClearConditions()
     {
@@ -736,7 +737,7 @@ public:
             int TestPatch=UpdatedPatches[i];
 
             if (PatchMan.isEmpty(TestPatch))continue;
-
+            PatchMan.WriteStats(TestPatch);
             UpdateCondition(TestPatch);
 
         }
@@ -875,7 +876,11 @@ public:
 //                current_rem_cand--;
 //                continue;
 //            }
-
+            if (FixedPaths.count(current_rem_cand)>0)
+            {
+                current_rem_cand--;
+                continue;
+            }
             has_removed|=RemoveIfPossible(current_rem_cand);
             //TestedRemovedPath.insert(current_rem_cand);
             current_rem_cand--;
@@ -933,9 +938,9 @@ public:
         CompactData();
     }
 
-    void RemoveSplitted()
+    void RemoveSplitted(bool mergeCollinear=true)
     {
-        PathSampl.SplitPaths();
+        PathSampl.SplitPaths(FixedPaths);
 
         //TestedRemovedPath.clear();
 
@@ -950,7 +955,9 @@ public:
             current_rem_cand=PathSampl.SelectedPaths.size()-1;
             has_removed=false;
             while (RemoveNextIfPossible()){has_removed=true;}
-            PathSampl.MergeCollinearPath();
+
+            if (mergeCollinear && has_removed)
+                PathSampl.MergeCollinearPath();
         }while (has_removed);
          CompactData();
         //PathSampl.MergeCollinearPath();

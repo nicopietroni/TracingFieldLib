@@ -1011,7 +1011,163 @@ public:
         }
     }
 
-    void SplitPaths(bool sort_path=false)
+//    void SplitPaths(bool sort_path=false)
+//    {
+//        //for each vertex the path passing by
+//        std::map<int,std::set<int> > VertexPath;
+
+//        //find the splitting vertices
+//        for (int i=0;i<(int)SelectedPaths.size();i++)
+//            for (int j=0;j<(int)SelectedPaths[i].size();j++)
+//            {
+//                int PathN=SelectedPaths[i][j];
+//                int PathV=Field::CrossFieldGraph::ElemOfNode(PathN);
+//                VertexPath[PathV].insert(i);
+//            }
+
+//        std::set<int> SplitVert;
+//        std::map<int,std::set<int> >::iterator IteM;
+//        for (IteM=VertexPath.begin();IteM!=VertexPath.end();IteM++)
+//        {
+//            if ((*IteM).second.size()==1)continue;
+//            SplitVert.insert((*IteM).first);
+//        }
+
+//        //then split
+//        struct NewPathsPrio
+//        {
+//            int OrigP;
+//            ScalarType Prio;
+//            std::vector<int> Path;
+
+//            void InitPriorityByY(std::vector<Geo::Point3<ScalarType > > &VertPos)
+//            {
+//                ScalarType minY=std::numeric_limits<ScalarType>::max();
+//                for (size_t i=0;i<Path.size();i++)
+//                {
+//                    int NodeIdx=Path[i];
+//                    int PathV=Field::CrossFieldGraph::ElemOfNode(NodeIdx);
+//                    assert(PathV>=0);
+//                    assert(PathV<(int)VertPos.size());
+//                    minY=std::min(VertPos[PathV].Y,minY);
+//                }
+//                Prio=minY;
+//            }
+
+//            NewPathsPrio(const std::vector<int> &_CurrPath,
+//                         const int &_OrigP)
+//            {
+//                Path=_CurrPath;
+//                OrigP=_OrigP;
+//            }
+
+//            inline bool operator <(const NewPathsPrio &oth)const
+//            {
+//                if (Prio!=oth.Prio)return(Prio<oth.Prio);
+//                if (OrigP!=oth.OrigP)return(OrigP<oth.OrigP);
+//                return false;
+//            }
+
+//            inline bool operator ==(const NewPathsPrio &oth)const
+//            {
+//                if (OrigP!=oth.OrigP)return false;
+//                if (Prio!=oth.Prio)return false;
+//                return (Path!=oth.Path);
+//            }
+//        };
+
+//        std::vector<NewPathsPrio> NewPaths;
+//        for (int i=0;i<(int)SelectedPaths.size();i++)
+//        {
+//            bool is_loop=Geo::PathFunctions<ScalarType>::IsLoop(SelectedPaths[i]);
+//            int numInters=0;
+//            int sizeP=(int)SelectedPaths[i].size()-1;
+//            int first_inters=-1;
+//            for (int j=0;j<sizeP;j++)
+//            {
+//                int PathN=SelectedPaths[i][j];
+//                int PathV=Field::CrossFieldGraph::ElemOfNode(PathN);
+
+//                //not loop not check first and last
+//                if (!is_loop)//no split begin and end
+//                {
+//                    if ((j==0)||(j==(sizeP-1)))continue;
+//                }
+
+//                //if loop check only one among start/end
+//                if (is_loop)//no split begin and end
+//                {
+//                    if (j==(sizeP-1))continue;
+//                }
+
+//                if (SplitVert.count(PathV)==0)continue;
+
+//                numInters++;
+//                first_inters=j;
+//            }
+
+//            //one split on the loop does nothing
+//            if ((is_loop)&&(numInters<2))
+//            {
+//                NewPaths.push_back(NewPathsPrio(SelectedPaths[i],i));
+//                NewPaths.back().InitPriorityByY(VertPos);
+//                continue;
+//            }
+
+//            //one split on the loop does nothing
+//            if ((!is_loop)&&(numInters==0))
+//            {
+//                NewPaths.push_back(NewPathsPrio(SelectedPaths[i],i));
+//                NewPaths.back().InitPriorityByY(VertPos);
+//                continue;
+//            }
+
+//            std::vector<int> to_splitPath=SelectedPaths[i];
+//            assert(first_inters>=0);
+//            assert(first_inters<to_splitPath.size());
+//            if (is_loop)
+//            {
+//                //remove the last one
+//                assert(to_splitPath[0]==to_splitPath.back());
+//                to_splitPath.pop_back();
+
+//                if (first_inters>0)
+//                    std::rotate(to_splitPath.begin(), to_splitPath.begin() + first_inters, to_splitPath.end());
+
+//                //replicate the last one
+//                to_splitPath.push_back(to_splitPath[0]);
+//            }
+
+//            std::vector<std::vector<int> > SplittedP;
+//            SplittedP.resize(1);
+//            for (int j=0;j<to_splitPath.size();j++)
+//            {
+//                int PathN=to_splitPath[j];
+//                int PathV=Field::CrossFieldGraph::ElemOfNode(PathN);
+//                SplittedP.back().push_back(PathN);
+//                if ((j==0)||(j==(to_splitPath.size()-1)))continue;//no split begin and end
+//                if (SplitVert.count(PathV)==0)continue;
+//                //otherwise split
+//                SplittedP.resize(SplittedP.size()+1);
+//                SplittedP.back().push_back(PathN);
+//            }
+//            for (size_t j=0;j<SplittedP.size();j++)
+//            {
+//                NewPathsPrio NPP(SplittedP[j],i);
+//                NPP.InitPriorityByY(VertPos);
+//                NewPaths.push_back(NPP);
+//            }
+//            //NewPaths.insert(NewPaths.end(),SplittedP.begin(),SplittedP.end());
+//        }
+//        if (sort_path)
+//            std::sort(NewPaths.begin(),NewPaths.end());
+
+//        SelectedPaths.clear();
+//        for (size_t i=0;i<NewPaths.size();i++)
+//            SelectedPaths.push_back(NewPaths[i].Path);
+//    }
+
+    void SplitPaths(const std::set<int> &FixedPaths=std::set<int>())
     {
         //for each vertex the path passing by
         std::map<int,std::set<int> > VertexPath;
@@ -1033,52 +1189,16 @@ public:
             SplitVert.insert((*IteM).first);
         }
 
-        //then split
-        struct NewPathsPrio
-        {
-            int OrigP;
-            ScalarType Prio;
-            std::vector<int> Path;
 
-            void InitPriorityByY(std::vector<Geo::Point3<ScalarType > > &VertPos)
-            {
-                ScalarType minY=std::numeric_limits<ScalarType>::max();
-                for (size_t i=0;i<Path.size();i++)
-                {
-                    int NodeIdx=Path[i];
-                    int PathV=Field::CrossFieldGraph::ElemOfNode(NodeIdx);
-                    assert(PathV>=0);
-                    assert(PathV<(int)VertPos.size());
-                    minY=std::min(VertPos[PathV].Y,minY);
-                }
-                Prio=minY;
-            }
 
-            NewPathsPrio(const std::vector<int> &_CurrPath,
-                         const int &_OrigP)
-            {
-                Path=_CurrPath;
-                OrigP=_OrigP;
-            }
-
-            inline bool operator <(const NewPathsPrio &oth)const
-            {
-                if (Prio!=oth.Prio)return(Prio<oth.Prio);
-                if (OrigP!=oth.OrigP)return(OrigP<oth.OrigP);
-                return false;
-            }
-
-            inline bool operator ==(const NewPathsPrio &oth)const
-            {
-                if (OrigP!=oth.OrigP)return false;
-                if (Prio!=oth.Prio)return false;
-                return (Path!=oth.Path);
-            }
-        };
-
-        std::vector<NewPathsPrio> NewPaths;
+        std::vector<std::vector<int> > NewPaths;
         for (int i=0;i<(int)SelectedPaths.size();i++)
         {
+            if (FixedPaths.count(i)>0)
+            {
+                NewPaths.push_back(SelectedPaths[i]);
+                continue;
+            }
             bool is_loop=Geo::PathFunctions<ScalarType>::IsLoop(SelectedPaths[i]);
             int numInters=0;
             int sizeP=(int)SelectedPaths[i].size()-1;
@@ -1109,16 +1229,18 @@ public:
             //one split on the loop does nothing
             if ((is_loop)&&(numInters<2))
             {
-                NewPaths.push_back(NewPathsPrio(SelectedPaths[i],i));
-                NewPaths.back().InitPriorityByY(VertPos);
+//                NewPaths.push_back(NewPathsPrio(SelectedPaths[i],i));
+//                NewPaths.back().InitPriorityByY(VertPos);
+                NewPaths.push_back(SelectedPaths[i]);
                 continue;
             }
 
             //one split on the loop does nothing
             if ((!is_loop)&&(numInters==0))
             {
-                NewPaths.push_back(NewPathsPrio(SelectedPaths[i],i));
-                NewPaths.back().InitPriorityByY(VertPos);
+//                NewPaths.push_back(NewPathsPrio(SelectedPaths[i],i));
+//                NewPaths.back().InitPriorityByY(VertPos);
+                NewPaths.push_back(SelectedPaths[i]);
                 continue;
             }
 
@@ -1153,18 +1275,19 @@ public:
             }
             for (size_t j=0;j<SplittedP.size();j++)
             {
-                NewPathsPrio NPP(SplittedP[j],i);
-                NPP.InitPriorityByY(VertPos);
-                NewPaths.push_back(NPP);
+//                NewPathsPrio NPP(SplittedP[j],i);
+//                NPP.InitPriorityByY(VertPos);
+//                NewPaths.push_back(NPP);
+                NewPaths.push_back(SplittedP[j]);
             }
             //NewPaths.insert(NewPaths.end(),SplittedP.begin(),SplittedP.end());
         }
-        if (sort_path)
-            std::sort(NewPaths.begin(),NewPaths.end());
-
-        SelectedPaths.clear();
-        for (size_t i=0;i<NewPaths.size();i++)
-            SelectedPaths.push_back(NewPaths[i].Path);
+//        if (sort_path)
+//            std::sort(NewPaths.begin(),NewPaths.end());
+        SelectedPaths=NewPaths;
+//        SelectedPaths.clear();
+//        for (size_t i=0;i<NewPaths.size();i++)
+//            SelectedPaths.push_back(NewPaths[i].Path);
     }
 
     void MergeCollinearPath()

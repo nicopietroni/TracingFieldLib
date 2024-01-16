@@ -438,6 +438,21 @@ inline ScalarType PositiveAngleDeg( Point2<ScalarType> const & p1,
     return (Arad* 180.0 / M_PI);
 }
 
+template <class ScalarType>
+inline Point3<ScalarType> MakeOrthogonalTo( Point3<ScalarType> const & v,
+                                            Point3<ScalarType> const & Target)
+{
+   Point3<ScalarType> vNorm=v;
+   Point3<ScalarType> TargetNorm=Target;
+   vNorm.Normalize();
+   TargetNorm.Normalize();
+
+   Point3<ScalarType> Ret=vNorm;
+   Ret=Ret-TargetNorm*Geo::Dot(TargetNorm,vNorm);
+   Ret.Normalize();
+   return Ret;
+}
+
 }
 
 #endif
