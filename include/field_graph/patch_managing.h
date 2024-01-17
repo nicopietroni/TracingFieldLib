@@ -675,19 +675,6 @@ private:
 //        }
 //    }
 
-    void InitEdgeToFace()
-    {
-        PData.EdgesToFace.clear();
-        for (size_t i=0;i<Faces.size();i++)
-            for (size_t j=0;j<Faces[i].size();j++)
-            {
-                int IndexV0=Faces[i][j];
-                int IndexV1=Faces[i][(j+1)%3];
-                std::pair<int,int> key(std::min(IndexV0,IndexV1),
-                                       std::max(IndexV0,IndexV1));
-                PData.EdgesToFace[key].push_back(i);
-            }
-    }
 
     void RemovePath(const std::vector<int> &ToRem)
     {
@@ -2017,6 +2004,19 @@ public:
         assert(PData.EdgePatchSides.size()==NumPatches());
     }
 
+    void InitEdgeToFace()
+    {
+        PData.EdgesToFace.clear();
+        for (size_t i=0;i<Faces.size();i++)
+            for (size_t j=0;j<Faces[i].size();j++)
+            {
+                int IndexV0=Faces[i][j];
+                int IndexV1=Faces[i][(j+1)%3];
+                std::pair<int,int> key(std::min(IndexV0,IndexV1),
+                                       std::max(IndexV0,IndexV1));
+                PData.EdgesToFace[key].push_back(i);
+            }
+    }
 
     void Update(std::vector<int> &UpdatedPatches)
     {

@@ -36,7 +36,7 @@ public:
             std::vector<Geo::Point2<ScalarType> > CompVertUV;
             //std::cout<<"Parametrizing Partition "<<i<<std::endl;
 
-            WriteOBJ<ScalarType>(std::string("test.obj"),SubMeshesV[i],SubMeshesF[i]);
+            //WriteOBJ<ScalarType>(std::string("test.obj"),SubMeshesV[i],SubMeshesF[i]);
             bool solved=Geo::UVParam<ScalarType>::LeastSquaresConformal(SubMeshesV[i],SubMeshesF[i],CompVertUV);
             if (!solved)return false;
 
@@ -85,7 +85,13 @@ public:
             std::vector<Geo::Point2<ScalarType> > CompVertUV;
             bool solved=Geo::UVParam<ScalarType>::Arap(SubMeshesV[i],SubMeshesF[i],CompVertUV,InitializeConformal,MaxIte);
             if (!solved)return false;
+            Geo::Box2<ScalarType> BB;
+            BB.Init(CompVertUV);
+            if (BB.Area()==0)
+                solved=Geo::UVParam<ScalarType>::LeastSquaresConformal(SubMeshesV[i],SubMeshesF[i],CompVertUV);
 
+            if (!solved)return false;
+                //WriteOBJ<ScalarType>(std::string("testArap.obj"),SubMeshesV[i],SubMeshesF[i]);
             //then reassign
             assert(OriginalV[i].size()==SubMeshesV[i].size());
             assert(OriginalV[i].size()==CompVertUV.size());

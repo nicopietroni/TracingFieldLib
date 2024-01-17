@@ -124,6 +124,10 @@ class OutlinePacker
         for (int x=minBBi.X;x<=maxBBi.X;x++)
             for (int y=minBBi.Y;y<=maxBBi.Y;y++)
             {
+                assert(x>=0);
+                assert(y>=0);
+                assert(x<OccupatedCell.size());
+                assert(y<OccupatedCell[x].size());
                 assert(!OccupatedCell[x][y]);
                 OccupatedCell[x][y]=true;
             }
@@ -180,12 +184,15 @@ class OutlinePacker
         std::vector<Rectangle> Rects;
         for (size_t i=0;i<UVPart.size();i++)
         {
+            //std::cout<<"NEW COMPONENT"<<UVPart[i].size()<<std::endl;
             Geo::Box2<ScalarType> BBPart;
             BBPart.Init(UVPart[i]);
             BBPart.Inflate(Border);
+
             Coord2DType Mov=-BBPart.Min;
             Translate(UVPart[i],Mov);
             BBPart.Translate(Mov);
+
             Area+=BBPart.Area();
             Rectangle R(BBPart.Min,BBPart.Max,i);
             Rects.push_back(R);
@@ -253,7 +260,7 @@ public:
         ScalarType InflateConst=2;
         bool has_fit=false;
         int curr_step=1;
-        while (!has_fit)
+        while ((!has_fit)&&(curr_step<10))
         {
             std::cout<<"Fit Step:"<<curr_step<<std::endl;
             has_fit=PackStep(UVPartitions,Border,InflateConst,Translation);
