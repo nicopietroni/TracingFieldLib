@@ -1249,6 +1249,48 @@ public:
             int IndexV=CornerVert[i];
             CornerPos.push_back(VertPos[IndexV]);
         }
+
+    }
+
+    void GetAllSideVert(int IndexP,int IndexE,std::vector<int> &SideV)const
+    {
+        assert(IndexP<NumPatches());
+        assert(IndexP>=0);
+        assert(!isEmpty(IndexP));
+        for (size_t i=0;i<PData.EdgePatchSides[IndexP][0][IndexE].size();i++)
+            SideV.push_back(PData.EdgePatchSides[IndexP][0][IndexE][i].first);
+
+        SideV.push_back(PData.EdgePatchSides[IndexP][0][IndexE].back().second);
+    }
+
+    void GetAllSidePos(std::vector<Geo::Point3<ScalarType >> &MidSidePos,
+                       int numInterval=2)const
+    {
+        //for each patch
+        for (size_t i=0;i<PData.EdgePatchSides.size();i++)
+        {
+            if (isEmpty(i))continue;
+
+            //should have one loop
+            assert(this->PData.EdgePatchSides[i].size()==1);
+            for (size_t j=0;j<PData.EdgePatchSides[i][0].size();j++)
+            {
+                std::vector<int> SideV;
+                GetAllSideVert(i,j,SideV);
+                int sizeSide=SideV.size();
+
+                int SizeStep=floor(0.5+(ScalarType)sizeSide/(numInterval+1));
+                SizeStep=std::max(SizeStep,1);
+                for (size_t k=0;k<numInterval;k++)
+                {
+                    int CurrIdx=SizeStep*k;
+                    CurrIdx=std::min(CurrIdx,sizeSide-1);
+                    int IndexV=SideV[CurrIdx];
+                    Geo::Point3<ScalarType > CurrP=PData.SubPatchVertPos[i][IndexV];
+                    MidSidePos.push_back(CurrP);
+                }
+            }
+        }
     }
 
     //    std::vector<Geo::Point3<ScalarType> > SidesMidP;

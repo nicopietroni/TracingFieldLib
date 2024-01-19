@@ -260,6 +260,70 @@ void GLDrawEdges(const std::vector<Geo::Point3<ScalarType> > &Pos,
     glPopAttrib();
 }
 
+////template <class ScalarType>
+//void GLDrawEdges2(const std::vector<std::vector<float> >  &Pos,
+//                  const std::vector<std::pair<int,int> > &Edges,
+//                  const float LineWidth,
+//                  std::vector<float> colorLine)
+//{
+
+//    glPushAttrib(GL_ALL_ATTRIB_BITS);
+//    glDepthRange(0.0,0.9999);
+//    glEnable(GL_COLOR_MATERIAL);
+//    glDisable(GL_LIGHTING);
+//    glDisable(GL_BLEND);
+
+
+//    assert(colorLine.size()==3);
+//    glColor3f(colorLine[0],colorLine[1],colorLine[2]);
+
+//    glLineWidth(LineWidth);
+
+//    glBegin (GL_LINES);
+
+//    for (size_t i=0;i<Edges.size();i++)
+//    {
+//        int VIdx0=Edges[i].first;
+//        int VIdx1=Edges[i].second;
+//        assert(VIdx0>=0);
+//        assert(VIdx1>=0);
+//        assert(VIdx0<(int)Pos.size());
+//        assert(VIdx1<(int)Pos.size());
+//        //should have x y and z
+//        assert(Pos[VIdx0].size()==3);
+//        assert(Pos[VIdx1].size()==3);
+
+//        glVertex3f(Pos[VIdx0][0],Pos[VIdx0][1],Pos[VIdx0][2]);
+//        glVertex3f(Pos[VIdx1][0],Pos[VIdx1][1],Pos[VIdx1][2]);
+//    }
+
+//    glEnd ();
+
+//    glPopAttrib();
+//}
+
+
+//template <class ScalarType>
+//void GLDrawEdges(const std::vector<Geo::Point3<ScalarType> > &Pos,
+//                 const std::vector<std::pair<int,int> > &Edges,
+//                 const ScalarType LineWidth,
+//                 const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0))
+//{
+//    std::vector<std::vector<float> >  Posf(Pos.size());
+//    for (size_t i=0;i<Pos.size();i++)
+//    {
+//        Posf[i].push_back((float)Pos[i].X);
+//        Posf[i].push_back((float)Pos[i].Y);
+//        Posf[i].push_back((float)Pos[i].Z);
+//    }
+//    std::vector<float> colorLineV;
+//    colorLineV.push_back(colorLine.X);
+//    colorLineV.push_back(colorLine.Y);
+//    colorLineV.push_back(colorLine.Z);
+
+//    GLDrawEdges2(Posf,Edges,(float)LineWidth,colorLineV);
+//}
+
 template <class ScalarType>
 void GLDrawEdges(const std::vector<Geo::Point2<ScalarType> > &Pos,
                  const std::vector<std::pair<int,int> > &Edges,

@@ -75,6 +75,7 @@ public:
     bool allow_concave;
     bool dynamic_smooth;
     bool split_removal;
+
     std::set<int> FixedPaths;
 
     void ClearConditions()
