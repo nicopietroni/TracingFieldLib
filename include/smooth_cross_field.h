@@ -96,7 +96,7 @@ void ComputeCurvatureField(const std::vector<Geo::Point3<ScalarType> > &VertPos,
 
 template <class ScalarType>
 struct SmoothParam{
-    //int NDir;
+    int NDir;
     ScalarType TopIntevalFix;
     ScalarType GlobalSmoothVal;
     std::vector<size_t> FixedCross;
@@ -106,7 +106,7 @@ struct SmoothParam{
     SmoothParam()
     {
         align_borders=true;
-        //NDir=4;
+        NDir=4;
         TopIntevalFix=0;
         GlobalSmoothVal=100;
         iterations=10;
@@ -280,7 +280,7 @@ void SmoothGlobalPolyvector(const std::vector<Geo::Point3<ScalarType> > &VertPos
     GetHardConstraints(VertPos,Faces,FaceCurv,FacesNormals,SParam,FixedI);
 
     double roSyWeight=-1;
-    int Ndir=4;
+    int Ndir=SParam.NDir;
     Eigen::VectorXi FaceI;
     Eigen::MatrixXd FaceD;
     Eigen::VectorXd alignWeights;

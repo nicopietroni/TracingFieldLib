@@ -71,19 +71,19 @@ public:
         assert(PatchM.SubPatchFaces[IndexPatch].size()>=1);
 
         if (UVParamType==UVArap)
-            Geo::UVParam<ScalarType>::Arap(PatchM.SubPatchVertPos[IndexPatch],
-                                           PatchM.SubPatchFaces[IndexPatch],
+            Geo::UVParam<ScalarType>::Arap(PatchM.PData.SubPatchVertPos[IndexPatch],
+                                           PatchM.PData.SubPatchFaces[IndexPatch],
                                            PerPatchUVs[IndexPatch],true, 5);
 
         if (UVParamType==UVLSqConformal)
-            Geo::UVParam<ScalarType>::LeastSquaresConformal(PatchM.SubPatchVertPos[IndexPatch],
-                                                            PatchM.SubPatchFaces[IndexPatch],
+            Geo::UVParam<ScalarType>::LeastSquaresConformal(PatchM.PData.SubPatchVertPos[IndexPatch],
+                                                            PatchM.PData.SubPatchFaces[IndexPatch],
                                                             PerPatchUVs[IndexPatch]);
 
         std::vector<ScalarType> FaceDistorion;
-        Geo::UVDistortion<ScalarType>::ComputeDistortion(PatchM.SubPatchVertPos[IndexPatch],
+        Geo::UVDistortion<ScalarType>::ComputeDistortion(PatchM.PData.SubPatchVertPos[IndexPatch],
                                                          PerPatchUVs[IndexPatch],
-                                                         PatchM.SubPatchFaces[IndexPatch],
+                                                         PatchM.PData.SubPatchFaces[IndexPatch],
                                                          DType,PerPatchUVDists[IndexPatch]);
     }
 
@@ -126,14 +126,14 @@ public:
         {
 //            std::cout<<"Index Patch:"<<IndexPatch<<std::endl;
 //            std::cout<<"Size All Patches:"<<PerPatchUVDists.size()<<std::endl;
-            int NumFPatch=PatchM.SubPatchFaces[IndexPatch].size();
+            int NumFPatch=PatchM.PData.SubPatchFaces[IndexPatch].size();
             FaceV=std::vector<ScalarType>(NumFPatch,MaxDist);
             return;
         }
         if (PerPatchUVDists[IndexPatch].size()==0)
         {
             //std::cout<<"Size All Data:"<<PerPatchUVDists[IndexPatch].size()<<std::endl;
-            int NumFPatch=PatchM.SubPatchFaces[IndexPatch].size();
+            int NumFPatch=PatchM.PData.SubPatchFaces[IndexPatch].size();
             FaceV=std::vector<ScalarType>(NumFPatch,MaxDist);
             return;
         }

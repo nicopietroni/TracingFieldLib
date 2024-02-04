@@ -75,34 +75,11 @@ void InitFieldByCurvature()
     Field::CrossF<ScalarType>::getMinMaxQ(VertCurv,minQCrossVert,maxQCrossVert);
     GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
 
-//    for (size_t i=0;i<VertCurv.size();i++)
-//    {
-//        assert(fabs(VertCurv[i].D[0].Norm()-1)<0.00001);
-//        assert(fabs(VertCurv[i].D[1].Norm()-1)<0.00001);
-//    }
-
-//    for (size_t i=0;i<FaceCurv.size();i++)
-//    {
-//        assert(fabs(FaceCurv[i].D[0].Norm()-1)<0.00001);
-//        assert(fabs(FaceCurv[i].D[1].Norm()-1)<0.00001);
-//    }
-
     has_cross_field=true;
 }
 
 void SaveField()
 {
-//    for (size_t i=0;i<VertCurv.size();i++)
-//    {
-//        assert(fabs(VertCurv[i].D[0].Norm()-1)<0.00001);
-//        assert(fabs(VertCurv[i].D[1].Norm()-1)<0.00001);
-//    }
-
-//    for (size_t i=0;i<FaceCurv.size();i++)
-//    {
-//        assert(fabs(FaceCurv[i].D[0].Norm()-1)<0.00001);
-//        assert(fabs(FaceCurv[i].D[1].Norm()-1)<0.00001);
-//    }
 
     assert(!PathMesh.empty());
     std::string PathField=RemoveExtension(PathMesh);
@@ -135,20 +112,14 @@ void SmoothGlobal()
     InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv,0);
     InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv,0);
 
-//    for (size_t i=0;i<VertCurv.size();i++)
-//    {
-//        assert(fabs(VertCurv[i].D[0].Norm()-1)<0.00001);
-//        assert(fabs(VertCurv[i].D[1].Norm()-1)<0.00001);
-//    }
-
-//    for (size_t i=0;i<FaceCurv.size();i++)
-//    {
-//        assert(fabs(FaceCurv[i].D[0].Norm()-1)<0.00001);
-//        assert(fabs(FaceCurv[i].D[1].Norm()-1)<0.00001);
-//    }
-
 }
 
+
+void BatchProcess()
+{
+    InitFieldByCurvature();
+    SmoothGlobal();
+}
 
 void LoadMesh(const std::string &path)
 {
@@ -217,11 +188,11 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     ypos*=yscale;
     ypos=(display_h)-ypos;
 
-        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-            trackball.MouseDown((int)xpos,(int)ypos,UI::OrbitBall::BUTTON_LEFT);
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+        trackball.MouseDown((int)xpos,(int)ypos,UI::OrbitBall::BUTTON_LEFT);
 
-        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
-            trackball.MouseUp((int)xpos,(int)ypos,UI::OrbitBall::BUTTON_LEFT);
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+        trackball.MouseUp((int)xpos,(int)ypos,UI::OrbitBall::BUTTON_LEFT);
 
 }
 
@@ -232,20 +203,20 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-//        if (key == GLFW_KEY_LEFT_SHIFT && action == GLFW_PRESS)
-//            trackball.ButtonDown(vcg::Trackball::KEY_SHIFT);
-//        if (key == GLFW_KEY_LEFT_SHIFT && action == GLFW_RELEASE)
-//            trackball.ButtonUp(vcg::Trackball::KEY_SHIFT);
+    //        if (key == GLFW_KEY_LEFT_SHIFT && action == GLFW_PRESS)
+    //            trackball.ButtonDown(vcg::Trackball::KEY_SHIFT);
+    //        if (key == GLFW_KEY_LEFT_SHIFT && action == GLFW_RELEASE)
+    //            trackball.ButtonUp(vcg::Trackball::KEY_SHIFT);
 
-        if (key == GLFW_KEY_LEFT_CONTROL && action == GLFW_PRESS)
-            trackball.ButtonDown(UI::OrbitBall::KEY_CTRL);
-        if (key == GLFW_KEY_LEFT_CONTROL && action == GLFW_RELEASE)
-            trackball.ButtonUp(UI::OrbitBall::KEY_CTRL);
+    if (key == GLFW_KEY_LEFT_CONTROL && action == GLFW_PRESS)
+        trackball.ButtonDown(UI::OrbitBall::KEY_CTRL);
+    if (key == GLFW_KEY_LEFT_CONTROL && action == GLFW_RELEASE)
+        trackball.ButtonUp(UI::OrbitBall::KEY_CTRL);
 
-//        if (key == GLFW_KEY_LEFT_ALT && action == GLFW_PRESS)
-//            trackball.ButtonDown(vcg::Trackball::KEY_ALT);
-//        if (key == GLFW_KEY_LEFT_ALT && action == GLFW_RELEASE)
-//            trackball.ButtonUp(vcg::Trackball::KEY_ALT);
+    //        if (key == GLFW_KEY_LEFT_ALT && action == GLFW_PRESS)
+    //            trackball.ButtonDown(vcg::Trackball::KEY_ALT);
+    //        if (key == GLFW_KEY_LEFT_ALT && action == GLFW_RELEASE)
+    //            trackball.ButtonUp(vcg::Trackball::KEY_ALT);
 }
 
 // Now inside any function
@@ -326,15 +297,46 @@ void InitIMGui()
     ImGui_ImplOpenGL2_Init();
 }
 
+bool lineF = (SParam.NDir==2);
+bool crossF = (SParam.NDir==4);
+
 void SetRenderBar()
 {
     ImGui::Begin("Field Smoother",NULL,ImGuiWindowFlags_AlwaysAutoResize);       // Create a window called "Hello, world!" and append into it.
+
+
+    if (ImGui::RadioButton("Line F", lineF)) {
+        lineF = true;
+        crossF = false;
+        SParam.NDir=2;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Cross F", crossF)) {
+        lineF = false;
+        crossF = true;
+        SParam.NDir=4;
+    }
 
     ImGui::SliderInt("Ring",&Nring, 2, 5, "%d",ImGuiSliderFlags_AlwaysClamp);
     if (ImGui::Button("Init By Curvature"))
     {
         if (loadedMesh)
             InitFieldByCurvature();
+    }
+
+    // Create a slider for the float value
+    ImGui::SliderFloat("Top Fix", &TopIntevalFix, 0.0f, 0.3f);
+    SParam.TopIntevalFix= (ScalarType) TopIntevalFix;
+
+    //        ImGui::SliderFloat("Top Fix",&TopIntevalFix, 0, 0.3, "%2.f",ImGuiSliderFlags_AlwaysClamp);
+    //        SParam.TopIntevalFix= (ScalarType) TopIntevalFix;
+
+    ImGui::SliderFloat("Smoothness",&GlobalSmoothVal, 50, 500, "%1.f",ImGuiSliderFlags_AlwaysClamp);
+    SParam.GlobalSmoothVal=GlobalSmoothVal;
+
+    if (ImGui::Button("Batch Process"))
+    {
+        BatchProcess();
     }
 
     if (has_cross_field)
@@ -345,16 +347,6 @@ void SetRenderBar()
                 SmoothGlobal();
         }
         //ImGui::SameLine();
-
-        // Create a slider for the float value
-        ImGui::SliderFloat("Top Fix", &TopIntevalFix, 0.0f, 0.3f);
-        SParam.TopIntevalFix= (ScalarType) TopIntevalFix;
-
-//        ImGui::SliderFloat("Top Fix",&TopIntevalFix, 0, 0.3, "%2.f",ImGuiSliderFlags_AlwaysClamp);
-//        SParam.TopIntevalFix= (ScalarType) TopIntevalFix;
-
-        ImGui::SliderFloat("Smoothness",&GlobalSmoothVal, 50, 500, "%1.f",ImGuiSliderFlags_AlwaysClamp);
-        SParam.GlobalSmoothVal=GlobalSmoothVal;
 
         if (ImGui::Button("Save Field"))
         {
@@ -450,9 +442,9 @@ int main(int argc, char *argv[])
 
     InitIMGui();
 
-        trackball.center=Geo::Point3<float>(0, 0, 0);
-        trackball.radius= 1;
-        //trackball.SetSpinnable(true);
+    trackball.center=Geo::Point3<float>(0, 0, 0);
+    trackball.radius= 1;
+    //trackball.SetSpinnable(true);
 
     glewInit();
     // Main loop

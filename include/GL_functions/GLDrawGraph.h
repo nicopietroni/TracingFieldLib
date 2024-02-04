@@ -32,8 +32,8 @@ public:
         PathDrawParam()
         {
             DrawPath=true;
-            pointSize=20;
-            lineSize=10;
+            pointSize=0;
+            lineSize=0;
             ColPoint=Geo::Point3<ScalarType>(0,0,1);
             ColLine=Geo::Point3<ScalarType>(0.5,0.9,0.5);
             moveVal=(ScalarType)0.1;
@@ -53,7 +53,7 @@ public:
         if (PDParam.DrawPath)
         {
             glDisable(GL_LIGHTING);
-            glLineWidth(2);
+            glLineWidth(10);
             GLDraw::glColor(ColLine);
             glBegin(GL_LINE_STRIP);
             for (size_t i=0;i<Nodes_To_Draw.size();i++)
@@ -64,20 +64,20 @@ public:
             }
             glEnd();
         }
-        for (size_t i=0;i<Nodes_To_Draw.size();i++)
-        {
-            int currNode=Nodes_To_Draw[i];
-            assert(currNode>=0);
-            //assert(currNode<(int)TGraph.N.size());
-            assert(currNode<(int)TGraph.NumNodes());
-            int CrossD=Field::CrossFieldGraph::DirOfNode(currNode);
-            int CrossI=Field::CrossFieldGraph::ElemOfNode(currNode);
-            assert(CrossD<4);
-            assert(CrossI<(int)Cross.size());
-            GLDraw::DrawDirectionCross<ScalarType>(Cross[CrossI],CrossD,scaleVal,PDParam.moveVal,
-                                                   PDParam.ColPoint,PDParam.ColLine,
-                                                   (float)PDParam.pointSize,(float)PDParam.lineSize);
-        }
+//        for (size_t i=0;i<Nodes_To_Draw.size();i++)
+//        {
+//            int currNode=Nodes_To_Draw[i];
+//            assert(currNode>=0);
+//            //assert(currNode<(int)TGraph.N.size());
+//            assert(currNode<(int)TGraph.NumNodes());
+//            int CrossD=Field::CrossFieldGraph::DirOfNode(currNode);
+//            int CrossI=Field::CrossFieldGraph::ElemOfNode(currNode);
+//            assert(CrossD<4);
+//            assert(CrossI<(int)Cross.size());
+//            GLDraw::DrawDirectionCross<ScalarType>(Cross[CrossI],CrossD,scaleVal,PDParam.moveVal,
+//                                                   PDParam.ColPoint,PDParam.ColLine,
+//                                                   (float)PDParam.pointSize,(float)PDParam.lineSize);
+//        }
         glDepthRange(0.0,1.0);
         glPopAttrib();
     }

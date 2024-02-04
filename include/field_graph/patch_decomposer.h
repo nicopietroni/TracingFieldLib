@@ -906,7 +906,7 @@ public:
         allow_darts=false;
         allow_concave=false;
         current_rem_cand=-1;
-        dynamic_smooth=false;
+        dynamic_smooth=true;
         split_removal=false;
         time_rem0=0;
         time_rem1=0;
