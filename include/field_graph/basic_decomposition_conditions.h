@@ -180,7 +180,7 @@ public:
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
     {
-        assert(IndexPatch<PatchM.SideLenghts.size());
+        assert(IndexPatch<PatchM.PData.SideLenghts.size());
 
         //if there is more than one hole return false
         //if (PatchM.PData.SideLenghts[IndexPatch].size()>1)return false;

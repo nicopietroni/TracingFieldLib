@@ -67,8 +67,8 @@ public:
 
         assert(PerPatchUVDists.size()==PerPatchUVs.size());
         //at least one face
-        assert(PatchM.SubPatchVertPos[IndexPatch].size()>=3);
-        assert(PatchM.SubPatchFaces[IndexPatch].size()>=1);
+        assert(PatchM.PData.SubPatchVertPos[IndexPatch].size()>=3);
+        assert(PatchM.PData.SubPatchFaces[IndexPatch].size()>=1);
 
         if (UVParamType==UVArap)
             Geo::UVParam<ScalarType>::Arap(PatchM.PData.SubPatchVertPos[IndexPatch],
@@ -100,7 +100,7 @@ public:
 
         assert(IndexPatch<PerPatchUVs.size());
         assert(IndexPatch<PerPatchUVDists.size());
-        assert(PerPatchUVs[IndexPatch].size()==PatchM.SubPatchVertPos[IndexPatch].size());
+        assert(PerPatchUVs[IndexPatch].size()==PatchM.PData.SubPatchVertPos[IndexPatch].size());
 
 
 
