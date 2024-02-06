@@ -4,7 +4,7 @@
 #include "imgui_impl_opengl2.h"
 #include <stdio.h>
 #include <UI/orbitball.h>
-#include "ImGuiFileBrowser.h"
+//#include "ImGuiFileBrowser.h"
 #ifdef __APPLE__
 #define GL_SILENCE_DEPRECATION
 #endif
@@ -20,12 +20,13 @@
 #include <connectivity.h>
 #include <cross_field_functions.h>
 #include <smooth_cross_field.h>
+#include <math_utils.h>
 
 GLFWwindow* window;
 std::string PathMesh;
 std::string PathField;
 UI::OrbitBall trackball;
-imgui_addons::ImGuiFileBrowser file_dialog; 
+//imgui_addons::ImGuiFileBrowser file_dialog;
 //std::ostringstream oss;
 ImVec4 clear_color = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);
 ImVec4 mesh_color = ImVec4(0.79f, 0.9f, 0.87f, 1.00f);
@@ -219,38 +220,38 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     //            trackball.ButtonUp(vcg::Trackball::KEY_ALT);
 }
 
-// Now inside any function
-void showMainMenu()
-{
-    bool open = false, save = false;
-    if(ImGui::BeginMainMenuBar())
-    {
-        if (ImGui::BeginMenu("File"))
-        {
-            if (ImGui::MenuItem("Open", NULL))
-                open = true;
-            if (ImGui::MenuItem("Quit", NULL))
-                exit(0);
+//// Now inside any function
+//void showMainMenu()
+//{
+//    bool open = false, save = false;
+//    if(ImGui::BeginMainMenuBar())
+//    {
+//        if (ImGui::BeginMenu("File"))
+//        {
+//            if (ImGui::MenuItem("Open", NULL))
+//                open = true;
+//            if (ImGui::MenuItem("Quit", NULL))
+//                exit(0);
             
-            ImGui::EndMenu();
-        }
-        ImGui::EndMainMenuBar();
-    }
+//            ImGui::EndMenu();
+//        }
+//        ImGui::EndMainMenuBar();
+//    }
     
-    //Remember the name to ImGui::OpenPopup() and showFileDialog() must be same...
-    if(open)
-        ImGui::OpenPopup("Open File");
-    // if(save)
-    //     ImGui::OpenPopup("Save File");
+//    //Remember the name to ImGui::OpenPopup() and showFileDialog() must be same...
+//    if(open)
+//        ImGui::OpenPopup("Open File");
+//    // if(save)
+//    //     ImGui::OpenPopup("Save File");
 
-    /* Optional third parameter. Support opening only compressed rar/zip files.
-     * Opening any other file will show error, return false and won't close the dialog.
-     */
-    if(file_dialog.showFileDialog("Open File", imgui_addons::ImGuiFileBrowser::DialogMode::OPEN, ImVec2(700, 310), ".obj,.ply,.off"))
-    {
-        LoadMesh(file_dialog.selected_path);
-    }
-}
+//    /* Optional third parameter. Support opening only compressed rar/zip files.
+//     * Opening any other file will show error, return false and won't close the dialog.
+//     */
+//    if(file_dialog.showFileDialog("Open File", imgui_addons::ImGuiFileBrowser::DialogMode::OPEN, ImVec2(700, 310), ".obj,.ply,.off"))
+//    {
+//        LoadMesh(file_dialog.selected_path);
+//    }
+//}
 
 void InitGLFW_Window()
 {
@@ -461,7 +462,7 @@ int main(int argc, char *argv[])
 
             //SetLogWindow();
 
-            showMainMenu();
+            //showMainMenu();
         }
         // Rendering
         ImGui::Render();

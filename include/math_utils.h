@@ -5,7 +5,7 @@
 #include <utility>
 #include <cstddef>
 #include <functional>
-
+#include <math.h>
 
 namespace  Geo
 {
