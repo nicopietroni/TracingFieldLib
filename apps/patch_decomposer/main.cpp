@@ -35,6 +35,7 @@
 #include <field_graph/dual_patches.h>
 #include <field_graph/UV_decomposition_conditions.h>
 #include <cross_field_functions.h>
+#include <math_utils.h>
 
 GLFWwindow* window;
 std::string PathMesh;
