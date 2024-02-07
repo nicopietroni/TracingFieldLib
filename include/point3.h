@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <point2.h>
+#include <math_utils.h>
 
 namespace  Geo{
 
