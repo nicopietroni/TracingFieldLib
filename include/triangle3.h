@@ -153,6 +153,62 @@ void BarycentricCoords(const Traingle3<ScalarType> &T,
     Geo::BarycentricCoords(T2,Test_pos2D,alpha,beta,gamma);
 }
 
+template<class ScalarType>
+ScalarType QualityRadii(Point3<ScalarType> const &p0,
+                        Point3<ScalarType> const &p1,
+                        Point3<ScalarType> const &p2)
+{
+
+    ScalarType a=(p1-p0).Norm();
+    ScalarType b=(p2-p0).Norm();
+    ScalarType c=(p1-p2).Norm();
+
+    ScalarType sum = (a + b + c)*0.5;
+    ScalarType area2 =  sum*(a+b-sum)*(a+c-sum)*(b+c-sum);
+    if(area2 <= 0) return 0;
+    //circumradius: (a*b*c)/(4*sqrt(area2))
+    //inradius: (a*b*c)/(4*circumradius*sum) => sqrt(area2)/sum;
+    return (8*area2)/(a*b*c*sum);
+}
+
+template<class ScalarType>
+ScalarType QualityMeanRatio(Point3<ScalarType> const &p0,
+                            Point3<ScalarType> const &p1,
+                            Point3<ScalarType> const &p2)
+{
+    ScalarType a=(p1-p0).Norm();
+    ScalarType b=(p2-p0).Norm();
+    ScalarType c=(p1-p2).Norm();
+    ScalarType sum = (a + b + c)*0.5; //semiperimeter
+    ScalarType area2 =  sum*(a+b-sum)*(a+c-sum)*(b+c-sum);
+    if(area2 <= 0) return 0;
+    return (4.0*sqrt(3.0)*sqrt(area2))/(a*a + b*b + c*c);
+}
+
+template<class ScalarType>
+ScalarType QualityRadii(const Traingle3<ScalarType> &T)
+{ return (QualityRadii(T.P(0),T.P(1),T.P(2)));}
+
+template<class ScalarType>
+ScalarType QualityMeanRatio(const Traingle3<ScalarType> &T)
+{ return (QualityMeanRatio(T.P(0),T.P(1),T.P(2)));}
+
+template<class ScalarType>
+Traingle3<ScalarType> TriangleOfFace(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                     const std::vector<std::vector<int> > &Faces,
+                                     const int &IndexF)
+{
+    assert(IndexF>=0);
+    assert(IndexF<Faces.size());
+    assert(Faces[IndexF].size()==3);
+    int IndexV0=Faces[IndexF][0];
+    int IndexV1=Faces[IndexF][1];
+    int IndexV2=Faces[IndexF][2];
+    Point3<ScalarType> p0=VertPos[IndexV0];
+    Point3<ScalarType> p1=VertPos[IndexV1];
+    Point3<ScalarType> p2=VertPos[IndexV2];
+    return Traingle3<ScalarType>(p0,p1,p2);
+}
 
 } //namespace
 

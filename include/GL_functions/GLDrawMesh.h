@@ -260,6 +260,45 @@ void GLDrawEdges(const std::vector<Geo::Point3<ScalarType> > &Pos,
     glPopAttrib();
 }
 
+template <class ScalarType>
+void GLDrawEdges(const std::vector<Geo::Point3<ScalarType> > &Pos,
+                 const std::vector<std::pair<int,int> > &Edges,
+                 const ScalarType LineWidth,
+                 const std::vector<Geo::Point3<ScalarType> >  &colorEdges)
+{
+    assert(colorEdges.size()==Edges.size());
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDepthRange(0.0,0.9999);
+    glEnable(GL_COLOR_MATERIAL);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_BLEND);
+
+
+    glLineWidth (LineWidth);
+
+    glBegin (GL_LINES);
+
+    for (size_t i=0;i<Edges.size();i++)
+    {
+        glColor(colorEdges[i]);
+
+        int VIdx0=Edges[i].first;
+        int VIdx1=Edges[i].second;
+        assert(VIdx0>=0);
+        assert(VIdx1>=0);
+        assert(VIdx0<(int)Pos.size());
+        assert(VIdx1<(int)Pos.size());
+        Geo::Point3<ScalarType> Pos0=Pos[VIdx0];
+        Geo::Point3<ScalarType> Pos1=Pos[VIdx1];
+        glVertex(Pos0);
+        glVertex(Pos1);
+    }
+    glEnd ();
+
+    glPopAttrib();
+}
+
 ////template <class ScalarType>
 //void GLDrawEdges2(const std::vector<std::vector<float> >  &Pos,
 //                  const std::vector<std::pair<int,int> > &Edges,

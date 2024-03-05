@@ -14,20 +14,40 @@ namespace Geo
 
 template <class ScalarType>
 void SmoothLaplacian(std::vector<Geo::Point3<ScalarType> > &VertPos,
-                     const std::vector<std::vector<int> > &Faces,
-                     int NumIte,
+                     const std::vector<std::vector<int> > &Faces,int NumIte,
                      const std::vector<int> &FixedVert=std::vector<int>(),
-                     bool line_border=true,
-                     ScalarType Damp=0.5)
+                     const std::vector<std::pair<int,int> > &Features=std::vector<std::pair<int,int> >(),
+                     bool line_border=true,ScalarType Damp=0.5)
 {
 
     std::set<int> FixedVertSet(FixedVert.begin(),FixedVert.end());
+    std::vector<bool> FeatureVert(VertPos.size(),false);
+    for (size_t i=0;i<Features.size();i++)
+    {
+        FeatureVert[Features[i].first]=true;
+        FeatureVert[Features[i].second]=true;
+    }
+
     std::vector<bool> IsB;
     Geo::getBorderVert(Faces,IsB);
     for (int s=0;s<NumIte;s++)
     {
-        std::vector<Geo::Point3<ScalarType> > NewVertPos(VertPos.size(),Geo::Point3<ScalarType>(0,0,0));
+        std::vector<Geo::Point3<ScalarType> > NewVertPos(VertPos.size(),
+                                                         Geo::Point3<ScalarType>(0,0,0));
         std::vector<int> SumNum(VertPos.size(),0);
+
+        //cumulate features
+        for (size_t i=0;i<Features.size();i++)
+        {
+            int IndexV0=Features[i].first;
+            int IndexV1=Features[i].second;
+            Geo::Point3<ScalarType> P0=VertPos[IndexV0];
+            Geo::Point3<ScalarType> P1=VertPos[IndexV1];
+            NewVertPos[IndexV1]+=P0;
+            SumNum[IndexV1]++;
+            NewVertPos[IndexV0]+=P1;
+            SumNum[IndexV0]++;
+        }
 
         for (size_t i=0;i<Faces.size();i++)
             for (size_t j=0;j<Faces[i].size();j++)
@@ -39,12 +59,12 @@ void SmoothLaplacian(std::vector<Geo::Point3<ScalarType> > &VertPos,
 
                 if (line_border)
                 {
-                    if (!IsB[IndexV0])
+                    if ((!IsB[IndexV0])&&(!FeatureVert[IndexV0]))
                     {
                         NewVertPos[IndexV0]+=P1;
                         SumNum[IndexV0]++;
                     }
-                    if (!IsB[IndexV1])
+                    if ((!IsB[IndexV1])&&(!FeatureVert[IndexV1]))
                     {
                         NewVertPos[IndexV1]+=P0;
                         SumNum[IndexV1]++;
@@ -52,10 +72,16 @@ void SmoothLaplacian(std::vector<Geo::Point3<ScalarType> > &VertPos,
                 }
                 else
                 {
-                    NewVertPos[IndexV0]+=P1;
-                    SumNum[IndexV0]++;
-                    NewVertPos[IndexV1]+=P0;
-                    SumNum[IndexV1]++;
+                    if (!FeatureVert[IndexV0])
+                    {
+                        NewVertPos[IndexV0]+=P1;
+                        SumNum[IndexV0]++;
+                    }
+                    if (!FeatureVert[IndexV1])
+                    {
+                        NewVertPos[IndexV1]+=P0;
+                        SumNum[IndexV1]++;
+                    }
                 }
             }
         if (line_border)
@@ -69,22 +95,25 @@ void SmoothLaplacian(std::vector<Geo::Point3<ScalarType> > &VertPos,
                 Geo::Point3<ScalarType> P0=VertPos[IndexV0];
                 Geo::Point3<ScalarType> P1=VertPos[IndexV1];
 
-                NewVertPos[IndexV0]+=P1;
-                SumNum[IndexV0]++;
-                NewVertPos[IndexV1]+=P0;
-                SumNum[IndexV1]++;
+                if (!FeatureVert[IndexV0])
+                {
+                    NewVertPos[IndexV0]+=P1;
+                    SumNum[IndexV0]++;
+                }
+                if (!FeatureVert[IndexV1])
+                {
+                    NewVertPos[IndexV1]+=P0;
+                    SumNum[IndexV1]++;
+                }
             }
         }
         for (size_t i=0;i<NewVertPos.size();i++)
         {
             if (FixedVertSet.count(i)>0)continue;
-            if (SumNum[i]==0)continue;;
+            if (SumNum[i]<2)continue;
             NewVertPos[i]/=(ScalarType)SumNum[i];
             VertPos[i]=NewVertPos[i]*(1-Damp)+VertPos[i]*Damp;
         }
-
-
-
     }
 }
 
@@ -190,30 +219,6 @@ void SmoothLaplacianImplicit(std::vector<Geo::Point3<ScalarType> > &VertPos,
     }
 }
 
-
-//    for (int s=0;s<NumIte;s++)
-//    {
-//        std::vector<Geo::Point3<ScalarType> > NewVertPos(VertPos.size(),Geo::Point3<ScalarType>(0,0,0));
-//        std::vector<int> SumNum(VertPos.size(),0);
-
-//        for (size_t i=0;i<Faces.size();i++)
-//            for (size_t j=0;j<Faces[i].size();j++)
-//            {
-//                int IndexV0=Faces[i][j];
-//                int IndexV1=Faces[i][(j+1)%Faces[i].size()];
-//                Geo::Point3<ScalarType> P0=VertPos[IndexV0];
-//                Geo::Point3<ScalarType> P1=VertPos[IndexV1];
-//                NewVertPos[IndexV0]+=P1;
-//                NewVertPos[IndexV1]+=P0;
-//                SumNum[IndexV0]++;
-//                SumNum[IndexV1]++;
-//            }
-//        for (size_t i=0;i<NewVertPos.size();i++)
-//        {
-//            NewVertPos[i]/=(ScalarType)SumNum[i];
-//            VertPos[i]=NewVertPos[i]*(1-Damp)+VertPos[i]*Damp;
-//        }
-//    }
 
 }
 #endif

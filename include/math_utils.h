@@ -14,12 +14,12 @@ namespace  Geo
 // Hash function
 struct hashPairIntFunction
 {
-  size_t operator()(const std::pair<int , int> &x) const
-  {
-      int h1 = std::hash<int>{}(x.first);
-      int h2 = std::hash<int>{}(x.second);
-      return h1 ^ h2;
-  }
+    size_t operator()(const std::pair<int , int> &x) const
+    {
+        int h1 = std::hash<int>{}(x.first);
+        int h2 = std::hash<int>{}(x.second);
+        return h1 ^ h2;
+    }
 };
 
 inline float ToDeg(const float &a)
@@ -41,6 +41,14 @@ inline ScalarType MaxPercentile(const std::vector<ScalarType> &Values,
     IndexMax=std::max(IndexMax,0);
     ScalarType TestVal=ValuesSorted[IndexMax];
     return TestVal;
+}
+
+template <class ScalarType>
+inline void Trim(std::vector<ScalarType> &Values,
+                 const ScalarType &MaxVal)
+{
+    for (size_t i=0;i<Values.size();i++)
+        Values[i]=std::min(Values[i],MaxVal);
 }
 
 

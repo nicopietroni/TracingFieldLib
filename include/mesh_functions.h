@@ -288,7 +288,7 @@ ScalarType Area(const std::vector<Geo::Point2<ScalarType> > &VertPos,
 
 template <class ScalarType>
 static int ClosestVertFromVect(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                const Geo::Point3<ScalarType> &TargetPos)
+                               const Geo::Point3<ScalarType> &TargetPos)
 {
     ScalarType DistMin=std::numeric_limits<ScalarType>::max();
     int IndexV=-1;
@@ -513,13 +513,6 @@ void SplitQuadIntoTris(const std::vector<Geo::Point3<ScalarType> > &Pos,
     }
 }
 
-int WhichVert(const std::vector<int> &Face,
-              const int &VertIndex)
-{
-    for (size_t i=0;i<Face.size();i++)
-        if (Face[i]==VertIndex)return i;
-    return -1;
-}
 
 void FFConnectedComponenent(const std::vector<std::vector<int> > &Elements,
                             const std::vector<std::vector<int> > &NextP,
@@ -914,7 +907,7 @@ void SplitMeshFromEdges(std::vector<Geo::Point3<ScalarType> > &Pos,
                 {
                     int IndexF=PosPartitions[k][w].F;
                     int IndexV=PosPartitions[k][w].V;
-                    int LocV=WhichVert(Faces[IndexF],IndexV);
+                    int LocV=Geo::WhichVert(Faces[IndexF],IndexV);
                     assert(LocV>=0);
                     assert(LocV<=(int)Faces[IndexF].size());
                     NewFaces[IndexF][LocV]=newVIndex;
@@ -953,8 +946,8 @@ static void MirrorMesh(std::vector<Geo::Point3<ScalarType> > &Pos3D,
 {
     std::vector<Geo::Point3<ScalarType> > MirroredPos3D=Pos3D;
     std::vector<std::vector<int> > MirroredFaces=Faces;
-//    std::vector<bool> IsB;
-//    Geo::getBorderVert(Faces,IsB);
+    //    std::vector<bool> IsB;
+    //    Geo::getBorderVert(Faces,IsB);
     for (size_t i=0;i<MirroredPos3D.size();i++)
     {
         //no need to mirror on the place
@@ -969,5 +962,53 @@ static void MirrorMesh(std::vector<Geo::Point3<ScalarType> > &Pos3D,
     AppendMesh(Pos3D,Faces,MirroredPos3D,MirroredFaces);
 
 }
+
+template <class ScalarType>
+static void RemoveDeleted(std::vector<Geo::Point3<ScalarType> > &Pos3D,
+                          std::vector<std::vector<int> > &Connectivity,
+                          const std::vector<bool> &DeletedV,
+                          const std::vector<bool> &DeletedEl)
+{
+    assert(Pos3D.size()==DeletedV.size());
+    assert(Connectivity.size()==DeletedEl.size());
+
+    std::vector<Geo::Point3<ScalarType> > NewPos3D;
+    std::vector<int> NewIdx(Pos3D.size(),-1);
+    for (size_t i=0;i<Pos3D.size();i++)
+    {
+        if (DeletedV[i])continue;
+        NewPos3D.push_back(Pos3D[i]);
+        NewIdx[i]=NewPos3D.size()-1;
+    }
+
+
+    std::vector<std::vector<int> > NewConnectivity;
+    for (size_t i=0;i<Connectivity.size();i++)
+    {
+        if (DeletedEl[i])continue;
+        NewConnectivity.resize(NewConnectivity.size()+1);
+        for (size_t j=0;j<Connectivity[i].size();j++)
+        {
+            int IndexVOr=Connectivity[i][j];
+            assert(IndexVOr>=0);
+//            std::cout<<"IndexVOr "<<IndexVOr<<std::endl;
+//            std::cout<<"NewIdx.size() "<<NewIdx.size()<<std::endl;
+            assert(IndexVOr<NewIdx.size());
+            int IndexVNew=NewIdx[IndexVOr];
+            assert(IndexVNew>=0);
+            assert(IndexVNew<NewPos3D.size());
+            NewConnectivity.back().push_back(IndexVNew);
+        }
+    }
+}
+
+//template <class ScalarType>
+//static bool EdgeManifold(std::vector<Geo::Point3<ScalarType> > &Pos3D,
+//                        std::vector<std::vector<int> > &Faces,
+//                       const Geo::Plane3<ScalarType> &SplitPl,
+//                       const std::set<int> &MiddleV)
+//{
+
+//}
 
 #endif

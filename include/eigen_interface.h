@@ -18,6 +18,30 @@ public:
 
     typedef typename Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> MatrixXm;
 
+    static void GetVertData(const std::vector<Geo::Point2<ScalarType> > &VertPos,
+                            MatrixXm &vert)
+    {
+        // create eigen matrix of vertices
+        vert=MatrixXm(VertPos.size(), 2);
+
+        // copy vertices
+        for (int i = 0; i < (int)VertPos.size(); i++)
+            for (int j = 0; j < 2; j++)
+                vert(i,j) = VertPos[i].cV(j);
+    }
+
+    static void GetVertData(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                            MatrixXm &vert)
+    {
+        // create eigen matrix of vertices
+        vert=MatrixXm(VertPos.size(), 3);
+
+        // copy vertices
+        for (int i = 0; i < (int)VertPos.size(); i++)
+            for (int j = 0; j < 3; j++)
+                vert(i,j) = VertPos[i].cV(j);
+    }
+
     static void GetTriMeshData(const std::vector<Geo::Point3<ScalarType> > &VertPos,
                                const std::vector<std::vector<int> > &Faces,
                                Eigen::MatrixXi &faces,

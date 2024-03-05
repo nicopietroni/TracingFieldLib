@@ -91,6 +91,9 @@ public:
                 solved=Geo::UVParam<ScalarType>::LeastSquaresConformal(SubMeshesV[i],SubMeshesF[i],CompVertUV);
 
             if (!solved)return false;
+
+            UVUtils<ScalarType>::ScaleToMatchArea(SubMeshesV[i],SubMeshesF[i],CompVertUV);
+
                 //WriteOBJ<ScalarType>(std::string("testArap.obj"),SubMeshesV[i],SubMeshesF[i]);
             //then reassign
             assert(OriginalV[i].size()==SubMeshesV[i].size());

@@ -58,11 +58,19 @@ public:
             V=currV0;
     }
 
-    int VFlip(const std::vector<std::vector<int> > &Faces)
+    int VFlip(const std::vector<std::vector<int> > &Faces)const
     {
         Pos3 TestP=(*this);
         TestP.FlipV(Faces);
         return TestP.V;
+    }
+
+    int FFlip(const std::vector<std::vector<int> > &NextF,
+              const std::vector<std::vector<int> > &NextEd)const
+    {
+        Pos3 TestP=(*this);
+        TestP.FlipF(NextF,NextEd);
+        return TestP.F;
     }
 
     void FlipE(const std::vector<std::vector<int> > &Faces)
@@ -116,7 +124,7 @@ public:
         E=newE;
     }
 
-    bool IsBorder(const std::vector<std::vector<int> > &NextF)
+    bool IsBorder(const std::vector<std::vector<int> > &NextF)const
     {
         int newF=NextF[F][E];
         return (newF==-1);

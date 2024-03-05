@@ -199,46 +199,6 @@ public:
         //std::cout<<T(0)<<","<<T(1)<<","<<T(2)<<std::endl;
     }
 
-    static void ComputeCovarianceMatrix(const std::vector<Geo::Point3<ScalarType> > &pointVec,
-                                 Geo::Point3<ScalarType> &barycenter, Eigen::Matrix<ScalarType,3,3> &m)
-    {
-      // first cycle: compute the barycenter
-      barycenter=Geo::Point3<ScalarType>(0,0,0);
-      typename  std::vector< Point3<ScalarType> >::const_iterator pit;
-      for( pit = pointVec.begin(); pit != pointVec.end(); ++pit) barycenter+= (*pit);
-      barycenter/=pointVec.size();
-
-      // second cycle: compute the covariance matrix
-      m.setZero();
-      Eigen::Matrix<ScalarType,3,1> p;
-      for(pit = pointVec.begin(); pit != pointVec.end(); ++pit) {
-          Geo::Point3<ScalarType> Diff=((*pit)-barycenter);
-          p=EigenInterface<ScalarType>::ToEigenVect(Diff);
-        //((*pit)-barycenter).ToEigenVector(p);
-        m+= p*p.transpose(); // outer product
-      }
-    }
-
-    static void FitPlaneToPointSet(const std::vector< Geo::Point3<ScalarType> > & pointVec,
-                            Geo::Plane3<ScalarType> & plane)
-    {
-      Eigen::Matrix<ScalarType,3,3> covMat = Eigen::Matrix<ScalarType,3,3>::Zero();
-      Geo::Point3<ScalarType> b;
-      ComputeCovarianceMatrix(pointVec,b,covMat);
-
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<ScalarType,3,3> > eig(covMat);
-      Eigen::Matrix<ScalarType,3,1> eval = eig.eigenvalues();
-      Eigen::Matrix<ScalarType,3,3> evec = eig.eigenvectors();
-      eval = eval.cwiseAbs();
-      int minInd;
-      eval.minCoeff(&minInd);
-      Point3<ScalarType> d;
-      d.X = evec(0,minInd);
-      d.Y = evec(1,minInd);
-      d.Z = evec(2,minInd);
-
-      plane.Init(b,d);
-    }
 };
 
 }
