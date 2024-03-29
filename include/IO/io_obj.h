@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <point3.h>
+#include <IO/file_path_functions.h>
 
 template <class ScalarType>
 bool LoadOBJ(std::string meshFile,
@@ -139,6 +140,65 @@ bool WriteOBJ(std::string meshFile,
 
 template <class ScalarType>
 bool WriteOBJ(std::string meshFile,
+              const std::vector<std::vector<ScalarType > > &VertPos,
+              const std::vector<std::vector<ScalarType > > &VertUVs,
+              const std::vector<std::vector<int> > &Connectivity,
+              const std::string pathTxt)
+{
+    //    std::cout<<"Loading:"<<meshFile.c_str()<<std::endl;
+    std::ofstream fout(meshFile.c_str());
+    if(!fout) return false;
+    
+    std::string MTLFile=GetFilanameNoExtension(meshFile);
+    MTLFile+=".mtl";
+
+    if (!pathTxt.empty())
+        fout<<"mtllib "<<MTLFile.c_str()<<"\n";
+    
+    for (size_t i=0;i<VertPos.size();i++)
+    {
+        assert(VertPos[i].size()==3);
+        fout<<"v "<<VertPos[i][0]<<" "<<VertPos[i][1]<<" "<<VertPos[i][2]<<"\n";
+    }
+
+    for (size_t i=0;i<VertUVs.size();i++)
+    {
+        assert(VertUVs[i].size()==1);
+        fout<<"vt "<<VertUVs[i][0]<<" "<<VertUVs[i][1]<<"\n";
+    }
+
+    if (!pathTxt.empty())
+        fout<<"usemtl material_0\n";
+
+    for (size_t i=0;i<Connectivity.size();i++)
+    {
+        fout<<"f";
+        for (size_t j=0;j<Connectivity[i].size();j++)
+            fout<<" "<<Connectivity[i][j]+1<<"/"<<Connectivity[i][j]+1;
+        fout<<"\n";
+    }
+
+    fout.close();
+
+     if (!pathTxt.empty())
+     {
+        std::ofstream fout(MTLFile.c_str());
+        fout<<"newmtl material_0\n";
+        fout<<"Ka 0.200000 0.200000 0.200000\n";
+        fout<<"Kd 0.752941 0.752941 0.752941\n";
+        fout<<"Ks 1.000000 1.000000 1.000000\n";
+        fout<<"Tr 0.000000\n";
+        fout<<"illum 2\n";
+        fout<<"Ns 0.000000\n";
+        std::string TxtFile=GetFilaname(pathTxt);
+        TxtFile+=".mtl\n";
+        fout<<"map_Kd "<<TxtFile.c_str()<<"\n";
+     }
+    return true;
+}
+
+template <class ScalarType>
+bool WriteOBJ(std::string meshFile,
               const std::vector<Geo::Point3<ScalarType> > &VertPos,
               const std::vector<std::vector<int> > &Connectivity)
 {
@@ -150,6 +210,30 @@ bool WriteOBJ(std::string meshFile,
         VertPosVect[i].push_back(VertPos[i].Z);
     }
     return (WriteOBJ(meshFile,VertPosVect,Connectivity));
+}
+
+template <class ScalarType>
+bool WriteOBJ(std::string meshFile,
+              const std::vector<Geo::Point3<ScalarType> > &VertPos,
+              const std::vector<Geo::Point2<ScalarType> > &UVPos,
+              const std::vector<std::vector<int> > &Connectivity,
+              const std::string pathTxt=std::string())
+{
+    assert(UVPos.size()==VertPos.size());
+    std::vector<std::vector<ScalarType > > VertPosVect(VertPos.size());
+    std::vector<std::vector<ScalarType > > VertUVVect(UVPos.size());
+    for (size_t i=0;i<VertPos.size();i++)
+    {
+        VertPosVect[i].push_back(VertPos[i].X);
+        VertPosVect[i].push_back(VertPos[i].Y);
+        VertPosVect[i].push_back(VertPos[i].Z);
+    }
+    for (size_t i=0;i<VertUVVect.size();i++)
+    {
+        VertUVVect[i].push_back(UVPos[i].X);
+        VertUVVect[i].push_back(UVPos[i].Y);
+    }
+    return (WriteOBJ(meshFile,VertPosVect,VertUVVect,Connectivity,pathTxt));
 }
 
 template <class ScalarType>

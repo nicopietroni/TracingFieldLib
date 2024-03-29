@@ -706,6 +706,32 @@ void SplitByFFConnectedComponenent(const std::vector<Geo::Point3<ScalarType> > &
                                   SubMeshesF,OriginalV,OriginalF);
 }
 
+template <class ScalarType>
+void SplitByFFConnectedComponenent(const std::vector<Geo::Point2<ScalarType> > &Vert,
+                                   const std::vector<std::vector<int> > &Elements,
+                                   std::vector<std::vector<Geo::Point2<ScalarType> > > &SubMeshesV,
+                                   std::vector<std::vector<std::vector<int> > > &SubMeshesF,
+                                   std::vector<std::vector<int> > &OriginalV,
+                                   std::vector<std::vector<int> > &OriginalF)
+{
+    std::vector<Geo::Point3<ScalarType> > Vert3D;
+    for (size_t i=0;i<Vert.size();i++)
+        Vert3D.push_back(Geo::Point3<ScalarType>(Vert[i].X,Vert[i].Y,0));
+
+    std::vector<std::vector<Geo::Point3<ScalarType> > > SubMeshesV3D;
+    SplitByFFConnectedComponenent(Vert3D,Elements,SubMeshesV3D,SubMeshesF,OriginalV,OriginalF);
+
+    SubMeshesV.clear();
+    SubMeshesV.resize(SubMeshesV3D.size());
+    for (size_t i=0;i<SubMeshesV3D.size();i++)
+        for (size_t j=0;j<SubMeshesV3D[i].size();j++)
+        {
+            Geo::Point3<ScalarType> Pos=SubMeshesV3D[i][j];
+            SubMeshesV[i].push_back(Geo::Point2<ScalarType>(Pos.X,Pos.Y));
+        }
+
+}
+
 int PolyMeshGenus(int NVert,int nEdges,int NFaces, int NHoles, int NComponents)
 {
     return -((NVert + NFaces - nEdges + NHoles - 2 * NComponents) / 2);
@@ -1000,6 +1026,12 @@ static void RemoveDeleted(std::vector<Geo::Point3<ScalarType> > &Pos3D,
             NewConnectivity.back().push_back(IndexVNew);
         }
     }
+}
+
+static void InvertOrientation(std::vector<std::vector<int> > &Faces)
+{
+    for (size_t i=0;i<Faces.size();i++)
+        std::reverse(Faces[i].begin(),Faces[i].end());
 }
 
 //template <class ScalarType>
