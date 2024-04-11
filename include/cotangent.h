@@ -28,10 +28,21 @@ namespace  Geo {
 template <class ScalarType>
 ScalarType CotangentWeightTriangle(const Geo::Point3<ScalarType> &v0,
                                    const Geo::Point3<ScalarType> &v1,
-                                   const Geo::Point3<ScalarType> &v2)
+                                   const Geo::Point3<ScalarType> &v2,
+                                   bool check_angle=true)
 {
+    
     ScalarType angleVal = AngleRad(v0-v2,v1-v2);
-    ScalarType cotVal = cos(angleVal) / sin(angleVal);
+    ScalarType sinAngle=sin(angleVal);
+    ScalarType cosAngle=cos(angleVal);
+    if (check_angle)
+    {
+       ScalarType minSin=0.001;
+       sinAngle=std::max(minSin,sinAngle);
+    }
+
+    //ScalarType cotVal = cos(angleVal) / sin(angleVal);
+    ScalarType cotVal = cosAngle / sinAngle;
     return (cotVal);
 }
 
@@ -41,7 +52,8 @@ ScalarType CotangentWeightTriFace(const std::vector<Geo::Point3<ScalarType> > &V
                                   const std::vector<std::vector<int> > &Faces,
                                   const std::vector<std::vector<int> > &NextF,
                                   const std::vector<std::vector<int> > &NextE,
-                                  const int IndexF,const int IndexE)
+                                  const int IndexF,const int IndexE,
+                                  bool check_angle=true)
 {
     assert(IndexF<(int)Faces.size());
     assert(IndexF>=0);
@@ -75,13 +87,13 @@ ScalarType CotangentWeightTriFace(const std::vector<Geo::Point3<ScalarType> > &V
     int IndexV0=Faces[F0][E0];
     int IndexV1=Faces[F0][(E0+1)%3];
     int IndexVa=Faces[F0][(E0+2)%3];
-    CotVal0=CotangentWeightTriangle(VertPos[IndexV0],VertPos[IndexV1],VertPos[IndexVa]);
+    CotVal0=CotangentWeightTriangle(VertPos[IndexV0],VertPos[IndexV1],VertPos[IndexVa],check_angle);
 
     //check if not a border edge
     if (F1!=-1)
     {
         int IndexVb=Faces[F1][(E1+2)%3];
-        CotVal1=CotangentWeightTriangle(VertPos[IndexV0],VertPos[IndexV1],VertPos[IndexVb]);
+        CotVal1=CotangentWeightTriangle(VertPos[IndexV0],VertPos[IndexV1],VertPos[IndexVb],check_angle);
     }
     return ((CotVal0+CotVal1)/(ScalarType)2);
 }
@@ -91,14 +103,15 @@ void CotangentWeightTriMesh(const std::vector<Geo::Point3<ScalarType> > &VertPos
                             const std::vector<std::vector<int> > &Faces,
                             const std::vector<std::vector<int> > &NextF,
                             const std::vector<std::vector<int> > &NextE,
-                            std::vector<std::vector<ScalarType> > &CotWeight)
+                            std::vector<std::vector<ScalarType> > &CotWeight,
+                            bool check_angle=true)
 {
     CotWeight.clear();
     CotWeight.resize(Faces.size());
     for (size_t f=0;f<Faces.size();f++)//for each face
         for (size_t e=0;e<Faces[f].size();e++)//for each edge
         {
-            ScalarType CotW=CotangentWeightTriFace(VertPos,Faces,NextF,NextE,f,e);
+            ScalarType CotW=CotangentWeightTriFace(VertPos,Faces,NextF,NextE,f,e,check_angle);
             CotWeight[f].push_back(CotW);
         }
 }

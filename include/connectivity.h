@@ -592,7 +592,49 @@ void getVFAdjacency(const std::vector<std::vector<int> > &Faces,
     }
 }
 
+void getVFStar(const std::vector<std::vector<int> > &Faces,
+               const std::vector<std::vector<int> > &VF,
+               const int &IndexV,const int extend_step,
+               std::vector<int> &FacesStar)
+{
+    assert(IndexV>=0);
+    assert(IndexV<VF.size());
+    //intialize witht he first faces
+    FacesStar=VF[IndexV];
+    std::set<int> ExploredV;
+    ExploredV.insert(IndexV);
 
+    for (size_t s=0;s<extend_step;s++)
+    {     
+      std::vector<int> NewFacesStar=FacesStar;
+
+      //collect vertices
+      std::vector<int> CurrV;
+      for (size_t i=0;i<FacesStar.size();i++)
+      {
+        int IndexF=FacesStar[i];
+        for (size_t j=0;j<Faces[IndexF].size();j++)
+           CurrV.push_back(Faces[IndexF][j]);
+      }
+
+      for (size_t i=0;i<CurrV.size();i++)
+      {
+        int TestV=CurrV[i];
+        assert(TestV>=0);
+        assert(TestV<VF.size());
+
+        if (ExploredV.count(TestV)>0)continue;
+
+        ExploredV.insert(TestV);
+        NewFacesStar.insert(NewFacesStar.end(),
+                            VF[TestV].begin(),
+                            VF[TestV].end());
+      }
+      FacesStar=NewFacesStar;
+      std::sort(FacesStar.begin(),FacesStar.end());
+      FacesStar.erase(std::unique(FacesStar.begin(), FacesStar.end()), FacesStar.end());
+    }
+}
 
 void getFFAdjacencyNonManifold(const std::vector<std::vector<int> > &Faces,
                                std::vector<std::vector<std::vector<int> > > &NextF,

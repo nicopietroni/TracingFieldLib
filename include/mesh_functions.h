@@ -755,9 +755,9 @@ int NumEdges(const std::vector<std::vector<int> > &Connectivity)
 }
 
 template <class ScalarType>
-void ComputePerVertAngle(std::vector<Geo::Point3<ScalarType> > &Pos,
-                         std::vector<std::vector<int> > &Faces,
-                         std::vector<ScalarType> &VertAngle)
+void ComputePerVertAngleDeg(const std::vector<Geo::Point3<ScalarType> > &Pos,
+                            const std::vector<std::vector<int> > &Faces,
+                            std::vector<ScalarType> &VertAngle)
 {
     VertAngle.clear();
     VertAngle.resize(Pos.size(),0);
@@ -1032,6 +1032,18 @@ static void InvertOrientation(std::vector<std::vector<int> > &Faces)
 {
     for (size_t i=0;i<Faces.size();i++)
         std::reverse(Faces[i].begin(),Faces[i].end());
+}
+
+template <class ScalarType>
+static bool HasNaNVert(const std::vector<Geo::Point3<ScalarType> > &VertPos)
+{
+    for (size_t i=0;i<VertPos.size();i++)
+    {
+        if (std::isnan(VertPos[i].X))return true;
+        if (std::isnan(VertPos[i].Y))return true;
+        if (std::isnan(VertPos[i].Z))return true;
+    }
+    return false;
 }
 
 //template <class ScalarType>

@@ -15,6 +15,7 @@
 #include "mesh_refine.h"
 #include <UV_param.h>
 #include "../tangent_space_smooth.h"
+#include "patch_basic.h"
 
 namespace Geo{
 
@@ -25,7 +26,7 @@ class PatchManaging
 {
 
 public:
-    enum CornerType{CTypeFlat,CTypeConvex,CTypeSpike,CTypeConcave};
+    //enum CornerType{CTypeFlat,CTypeConvex,CTypeSpike,CTypeConcave};
 
     struct PatchData
     {
@@ -532,7 +533,7 @@ private:
 
         //compute the angle on the vertices to cech convex/concave
         std::vector<ScalarType> VertAngle;
-        ComputePerVertAngle(PData.SubPatchVertPos[IndexP],PData.SubPatchFaces[IndexP],VertAngle);
+        ComputePerVertAngleDeg(PData.SubPatchVertPos[IndexP],PData.SubPatchFaces[IndexP],VertAngle);
 
         //get the border sequences
         std::vector<std::vector<int > > BorderVIdx;

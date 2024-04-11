@@ -145,21 +145,21 @@ public:
             VertUV[i]=CenterUV+(CenterUV-VertUV[i]);
     }
 
-    static void ScaleToMatchAreas(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                                  const std::vector<std::vector<int> > &Faces,
-                                  std::vector<Geo::Point2<ScalarType> > &VertUV)
-    {
-        //Rescale the parametrization to match the 3D area
-        ScalarType meshArea2D = Area(VertUV,Faces);
-        ScalarType meshArea3D = Area(VertPos,Faces);
-        /*
-        std::cout<<"Area 2D:"<<meshArea2D<<std::endl;
-        std::cout<<"Area 3D:"<<meshArea3D<<std::endl;*/
-        ScalarType scaleFact = std::sqrt(meshArea3D / meshArea2D);
+    // static void ScaleToMatchAreas(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+    //                               const std::vector<std::vector<int> > &Faces,
+    //                               std::vector<Geo::Point2<ScalarType> > &VertUV)
+    // {
+    //     //Rescale the parametrization to match the 3D area
+    //     ScalarType meshArea2D = Area(VertUV,Faces);
+    //     ScalarType meshArea3D = Area(VertPos,Faces);
+        
+    //     std::cout<<"Area 2D:"<<meshArea2D<<std::endl;
+    //     std::cout<<"Area 3D:"<<meshArea3D<<std::endl;
+    //     ScalarType scaleFact = std::sqrt(meshArea3D / meshArea2D);
 
-        for (size_t i=0; i<VertUV.size(); i++)
-            VertUV[i]= VertUV[i]*scaleFact;
-    }
+    //     for (size_t i=0; i<VertUV.size(); i++)
+    //         VertUV[i]= VertUV[i]*scaleFact;
+    // }
 
     static bool LeastSquaresConformal(const std::vector<Geo::Point3<ScalarType> > &VertPos,
                                       const std::vector<std::vector<int> > &Faces,

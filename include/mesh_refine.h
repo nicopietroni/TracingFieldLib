@@ -61,9 +61,9 @@ public:
                                   std::vector<Geo::Point2<ScalarType> > &PosUV,
                                   std::vector<std::vector<int> > &Faces,
                                   int To_splitIDX,bool to_split[3],
-    Geo::Point3<ScalarType> Interp[3],
-    Geo::Point2<ScalarType> InterpUV[3],
-    std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &MarkedE)
+                                  Geo::Point3<ScalarType> Interp[3],
+                                  Geo::Point2<ScalarType> InterpUV[3],
+                                  std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &MarkedE)
     {
         typedef typename std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > KeyType;
 
@@ -359,10 +359,18 @@ public:
                                    std::vector<std::vector<int> > &Faces,
                                    const std::vector<std::pair<int,int> > &To_split,
                                    const std::vector<ScalarType> &Alpha,
-                                   std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &MarkedE)
+                                   std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &MarkedE,
+                                   std::vector<int> *OldF=NULL)
     {
         assert(MeshType(Faces)==MT_Triangle);
         assert(To_split.size()==Alpha.size());
+
+        if (OldF!=NULL)
+        {
+         (*OldF).clear();
+         for (size_t i=0;i<Faces.size();i++)
+            (*OldF).push_back(i);
+        }
 
         //save the split for each edge
         std::map<std::pair<int,int>,Geo::Point3<ScalarType> > SplitMap3D;
@@ -422,12 +430,24 @@ public:
 
             //then do split
             SplitTriangleFace(Pos,PosUV,Faces,i,to_split,Interp,InterpUV,MarkedE);
-
+            if (OldF!=NULL)
+                (*OldF).resize(Faces.size(),i);
         }
         assert(Pos.size()==PosUV.size());
         RemoveDuplicatedVert(Pos,PosUV,Faces);
         assert(Pos.size()==PosUV.size());
 
+    }
+
+    static void SplitTriangleFaces(std::vector<Geo::Point3<ScalarType> > &Pos,
+                                   std::vector<std::vector<int> > &Faces,
+                                   const std::vector<std::pair<int,int> > &To_split,
+                                   const std::vector<ScalarType> &Alpha,
+                                   std::vector<int> *OldF=NULL)
+    {
+        std::vector<Geo::Point2<ScalarType> > PosUV(Pos.size(),Geo::Point2<ScalarType>(0,0));
+        std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > MarkedE;
+        SplitTriangleFaces(Pos,PosUV,Faces,To_split,Alpha,MarkedE,OldF);
     }
 
     static bool RefineMeshWithUVPoints(std::vector<Geo::Point3<ScalarType> > &Pos3D,

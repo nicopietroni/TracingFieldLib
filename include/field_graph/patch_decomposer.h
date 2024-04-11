@@ -118,13 +118,13 @@ public:
         if (!allow_darts)
         {
             std::vector<int> SpikeCorn;
-            PatchMan.CornersOfType(IndexPatch,PatchManaging<ScalarType>::CTypeSpike,SpikeCorn);
+            PatchMan.CornersOfType(IndexPatch,Geo::CTypeSpike,SpikeCorn);
             if (SpikeCorn.size()>0)return false;
         }
         if (!allow_concave)
         {
             std::vector<int> ConcaveCorn;
-            PatchMan.CornersOfType(IndexPatch,PatchManaging<ScalarType>::CTypeConcave,ConcaveCorn);
+            PatchMan.CornersOfType(IndexPatch,Geo::CTypeConcave,ConcaveCorn);
             if (ConcaveCorn.size()>0)return false;
         }
 
@@ -157,7 +157,7 @@ public:
             std::cout<<"Checking Patch "<<i<<std::endl;
 
             if (PatchMan.isEmpty(i))continue;
-
+            UpdateCondition(i);
             if (!SatisfyConditions(i))UnsolvedPatches.insert(i);
             if (!SatisfyConditionsAfterGlobalUpdate(i))UnsolvedPatches.insert(i);
         }
@@ -927,7 +927,7 @@ public:
         {
             AddNext(all_solved,added_sample);
         }while ((!all_solved)&&(added_sample));
-
+        
         CompactData();
     }
 

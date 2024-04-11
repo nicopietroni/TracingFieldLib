@@ -72,12 +72,13 @@ template <class ScalarType>
 void FindLaplacianCotangentWeightForTriMesh(const std::vector<Point3<ScalarType> > &VertPos,
                                             const std::vector<std::vector<int> > &Faces,
                                             const std::vector<std::vector<int> > &Kernel,
-                                            std::vector<std::vector<ScalarType> > &Weight)
+                                            std::vector<std::vector<ScalarType> > &Weight,
+                                            bool check_angle=true)
 {
     std::vector<std::vector<int> > NextF,NextE;
     getFFAdjacency(Faces,NextF,NextE);
     std::vector<std::vector<ScalarType> > CotWeight;
-    CotangentWeightTriMesh(VertPos,Faces,NextF,NextE,CotWeight);
+    CotangentWeightTriMesh(VertPos,Faces,NextF,NextE,CotWeight,check_angle);
 
     std::map<std::pair<int,int>, ScalarType> EdgeWMap;
     for (size_t i=0;i<Faces.size();i++)

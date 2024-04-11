@@ -39,15 +39,15 @@ public:
         {
 
             Geo::Point3<ScalarType> ColPoints(0,0,0);
-            typename Geo::PatchManaging<ScalarType>::CornerType CType=PM.PData.VisualCornerType[IndexPatch][i];
+            typename Geo::CornerType CType=PM.PData.VisualCornerType[IndexPatch][i];
             switch(CType) {
-              case Geo::PatchManaging<ScalarType>::CTypeConvex:
+              case Geo::CTypeConvex:
                 ColPoints=Geo::Point3<ScalarType>(0,1,1);
                 break;
-              case Geo::PatchManaging<ScalarType>::CTypeConcave:
+              case Geo::CTypeConcave:
                 ColPoints=Geo::Point3<ScalarType>(1,0,1);
                 break;
-             case Geo::PatchManaging<ScalarType>::CTypeSpike:
+             case Geo::CTypeSpike:
                 ColPoints=Geo::Point3<ScalarType>(1,1,0);
                 break;
              default:

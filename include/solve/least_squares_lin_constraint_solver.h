@@ -1,6 +1,7 @@
 #ifndef LEAST_SQUARES_SOLVE
 #define LEAST_SQUARES_SOLVE
 
+#include <eigen_interface.h>
 #include <Eigen/Sparse>
 #include "linear_constraint.h"
 
@@ -81,10 +82,24 @@ public:
 
     void Init(const std::vector<LinearConstraint<ScalarType> > &_LinConstr)
     {
+        
         LinConstr=_LinConstr;
+
+        // for (size_t i=0;i<LinConstr.size();i++)
+        // {
+        //     if (LinConstr[i].hasNaNInf())
+        //     {std::cout<<"Error on LinConstrs "<<std::endl;exit(0);}
+        // }
+
         InitFromConstraints<ScalarType>(LinConstr,A0,A);
+
+        if (hasNaNInf(A0))
+        {std::cout<<"Error on A0 in Init!!!!"<<std::endl;exit(0);}
+
         solver= new Eigen::SimplicialCholesky<Eigen::SparseMatrix<ScalarType > > (A);
         assert(solver->info() == Eigen::Success);
+        // if (solver->info() != Eigen::Success)
+        // {std::cout<<"Error Not Success Eigen!!!!"<<std::endl;exit(0);}
     }
 
     void Solve(std::vector<ScalarType> &Solution,const std::vector<ScalarType> &RHS=std::vector<ScalarType>())
@@ -104,9 +119,33 @@ public:
                 V(CurrRow)=RHS[i]*LinConstr[i].Weight;
         }
 
+        for (int i=0;i<V.rows();i++)
+        {
+         if (std::isnan(V(i))||std::isinf(V(i)))
+         {
+            {std::cout<<"Error on V 0!!!!"<<" index "<< i<<std::endl;exit(0);}
+         }
+        }
+        // if (hasNaNInf(A0))
+        // {std::cout<<"Error on A0!!!!"<<std::endl;exit(0);}
+        //std::cout<<"ROWS 0 :"<<V.rows()<<std::endl;
+            
         V=A0.transpose()*V;
+
+        //std::cout<<"ROWS 1:"<<V.rows()<<std::endl;
+        // for (int i=0;i<V.rows();i++)
+        // {
+        //  if (std::isnan(V(i))||std::isinf(V(i)))
+        //  {
+        //     std::cout<<"ROWS 1:"<<V.rows()<<std::endl;
+        //     std::cout<<"Error on V 1!!!!"<<" index "<< i<<" value:"<<V(i)<<std::endl;exit(0);
+        //  }
+        // }
+
+        //std::cout<<"SOLVING"<<std::endl;
         //solve the system
         V = solver->solve(V).eval();
+        //std::cout<<"DONE"<<std::endl;
 
         //update the position
         Solution.resize(V.rows());

@@ -414,7 +414,6 @@ inline ScalarType AngleRad( Geo::Point3<ScalarType> const & p1,
     return (ScalarType) acos(t);
 }
 
-
 template <class ScalarType>
 inline ScalarType AngleDeg( Point3<ScalarType> const & p1,
                             Point3<ScalarType> const & p2)
@@ -437,6 +436,36 @@ inline ScalarType PositiveAngleDeg( Point2<ScalarType> const & p1,
 {
     ScalarType Arad=PositiveAngleRad(p1,p2);
     return (Arad* 180.0 / M_PI);
+}
+
+template <class ScalarType>
+ScalarType OrientedAngleRad( const Point3<ScalarType> & v1,
+                             const Point3<ScalarType> & v2, 
+                             const Point3<ScalarType>& normal) 
+{
+    // Calculate the unsigned angle between v1 and v2
+    ScalarType angle = AngleRad( v1,v2 );
+
+    // Calculate the sign of the angle based on the orientation specified by the normal vector
+    Point3<ScalarType> crossProduct = Geo::Cross(v1, v2);
+    ScalarType dotProduct = Geo::Dot(normal, crossProduct);
+
+    if (dotProduct < 0) {
+        angle = -angle;
+    }
+
+    angle=normalizeAngle(angle);
+
+    return angle;
+}
+
+template <class ScalarType>
+ScalarType OrientedAngleDeg( const Point3<ScalarType> & v1,
+                             const Point3<ScalarType> & v2, 
+                             const Point3<ScalarType>& normal) 
+{
+    ScalarType angle=OrientedAngleRad(v1,v2,normal);
+    return (ToDeg(angle));
 }
 
 template <class ScalarType>

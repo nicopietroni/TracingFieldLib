@@ -26,27 +26,27 @@ public:
         return false;
     }
 
-    ScalarType DimX()
+    ScalarType DimX()const
     {
         return (Max.X-Min.X);
     }
 
-    ScalarType DimY()
+    ScalarType DimY()const
     {
         return (Max.Y-Min.Y);
     }
 
-    ScalarType DimZ()
+    ScalarType DimZ()const
     {
         return (Max.Z-Min.Z);
     }
 
-    ScalarType Diag()
+    ScalarType Diag()const
     {
         return (Max-Min).Norm();
     }
 
-    Geo::Point3<ScalarType> Center()
+    Geo::Point3<ScalarType> Center()const
     {
         assert(!IsEmpty());
         return ((Max+Min)/(ScalarType)2);

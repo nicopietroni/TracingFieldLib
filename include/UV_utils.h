@@ -13,6 +13,13 @@ class UVUtils{
 
 public:
 
+    enum UVType
+        {
+            UVArap,
+            UVLSConformal,
+            UVTutte
+        };
+
     static void MapToACircle(const std::vector<Geo::Point3<ScalarType> > &VertPos,
                              const std::vector<int> &CircleSeq,
                              const ScalarType &Radius,
@@ -211,15 +218,31 @@ public:
     //     return true;
     // }
 
-    static void ScaleToMatchArea(const std::vector<Geo::Point3<ScalarType> > &vert_3D,
+    // static void ScaleToMatchArea(const std::vector<Geo::Point3<ScalarType> > &vert_3D,
+    //                              const std::vector<std::vector<int> > &Faces,
+    //                              std::vector<Geo::Point2<ScalarType> > &vert_UV)
+    // {
+    //     ScalarType Area3D=Area(vert_3D,Faces);
+    //     ScalarType Area2D=Area(vert_UV,Faces);
+    //     ScalarType ScaleFact=Area3D/Area2D;
+    //     for (size_t i=0;i<vert_UV.size();i++)
+    //         vert_UV[i]=vert_UV[i]*ScaleFact;
+    // }
+
+static void ScaleToMatchArea(const std::vector<Geo::Point3<ScalarType> > &VertPos,
                                  const std::vector<std::vector<int> > &Faces,
-                                 std::vector<Geo::Point2<ScalarType> > &vert_UV)
+                                 std::vector<Geo::Point2<ScalarType> > &VertUV)
     {
-        ScalarType Area3D=Area(vert_3D,Faces);
-        ScalarType Area2D=Area(vert_UV,Faces);
-        ScalarType ScaleFact=Area3D/Area2D;
-        for (size_t i=0;i<vert_UV.size();i++)
-            vert_UV[i]=vert_UV[i]*ScaleFact;
+        //Rescale the parametrization to match the 3D area
+        ScalarType meshArea2D = Area(VertUV,Faces);
+        ScalarType meshArea3D = Area(VertPos,Faces);
+        
+        // std::cout<<"Area 2D:"<<meshArea2D<<std::endl;
+        // std::cout<<"Area 3D:"<<meshArea3D<<std::endl;
+        ScalarType scaleFact = std::sqrt(meshArea3D / meshArea2D);
+
+        for (size_t i=0; i<VertUV.size(); i++)
+            VertUV[i]= VertUV[i]*scaleFact;
     }
 
 

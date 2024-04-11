@@ -1,44 +1,226 @@
 #ifndef GEODESIC
 #define GEODESIC
 
+#include "temp_mark.h"
 #include <vector>
 #include <queue>
 #include <limits>
+#include "connectivity.h"
 
-template <class ScalarType>
-bool Dijkstra(const std::vector<std::vector<ScalarType> > &Weight,
-              const std::vector<std::vector<int> >  &graph,
-              int &Source,std::vector<std::vector<ScalarType> > &Dist)
+namespace Geo
 {
-    assert(Weight.size()==graph.size());
-    int numVertices = graph.size();
+    template <class ScalarType>
+    class Geodesic
+    {
 
-    // Create a vector to store the distances from the source vertex
-    std::vector<int> distance(numVertices, std::numeric_limits<int>::max());
+        struct NodeDist
+        {
+            int IndexNode;
+            ScalarType DistNode;
 
-    // Create a priority queue to store vertices with their distances
-    std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int> >, std::greater<std::pair<int, int>>> pq;
+            NodeDist(const int &_IndexNode,
+                     const ScalarType &_DistNode)
+            {
+                IndexNode = _IndexNode;
+                DistNode = _DistNode;
+            }
 
-//    //Set the distance of the source vertex to 0 and add it to the priority queue
-//    distance[source] = 0;
-//        pq.push(make_pair(0, source));
+            bool operator<(const NodeDist &other) const
+            {
+                if (DistNode != other.DistNode)
+                    return DistNode > other.DistNode;
 
-//        while (!pq.empty()) {
-//            int u = pq.top().second;
-//            pq.pop();
+                return IndexNode < other.IndexNode;
+            }
+        };
 
-//            // Visit each adjacent vertex of u
-//            for (const Edge& edge : graph[u]) {
-//                int v = edge.destination;
-//                int weight = edge.weight;
+    public:
 
-//                // If a shorter path is found, update the distance and enqueue the vertex
-//                if (distance[u] + weight < distance[v]) {
-//                    distance[v] = distance[u] + weight;
-//                    pq.push(make_pair(distance[v], v));
-//                }
-//            }
-//        }
+        struct GeodesicParam
+        {
+            // input parameters
+            std::vector<int> Seeds;
+            std::set<int> Target;
+            std::set<int> Avoid;
+            ScalarType MaxD;
+            int MaxSteps;
+
+            std::vector<int> Source;
+            std::vector<int> Father;
+            std::vector<ScalarType> Dist;
+            std::vector<int> Steps;
+            std::set<int> InInterval;
+
+            // output parameters
+            std::vector<int> Path;
+            ScalarType Lenght;
+
+            bool IsAllocated(const int &NumEl) const
+            {
+                if (Steps.size() != NumEl)
+                    return false;
+                if (Source.size() != NumEl)
+                    return false;
+                if (Father.size() != NumEl)
+                    return false;
+                if (Dist.size() != NumEl)
+                    return false;
+            }
+
+            void Allocate(const int &NumEl)
+            {
+                Steps = std::vector<int>(NumEl, -1);
+                Source = std::vector<int>(NumEl, -1);
+                Father = std::vector<int>(NumEl, -1);
+                Dist = std::vector<ScalarType>(NumEl, std::numeric_limits<ScalarType>::max());
+            }
+
+            void AllocateIfNeeded(const int &NumEl)
+            {
+                if (!IsAllocated(NumEl))
+                    Allocate(NumEl);
+            }
+
+            GeodesicParam()
+            {
+                MaxSteps = std::numeric_limits<int>::max();
+                MaxD = std::numeric_limits<ScalarType>::max();
+                Lenght = -1;
+            }
+
+            void Reset(const int &NumEl)
+            {
+                InInterval.clear();
+                if (IsAllocated(NumEl))
+                {
+                    std::fill(Steps.begin(),Steps.end(),-1);
+                    std::fill(Source.begin(),Source.end(),-1);
+                    std::fill(Father.begin(),Father.end(),-1);
+                    std::fill(Dist.begin(),Dist.end(),std::numeric_limits<ScalarType>::max());
+                }
+                else
+                    Allocate(NumEl);
+            }
+        };
+
+        static void RetrievePath(GeodesicParam &GeoP,
+                                 const int &ArrivalNode,
+                                 std::vector<int> &NodeSeq)
+        {
+            assert(ArrivalNode>=0);
+            assert(ArrivalNode<GeoP.Father.size());
+
+            NodeSeq.clear();
+            int CurrN=ArrivalNode;
+            while(CurrN!=-1){
+                NodeSeq.push_back(CurrN);
+                assert(CurrN>=0);
+                assert(CurrN<GeoP.Father.size());
+                CurrN=GeoP.Father[CurrN];
+            }
+            std::reverse(NodeSeq.begin(),NodeSeq.end());
+        }
+
+        static void NodeDijkstra(const std::vector<Geo::Point3<ScalarType>> &NodePos,
+                                 const std::vector<std::vector<int>> &NodeNode,
+                                 Geo::TMark &TempMark, GeodesicParam &GeoP)
+        {
+            TempMark.AllocateIfNeeded(NodePos.size());
+            TempMark.UnMarkAll();
+            // GeoP.AllocateIfNeeded(NodePos.size());
+            // GeoP.InInterval.clear();
+            GeoP.Reset(NodePos.size());
+
+            std::vector<NodeDist> Heap;
+            for (size_t i = 0; i < GeoP.Seeds.size(); i++)
+            {
+                int IndexV = GeoP.Seeds[i];
+                assert(!TempMark.IsMarked(IndexV));
+                GeoP.Dist[IndexV] = 0;
+                GeoP.Source[IndexV] = IndexV;
+                GeoP.Father[IndexV] = -1;
+                GeoP.Steps[IndexV] = 0;
+                TempMark.Mark(IndexV);
+                GeoP.InInterval.insert(IndexV);
+                Heap.push_back(NodeDist(IndexV, 0));
+            }
+
+            std::make_heap(Heap.begin(), Heap.end());
+
+            while (!Heap.empty())
+            {
+                pop_heap(Heap.begin(), Heap.end());
+                // VertexPointer curr = (Heap.back()).v;
+                int CurrNode = (Heap.back()).IndexNode;
+                // if ((target!=NULL)&&(target==curr))return;
+                if (GeoP.Target.count(CurrNode) > 0)
+                    return;
+                Heap.pop_back();
+
+                //   std::vector<VertexPointer> vertVec;
+                //   face::VVStarVF<FaceType>(curr,vertVec);
+                assert(CurrNode >= 0);
+                assert(CurrNode < NodeNode.size());
+                std::vector<int> NextNodes = NodeNode[CurrNode];
+
+                // for(size_t i=0;i<vertVec.size();++i)
+                for (size_t i = 0; i < NextNodes.size(); i++)
+                {
+                    // VertexPointer nextV = vertVec[i];
+                    int NextNode = NextNodes[i];
+
+                    // if ((avoid_selected)&&(nextV->IsS()))continue;
+                    if (GeoP.Avoid.count(NextNode) > 0)
+                        continue;
+
+                    // ScalarType nextDist = curr->Q() + distFunc(curr,nextV);
+
+                    assert(CurrNode >= 0);
+                    assert(CurrNode < GeoP.Dist.size());
+                    assert(CurrNode < GeoP.Steps.size());
+                    assert(CurrNode < NodePos.size());
+
+                    assert(NextNode >= 0);
+                    assert(NextNode < NodePos.size());
+
+                    ScalarType Delta = (NodePos[CurrNode] - NodePos[NextNode]).Norm();
+                    ScalarType nextDist = GeoP.Dist[CurrNode] + Delta;
+
+                    int nextStep = GeoP.Steps[CurrNode] + 1;
+                    // if( (nextDist < maxDistanceThr) &&
+                    //     (!tri::IsMarked(m,nextV) ||  nextDist < nextV->Q()) )
+                    // {
+                    if ((nextDist < GeoP.MaxD) &&
+                        (nextStep < GeoP.MaxSteps)&&
+                        (!TempMark.IsMarked(NextNode) ||
+                        nextDist < GeoP.Dist[NextNode]))
+                    {
+                        // nextV->Q() = nextDist;
+                        GeoP.Dist[NextNode] = nextDist;
+                        // tri::Mark(m,nextV);
+                        TempMark.Mark(NextNode);
+
+                        // Heap.push_back(DIJKDist(nextV));
+                        Heap.push_back(NodeDist(NextNode, nextDist));
+
+                        push_heap(Heap.begin(), Heap.end());
+
+                        //   if (InInterval!=NULL) InInterval->push_back(nextV);
+                        //   if (sourceHandle!=NULL)
+                        GeoP.InInterval.insert(NextNode);
+                        //(*sourceHandle)[nextV] = (*sourceHandle)[curr];
+                        GeoP.Source[NextNode] = GeoP.Source[CurrNode];
+                        GeoP.Steps[NextNode]=nextStep;
+                        //   if (parentHandle!=NULL)
+                        //   (*parentHandle)[nextV] = curr;
+                        GeoP.Father[NextNode] = CurrNode;
+                        //   printf("Heapsize %i nextDist = %f curr vert %i next vert %i \n",Heap.size(), nextDist, tri::Index(m,curr), tri::Index(m,nextV));
+                    }
+                }
+            }
+        }
+    };
+
 }
 
 #endif

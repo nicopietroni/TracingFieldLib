@@ -36,6 +36,7 @@
 #include <field_graph/UV_decomposition_conditions.h>
 #include <cross_field_functions.h>
 #include <math_utils.h>
+#include <field_graph/mesh_preprocess.h>
 
 GLFWwindow* window;
 std::string PathMesh;
@@ -60,6 +61,7 @@ bool has_graph=false;
 bool has_init_patches=false;
 bool DrawTangentNode=false;
 bool DrawExitNode=false;
+bool DrawInternalNode=false;
 bool DrawCorners=false;
 bool DrawSides=false;
 
@@ -143,6 +145,11 @@ ScalarType old_max_uvDist=max_uvDist;
 int old_MinSides=MinSides;
 int old_MaxSides=MaxSides;
 ScalarType old_CCability=CCability;
+
+int min_sing_distance=1;
+
+int DrawMeshMode=0;
+int DrawFieldMode=0;
 
 void UpdateColor()
 {
@@ -253,6 +260,14 @@ void InitConditions()
         PDeco.AddCondition(new Geo::UVCondition<ScalarType>(uv_type,dist_type,max_uvDist));
     }
 }
+
+//std::vector<int> SampledVert;
+
+// void TestSampling()
+// {
+//     PathSampl.SampleCloseSingTracingVert(SampledVert,8);
+//     std::cout<<"sampled:"<<SampledVert.size()<<std::endl;
+// }
 
 void InitTracing()
 {
@@ -612,17 +627,39 @@ void SetRenderBar()
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW MESH");
     ImGui::Checkbox("Draw Mesh", &showMesh);
+    static const char* itemsDrawMode[] = { "Smooth",
+                                           "Flat",
+                                           "Smooth Wire",
+                                           "Flat Wire"};
+    ImGui::SetNextItemWidth(100);
+    ImGui::Combo("Mesh Mode", &DrawMeshMode, itemsDrawMode, IM_ARRAYSIZE(itemsDrawMode));
+
     ImGui::Checkbox("Draw Cross", &showCross);
+    static const char* itemsFDrawMode[] = { "Face Field",
+                                           "Vert Field"};
+    ImGui::SetNextItemWidth(100);
+    ImGui::Combo("Field Mode", &DrawFieldMode, itemsFDrawMode, IM_ARRAYSIZE(itemsFDrawMode));
+
     ImGui::Checkbox("Draw Singularities", &showSing);
-    ImGui::Checkbox("Draw Corners", &DrawCorners);
-    ImGui::Checkbox("Draw Sides", &DrawSides);
+
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
+    //  ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
+    // ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
+    ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
+    ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
+    ImGui::Checkbox("Draw Internal Node", &DrawInternalNode);
+
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW SAMPLING");
+    ImGui::Checkbox("Draw Initial Pos", &DrawInitalPos);
     ImGui::Checkbox("Draw Candidates", &DrawCandidates);
 
 
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
-    ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
-    ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW PATCH");
+    ImGui::Checkbox("Draw Corners", &DrawCorners);
+    ImGui::Checkbox("Draw Sides", &DrawSides);
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "COLOR PATCHES");
     static const char* itemsShape[] = { "Uniform",
                                         "By Patch",
@@ -638,12 +675,48 @@ void SetRenderBar()
         UpdateColor();
         OldCol=CurrCol;
     }
+
+
+   
+    
     ImGui::End();
+}
+
+void UpdateAfterRemesh()
+{
+    ComputeNormals(VertPos,Connectivity,FaceNormals,VertNormals);
+    Geo::getFFAdjacency(Connectivity,NextF,NextE);
+    
+    InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv);
+
+    SetVertCrossFromFace(VertPos,Connectivity,VertNormals,FaceCurv,VertCurv);
+    InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv);
+
+    Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv,minQCrossVert,maxQCrossVert);
+    GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
+    PatchM.SetSingularities(SingIndex,SingValue);
+    UpdateColor();
 }
 
 void SetDecomposeBar()
 {
     ImGui::Begin("Decompose",NULL,ImGuiWindowFlags_AlwaysAutoResize);       // Create a window called "Hello, world!" and append into it.
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PREPROCESS");
+
+    ImGui::InputInt("Sing Dist",&min_sing_distance);
+    // if (ImGui::Button("Test"))
+    // {
+    //     TestSampling();
+    // }
+    if (ImGui::Button("Refine Close Sing"))
+    {
+        Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(VertPos,Connectivity,
+                                                                FaceCurv,SingIndex,min_sing_distance);
+                                                                 MeshBox.Init(VertPos);
+
+       UpdateAfterRemesh();
+       //WriteOBJ("refined_test.obj",VertPos,Connectivity);
+    }
 
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "INIT");
     ImGui::SliderFloat("Drift",&drift_penalty, 0, 1000);
@@ -661,6 +734,7 @@ void SetDecomposeBar()
     }
 
     ImGui::InputInt("Initial Sample",&PathSampl.NumSamples);
+    ImGui::InputInt("Sing Dist Sample",&PathSampl.minSingResample);
     if (ImGui::Button("Init Tracing"))
     {
         InitTracing();
@@ -915,8 +989,29 @@ void GLDrawMesh()
     {
         //glColor4f(mesh_color.x * mesh_color.w, mesh_color.y * mesh_color.w, mesh_color.z * mesh_color.w, mesh_color.w);
         glPushAttrib(GL_ALL_ATTRIB_BITS);
+        bool wire=true;
+        bool smoothshade=true;
+        switch(DrawMeshMode) {
+        case 0:
+            wire=false;
+            smoothshade=true;
+            break;
+        case 1:
+            wire=false;
+            smoothshade=false;
+            break;
+        case 2:
+            wire=true;
+            smoothshade=true;
+            break;
+        default:
+            wire=true;
+            smoothshade=false;
+            break;
+        }
+        GLDraw::GLDrawBorders<ScalarType>(VertPos,Connectivity,NextF,1);
         glLineWidth(line_thick);
-        GLDraw::DrawSurfaceMesh<ScalarType>(VertPos,Connectivity,FaceNormals,VertNormals,true,true,true,false,GLDraw::TRTriangle,&FaceCol);
+        GLDraw::DrawSurfaceMesh<ScalarType>(VertPos,Connectivity,FaceNormals,VertNormals,true,wire,smoothshade,false,GLDraw::TRTriangle,&FaceCol);
         glPopAttrib();
     }
 
@@ -924,15 +1019,17 @@ void GLDrawMesh()
     {
         ScalarType scaleVal=MeshBox.Diag()*(ScalarType)0.02;
         if (showCross)
-            //GLDraw::DrawCrossFields<ScalarType>(VertCurv,scaleVal,maxQCrossVert,minQCrossVert);
-            GLDraw::DrawCrossFields<ScalarType>(FaceCurv,scaleVal,maxQCrossVert,minQCrossVert);
-
+        {
+            
+            if (DrawFieldMode==0)
+                GLDraw::DrawCrossFields<ScalarType>(FaceCurv,scaleVal,maxQCrossVert,minQCrossVert);
+            else
+                GLDraw::DrawCrossFields<ScalarType>(VertCurv,scaleVal,maxQCrossVert,minQCrossVert);
+        }
         if (showSing)
             GLDraw::DrawSingularity<ScalarType>(VertPos,SingIndex,SingValue);
     }
 
-
-    //GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(TGraph,VertCurv,PathN,MeshBox.Diag()*0.005);
 
 
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam;
@@ -959,6 +1056,22 @@ void GLDrawMesh()
     if (DrawCandidates)
         GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCandidates(PathSampl,MeshBox.Diag()*0.005);
 
+    PDParam.lineSize=5;
+    if (DrawExitNode)
+    {
+        PDParam.ColLine=Geo::Point3<ScalarType>(0,1,0);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::ExitDomain,MeshBox.Diag()*0.01,PDParam);
+    }
+    if (DrawTangentNode)
+    {
+        PDParam.ColLine=Geo::Point3<ScalarType>(1,0,0);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::TangentDomain,MeshBox.Diag()*0.01,PDParam);
+    }
+    if (DrawInternalNode)
+    {
+        PDParam.ColLine=Geo::Point3<ScalarType>(0,0,1);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::Internal,MeshBox.Diag()*0.01,PDParam);
+    }
     //GLDraw::DrawPoints(SidesMidP);
 
     //     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,
@@ -1019,6 +1132,8 @@ int main(int argc, char *argv[])
 
         GLDrawMesh();
 
+        //GLDraw::DrawVertices(VertPos,SampledVert);
+        
         // If you are using this code with non-legacy OpenGL header/contexts (which you should not, prefer using imgui_impl_opengl3.cpp!!),
         // you may need to backup/reset/restore other state, e.g. for current shader using the commented lines below.
         ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());

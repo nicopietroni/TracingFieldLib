@@ -12,6 +12,7 @@
 #include "tracing_interface.h"
 #include "path_functions.h"
 #include "./connectivity.h"
+#include "geodesic.h"
 
 namespace Geo{
 
@@ -75,6 +76,9 @@ public:
     //limit the path to pass only on those marked one
     bool limit_path_to[VERT_MARK_SIZE];
 
+    //the minimum distance to add samples im between
+    int minSingResample;
+
     Geo::TracingGraph<ScalarType> &Graph()const
     {
         return TGraph;
@@ -91,6 +95,45 @@ public:
         {
             VertTMark[i]=std::vector<int>(VertPos.size(),0);
             GlobalTMark[i]=0;
+        }
+    }
+
+    void SampleCloseSingTracingVert(std::vector<int> &SampledVert,int stepDist)
+    {
+        SampledVert.clear();
+
+        std::vector<std::vector<int> > VVAdj;
+        Geo::FindVertexStar(Connectivity,VertPos.size(),VVAdj);
+        typename Geo::Geodesic<ScalarType>::GeodesicParam GParam;
+        GParam.MaxSteps=stepDist;
+        Geo::TMark TempMark;
+        for (size_t i=0;i<SingIndex.size();i++)
+        {
+            int IndexV0=SingIndex[i];
+            GParam.Seeds.clear();
+            GParam.Seeds.push_back(IndexV0);
+            Geo::Geodesic<ScalarType>::NodeDijkstra(VertPos,VVAdj,TempMark,GParam);
+            //std::cout<<"In Interval "<<GParam.InInterval.size()<<std::endl;
+            //check wich other singularities are in the area
+            std::vector<int> OtherSing;
+
+            for (size_t j=0;j<SingIndex.size();j++)
+            {
+                int IndexV1=SingIndex[j];
+                if (IndexV1<=IndexV0)continue;
+                if (GParam.InInterval.count(IndexV1)==0)continue;
+                OtherSing.push_back(IndexV1);
+            }
+
+            for (size_t j=0;j<OtherSing.size();j++)
+            {
+                std::vector<int> VertSeq;
+                Geo::Geodesic<ScalarType>::RetrievePath(GParam,OtherSing[j],VertSeq);
+                if (VertSeq.size()<=2)continue;
+                int num=VertSeq.size();
+                int MidV=num/2;//(num % 2 == 0) ? (num / 2) : ((num / 2) + 1);
+                SampledVert.push_back(VertSeq[MidV]);
+            }
         }
     }
 
@@ -386,7 +429,7 @@ private:
         StartingNodes.clear();
         SampledPaths.clear();
 
-        std::cout<<"Sampling starting Nnodes"<<std::endl;
+        std::cout<<"Sampling starting Nodes"<<std::endl;
 
         int MarkSample=-1;
         for (size_t i=0;i<VERT_MARK_SIZE;i++)
@@ -395,12 +438,26 @@ private:
         //InitTracingNodes(NumSamples,MarkSample);
         std::vector<int> SampledVert;
         SampleTracingVert(NumSamples,SampledVert,MarkSample);
-        FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
 
+        //add in between singularity samples
+        if (minSingResample>0)
+        {
+            std::vector<int> SingSingSampledVert;
+            SampleCloseSingTracingVert(SingSingSampledVert,minSingResample);
+            SampledVert.insert(SampledVert.end(),SingSingSampledVert.begin(),SingSingSampledVert.end());
+        }
+
+        FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
+        // for (size_t i=0;i<StartingNodes.size();i++)
+        // {
+        //     int IndexN=StartingNodes[i];
+        //     assert(IndexN>=0);
+        //     assert(IndexN<TGraph.NumNodes());
+        //     assert(TGraph.EnabledN[IndexN]);
+        // }
         int IndexLimit=-1;
         for (size_t i=0;i<VERT_MARK_SIZE;i++)
             if (limit_path_to[i])IndexLimit=i;
-
 
         //then set exit nodes if needed to stop the tracing
         std::vector<std::pair<int,NType> > SwapNodeType;
@@ -430,6 +487,7 @@ private:
             }
         }
 
+
         std::vector<int> NewStartingNodes;
 
         int non_traced=0;
@@ -437,12 +495,13 @@ private:
 
         for (size_t i=0;i<StartingNodes.size();i++)
         {
+            assert(TGraph.EnabledN[StartingNodes[i]]);
+            
             std::vector<int> CurrPath;
 
             auto start = std::chrono::high_resolution_clock::now();
-
             bool has_traced=Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(TGraph,StartingNodes[i],CurrPath);
-
+            
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
             //TimeTracing += duration.count() * 1e-6;
@@ -925,10 +984,12 @@ public:
 
     void SampleCandidates(bool Init_Distances=true)
     {
+        
         ClearSampledPaths();
 
         if (avoidSingularities)
             DisableSingularities();
+
 
         TGraph.DisableNodeType(TangentDomain);
 
@@ -936,6 +997,7 @@ public:
         TGraph.CurrDistIndex()=1;
         SamplePaths(NumSamples);
         TGraph.CurrDistIndex()=0;
+
 
         if (avoidSingularities)
             EnableSingularities();
@@ -945,6 +1007,7 @@ public:
             TGraph.EnableAllNodes();
             InitializeDistance();
         }
+
         InitCandidates();
 
         UpdateCandidatePriority();
@@ -953,17 +1016,14 @@ public:
 
     void Init()
     {
-
         InitMarkVector();
 
         TGraph.EnableAllNodes();
 
         //InitBorderNodes();
-
         InitSingularityNodes();
 
         SampleCandidates(true);
-
 
         WriteTiming();
 
@@ -1412,6 +1472,7 @@ public:
         updatePatches=true;
         //orthoBorderDist=true;
         NumSamples=1000;
+        minSingResample=8;
 
         for (size_t i=0;i<VERT_MARK_SIZE;i++)
         {

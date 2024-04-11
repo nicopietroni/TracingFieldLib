@@ -48,6 +48,24 @@ public:
         Weight=1;
     }
 
+    bool hasNaNInf() 
+    {
+        if (isnan(RHSide)||
+            isinf(RHSide))
+        {std::cout<<"Error on LinConstr RHS"<<std::endl;return true;}
+
+        if (isnan(Weight)||
+            isinf(Weight))
+        {std::cout<<"Error on LinConstr Weight"<<std::endl;return true;}
+
+        for (size_t i=0;i<LHSide.size();i++)
+        {
+        if (isnan(LHSide[i].W)||
+            isinf(LHSide[i].W))
+        {std::cout<<"Error on LinConstr Entries"<<std::endl;return true;}
+        }
+        return false;
+    }
 };
 
 //template <class ScalarType>

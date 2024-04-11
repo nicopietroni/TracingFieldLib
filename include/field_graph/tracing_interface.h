@@ -74,7 +74,9 @@ public:
             //std::cout<<"Completing"<<std::endl;
             int StartOpp=PathFunctions<ScalarType>::OppositeNode(TGraph,StartN);
             std::vector<int> PathNOpp;
+            
             has_traced=CompleteTraceFrom(TGraph,StartOpp,PathNOpp,false,true);
+
             if (!has_traced)return false;
 
             //revert the path

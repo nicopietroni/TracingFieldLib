@@ -25,7 +25,7 @@ public:
         for (int i=0;i<PM.NumPatches();i++)
         {
             std::vector<int> CornerVert;
-            std::vector<typename PatchManaging<ScalarType>::CornerType> CurrType;
+            std::vector<CornerType> CurrType;
             PM.GetAllCorners(i,CornerVert,CurrType);
             PM.MapToOriginal(i,CornerVert);
             CornerSet.insert(CornerVert.begin(),CornerVert.end());

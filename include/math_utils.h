@@ -22,9 +22,21 @@ struct hashPairIntFunction
     }
 };
 
-inline float ToDeg(const float &a)
+template <class ScalarType>
+inline ScalarType ToDeg(const ScalarType &a)
 {
-    return a*180.0f/float(M_PI);
+    return a*(ScalarType)180.0f/ScalarType(M_PI);
+}
+
+
+template <class ScalarType>
+inline ScalarType normalizeAngle(ScalarType angle) 
+{
+    angle =(ScalarType) fmod((float)angle, (float) 2 * M_PI);
+    if (angle < 0) {
+        angle += 2 * M_PI;
+    }
+    return angle;
 }
 
 template <class ScalarType>

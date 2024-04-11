@@ -16,19 +16,19 @@ namespace Geo
     {
 
     public:
-        enum UVType
-        {
-            UVArap,
-            UVLSConformal,
-            UVTutte
-        };
+        // enum UVType
+        // {
+        //     UVArap,
+        //     UVLSConformal,
+        //     UVTutte
+        // };
 
         struct MultiPatchParameters
         {
             ScalarType border_size;
             bool rearrange;
             int Max_iteNum;             //for Arap 
-            UVType ParamType;
+            typename Geo::UVUtils<ScalarType>::UVType ParamType;
             std::vector<int> CornerIdx; //for Tutte
 
             MultiPatchParameters()
@@ -36,7 +36,7 @@ namespace Geo
                 border_size = 5;
                 rearrange = true;
                 Max_iteNum = 100;
-                ParamType = UVLSConformal;
+                ParamType = Geo::UVUtils<ScalarType>::UVLSConformal;
             }
         };
 
@@ -59,18 +59,14 @@ namespace Geo
             for (size_t i = 0; i < SubMeshesV.size(); i++)
             {
                 std::vector<Geo::Point2<ScalarType>> CompVertUV;
-                // std::cout<<"Parametrizing Partition "<<i<<std::endl;
-
-                // WriteOBJ<ScalarType>(std::string("test.obj"),SubMeshesV[i],SubMeshesF[i]);
                 bool solved =false;
                 switch (MPatchParam.ParamType)
                 {
-                case UVLSConformal:
+                case Geo::UVUtils<ScalarType>::UVLSConformal:
                     solved = Geo::UVParam<ScalarType>::LeastSquaresConformal(SubMeshesV[i], SubMeshesF[i], CompVertUV);
-                    // if (!solved)
-                    //     return false;
+                   
                     break;
-                case UVArap:
+                case Geo::UVUtils<ScalarType>::UVArap:
                     solved = Geo::UVParam<ScalarType>::Arap(SubMeshesV[i], SubMeshesF[i], CompVertUV,
                                                             true, MPatchParam.Max_iteNum);
                     // if (!solved)
@@ -122,52 +118,52 @@ namespace Geo
             return true;
         }
 
-            static bool LeastSquaresConformal(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                                              const std::vector<std::vector<int> > &Faces,
-                                              std::vector<Geo::Point2<ScalarType> > &VertUV,
-                                              bool Rearrange=true)
-            {
-                std::vector<std::vector<Geo::Point3<ScalarType> > > SubMeshesV;
-                std::vector<std::vector<std::vector<int> > > SubMeshesF;
-                std::vector<std::vector<int> > OriginalV,OriginalF;
-                SplitByFFConnectedComponenent<ScalarType>(VertPos,Faces,SubMeshesV,
-                                                          SubMeshesF,OriginalV,OriginalF);
+            // static bool LeastSquaresConformal(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+            //                                   const std::vector<std::vector<int> > &Faces,
+            //                                   std::vector<Geo::Point2<ScalarType> > &VertUV,
+            //                                   bool Rearrange=true)
+            // {
+            //     std::vector<std::vector<Geo::Point3<ScalarType> > > SubMeshesV;
+            //     std::vector<std::vector<std::vector<int> > > SubMeshesF;
+            //     std::vector<std::vector<int> > OriginalV,OriginalF;
+            //     SplitByFFConnectedComponenent<ScalarType>(VertPos,Faces,SubMeshesV,
+            //                                               SubMeshesF,OriginalV,OriginalF);
 
-                assert(SubMeshesF.size()==SubMeshesV.size());
-                assert(SubMeshesF.size()==OriginalV.size());
+            //     assert(SubMeshesF.size()==SubMeshesV.size());
+            //     assert(SubMeshesF.size()==OriginalV.size());
 
-                VertUV.clear();
-                VertUV.resize(VertPos.size(),Geo::Point2<ScalarType>(0,0));
-                for (size_t i=0;i<SubMeshesV.size();i++)
-                {
-                    std::vector<Geo::Point2<ScalarType> > CompVertUV;
-                    //std::cout<<"Parametrizing Partition "<<i<<std::endl;
+            //     VertUV.clear();
+            //     VertUV.resize(VertPos.size(),Geo::Point2<ScalarType>(0,0));
+            //     for (size_t i=0;i<SubMeshesV.size();i++)
+            //     {
+            //         std::vector<Geo::Point2<ScalarType> > CompVertUV;
+            //         //std::cout<<"Parametrizing Partition "<<i<<std::endl;
 
-                    //WriteOBJ<ScalarType>(std::string("test.obj"),SubMeshesV[i],SubMeshesF[i]);
-                    bool solved=Geo::UVParam<ScalarType>::LeastSquaresConformal(SubMeshesV[i],SubMeshesF[i],CompVertUV);
-                    if (!solved)return false;
+            //         //WriteOBJ<ScalarType>(std::string("test.obj"),SubMeshesV[i],SubMeshesF[i]);
+            //         bool solved=Geo::UVParam<ScalarType>::LeastSquaresConformal(SubMeshesV[i],SubMeshesF[i],CompVertUV);
+            //         if (!solved)return false;
 
-                    //then reassign
-                    assert(OriginalV[i].size()==SubMeshesV[i].size());
-                    assert(OriginalV[i].size()==CompVertUV.size());
-                    for (size_t j=0;j<OriginalV[i].size();j++)
-                    {
-                        int GlobalIdx=OriginalV[i][j];
-                        assert(GlobalIdx>=0);
-                        assert(GlobalIdx<VertUV.size());
-                        VertUV[GlobalIdx]=CompVertUV[j];
-                    }
-                }
-                Geo::Box2<ScalarType> BB_UV;
-                BB_UV.Init(VertUV);
-                if (Rearrange)
-                {
-                    Geo::OutlinePacker<ScalarType> Packer;
-                    Packer.Pack(VertUV,Faces,BB_UV.Diag()*0.01);
-                }
+            //         //then reassign
+            //         assert(OriginalV[i].size()==SubMeshesV[i].size());
+            //         assert(OriginalV[i].size()==CompVertUV.size());
+            //         for (size_t j=0;j<OriginalV[i].size();j++)
+            //         {
+            //             int GlobalIdx=OriginalV[i][j];
+            //             assert(GlobalIdx>=0);
+            //             assert(GlobalIdx<VertUV.size());
+            //             VertUV[GlobalIdx]=CompVertUV[j];
+            //         }
+            //     }
+            //     Geo::Box2<ScalarType> BB_UV;
+            //     BB_UV.Init(VertUV);
+            //     if (Rearrange)
+            //     {
+            //         Geo::OutlinePacker<ScalarType> Packer;
+            //         Packer.Pack(VertUV,Faces,BB_UV.Diag()*0.01);
+            //     }
 
-                return true;
-            }
+            //     return true;
+            // }
 
         //     static bool Arap(const std::vector<Geo::Point3<ScalarType> > &VertPos,
         //                      const std::vector<std::vector<int> > &Faces,
