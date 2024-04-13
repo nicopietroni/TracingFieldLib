@@ -103,6 +103,7 @@ public:
     std::vector<Geo::Point3<ScalarType> > &VertPos;
     std::vector<std::vector<int> > &Faces;
     const Geo::TracingGraph<ScalarType> &TGraph;
+    const std::vector<Field::CrossF<ScalarType> > &Cross;
 
 
     bool UpdateVisual;
@@ -425,6 +426,35 @@ private:
         }
     }
 
+    void GetBorderNodes(const int &IndexV,
+                        Geo::Point3<ScalarType> &Dir,
+                        std::vector<size_t> &BorderN)
+    {
+        BorderN.clear();
+        GetNodeOfType(IndexV,Geo::TangentDomain,BorderN);
+        assert(BorderN.size()<=2);
+        if (BorderN.size()==2)
+        {
+            size_t Dir0= Field::CrossFieldGraph::DirOfNode(BorderN[0]);
+            size_t Dir1= Field::CrossFieldGraph::DirOfNode(BorderN[1]);
+            //check if is concave
+            if ((Dir0%2)!=(Dir1%2))
+            {
+                BorderN.clear();
+                assert(IndexV<Cross.size());
+                assert(IndexV>=0);
+                Geo::Point3<ScalarType> Dir0_Cross=Cross[IndexV].GetDirection(Dir0);
+                Geo::Point3<ScalarType> Dir1_Cross=Cross[IndexV].GetDirection(Dir1);
+                ScalarType Dot0=fabs(Geo::Dot(Dir0_Cross,Dir));
+                ScalarType Dot1=fabs(Geo::Dot(Dir1_Cross,Dir));
+                if (Dot0>Dot1)
+                    BorderN.push_back(BorderN[0]);
+                else
+                    BorderN.push_back(BorderN[1]);
+            }
+        }
+    }
+
     void AddBorderPaths()
     {
         //get all border pos
@@ -440,10 +470,20 @@ private:
                 int IndexV1=CurrPos.VFlip(Faces);
 
                 std::vector<size_t> TangentV0;
-                GetNodeOfType(IndexV0,Geo::TangentDomain,TangentV0);
+                // GetNodeOfType(IndexV0,Geo::TangentDomain,TangentV0);
 
                 std::vector<size_t> TangentV1;
-                GetNodeOfType(IndexV1,Geo::TangentDomain,TangentV1);
+                // GetNodeOfType(IndexV1,Geo::TangentDomain,TangentV1);
+
+                
+                Geo::Point3<ScalarType> Dir=VertPos[IndexV0]-VertPos[IndexV1];
+                Dir.Normalize();
+                GetBorderNodes(IndexV0,Dir,TangentV0);
+                Dir=-Dir;
+                GetBorderNodes(IndexV1,Dir,TangentV1);
+
+                assert(TangentV0.size()<=2);
+                assert(TangentV1.size()<=2);
 
                 std::pair<int,int> key0(IndexV0,IndexV1);
                 std::pair<int,int> key1(IndexV1,IndexV0);
@@ -503,7 +543,13 @@ private:
             if (angleDeg<180)
                 return CTypeConvex;
             else
+            {
+                std::cout<<"**CONCAVE**"<<std::endl;
+                for (size_t k=0;k<4;k++)
+                    std::cout<<CountDir[k]<<" ";
+                std::cout<<std::endl<<std::endl;
                 return CTypeConcave;
+            }
         }
 
         if ((CountDir[0]==2)&&(CountDir[2]==0)&&(angleDeg>270))
@@ -2199,6 +2245,7 @@ public:
         std::cout<<"- Find Patch Corners"<<std::endl;
         FindPatchCorners();
 
+        std::cout<<"- Init Edge to Face"<<std::endl;
         InitEdgeToFace();
 
         if (UpdateVisual)
@@ -2212,9 +2259,10 @@ public:
 
     PatchManaging(std::vector<Geo::Point3<ScalarType> > &_VertPos,
                   std::vector<std::vector<int> > &_Faces,
+                  std::vector<Field::CrossF<ScalarType> > &_Cross,
                   const Geo::TracingGraph<ScalarType> &_TGraph,
                   const std::vector<std::vector<int> > &_PathNodes):
-        VertPos(_VertPos),Faces(_Faces),
+        VertPos(_VertPos),Faces(_Faces),Cross(_Cross),
         TGraph(_TGraph),PathNodes(_PathNodes)
     {
         UpdateVisual=true;

@@ -25,6 +25,10 @@ class PatchDecomposer
     std::vector<std::vector<int> > VFAdj;
     std::vector<Field::CrossF<ScalarType> > &VertCurv;
     std::vector<Field::CrossF<ScalarType> > &FaceCurv;
+    
+    Geo::CornerType StartTraceType;
+    Geo::CornerType EndTraceType;
+     
 
     void RemoveEmptyPatches()
     {
@@ -76,6 +80,7 @@ public:
     bool dynamic_smooth;
     bool split_removal;
 
+    
     std::set<int> FixedPaths;
 
     void ClearConditions()
@@ -890,6 +895,7 @@ public:
             {
                 return (current_rem_cand>=0);
             }
+            
         }while ((!has_removed)&&(current_rem_cand>=0));
         return false;
     }
@@ -913,6 +919,9 @@ public:
         time_rem2=0;
         time_rem3=0;
         time_rem4=0;
+
+        StartTraceType=Geo::CTNone;
+        EndTraceType=Geo::CTNone;
     }
 
 //    std::set<int> TestedRemovedPath;

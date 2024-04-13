@@ -448,6 +448,7 @@ private:
         }
 
         FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
+
         // for (size_t i=0;i<StartingNodes.size();i++)
         // {
         //     int IndexN=StartingNodes[i];
@@ -455,6 +456,7 @@ private:
         //     assert(IndexN<TGraph.NumNodes());
         //     assert(TGraph.EnabledN[IndexN]);
         // }
+        
         int IndexLimit=-1;
         for (size_t i=0;i<VERT_MARK_SIZE;i++)
             if (limit_path_to[i])IndexLimit=i;

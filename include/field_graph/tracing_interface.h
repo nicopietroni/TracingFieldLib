@@ -53,6 +53,13 @@ class GraphTracing
         return(TGraph.NodeType(OppN)==(Geo::ExitDomain));
     }
 
+    static bool IsOppositeTangent(const Geo::TracingGraph<ScalarType> &TGraph,
+                                     const int &indexN)
+    {
+        int OppN=Geo::PathFunctions<ScalarType>::OppositeNode(TGraph,indexN);
+        return(TGraph.NodeType(OppN)==(Geo::TangentDomain));
+    }
+
 public:
 
 
@@ -62,7 +69,7 @@ public:
     {
 
         bool IsBorder=IsOppositeExitDomain(TGraph,StartN);
-
+        IsBorder|=IsOppositeTangent(TGraph,StartN);
         bool has_traced=CompleteTraceFrom(TGraph,StartN,PathN,true,true);
         if (!has_traced)return false;
         bool IsLoop=Geo::PathFunctions<ScalarType>::IsLoop(PathN);
@@ -102,11 +109,18 @@ public:
         {
             bool IsExit_0=TGraph.NodeType(PathN[0])==(Geo::ExitDomain);
             bool IsExitOpp_0=IsOppositeExitDomain(TGraph,PathN[0]);
-            assert(IsExit_0||IsExitOpp_0);
 
+            //in case joining with a dart or a concave
+            bool IsTagent_0=TGraph.NodeType(PathN[0])==(Geo::TangentDomain);
+            bool IsTagentOpp_0=IsOppositeTangent(TGraph,PathN[0]);
+            assert(IsExit_0||IsExitOpp_0||IsTagent_0||IsTagentOpp_0);
+
+            bool IsTagent_1=TGraph.NodeType(PathN[0])==(Geo::TangentDomain);
             bool IsExit_1=TGraph.NodeType(PathN.back())==(Geo::ExitDomain);
+
             bool IsExitOpp_1=IsOppositeExitDomain(TGraph,PathN.back());
-            assert(IsExit_1||IsExitOpp_1);
+            bool IsTagentOpp_1=IsOppositeTangent(TGraph,PathN.back());
+            assert(IsExit_1||IsExitOpp_1||IsTagent_1||IsTagentOpp_1);
         }
 
         return true;

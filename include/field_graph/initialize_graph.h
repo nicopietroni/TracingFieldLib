@@ -683,6 +683,65 @@ namespace Geo
             }
         }
 
+        static void GetBorderDirections(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                        const std::vector<std::vector<int>> &Faces,
+                                        const std::vector<Point3<ScalarType>> &FaceNormals,
+                                        const std::vector<Point3<ScalarType>> &VertNormals,
+                                        std::vector<std::vector<Geo::Point3<ScalarType>>> &BorderDir,
+                                        std::vector<Geo::Point3<ScalarType>> &InternalAvg)
+        {
+            std::vector<std::vector<int>> NextF, NextE;
+            Geo::getFFAdjacency(Faces, NextF, NextE);
+
+            BorderDir.clear();
+            BorderDir.resize(VertPos.size());
+
+            InternalAvg.clear();
+            InternalAvg.resize(VertPos.size(),Geo::Point3<ScalarType>(0,0,0));
+
+            for (size_t i = 0; i < Faces.size(); i++)
+                for (size_t j = 0; j < Faces[i].size(); j++)
+                {
+                    if (NextF[i][j] != -1)
+                        continue; // only border
+                    int sizeF = Faces[i].size();
+                    int IndexV0 = Faces[i][j];
+                    int IndexV1 = Faces[i][(j + 1) % sizeF];
+                    assert(IndexV0 != IndexV1);
+                    assert(IndexV0 >= 0);
+                    assert(IndexV1 >= 0);
+                    assert(IndexV0 < (int)VertPos.size());
+                    assert(IndexV1 < (int)VertPos.size());
+                    Geo::Point3<ScalarType> Pos0 = VertPos[IndexV0];
+                    Geo::Point3<ScalarType> Pos1 = VertPos[IndexV1];
+                    Geo::Point3<ScalarType> Dir0 = Pos1 - Pos0;
+                    Geo::Point3<ScalarType> Dir1 = Pos0 - Pos1;
+
+                    Geo::Point3<ScalarType> NormF = FaceNormals[i];
+                    Geo::Point3<ScalarType> NormV0 = VertNormals[IndexV0];
+                    Geo::Point3<ScalarType> NormV1 = VertNormals[IndexV1];
+                    Eigen::Matrix3<ScalarType> Rot0 = Geo::PointMatch<ScalarType>::BestRotationMatrix(NormF, NormV0);
+                    Eigen::Matrix3<ScalarType> Rot1 = Geo::PointMatch<ScalarType>::BestRotationMatrix(NormF, NormV1);
+                    Dir0 = Rot0 * Dir0;
+                    Dir1 = Rot1 * Dir1;
+                    Dir0.Normalize();
+                    Dir1.Normalize();
+
+                    BorderDir[IndexV0].push_back(Dir0);
+                    BorderDir[IndexV1].push_back(Dir1);
+
+
+                    Geo::Point3<ScalarType> DirInternal0 = Cross(NormV0, Dir0);
+                    Geo::Point3<ScalarType> DirInternal1 = Cross(NormV1, -Dir1);
+
+                    InternalAvg[IndexV0] += DirInternal0;
+                    InternalAvg[IndexV1] += DirInternal1;
+                }
+
+            for (size_t i=0;i<InternalAvg.size();i++)
+                InternalAvg[i].Normalize();
+        }
+
         static CornerType BorderNodeTypeFromAngle(const ScalarType &AngleVal)
         {
             ScalarType ConvexInt0 = 0;
@@ -850,6 +909,67 @@ namespace Geo
             NodeTypes.push_back(Internal);
         }
 
+        // // static VType
+        // static void SetNodeTypeVertCross(TracingGraph<ScalarType> &TGraph,
+        //                                  const std::vector<std::vector<int>> &Faces,
+        //                                  const std::vector<Geo::Point3<ScalarType>> &VertPos,
+        //                                  const std::vector<Field::CrossF<ScalarType>> &CrossField)
+        // {
+        //     std::vector<ScalarType> VertAngle;
+        //     ComputePerVertAngleDeg<ScalarType>(VertPos, Faces, VertAngle);
+
+        //     // std::vector<std::vector<Geo::Point3<ScalarType>>> ExitDirs;
+        //     std::vector<Point3<ScalarType>> FaceNormals, VertNormals;
+        //     Geo::ComputeNormals(VertPos, Faces, FaceNormals, VertNormals);
+
+        //     std::vector<Geo::Point3<ScalarType>> BorderAvg, InternalAvg;
+        //     GetBorderInternalAVGDirections(VertPos, Faces, FaceNormals,
+        //                                    VertNormals, BorderAvg,
+        //                                    InternalAvg);
+
+        //     assert(BorderAvg.size() == VertPos.size());
+        //     assert(InternalAvg.size() == VertPos.size());
+
+        //     std::vector<bool> IsB;
+        //     Geo::getBorderVert(Faces, IsB);
+
+        //     for (size_t i = 0; i < VertPos.size(); i++)
+        //     {
+        //         if (!IsB[i])
+        //             continue;
+        //         // assert(BorderAvg[i]!=Geo::Point3<ScalarType>(0,0,0));
+
+        //         ScalarType CurrA = VertAngle[i];
+        //         CornerType CType = BorderNodeTypeFromAngle(CurrA);
+
+        //         std::vector<int> NodeIdx;
+        //         std::vector<NType> NodeTypes;
+
+        //         switch (CType)
+        //         {
+        //         case CTypeConvex:
+        //             GetNodeTypes_BorderConvexCross(CrossField, BorderAvg[i], i, NodeIdx, NodeTypes);
+        //             break;
+        //         case CTypeFlat:
+        //             GetNodeTypes_BorderFlatCross(CrossField, InternalAvg[i], i, NodeIdx, NodeTypes);
+        //             break;
+        //             break;
+        //         case CTypeConcave:
+        //             GetNodeTypes_BorderConcaveCross(CrossField, InternalAvg[i], i, NodeIdx, NodeTypes);
+        //             // code block
+        //             break;
+        //         default:
+        //             GetNodeTypes_BorderDartCross(CrossField, BorderAvg[i], i, NodeIdx, NodeTypes);
+        //             // code block
+        //         }
+        //         for (size_t i = 0; i < NodeIdx.size(); i++)
+        //         {
+        //             int IndexN = NodeIdx[i];
+        //             TGraph.NodeType(IndexN) = NodeTypes[i];
+        //         }
+        //     }
+        // }
+
         // static VType
         static void SetNodeTypeVertCross(TracingGraph<ScalarType> &TGraph,
                                          const std::vector<std::vector<int>> &Faces,
@@ -863,50 +983,125 @@ namespace Geo
             std::vector<Point3<ScalarType>> FaceNormals, VertNormals;
             Geo::ComputeNormals(VertPos, Faces, FaceNormals, VertNormals);
 
-            std::vector<Geo::Point3<ScalarType>> BorderAvg, InternalAvg;
-            GetBorderInternalAVGDirections(VertPos, Faces, FaceNormals,
-                                           VertNormals, BorderAvg,
-                                           InternalAvg);
+            std::vector<std::vector<Geo::Point3<ScalarType>>> BorderDir;
+            std::vector<Geo::Point3<ScalarType>> InternalAVG;
+            GetBorderDirections(VertPos,Faces,FaceNormals, VertNormals,BorderDir,InternalAVG);
 
-            assert(BorderAvg.size() == VertPos.size());
-            assert(InternalAvg.size() == VertPos.size());
+            assert(BorderDir.size() == VertPos.size());
+            assert(InternalAVG.size() == VertPos.size());
 
             std::vector<bool> IsB;
             Geo::getBorderVert(Faces, IsB);
 
             for (size_t i = 0; i < VertPos.size(); i++)
             {
-                if (!IsB[i])
-                    continue;
-                // assert(BorderAvg[i]!=Geo::Point3<ScalarType>(0,0,0));
+                if (!IsB[i]) continue;
+
+                assert(BorderDir[i].size()==2);
 
                 ScalarType CurrA = VertAngle[i];
-                CornerType CType = BorderNodeTypeFromAngle(CurrA);
 
-                std::vector<int> NodeIdx;
-                std::vector<NType> NodeTypes;
-
-                switch (CType)
+                int BestDir0=CrossField[i].BestDirectionI(BorderDir[i][0]);
+                int BestDir1=CrossField[i].BestDirectionI(BorderDir[i][1]);
+                // std::cout<<"Dir 0:"<<BestDir0<<std::endl;
+                // std::cout<<"Dir 1:"<<BestDir1<<std::endl;
+                //in this case can be dart or convex
+                if (BestDir0==BestDir1)
                 {
-                case CTypeConvex:
-                    GetNodeTypes_BorderConvexCross(CrossField, BorderAvg[i], i, NodeIdx, NodeTypes);
-                    break;
-                case CTypeFlat:
-                    GetNodeTypes_BorderFlatCross(CrossField, InternalAvg[i], i, NodeIdx, NodeTypes);
-                    break;
-                    break;
-                case CTypeConcave:
-                    GetNodeTypes_BorderConcaveCross(CrossField, InternalAvg[i], i, NodeIdx, NodeTypes);
-                    // code block
-                    break;
-                default:
-                    GetNodeTypes_BorderDartCross(CrossField, BorderAvg[i], i, NodeIdx, NodeTypes);
-                    // code block
+                    if (CurrA<180)//in this case convex
+                    {
+                        Geo::Point3<ScalarType> Avg=(BorderDir[i][0]+BorderDir[i][1])/2;
+                        int BestDirInt=CrossField[i].BestIntervalI(Avg);
+
+                        int IndexN0 = Field::CrossFieldGraph::NodeOfElemDir(i, BestDirInt);
+                        int IndexN1 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDirInt + 1) % 4);
+                        int IndexN2 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDirInt + 2) % 4);
+                        int IndexN3 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDirInt + 3) % 4);
+
+                        TGraph.NodeType(IndexN0) =TangentDomain;
+                        TGraph.NodeType(IndexN1) =TangentDomain;
+                        TGraph.NodeType(IndexN2) =ExitDomain;
+                        TGraph.NodeType(IndexN3) =ExitDomain;
+                    }
+                    //in this case is dart
+                    else
+                    {
+                        int IndexN0 = Field::CrossFieldGraph::NodeOfElemDir(i, BestDir0);
+                        int IndexN1 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDir0 + 1) % 4);
+                        int IndexN2 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDir0 + 2) % 4);
+                        int IndexN3 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDir0 + 3) % 4);
+
+                        TGraph.NodeType(IndexN0) =TangentDomain;
+                        TGraph.NodeType(IndexN1) =Internal;
+                        TGraph.NodeType(IndexN2) =Internal;
+                        TGraph.NodeType(IndexN3) =Internal;
+                    }
+                    continue;
                 }
-                for (size_t i = 0; i < NodeIdx.size(); i++)
+                //in this case is flat
+                if ((BestDir0%2)==(BestDir1%2))
                 {
-                    int IndexN = NodeIdx[i];
-                    TGraph.NodeType(IndexN) = NodeTypes[i];
+                    int IndexTang0 = Field::CrossFieldGraph::NodeOfElemDir(i, BestDir0);
+                    int IndexTang1 = Field::CrossFieldGraph::NodeOfElemDir(i, BestDir1);
+                   
+                    TGraph.NodeType(IndexTang0) =TangentDomain;
+                    TGraph.NodeType(IndexTang1) =TangentDomain;
+
+                    //find which one is internal
+                    int IntTest0=(BestDir0+1)%4;
+                    int IntTest1=(BestDir1+1)%4;
+                    Geo::Point3<ScalarType> DirTest0=CrossField[i].GetDirection(IntTest0);
+                    Geo::Point3<ScalarType> DirTest1=CrossField[i].GetDirection(IntTest1);
+                    Geo::Point3<ScalarType> IntDir=InternalAVG[i];
+
+                    int IndexTest0 = Field::CrossFieldGraph::NodeOfElemDir(i, IntTest0);
+                    int IndexTest1 = Field::CrossFieldGraph::NodeOfElemDir(i, IntTest1);
+                   
+                    if (Geo::Dot(DirTest0,IntDir)>Geo::Dot(DirTest1,IntDir))
+                    {
+                        TGraph.NodeType(IndexTest0) =Internal;
+                        TGraph.NodeType(IndexTest1) =ExitDomain;
+                    }
+                    else
+                    {
+                        TGraph.NodeType(IndexTest1) =Internal;
+                        TGraph.NodeType(IndexTest0) =ExitDomain;
+                    }
+                    continue;
+                }
+                //concave or convex
+                if ((BestDir0)!=(BestDir1))
+                {
+                    assert((BestDir0%2)!=(BestDir1%2));
+                    int IndexTang0 = Field::CrossFieldGraph::NodeOfElemDir(i, BestDir0);
+                    int IndexTang1 = Field::CrossFieldGraph::NodeOfElemDir(i, BestDir1);
+                   
+                    TGraph.NodeType(IndexTang0) =TangentDomain;
+                    TGraph.NodeType(IndexTang1) =TangentDomain;
+
+                    int IntTest0=(BestDir0+2)%4;
+                    int IntTest1=(BestDir1+2)%4;
+
+                    int IndexTest0 = Field::CrossFieldGraph::NodeOfElemDir(i, IntTest0);
+                    int IndexTest1 = Field::CrossFieldGraph::NodeOfElemDir(i, IntTest1);
+                   
+                    assert(IntTest0!=BestDir0);
+                    assert(IntTest0!=IntTest1);
+                    assert(IntTest0!=BestDir1);
+
+                    assert(IntTest1!=BestDir0);
+                    assert(IntTest1!=IntTest0);
+                    assert(IntTest1!=BestDir1);
+                    if (CurrA<180)//in this case convex
+                    {
+                        TGraph.NodeType(IndexTest0) =ExitDomain;
+                        TGraph.NodeType(IndexTest1) =ExitDomain;
+                    }
+                    else//in this case concave
+                    {
+                        TGraph.NodeType(IndexTest0) =Internal;
+                        TGraph.NodeType(IndexTest1) =Internal;
+                    }
                 }
             }
         }
@@ -1072,6 +1267,7 @@ namespace Geo
         }
 
     public:
+
         static void InitFromVertCrossField(TracingGraph<ScalarType> &TGraph,
                                            const std::vector<Geo::Point3<ScalarType>> &VertPos,
                                            const std::vector<std::vector<int>> &Faces,

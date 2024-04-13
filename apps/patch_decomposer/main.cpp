@@ -105,7 +105,8 @@ Geo::CrossPathSampling<ScalarType> PathSampl(VertPos,Connectivity,TGraph,VertCur
 std::vector<Geo::Point3<ScalarType> > PathColors;
 
 std::vector<Geo::Point3<ScalarType> > FaceCol;
-Geo::PatchManaging<ScalarType> PatchM(VertPos,Connectivity,TGraph,PathSampl.SelectedPaths);
+Geo::PatchManaging<ScalarType> PatchM(VertPos,Connectivity,VertCurv,TGraph,PathSampl.SelectedPaths);
+
 
 int CurrCol=0;
 int OldCol=CurrCol;
@@ -851,6 +852,7 @@ void SetDecomposeBar()
         Geo::ScatterColor<ScalarType>(PathColors);
         UpdateColor();
     }
+    
     ImGui::SameLine();
     if (ImGui::Button("Resample"))
     {
