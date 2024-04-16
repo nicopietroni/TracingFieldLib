@@ -38,32 +38,39 @@
 #include <math_utils.h>
 #include <field_graph/mesh_preprocess.h>
 
-GLFWwindow* window;
+GLFWwindow *window;
 std::string PathMesh;
 std::string PathField;
 std::string ProjectName;
 UI::OrbitBall trackball;
 ImVec4 clear_color = ImVec4(1.0f, 1.0f, 1.0f, 1.00f);
-//ImVec4 mesh_color = ImVec4(0.79f, 0.9f, 0.87f, 1.00f);
-float line_thick=1.f;
+// ImVec4 mesh_color = ImVec4(0.79f, 0.9f, 0.87f, 1.00f);
+float line_thick = 1.f;
 int selected_rend_item = 5;
 
-bool DrawInitalPos=false;
-bool DrawCandidates=false;
+bool DrawInitalPos = false;
+bool DrawCandidates = false;
+int curr_cand=-1;
 
-bool DrawSamplesPaths=false;
+bool DrawSamplesPaths = false;
+
+bool showMesh = true;
+bool showCross = true;
+bool showSing = true;
+bool has_graph = false;
+// bool has_init_patches=false;
+bool DrawTangentNode = false;
+bool DrawExitNode = false;
+bool DrawInternalNode = false;
+bool DrawCorners = false;
+bool DrawSides = false;
 
 
-bool showMesh=true;
-bool showCross=true;
-bool showSing=true;
-bool has_graph=false;
-bool has_init_patches=false;
-bool DrawTangentNode=false;
-bool DrawExitNode=false;
-bool DrawInternalNode=false;
-bool DrawCorners=false;
-bool DrawSides=false;
+bool Draw_must_pass_on=false;
+bool Draw_sample_on=false;
+bool Draw_force_sample=false;
+bool Draw_allow_path_on=false;
+bool Draw_allow_arrive_to=false;
 
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
@@ -74,92 +81,92 @@ bool DrawSides=false;
 
 typedef double ScalarType;
 
-//MESH DATA
-bool loadedMesh=false;
-std::vector<Geo::Point3<ScalarType > > VertPos;
-std::vector<std::vector<int> > Connectivity;
-std::vector<Geo::Point3<ScalarType> > FaceNormals;
-std::vector<Geo::Point3<ScalarType> > VertNormals;
-std::vector<std::vector<int> > NextF,NextE;
+// MESH DATA
+bool loadedMesh = false;
+std::vector<Geo::Point3<ScalarType>> VertPos;
+std::vector<std::vector<int>> Connectivity;
+std::vector<Geo::Point3<ScalarType>> FaceNormals;
+std::vector<Geo::Point3<ScalarType>> VertNormals;
+std::vector<std::vector<int>> NextF, NextE;
 Geo::Box3<ScalarType> MeshBox;
 
-//FIELD DATA
-std::vector<Field::CrossF<ScalarType> > VertCurv;
-std::vector<Field::CrossF<ScalarType> > FaceCurv;
-bool has_cross_field=false;
-ScalarType minQCrossVert,maxQCrossVert;
-std::vector<int> SingIndex,SingValue;
+// FIELD DATA
+std::vector<Field::CrossF<ScalarType>> VertCurv;
+std::vector<Field::CrossF<ScalarType>> FaceCurv;
+bool has_cross_field = false;
+ScalarType minQCrossVert, maxQCrossVert;
+std::vector<int> SingIndex, SingValue;
 
 Geo::TracingGraph<ScalarType> TGraph(Geo::GT_CrossField);
 
-float drift_penalty=100.f;
-float maxAngle=45.f;
-int diffuse_step=1;
-int smooth_steps=10;
-int CurrN=0;
-int OldN=-1;
-//std::vector<int> PathN;
+float drift_penalty = 100.f;
+float maxAngle = 45.f;
+int diffuse_step = 1;
+int smooth_steps = 10;
+int CurrN = 0;
+int OldN = -1;
+// std::vector<int> PathN;
 
-Geo::CrossPathSampling<ScalarType> PathSampl(VertPos,Connectivity,TGraph,VertCurv,SingIndex,SingValue);
+Geo::CrossPathSampling<ScalarType> PathSampl(VertPos, Connectivity, TGraph, VertCurv, SingIndex, SingValue);
 
-std::vector<Geo::Point3<ScalarType> > PathColors;
+std::vector<Geo::Point3<ScalarType>> PathColors;
 
-std::vector<Geo::Point3<ScalarType> > FaceCol;
-Geo::PatchManaging<ScalarType> PatchM(VertPos,Connectivity,VertCurv,TGraph,PathSampl.SelectedPaths);
+std::vector<Geo::Point3<ScalarType>> FaceCol;
+Geo::PatchManaging<ScalarType> PatchM(VertPos, Connectivity, VertCurv, TGraph, PathSampl.SelectedPaths);
 
-
-int CurrCol=0;
-int OldCol=CurrCol;
+int CurrCol = 0;
+int OldCol = CurrCol;
 
 Geo::Point3<ScalarType> mesh_color(0.79, 0.9, 0.87);
 
-Geo::PatchDecomposer<ScalarType> PDeco(PatchM,PathSampl,VertCurv,FaceCurv);
+Geo::PatchDecomposer<ScalarType> PDeco(PatchM, PathSampl, VertCurv, FaceCurv);
 
-std::vector<Geo::Point3<ScalarType> > SidesMidP;
-//for debugging the marked parts
-//std::vector<int> MarkedV;
+std::vector<Geo::Point3<ScalarType>> SidesMidP;
+// for debugging the marked parts
+// std::vector<int> MarkedV;
 
-int failed_trace=0;
-int tested_trace=0;
+int failed_trace = 0;
+int tested_trace = 0;
 
-bool single_boundary_cond=true;
-bool disk_like_cond=true;
-bool single_sing_cond=false;
-bool match_sing_cond=true;
-bool use_uv=false;
-bool isometric_uv=false;
-bool conformal_uv=false;
-ScalarType max_uvDist=0.05;
+bool single_boundary_cond = true;
+bool disk_like_cond = true;
+bool single_sing_cond = false;
+bool match_sing_cond = true;
+bool use_uv = false;
+bool isometric_uv = false;
+bool conformal_uv = false;
+ScalarType max_uvDist = 0.05;
 
-int MinSides=3;
-int MaxSides=6;
-ScalarType CCability=0;
+int MinSides = 3;
+int MaxSides = 6;
+ScalarType CCability = 0;
 
-bool old_single_boundary_cond=single_boundary_cond;
-bool old_disk_like_cond=disk_like_cond;
-bool old_single_sing_cond=single_sing_cond;
-bool old_match_sing_cond=match_sing_cond;
-bool old_isometric_uv=isometric_uv;
-bool old_conformal_uv=conformal_uv;
-ScalarType old_max_uvDist=max_uvDist;
+bool old_single_boundary_cond = single_boundary_cond;
+bool old_disk_like_cond = disk_like_cond;
+bool old_single_sing_cond = single_sing_cond;
+bool old_match_sing_cond = match_sing_cond;
+bool old_isometric_uv = isometric_uv;
+bool old_conformal_uv = conformal_uv;
+ScalarType old_max_uvDist = max_uvDist;
 
-int old_MinSides=MinSides;
-int old_MaxSides=MaxSides;
-ScalarType old_CCability=CCability;
+int old_MinSides = MinSides;
+int old_MaxSides = MaxSides;
+ScalarType old_CCability = CCability;
 
-int min_sing_distance=1;
+int min_sing_distance = 1;
 
-int DrawMeshMode=0;
-int DrawFieldMode=0;
+int DrawMeshMode = 0;
+int DrawFieldMode = 0;
 
 void UpdateColor()
 {
-    bool has_uv=false;
+    bool has_uv = false;
     std::vector<ScalarType> FaceVal;
 
-    switch(CurrCol) {
+    switch (CurrCol)
+    {
     case 0:
-        FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
+        FaceCol = std::vector<Geo::Point3<ScalarType>>(Connectivity.size(), mesh_color);
         break;
     case 1:
         PatchM.GetColorFaceByPatch(FaceCol);
@@ -177,53 +184,53 @@ void UpdateColor()
         PDeco.GetColorBySolvedPatches(FaceCol);
         break;
     case 6:
-        has_uv=PDeco.GetConditionPerFaceScalar(FaceVal,std::string("uv_distortion"));
+        has_uv = PDeco.GetConditionPerFaceScalar(FaceVal, std::string("uv_distortion"));
         if (has_uv)
         {
-            Geo::GetColorByScalar<ScalarType>(FaceVal,max_uvDist,0,FaceCol);
+            Geo::GetColorByScalar<ScalarType>(FaceVal, max_uvDist, 0, FaceCol);
         }
         break;
     default:
-        FaceCol=std::vector<Geo::Point3<ScalarType> >(Connectivity.size(),mesh_color);
+        FaceCol = std::vector<Geo::Point3<ScalarType>>(Connectivity.size(), mesh_color);
         // code block
     }
 }
 
 void InitGraph()
 {
-    Geo::TragingGraphFunctions<ScalarType>::InitFromVertCrossField(TGraph,VertPos,Connectivity,VertCurv,
-                                                                   drift_penalty,maxAngle,diffuse_step);
-    TGraph.DeSelectAll(0);
-    TGraph.SelectNoteType(Geo::ExitDomain,0);
-    TGraph.SelectNoteType(Geo::TangentDomain,0);
+    Geo::TragingGraphFunctions<ScalarType>::InitFromVertCrossField(TGraph, VertPos, Connectivity, VertCurv,
+                                                                   drift_penalty, maxAngle, diffuse_step);
+    //TGraph.DeSelectAll(0);
+    // TGraph.SelectNoteType(Geo::ExitDomain, 0);
+    // TGraph.SelectNoteType(Geo::TangentDomain, 0);
 }
 
 bool UpdateConditions()
 {
-    bool has_changed=false;
-    has_changed|=old_single_boundary_cond!=single_boundary_cond;
-    has_changed|=old_disk_like_cond!=disk_like_cond;
-    has_changed|=old_single_sing_cond!=single_sing_cond;
-    has_changed|=old_match_sing_cond!=match_sing_cond;
+    bool has_changed = false;
+    has_changed |= old_single_boundary_cond != single_boundary_cond;
+    has_changed |= old_disk_like_cond != disk_like_cond;
+    has_changed |= old_single_sing_cond != single_sing_cond;
+    has_changed |= old_match_sing_cond != match_sing_cond;
 
-    has_changed|=old_MinSides!=MinSides;
-    has_changed|=old_MaxSides!=MaxSides;
-    has_changed|=old_CCability!=CCability;
-    has_changed|=isometric_uv!=old_isometric_uv;
-    has_changed|=conformal_uv!=old_conformal_uv;
-    has_changed|=max_uvDist!=old_max_uvDist;
+    has_changed |= old_MinSides != MinSides;
+    has_changed |= old_MaxSides != MaxSides;
+    has_changed |= old_CCability != CCability;
+    has_changed |= isometric_uv != old_isometric_uv;
+    has_changed |= conformal_uv != old_conformal_uv;
+    has_changed |= max_uvDist != old_max_uvDist;
 
-    old_single_boundary_cond=single_boundary_cond;
-    old_disk_like_cond=disk_like_cond;
-    old_single_sing_cond=single_sing_cond;
-    old_match_sing_cond=match_sing_cond;
-    old_MinSides=MinSides;
-    old_MaxSides=MaxSides;
-    old_CCability=CCability;
+    old_single_boundary_cond = single_boundary_cond;
+    old_disk_like_cond = disk_like_cond;
+    old_single_sing_cond = single_sing_cond;
+    old_match_sing_cond = match_sing_cond;
+    old_MinSides = MinSides;
+    old_MaxSides = MaxSides;
+    old_CCability = CCability;
 
-    old_isometric_uv=isometric_uv;
-    old_conformal_uv=conformal_uv;
-    old_max_uvDist=max_uvDist;
+    old_isometric_uv = isometric_uv;
+    old_conformal_uv = conformal_uv;
+    old_max_uvDist = max_uvDist;
 
     return has_changed;
 }
@@ -239,30 +246,30 @@ void InitConditions()
         PDeco.AddCondition(new Geo::SingleSingularityCondition<ScalarType>());
     if (match_sing_cond)
         PDeco.AddCondition(new Geo::MathchSingularityCondition<ScalarType>());
-    if ((MinSides>0)||(MaxSides>0))
+    if ((MinSides > 0) || (MaxSides > 0))
     {
         PDeco.AddCondition(new Geo::NumSidesCondition<ScalarType>());
     }
-    if (CCability>=1)
+    if (CCability >= 1)
     {
-        ScalarType AvVAl=AvgEdgeLen(VertPos,Connectivity);
+        ScalarType AvVAl = AvgEdgeLen(VertPos, Connectivity)*CCability;
         PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(AvVAl));
     }
     if (isometric_uv)
     {
-        Geo::UVCondition<ScalarType>::UVType uv_type=Geo::UVCondition<ScalarType>::UVArap;
-        Geo::UVDistortion<ScalarType>::DistType dist_type=Geo::UVDistortion<ScalarType>::EdgeDist;
-        PDeco.AddCondition(new Geo::UVCondition<ScalarType>(uv_type,dist_type,max_uvDist));
+        Geo::UVCondition<ScalarType>::UVType uv_type = Geo::UVCondition<ScalarType>::UVArap;
+        Geo::UVDistortion<ScalarType>::DistType dist_type = Geo::UVDistortion<ScalarType>::EdgeDist;
+        PDeco.AddCondition(new Geo::UVCondition<ScalarType>(uv_type, dist_type, max_uvDist));
     }
     if (conformal_uv)
     {
-        Geo::UVCondition<ScalarType>::UVType uv_type=Geo::UVCondition<ScalarType>::UVLSqConformal;
-        Geo::UVDistortion<ScalarType>::DistType dist_type=Geo::UVDistortion<ScalarType>::AngleDist;
-        PDeco.AddCondition(new Geo::UVCondition<ScalarType>(uv_type,dist_type,max_uvDist));
+        Geo::UVCondition<ScalarType>::UVType uv_type = Geo::UVCondition<ScalarType>::UVLSqConformal;
+        Geo::UVDistortion<ScalarType>::DistType dist_type = Geo::UVDistortion<ScalarType>::AngleDist;
+        PDeco.AddCondition(new Geo::UVCondition<ScalarType>(uv_type, dist_type, max_uvDist));
     }
 }
 
-//std::vector<int> SampledVert;
+// std::vector<int> SampledVert;
 
 // void TestSampling()
 // {
@@ -270,15 +277,16 @@ void InitConditions()
 //     std::cout<<"sampled:"<<SampledVert.size()<<std::endl;
 // }
 
-void InitTracing()
+void SampleTracing()
 {
-    //PathN.clear();
-    PathSampl.Init();
+    // PathN.clear();
+    //PathSampl.Init();
+    PDeco.SampleInitialCandidates();
 }
 
-void AddAllPaths(bool upd_patches=true)
+void AddAllPaths(bool upd_patches = true)
 {
-    //auto start = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
     PathSampl.InsertAllPaths();
     //    auto end = std::chrono::high_resolution_clock::now();
     //    // Calculate the elapsed time
@@ -294,7 +302,7 @@ void AddAllPaths(bool upd_patches=true)
     {
         PatchM.Update(UpdatedPatches);
         PDeco.UpdateAllUnsolvedPatches();
-        CurrCol=1;
+        CurrCol = 1;
         UpdateColor();
     }
 }
@@ -302,29 +310,30 @@ void AddAllPaths(bool upd_patches=true)
 void SmoothPaths()
 {
     Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
-    std::vector<std::vector<int> > VertPaths;
+    std::vector<std::vector<int>> VertPaths;
     PathSampl.GetVertexSelectedPaths(VertPaths);
 
-    for (size_t i=0;i<VertPaths.size();i++)
+    for (size_t i = 0; i < VertPaths.size(); i++)
     {
-        if (VertPaths[i].size()==0)continue;
-        for (int j=0;j<(int)VertPaths[i].size()-1;j++)
+        if (VertPaths[i].size() == 0)
+            continue;
+        for (int j = 0; j < (int)VertPaths[i].size() - 1; j++)
         {
-            int IndexV0=VertPaths[i][j];
-            int IndexV1=VertPaths[i][j+1];
-            std::pair<int,int> key(std::min(IndexV0,IndexV1),
-                                   std::max(IndexV0,IndexV1));
+            int IndexV0 = VertPaths[i][j];
+            int IndexV1 = VertPaths[i][j + 1];
+            std::pair<int, int> key(std::min(IndexV0, IndexV1),
+                                    std::max(IndexV0, IndexV1));
             UVP.FeatureLines.push_back(key);
         }
     }
-    UVP.Steps=smooth_steps;
-    Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos,Connectivity,UVP);
+    UVP.Steps = smooth_steps;
+    Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos, Connectivity, UVP);
 
-//    //update cross F poistion
-//    for (size_t i=0;i<VertCurv.size();i++)
-//        VertCurv[i].Pos=VertPos[i];
+    //    //update cross F poistion
+    //    for (size_t i=0;i<VertCurv.size();i++)
+    //        VertCurv[i].Pos=VertPos[i];
 
-    AdaptFieldToMesh(VertPos,Connectivity,VertCurv,FaceCurv);
+    AdaptFieldToMesh(VertPos, Connectivity, VertCurv, FaceCurv);
 
     PatchM.UpdateSubPatchPos();
     PatchM.InitVisualCornersEdges();
@@ -334,6 +343,7 @@ void InitPatches()
 {
     PatchM.Init();
     InitConditions();
+    //PDeco.InitBorderVertType();
     PDeco.UpdateAllUnsolvedPatches();
 }
 
@@ -395,36 +405,36 @@ void BatchProcess()
     //    std::cout << "* Smooth Patches: " << elapsed_seconds5  <<std::endl;
 }
 
-//void TestTrace()
+// void TestTrace()
 //{
-//    int currI=CurrN;
-//    do{
-//        if (TGraph.NodeType(currI)==Geo::Internal)
-//        {
-//           CurrN=currI;
-//           break;
-//        }
-//        currI=(currI+1)%TGraph.NumNodes();
-//    }while (true);
-//    tested_trace++;
-//    bool has_traced=Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(TGraph,CurrN,PathN);
-//    if (!has_traced) failed_trace++;
-//}
+//     int currI=CurrN;
+//     do{
+//         if (TGraph.NodeType(currI)==Geo::Internal)
+//         {
+//            CurrN=currI;
+//            break;
+//         }
+//         currI=(currI+1)%TGraph.NumNodes();
+//     }while (true);
+//     tested_trace++;
+//     bool has_traced=Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(TGraph,CurrN,PathN);
+//     if (!has_traced) failed_trace++;
+// }
 
-//void TestSpeed()
+// void TestSpeed()
 //{
-//    // Record the start time
-//    auto start = std::chrono::high_resolution_clock::now();
-//    failed_trace=0;
-//    tested_trace=0;
-//    for (CurrN=0;CurrN<(int)TGraph.NumNodes();CurrN++)
-//    {
-//        if ((CurrN % 100)==0)
-//            std::cout<<"Testing "<<CurrN<<std::endl;
-//       TestTrace();
-//    }
-//    // Record the end time
-//    auto end = std::chrono::high_resolution_clock::now();
+//     // Record the start time
+//     auto start = std::chrono::high_resolution_clock::now();
+//     failed_trace=0;
+//     tested_trace=0;
+//     for (CurrN=0;CurrN<(int)TGraph.NumNodes();CurrN++)
+//     {
+//         if ((CurrN % 100)==0)
+//             std::cout<<"Testing "<<CurrN<<std::endl;
+//        TestTrace();
+//     }
+//     // Record the end time
+//     auto end = std::chrono::high_resolution_clock::now();
 
 //    // Calculate the elapsed time
 //    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -436,10 +446,10 @@ void BatchProcess()
 //    CurrN=0;
 //}
 
-//void TestSelfIntersect()
+// void TestSelfIntersect()
 //{
-//    // Record the start time
-//    auto start = std::chrono::high_resolution_clock::now();
+//     // Record the start time
+//     auto start = std::chrono::high_resolution_clock::now();
 
 //    for (CurrN=0;CurrN<(int)TGraph.NumNodes();CurrN++)
 //    {
@@ -466,77 +476,78 @@ void BatchProcess()
 //    CurrN=0;
 //}
 
-
 void LoadMesh(const std::string &path)
 {
     //    oss<<"Loading "<<path.c_str()<<std::endl;
-    loadedMesh=LoadOBJ(path,VertPos,Connectivity,true);
+    loadedMesh = LoadOBJ(path, VertPos, Connectivity, true);
     if (loadedMesh)
     {
-        std::cout<<"Loaded "<<Connectivity.size()<<" faces "<<VertPos.size()<<" vertices"<<std::endl;
+        std::cout << "Loaded " << Connectivity.size() << " faces " << VertPos.size() << " vertices" << std::endl;
         MeshBox.Init(VertPos);
-        ComputeNormals(VertPos,Connectivity,FaceNormals,VertNormals);
-        Geo::getFFAdjacency(Connectivity,NextF,NextE);
+        ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
+        Geo::getFFAdjacency(Connectivity, NextF, NextE);
 
-        //std::cout<<"FNorm 0 "<<FaceNormals.size()<<std::endl;
+        // std::cout<<"FNorm 0 "<<FaceNormals.size()<<std::endl;
     }
     else
-        std::cout<<"Mesh not loaded"<<std::endl;
+        std::cout << "Mesh not loaded" << std::endl;
 
     UpdateColor();
 }
 
 void LoadField(const std::string &path)
 {
-    //std::cout<<"Loading Field"<<path.c_str()<<std::endl;
-    has_cross_field=ReadField(VertPos,Connectivity,path,VertCurv,FaceCurv);
-    if (VertCurv.size()==0)
+    // std::cout<<"Loading Field"<<path.c_str()<<std::endl;
+    has_cross_field = ReadField(VertPos, Connectivity, path, VertCurv, FaceCurv);
+    if (VertCurv.size() == 0)
     {
-        SetVertCrossFromFace(VertPos,Connectivity,VertNormals,FaceCurv,VertCurv);
+        SetVertCrossFromFace(VertPos, Connectivity, VertNormals, FaceCurv, VertCurv);
         InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv);
     }
-    if (FaceCurv.size()==0)
+    if (FaceCurv.size() == 0)
     {
-        SetFaceCrossVectorFromVert(Connectivity,FaceNormals,VertCurv,FaceCurv);
+        SetFaceCrossVectorFromVert(Connectivity, FaceNormals, VertCurv, FaceCurv);
         InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv);
     }
     if (has_cross_field)
     {
-        std::cout<<"Loaded Field"<<std::endl;
-        showCross=true;
-        showSing=true;
+        std::cout << "Loaded Field" << std::endl;
+        showCross = true;
+        showSing = true;
 
-        Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv,minQCrossVert,maxQCrossVert);
-        GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
-        PatchM.SetSingularities(SingIndex,SingValue);
+        Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv, minQCrossVert, maxQCrossVert);
+        GetFaceSingularities(FaceCurv, VertPos, Connectivity, NextF, NextE, SingIndex, SingValue);
+        PatchM.SetSingularities(SingIndex, SingValue);
     }
     else
-        std::cout<<"Field not loaded"<<std::endl;
+        std::cout << "Field not loaded" << std::endl;
 }
 
-static void glfw_error_callback(int error, const char* description)
+static void glfw_error_callback(int error, const char *description)
 {
     fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
+static void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
 {
-    if(ImGui::GetIO().WantCaptureMouse) return;
-    
+    if (ImGui::GetIO().WantCaptureMouse)
+        return;
+
     int display_w, display_h;
     glfwGetFramebufferSize(window, &display_w, &display_h);
     float xscale, yscale;
     glfwGetWindowContentScale(window, &xscale, &yscale);
-    xpos*=xscale;
-    ypos*=yscale;
-    ypos=(display_h)-ypos;
-    trackball.MouseMove((int)xpos,(int)ypos);
+    xpos *= xscale;
+    ypos *= yscale;
+    ypos = (display_h)-ypos;
+    trackball.MouseMove((int)xpos, (int)ypos);
 }
 
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
 {
     (void)mods;
-    if(ImGui::GetIO().WantCaptureMouse) return;
+    if (ImGui::GetIO().WantCaptureMouse)
+        return;
 
     int display_w, display_h;
     glfwGetFramebufferSize(window, &display_w, &display_h);
@@ -544,26 +555,25 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     glfwGetWindowContentScale(window, &xscale, &yscale);
     double xpos, ypos;
     glfwGetCursorPos(window, &xpos, &ypos);
-    xpos*=xscale;
-    ypos*=yscale;
-    ypos=(display_h)-ypos;
+    xpos *= xscale;
+    ypos *= yscale;
+    ypos = (display_h)-ypos;
 
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-        trackball.MouseDown((int)xpos,(int)ypos,UI::OrbitBall::BUTTON_LEFT);
+        trackball.MouseDown((int)xpos, (int)ypos, UI::OrbitBall::BUTTON_LEFT);
 
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
-        trackball.MouseUp((int)xpos,(int)ypos,UI::OrbitBall::BUTTON_LEFT);
-
+        trackball.MouseUp((int)xpos, (int)ypos, UI::OrbitBall::BUTTON_LEFT);
 }
 
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
 {
     (void)window;
     (void)xoffset;
     trackball.MouseWheel(yoffset);
 }
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
     (void)window;
     (void)scancode;
@@ -575,22 +585,21 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         trackball.ButtonUp(UI::OrbitBall::KEY_CTRL);
 }
 
-
 void InitGLFW_Window()
 {
     if (!glfwInit())
     {
-        //std::cout<<"Error Initializing GLFW"<<std::endl;
+        // std::cout<<"Error Initializing GLFW"<<std::endl;
         exit(0);
     }
-    //return 1;
+    // return 1;
 
     window = glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL2 example", NULL, NULL);
     // if (window == NULL)
     //     return 1;
     if (window == NULL)
     {
-        //std::cout<<"Error Initializing GLFW Window"<<std::endl;
+        // std::cout<<"Error Initializing GLFW Window"<<std::endl;
         exit(0);
     }
 
@@ -610,8 +619,9 @@ void InitIMGui()
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    ImGuiIO &io = ImGui::GetIO();
+    (void)io;
+    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 
     // Setup Dear ImGui style
     ImGui::StyleColorsClassic();
@@ -623,20 +633,20 @@ void InitIMGui()
 
 void SetRenderBar()
 {
-    ImGui::Begin("Render",NULL,ImGuiWindowFlags_AlwaysAutoResize);       // Create a window called "Hello, world!" and append into it.
+    ImGui::Begin("Render", NULL, ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello, world!" and append into it.
 
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW MESH");
     ImGui::Checkbox("Draw Mesh", &showMesh);
-    static const char* itemsDrawMode[] = { "Smooth",
-                                           "Flat",
-                                           "Smooth Wire",
-                                           "Flat Wire"};
+    static const char *itemsDrawMode[] = {"Smooth",
+                                          "Flat",
+                                          "Smooth Wire",
+                                          "Flat Wire"};
     ImGui::SetNextItemWidth(100);
     ImGui::Combo("Mesh Mode", &DrawMeshMode, itemsDrawMode, IM_ARRAYSIZE(itemsDrawMode));
 
     ImGui::Checkbox("Draw Cross", &showCross);
-    static const char* itemsFDrawMode[] = { "Face Field",
+    static const char *itemsFDrawMode[] = {"Face Field",
                                            "Vert Field"};
     ImGui::SetNextItemWidth(100);
     ImGui::Combo("Field Mode", &DrawFieldMode, itemsFDrawMode, IM_ARRAYSIZE(itemsFDrawMode));
@@ -653,112 +663,210 @@ void SetRenderBar()
 
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW SAMPLING");
+    ImGui::Checkbox("Draw Must Pass", &Draw_must_pass_on);
+    ImGui::Checkbox("Draw Sample On", &Draw_sample_on);
+    ImGui::Checkbox("Draw Force Sample", &Draw_force_sample);
+    ImGui::Checkbox("Draw Allow Path", &Draw_allow_path_on);
+    ImGui::Checkbox("Draw Allow Arrive", &Draw_allow_arrive_to);
+    
     ImGui::Checkbox("Draw Initial Pos", &DrawInitalPos);
+    ImGui::InputInt("Cand Idx",&curr_cand);
     ImGui::Checkbox("Draw Candidates", &DrawCandidates);
-
-
+    
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW PATCH");
     ImGui::Checkbox("Draw Corners", &DrawCorners);
     ImGui::Checkbox("Draw Sides", &DrawSides);
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "COLOR PATCHES");
-    static const char* itemsShape[] = { "Uniform",
-                                        "By Patch",
-                                        "if Disk",
-                                        "Valence",
-                                        "Match Sing",
-                                        "Unsolved",
-                                        "Uv Distortion"};
+    static const char *itemsShape[] = {"Uniform",
+                                       "By Patch",
+                                       "if Disk",
+                                       "Valence",
+                                       "Match Sing",
+                                       "Unsolved",
+                                       "Uv Distortion"};
     ImGui::SetNextItemWidth(100);
     ImGui::Combo("Color Patches", &CurrCol, itemsShape, IM_ARRAYSIZE(itemsShape));
-    if (CurrCol!=OldCol)
+    if (CurrCol != OldCol)
     {
         UpdateColor();
-        OldCol=CurrCol;
+        OldCol = CurrCol;
     }
 
-
-   
-    
     ImGui::End();
 }
 
 void UpdateAfterRemesh()
 {
-    ComputeNormals(VertPos,Connectivity,FaceNormals,VertNormals);
-    Geo::getFFAdjacency(Connectivity,NextF,NextE);
-    
+    ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
+    Geo::getFFAdjacency(Connectivity, NextF, NextE);
+
     InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv);
 
-    SetVertCrossFromFace(VertPos,Connectivity,VertNormals,FaceCurv,VertCurv);
+    SetVertCrossFromFace(VertPos, Connectivity, VertNormals, FaceCurv, VertCurv);
     InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv);
 
-    Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv,minQCrossVert,maxQCrossVert);
-    GetFaceSingularities(FaceCurv,VertPos,Connectivity,NextF,NextE,SingIndex,SingValue);
-    PatchM.SetSingularities(SingIndex,SingValue);
+    Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv, minQCrossVert, maxQCrossVert);
+    GetFaceSingularities(FaceCurv, VertPos, Connectivity, NextF, NextE, SingIndex, SingValue);
+    PatchM.SetSingularities(SingIndex, SingValue);
     UpdateColor();
 }
 
 void SetDecomposeBar()
 {
-    ImGui::Begin("Decompose",NULL,ImGuiWindowFlags_AlwaysAutoResize);       // Create a window called "Hello, world!" and append into it.
+    ImGui::Begin("Decompose", NULL, ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello, world!" and append into it.
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "PREPROCESS");
 
-    ImGui::InputInt("Sing Dist",&min_sing_distance);
+    
+    if (ImGui::Button("Refine Sing"))
+    {
+        Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(VertPos, Connectivity,
+                                                                 FaceCurv, SingIndex, min_sing_distance);
+        MeshBox.Init(VertPos);
+
+        UpdateAfterRemesh();
+        // WriteOBJ("refined_test.obj",VertPos,Connectivity);
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80);
+    ImGui::InputInt("Sing Dist", &min_sing_distance);
     // if (ImGui::Button("Test"))
     // {
     //     TestSampling();
     // }
-    if (ImGui::Button("Refine Close Sing"))
-    {
-        Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(VertPos,Connectivity,
-                                                                FaceCurv,SingIndex,min_sing_distance);
-                                                                 MeshBox.Init(VertPos);
-
-       UpdateAfterRemesh();
-       //WriteOBJ("refined_test.obj",VertPos,Connectivity);
-    }
+    
 
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "INIT");
-    ImGui::SliderFloat("Drift",&drift_penalty, 0, 1000);
-    ImGui::SliderFloat("Max Angle",&maxAngle, 0, 90);
-    ImGui::InputInt("Diffuse Step",&diffuse_step);
+    ImGui::SetNextItemWidth(150);
+    ImGui::SliderFloat("Drift", &drift_penalty, 0, 1000);
+    ImGui::SetNextItemWidth(150);
+    ImGui::SliderFloat("Max Angle", &maxAngle, 0, 90);
+    ImGui::SetNextItemWidth(150);
+    ImGui::InputInt("Diffuse", &diffuse_step);
+    ImGui::SetNextItemWidth(150);
     if (ImGui::Button("Init Graph"))
     {
         InitGraph();
-        has_graph=true;
-        showCross=false;
+        InitPatches();
+        has_graph = true;
+        showCross = false;
     }
-    if (!has_graph){
+    if (!has_graph)
+    {
         ImGui::End();
         return;
     }
 
-    ImGui::InputInt("Initial Sample",&PathSampl.NumSamples);
-    ImGui::InputInt("Sing Dist Sample",&PathSampl.minSingResample);
-    if (ImGui::Button("Init Tracing"))
+    
+    // if (ImGui::Button("Init Patches"))
+    // {
+    //     InitPatches();
+    //     has_init_patches=true;
+    // }
+    // if (!has_init_patches){
+    //     ImGui::End();
+    //     return;
+    // }
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATH SAMPLING");
+
+    ImGui::SetNextItemWidth(80);
+    ImGui::InputInt("Samples", &PathSampl.NumSamples);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80);
+    ImGui::InputInt("Sing Dist", &PathSampl.minSingResample);
+
+    ImGui::BeginTable("Involved Nodes", 5);
+    ImGui::TableSetupColumn("");
+    ImGui::TableSetupColumn("Dart");
+    ImGui::TableSetupColumn("Concave");
+    ImGui::TableSetupColumn("Border");
+    ImGui::TableSetupColumn("Internal");
+    ImGui::TableHeadersRow();
+
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::Text("Start");
+
+    ImGui::TableSetColumnIndex(1);
+    ImGui::Checkbox("##foo1", &PDeco.start_spike);
+    ImGui::TableSetColumnIndex(2);
+    ImGui::Checkbox("##foo2", &PDeco.start_concave);
+    ImGui::TableSetColumnIndex(3);
+    ImGui::Checkbox("##foo3", &PDeco.start_border);
+    ImGui::TableSetColumnIndex(4);
+    ImGui::Checkbox("##foo4", &PDeco.start_internal);
+
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::Text("End");
+
+    ImGui::TableSetColumnIndex(1);
+    ImGui::Checkbox("##foo5", &PDeco.end_spike);
+    ImGui::TableSetColumnIndex(2);
+    ImGui::Checkbox("##foo6", &PDeco.end_concave);
+    ImGui::TableSetColumnIndex(3);
+    ImGui::Checkbox("##foo7", &PDeco.end_border);
+    ImGui::TableSetColumnIndex(4);
+    //ImGui::Checkbox("##foo8", &PDeco.end_internal);
+
+    ImGui::EndTable();
+    if (ImGui::Button("Sample Candidates"))
     {
-        InitTracing();
-        InitPatches();
-        has_init_patches=true;
+        SampleTracing();
     }
-    if (!has_init_patches){
-        ImGui::End();
-        return;
-    }
+
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATH DISTRIBUTION");
+
     //    if (ImGui::Button("Init Patches"))
     //    {
     //        InitPatches();
     //    }
+    if (ImGui::Button("Add Next"))
+    {
+        bool terminated = false;
+        bool solved = false;
+        PDeco.AddNext(solved, terminated);
 
-    ImGui::Separator();
-    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATH SAMPLING");
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+        UpdateColor();
+    }
 
-    ImGui::Checkbox("Dynamic Update", &PathSampl.dynamicUpdates);
-    ImGui::Checkbox("Only Where Needed", &PDeco.add_only_where_needed);
-    ImGui::Checkbox("Stop When Solved", &PDeco.stop_when_solved);
-    ImGui::Checkbox("Dynamic Smooth", &PDeco.dynamic_smooth);
+    ImGui::SameLine();
+    if (ImGui::Button("Resample"))
+    {
+        PDeco.RetraceOnUnsolved();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Remove"))
+    {
+        PDeco.RemoveNextIfPossible();
 
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+        UpdateColor();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Split"))
+    {
+        PathSampl.SplitPaths();
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+        UpdateColor();
+    }
+
+    ImGui::SetNextItemWidth(120);
+    ImGui::Checkbox("Dynamic Upd", &PathSampl.dynamicUpdates);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(120);
+    ImGui::Checkbox("Only Needed", &PDeco.add_only_where_needed);
+    ImGui::SetNextItemWidth(120);
+    ImGui::Checkbox("Stop Solved", &PDeco.stop_when_solved);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(120);
+    ImGui::Checkbox("Dynamic Smth", &PDeco.dynamic_smooth);
 
     ImGui::TextColored(ImVec4(0, 0, 1, 1), "structure");
     ImGui::Checkbox("Darts", &PDeco.allow_darts);
@@ -777,16 +885,16 @@ void SetDecomposeBar()
 
     ImGui::TextColored(ImVec4(0, 0, 1, 1), "sides");
     ImGui::SetNextItemWidth(50);
-    ImGui::InputInt("Min Sides",&MinSides,0);
+    ImGui::InputInt("Min Sides", &MinSides, 0);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(50);
-    ImGui::InputInt("Max Sides",&MaxSides,0);
+    ImGui::InputInt("Max Sides", &MaxSides, 0);
 
     ImGui::TextColored(ImVec4(0, 0, 1, 1), "shape");
     ImGui::SetNextItemWidth(100);
-    float CCAbilityf=CCability;
+    float CCAbilityf = CCability;
     ImGui::InputFloat("CC Ability", &CCAbilityf);
-    CCability=(ScalarType)CCAbilityf;
+    CCability = (ScalarType)CCAbilityf;
 
     ImGui::TextColored(ImVec4(0, 0, 1, 1), "UV");
 
@@ -794,116 +902,62 @@ void SetDecomposeBar()
     ImGui::Checkbox("UV", &use_uv);
     if (!use_uv)
     {
-        isometric_uv=false;
-        conformal_uv=false;
+        isometric_uv = false;
+        conformal_uv = false;
     }
     ImGui::SameLine();
-    if (ImGui::RadioButton("Isometric", isometric_uv)) {
+    if (ImGui::RadioButton("Isometric", isometric_uv))
+    {
         isometric_uv = true;
         conformal_uv = false;
     }
     ImGui::SameLine();
-    if (ImGui::RadioButton("Conformal", conformal_uv)) {
+    if (ImGui::RadioButton("Conformal", conformal_uv))
+    {
         isometric_uv = false;
         conformal_uv = true;
     }
 
-    float max_uvDistf=max_uvDist;
+    float max_uvDistf = max_uvDist;
     ImGui::SetNextItemWidth(100);
     ImGui::InputFloat("Max UV Distortion", &max_uvDistf);
-    max_uvDist=max_uvDistf;
+    max_uvDist = max_uvDistf;
 
-    //    ImGui::SetNextItemWidth(100);
-    //    float CCAbilityf=CCability;
-    //    ImGui::InputFloat("CC Ability", &CCAbilityf);
-    //    CCability=(ScalarType)CCAbilityf;
-
-    //    ImGui::TextColored(ImVec4(0, 0, 1, 1), "shape");
-    //    ImGui::SetNextItemWidth(100);
-    //    float CCAbilityf=CCability;
-    //    ImGui::InputFloat("CC Ability", &CCAbilityf);
-    //    CCability=(ScalarType)CCAbilityf;
-
-
-    bool needUpdate=UpdateConditions();
+    bool needUpdate = UpdateConditions();
     if (needUpdate)
+    {
         InitConditions();
-    //    if (ImGui::Button("Add One"))
-    //    {
-    //        PathSampl.AddNextPath();
-    //        PathColors.resize(PathSampl.SelectedPaths.size());
-    //        Geo::ScatterColor<ScalarType>(PathColors);
-    //        std::vector<int> UpdatedPatches;
-    //        PatchM.Update(UpdatedPatches);
-    //        UpdateColor();
-    //        //PatchM.InitVisualCornersEdges();
-    //    }
-
-    //    if (ImGui::Button("Add All Paths"))
-    //        AddAllPaths();
-
-    if (ImGui::Button("Add Next"))
-    {
-        bool terminated=false;
-        bool solved=false;
-        PDeco.AddNext(solved,terminated);
-
-        PathColors.resize(PathSampl.SelectedPaths.size());
-        Geo::ScatterColor<ScalarType>(PathColors);
-        UpdateColor();
+        PDeco.UpdateAllUnsolvedPatches();
     }
-    
-    ImGui::SameLine();
-    if (ImGui::Button("Resample"))
-    {
-        PDeco.RetraceOnUnsolved();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Remove"))
-    {
-        PDeco.RemoveNextIfPossible();
-
-        PathColors.resize(PathSampl.SelectedPaths.size());
-        Geo::ScatterColor<ScalarType>(PathColors);
-        UpdateColor();
-    }
-    if (ImGui::Button("Split"))
-    {
-        PathSampl.SplitPaths();
-        PathColors.resize(PathSampl.SelectedPaths.size());
-        Geo::ScatterColor<ScalarType>(PathColors);
-        UpdateColor();
-    }
-
     ImGui::End();
 }
 
 void SaveSubMeshes()
 {
-    std::string subMeshFilename=ProjectName;
+    std::string subMeshFilename = ProjectName;
     subMeshFilename.append("_submesh.obj");
     PDeco.SaveSubMeshes(subMeshFilename);
 }
 
 void SavePatches()
 {
-    std::string PatchFilename=ProjectName;
+    std::string PatchFilename = ProjectName;
     PatchFilename.append("_layout.patch");
     PDeco.SavePatchesLayout(PatchFilename);
 }
 
 void SaveField()
 {
-    std::string FinalFieldFilename=ProjectName;
+    std::string FinalFieldFilename = ProjectName;
     FinalFieldFilename.append("_layout.ffield");
-    WriteField(FinalFieldFilename.c_str(),VertCurv,FaceCurv);
+    WriteField(FinalFieldFilename.c_str(), VertCurv, FaceCurv);
 }
 
 void SaveMesh()
 {
-    std::string FinalMFilename=ProjectName;
+    std::string FinalMFilename = ProjectName;
     FinalMFilename.append("_layout.obj");
-    WriteOBJ(FinalMFilename.c_str(),VertPos,Connectivity);
+    WriteOBJ(FinalMFilename.c_str(), VertPos, Connectivity);
 }
 
 void SaveAll()
@@ -916,15 +970,15 @@ void SaveAll()
 
 void SetExportBar()
 {
-    ImGui::Begin("Export",NULL,ImGuiWindowFlags_AlwaysAutoResize);       // Create a window called "Hello, world!" and append into it.
+    ImGui::Begin("Export", NULL, ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello, world!" and append into it.
 
-    ImGui::InputInt("Smooth Steps",&smooth_steps);
+    ImGui::InputInt("Smooth Steps", &smooth_steps);
     if (ImGui::Button("Smooth"))
         SmoothPaths();
 
     if (ImGui::Button("Extract Dual"))
-        Geo::DualPatch<ScalarType>::ExtractDual(VertPos,Connectivity,PatchM,SidesMidP);
-    //PatchM.ExtractDual();
+        Geo::DualPatch<ScalarType>::ExtractDual(VertPos, Connectivity, PatchM, SidesMidP);
+    // PatchM.ExtractDual();
 
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "SAVE");
@@ -969,78 +1023,76 @@ void GLDrawMesh()
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 
-    gluPerspective(40, (GLdouble)display_w/(GLdouble)display_h, 0.1, 100);
+    gluPerspective(40, (GLdouble)display_w / (GLdouble)display_h, 0.1, 100);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    gluLookAt(0,0,3.5f,   0,0,0,   0,1,0);
+    gluLookAt(0, 0, 3.5f, 0, 0, 0, 0, 1, 0);
 
     trackball.GetView();
 
     trackball.Apply();
-    //if (showTrackBall)
-    //    trackball.DrawPostApply();
+    // if (showTrackBall)
+    //     trackball.DrawPostApply();
 
     glDisable(GL_CULL_FACE);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 
-    GLDraw::glScale(3/MeshBox.Diag());
+    GLDraw::glScale(3 / MeshBox.Diag());
     GLDraw::glTranslate(-MeshBox.Center());
 
     if (showMesh)
     {
-        //glColor4f(mesh_color.x * mesh_color.w, mesh_color.y * mesh_color.w, mesh_color.z * mesh_color.w, mesh_color.w);
+        // glColor4f(mesh_color.x * mesh_color.w, mesh_color.y * mesh_color.w, mesh_color.z * mesh_color.w, mesh_color.w);
         glPushAttrib(GL_ALL_ATTRIB_BITS);
-        bool wire=true;
-        bool smoothshade=true;
-        switch(DrawMeshMode) {
+        bool wire = true;
+        bool smoothshade = true;
+        switch (DrawMeshMode)
+        {
         case 0:
-            wire=false;
-            smoothshade=true;
+            wire = false;
+            smoothshade = true;
             break;
         case 1:
-            wire=false;
-            smoothshade=false;
+            wire = false;
+            smoothshade = false;
             break;
         case 2:
-            wire=true;
-            smoothshade=true;
+            wire = true;
+            smoothshade = true;
             break;
         default:
-            wire=true;
-            smoothshade=false;
+            wire = true;
+            smoothshade = false;
             break;
         }
-        GLDraw::GLDrawBorders<ScalarType>(VertPos,Connectivity,NextF,1);
+        GLDraw::GLDrawBorders<ScalarType>(VertPos, Connectivity, NextF, 1);
         glLineWidth(line_thick);
-        GLDraw::DrawSurfaceMesh<ScalarType>(VertPos,Connectivity,FaceNormals,VertNormals,true,wire,smoothshade,false,GLDraw::TRTriangle,&FaceCol);
+        GLDraw::DrawSurfaceMesh<ScalarType>(VertPos, Connectivity, FaceNormals, VertNormals, true, wire, smoothshade, false, GLDraw::TRTriangle, &FaceCol);
         glPopAttrib();
     }
 
     if (has_cross_field)
     {
-        ScalarType scaleVal=MeshBox.Diag()*(ScalarType)0.02;
+        ScalarType scaleVal = MeshBox.Diag() * (ScalarType)0.02;
         if (showCross)
         {
-            
-            if (DrawFieldMode==0)
-                GLDraw::DrawCrossFields<ScalarType>(FaceCurv,scaleVal,maxQCrossVert,minQCrossVert);
+
+            if (DrawFieldMode == 0)
+                GLDraw::DrawCrossFields<ScalarType>(FaceCurv, scaleVal, maxQCrossVert, minQCrossVert);
             else
-                GLDraw::DrawCrossFields<ScalarType>(VertCurv,scaleVal,maxQCrossVert,minQCrossVert);
+                GLDraw::DrawCrossFields<ScalarType>(VertCurv, scaleVal, maxQCrossVert, minQCrossVert);
         }
         if (showSing)
-            GLDraw::DrawSingularity<ScalarType>(VertPos,SingIndex,SingValue);
+            GLDraw::DrawSingularity<ScalarType>(VertPos, SingIndex, SingValue);
     }
 
-
-
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam;
-    PDParam.DrawPath=true;
-    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(TGraph,VertCurv,PathSampl.
-                                                          SelectedPaths,MeshBox.Diag()*0.005,
-                                                          PDParam,PathColors);
+    PDParam.DrawPath = true;
+    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(TGraph, VertCurv, PathSampl.SelectedPaths, MeshBox.Diag() * 0.005,
+                                                          PDParam, PathColors);
 
-    PDParam.DrawPath=false;
+    PDParam.DrawPath = false;
 
     if (DrawCorners)
         GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCorners(PatchM);
@@ -1050,63 +1102,87 @@ void GLDrawMesh()
 
     if (DrawInitalPos)
     {
-        std::vector<int> StartIDX;
-        PathSampl.GetStartingNodes(StartIDX);
-        GLDraw::DrawVertices(VertPos,StartIDX);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam1;
+        PDParam1.ColPoint=Geo::Point3<ScalarType>(1,0,1);
+        PDParam1.pointSize=20;
+        PDParam1.lineSize=10;
+        PDParam1.DrawPath=false;
+        std::vector<int> NodesIdx;
+        PathSampl.GetStartingNodes(NodesIdx);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(TGraph,VertCurv,
+                                                            NodesIdx,MeshBox.Diag() * 0.005,
+                                                            PDParam1);
+        // std::vector<int> StartIDX;
+        // PathSampl.GetStartingNodes(StartIDX);
+        // GLDraw::DrawVertices(VertPos, StartIDX);
     }
 
-    if (DrawCandidates)
-        GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCandidates(PathSampl,MeshBox.Diag()*0.005);
+    if (Draw_must_pass_on)
+        GLDraw::DrawVertices<ScalarType>(VertPos,PathSampl.must_pass_on);
+    if (Draw_sample_on)
+        GLDraw::DrawVertices<ScalarType>(VertPos,PathSampl.sample_on);
+    if (Draw_force_sample)
+        GLDraw::DrawVertices<ScalarType>(VertPos,PathSampl.force_sample);
+    if (Draw_allow_path_on)
+        GLDraw::DrawVertices<ScalarType>(VertPos,PathSampl.allow_path_on);
+    if (Draw_allow_arrive_to)
+        GLDraw::DrawVertices<ScalarType>(VertPos,PathSampl.allow_arrive_to);
 
-    PDParam.lineSize=5;
+    if (DrawCandidates)
+        GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCandidates(PathSampl, MeshBox.Diag() * 0.005,curr_cand);
+
+    PDParam.lineSize = 5;
     if (DrawExitNode)
     {
-        PDParam.ColLine=Geo::Point3<ScalarType>(0,1,0);
-        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::ExitDomain,MeshBox.Diag()*0.01,PDParam);
+        PDParam.ColLine = Geo::Point3<ScalarType>(0, 1, 0);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph, VertCurv, Geo::ExitDomain, MeshBox.Diag() * 0.01, PDParam);
+        PDParam.ColLine = Geo::Point3<ScalarType>(1, 1, 0);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph, VertCurv, Geo::ConvexExitDomain, MeshBox.Diag() * 0.01, PDParam);
     }
     if (DrawTangentNode)
     {
-        PDParam.ColLine=Geo::Point3<ScalarType>(1,0,0);
-        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::TangentDomain,MeshBox.Diag()*0.01,PDParam);
+        PDParam.ColLine = Geo::Point3<ScalarType>(1, 0, 0);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph, VertCurv, Geo::TangentDomain, MeshBox.Diag() * 0.01, PDParam);
+        PDParam.ColLine = Geo::Point3<ScalarType>(0, 1, 1);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph, VertCurv, Geo::TangentExitDomain, MeshBox.Diag() * 0.01, PDParam);
     }
     if (DrawInternalNode)
     {
-        PDParam.ColLine=Geo::Point3<ScalarType>(0,0,1);
-        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,Geo::Internal,MeshBox.Diag()*0.01,PDParam);
+        PDParam.ColLine = Geo::Point3<ScalarType>(0, 0, 1);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph, VertCurv, Geo::Internal, MeshBox.Diag() * 0.01, PDParam);
     }
-    //GLDraw::DrawPoints(SidesMidP);
+    // GLDraw::DrawPoints(SidesMidP);
 
     //     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,
     //                                                                 Geo::ExitDomain,MeshBox.Diag()*0.005);
-    //bool DrawSamplesPaths=false;
-
+    // bool DrawSamplesPaths=false;
 }
 
 int main(int argc, char *argv[])
 {
 
-    //oss<<"Initialized Log Window"<<std::endl;
-    //AScene.SetOutputStream(&oss);
+    // oss<<"Initialized Log Window"<<std::endl;
+    // AScene.SetOutputStream(&oss);
 
-    assert(argc>=3);
-    if (argc<3)
+    assert(argc >= 3);
+    if (argc < 3)
     {
-        std::cout<<"ERROR need mesh and field file"<<std::endl;
+        std::cout << "ERROR need mesh and field file" << std::endl;
         exit(0);
     }
 
-    PathMesh=std::string(argv[1]);
+    PathMesh = std::string(argv[1]);
     LoadMesh(PathMesh);
-    ProjectName=RemoveExtension(PathMesh);
-    PathField=std::string(argv[2]);
+    ProjectName = RemoveExtension(PathMesh);
+    PathField = std::string(argv[2]);
     LoadField(PathField);
-    
+
     InitGLFW_Window();
 
     InitIMGui();
 
-    trackball.center=Geo::Point3<float>(0, 0, 0);
-    trackball.radius= 1;
+    trackball.center = Geo::Point3<float>(0, 0, 0);
+    trackball.radius = 1;
 
     glewInit();
     // Main loop
@@ -1118,24 +1194,24 @@ int main(int argc, char *argv[])
         ImGui_ImplOpenGL2_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        //ImGui::SetNextWindowPos(ImVec2(20, 20));
+        // ImGui::SetNextWindowPos(ImVec2(20, 20));
         SetDecomposeBar();
         int windowWidth, windowHeight;
         glfwGetWindowSize(window, &windowWidth, &windowHeight);
-        //ImGui::SetNextWindowPos(ImVec2(windowWidth-200, 20));
+        // ImGui::SetNextWindowPos(ImVec2(windowWidth-200, 20));
         SetRenderBar();
-        //ImGui::Render();
+        // ImGui::Render();
 
         glfwGetWindowSize(window, &windowWidth, &windowHeight);
-        //ImGui::SetNextWindowPos(ImVec2(windowWidth-400, windowHeight-200));
+        // ImGui::SetNextWindowPos(ImVec2(windowWidth-400, windowHeight-200));
         SetExportBar();
 
         ImGui::Render();
 
         GLDrawMesh();
 
-        //GLDraw::DrawVertices(VertPos,SampledVert);
-        
+        // GLDraw::DrawVertices(VertPos,SampledVert);
+
         // If you are using this code with non-legacy OpenGL header/contexts (which you should not, prefer using imgui_impl_opengl3.cpp!!),
         // you may need to backup/reset/restore other state, e.g. for current shader using the commented lines below.
         ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
