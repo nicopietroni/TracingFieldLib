@@ -56,12 +56,14 @@ public:
         {
             int IndexN0=PathN[i];
             int IndexN1=PathN[(i+1)];
-
+           
             //add the first one
             NewPath.push_back(IndexN0);
 
             if (TGraph.IsDirectPairE(IndexN0,IndexN1))continue;
             std::vector<int> DirectPath;
+            assert(TGraph.IsEnabled(IndexN0));
+            assert(TGraph.IsEnabled(IndexN1));
             bool connected=ConnectDirect(TGraph,IndexN0,IndexN1,DirectPath);
             if (!connected)return false;
 

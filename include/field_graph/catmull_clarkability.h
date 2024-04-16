@@ -107,8 +107,8 @@ bool IsCatmullClarkable(const std::vector<ScalarType> &EdgeL,
 
     CC+=SideThr;
 
-    if (print_debug)
-    {
+    // if (print_debug)
+    // {
         std::cout<<"CC Computation "<<CC<<std::endl;
         std::cout<<"Side "<<EdgeL.size()<<std::endl;
         for (size_t i=0;i<EdgeL.size();i++)
@@ -117,7 +117,7 @@ bool IsCatmullClarkable(const std::vector<ScalarType> &EdgeL,
 
         std::cout<<"SideThr: "<<SideThr<<std::endl;
         std::cout<<"CC: "<<CC<<std::endl;
-    }
+//    }
     //CC=std::max(CC,(ScalarType)0);
     //    if ((EdgeL.size()==4)&&(CC>Ratio4))
     //        return true;

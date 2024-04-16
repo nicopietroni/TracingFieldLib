@@ -17,7 +17,7 @@
 namespace  Geo{
 
 enum NType{
-    ExitDomain, TangentDomain, Internal
+    ExitDomain, TangentDomain, TangentExitDomain,ConvexExitDomain,Internal
 };
 
 enum GraphType
@@ -218,6 +218,7 @@ public:
         N.resize(NumNodes);
         NT.clear();
         NT.resize(NumNodes,Internal);
+        //NT.resize(NumNodes,std::vector(1,Internal));
         EnabledN.clear();
         EnabledN.resize(NumNodes,true);
     }

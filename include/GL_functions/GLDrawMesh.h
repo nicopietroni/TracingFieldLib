@@ -10,552 +10,558 @@
 namespace GLDraw
 {
 
-enum TypeRendMesh{TRTriangle,TrQuad,TrPolygon};
-
-//template <class ScalarType>
-//void DrawPoints(const std::vector< Geo::Point3<ScalarType> > &VertPos)
-//{
-//    glPushAttrib(GL_ALL_ATTRIB_BITS);
-//    glDepthRange(0.0,0.9999);
-//    glDisable(GL_LIGHTING);
-//    glPointSize(30);
-//    glColor4f(1.f,0.f,1.f,1.f);
-//    glBegin(GL_POINTS);
-//    for (size_t i=0;i<VertPos.size();i++)
-//    {
-//        Geo::Point3<ScalarType> Pos=VertPos[i];
-//        glVertex(Pos);
-//    }
-//    glEnd();
-//    glDepthRange(0.0,1.0);
-//    glPopAttrib();
-//}
-
-
-template <class ScalarType>
-void DrawPoints(const std::vector<Geo::Point3<ScalarType> > &Samples,
-                Geo::Point3<ScalarType> pointCol=Geo::Point3<ScalarType>(1,0,1),
-                int size=20)
-{
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-
-    glDisable(GL_LIGHTING);
-    glDepthRange(0.0,0.9999);
-
-    glPointSize(30);
-
-    glBegin(GL_POINTS);
-    for (size_t i=0;i<Samples.size();i++)
+    enum TypeRendMesh
     {
-        Geo::Point3<ScalarType> CurrPos=Samples[i];
+        TRTriangle,
+        TrQuad,
+        TrPolygon
+    };
 
-        glColor3f((float)pointCol.X,(float)pointCol.Y,(float)pointCol.Z);
-        glVertex(CurrPos);
-    }
-    glEnd();
-    glDepthRange(0.0,1.0);
-    glPopAttrib();
-}
+    // template <class ScalarType>
+    // void DrawPoints(const std::vector< Geo::Point3<ScalarType> > &VertPos)
+    //{
+    //     glPushAttrib(GL_ALL_ATTRIB_BITS);
+    //     glDepthRange(0.0,0.9999);
+    //     glDisable(GL_LIGHTING);
+    //     glPointSize(30);
+    //     glColor4f(1.f,0.f,1.f,1.f);
+    //     glBegin(GL_POINTS);
+    //     for (size_t i=0;i<VertPos.size();i++)
+    //     {
+    //         Geo::Point3<ScalarType> Pos=VertPos[i];
+    //         glVertex(Pos);
+    //     }
+    //     glEnd();
+    //     glDepthRange(0.0,1.0);
+    //     glPopAttrib();
+    // }
 
-
-template <class ScalarType>
-void DrawPoints(const std::vector<Geo::Point2<ScalarType> > &Samples,
-                Geo::Point3<ScalarType> pointCol=Geo::Point3<ScalarType>(1,0,1),
-                int size=20)
-{
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-
-    glDisable(GL_LIGHTING);
-    glDepthRange(0.0,0.9999);
-
-    glPointSize(30);
-
-    glBegin(GL_POINTS);
-    for (size_t i=0;i<Samples.size();i++)
+    template <class ScalarType>
+    void DrawPoints(const std::vector<Geo::Point3<ScalarType>> &Samples,
+                    Geo::Point3<ScalarType> pointCol = Geo::Point3<ScalarType>(1, 0, 1),
+                    int size = 20)
     {
-        Geo::Point2<ScalarType> CurrPos=Samples[i];
 
-        glColor3f((float)pointCol.X,(float)pointCol.Y,(float)pointCol.Z);
-        glVertex(CurrPos);
-    }
-    glEnd();
-    glDepthRange(0.0,1.0);
-    glPopAttrib();
-}
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
 
-template <class ScalarType>
-void DrawVertices(std::vector< Geo::Point3<ScalarType> > &VertPos,
-                  const std::vector<int> &To_Draw)
-{
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glDepthRange(0.0,0.9999);
-    glDisable(GL_LIGHTING);
-    glPointSize(30);
-    glColor4f(1.f,0.f,1.f,1.f);
-    glBegin(GL_POINTS);
-    for (size_t j=0;j<To_Draw.size();j++)
-    {
-        int IndexV=To_Draw[j];
-        assert(IndexV>=0);
-        assert(IndexV<VertPos.size());
-        Geo::Point3<ScalarType> Pos=VertPos[IndexV];
-        glVertex(Pos);
-    }
-    glEnd();
-    glDepthRange(0.0,1.0);
-    glPopAttrib();
-}
+        glDisable(GL_LIGHTING);
+        glDepthRange(0.0, 0.9999);
 
+        glPointSize(30);
 
-template <class ScalarType>
-void DrawVertices(std::vector< Geo::Point3<ScalarType> > &VertPos,
-                  const std::vector<size_t> &To_Draw)
-{
-    std::vector<int> To_DrawInt;
-    for (size_t j=0;j<To_Draw.size();j++)
-        To_DrawInt.push_back(To_Draw[j]);
-
-    DrawVertices(VertPos,To_DrawInt);
-}
-
-template <class ScalarType>
-void DrawSurfaceFill3D(const std::vector< Geo::Point3<ScalarType> > &VertPos,
-                       const std::vector<std::vector<int> > &Connectivity,
-                       const std::vector<Geo::Point3<ScalarType> > &FaceNormal,
-                       const std::vector<Geo::Point3<ScalarType> > &VertNormal,
-                       bool SmoothShade,TypeRendMesh TRM=TRTriangle,
-                       std::vector<Geo::Point3<ScalarType>> *FaceCol=NULL,
-                       bool use_blend=false)
-{
-    assert(Connectivity.size()==FaceNormal.size());
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-    for (size_t i=0;i<Connectivity.size();i++)
-    {
-        if (FaceCol!=NULL)
+        glBegin(GL_POINTS);
+        for (size_t i = 0; i < Samples.size(); i++)
         {
-            if (use_blend)
-                glColorAlpha((*FaceCol)[i],0.5);
-            else
-                glColor((*FaceCol)[i]);
+            Geo::Point3<ScalarType> CurrPos = Samples[i];
+
+            glColor3f((float)pointCol.X, (float)pointCol.Y, (float)pointCol.Z);
+            glVertex(CurrPos);
         }
-        if (TRM==TRTriangle)
-            glBegin(GL_TRIANGLES);
-        if (TRM==TrQuad)
-            glBegin(GL_QUADS);
-        if (TRM==TrQuad)
-            glBegin(GL_POLYGON);
+        glEnd();
+        glDepthRange(0.0, 1.0);
+        glPopAttrib();
+    }
 
-        if (!SmoothShade)
-            glNormal(FaceNormal[i]);
+    template <class ScalarType>
+    void DrawPoints(const std::vector<Geo::Point2<ScalarType>> &Samples,
+                    Geo::Point3<ScalarType> pointCol = Geo::Point3<ScalarType>(1, 0, 1),
+                    int size = 20)
+    {
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
 
-        for (size_t j=0;j<Connectivity[i].size();j++)
+        glDisable(GL_LIGHTING);
+        glDepthRange(0.0, 0.9999);
+
+        glPointSize(30);
+
+        glBegin(GL_POINTS);
+        for (size_t i = 0; i < Samples.size(); i++)
         {
-            int IndexV=Connectivity[i][j];
-            assert(IndexV>=0);
-            assert(IndexV<(int)VertPos.size());
+            Geo::Point2<ScalarType> CurrPos = Samples[i];
 
-            if (SmoothShade)
-                glNormal(VertNormal[IndexV]);
+            glColor3f((float)pointCol.X, (float)pointCol.Y, (float)pointCol.Z);
+            glVertex(CurrPos);
+        }
+        glEnd();
+        glDepthRange(0.0, 1.0);
+        glPopAttrib();
+    }
 
-            Geo::Point3<ScalarType> Pos=VertPos[IndexV];
+    template <class ScalarType>
+    void DrawVertices(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                      const std::vector<int> &To_Draw)
+    {
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        glDepthRange(0.0, 0.9999);
+        glDisable(GL_LIGHTING);
+        glPointSize(30);
+        glColor4f(1.f, 0.f, 1.f, 1.f);
+        glBegin(GL_POINTS);
+        for (size_t j = 0; j < To_Draw.size(); j++)
+        {
+            int IndexV = To_Draw[j];
+            assert(IndexV >= 0);
+            assert(IndexV < VertPos.size());
+            Geo::Point3<ScalarType> Pos = VertPos[IndexV];
             glVertex(Pos);
         }
         glEnd();
+        glDepthRange(0.0, 1.0);
+        glPopAttrib();
     }
-}
 
-
-template <class ScalarType>
-void DrawSurfaceFillUV(std::vector< Geo::Point2<ScalarType> > &VertPos,
-                       std::vector<std::vector<int> > &Connectivity,
-                       TypeRendMesh TRM=TRTriangle,
-                       std::vector<Geo::Point3<ScalarType>> *FaceCol=NULL)
-{
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-    for (size_t i=0;i<Connectivity.size();i++)
+    template <class ScalarType>
+    void DrawVertices(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                      const std::vector<size_t> &To_Draw)
     {
-        if (FaceCol!=NULL)
-            glColor((*FaceCol)[i]);
+        std::vector<int> To_DrawInt;
+        for (size_t j = 0; j < To_Draw.size(); j++)
+            To_DrawInt.push_back(To_Draw[j]);
 
-        if (TRM==TRTriangle)
-            glBegin(GL_TRIANGLES);
-        if (TRM==TrQuad)
-            glBegin(GL_QUADS);
-        if (TRM==TrQuad)
-            glBegin(GL_POLYGON);
+        DrawVertices(VertPos, To_DrawInt);
+    }
 
-        glNormal(Geo::Point3<float>(0,0,1.f));
-
-        for (size_t j=0;j<Connectivity[i].size();j++)
+    template <class ScalarType>
+    void DrawVertices(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                      const std::vector<bool> &To_Draw)
+    {
+        assert(To_Draw.size() == VertPos.size());
+        std::vector<int> To_DrawInt;
+        for (size_t j = 0; j < To_Draw.size(); j++)
         {
-            int IndexV=Connectivity[i][j];
-            assert(IndexV>=0);
-            assert(IndexV<(int)VertPos.size());
-
-            Geo::Point2<ScalarType> Pos=VertPos[IndexV];
-            glVertex(Pos);
+            if (!To_Draw[j])
+                continue;
+            To_DrawInt.push_back(j);
         }
-        glEnd();
+        DrawVertices(VertPos, To_DrawInt);
     }
-}
 
-template <class CoordType>
-void DrawSurfaceWire(const std::vector< CoordType > &VertPos,
-                     const std::vector<std::vector<int> > &Connectivity)
-{
-    glDisable(GL_LIGHTING);
-    for (size_t i=0;i<Connectivity.size();i++)
+    template <class ScalarType>
+    void DrawSurfaceFill3D(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                           const std::vector<std::vector<int>> &Connectivity,
+                           const std::vector<Geo::Point3<ScalarType>> &FaceNormal,
+                           const std::vector<Geo::Point3<ScalarType>> &VertNormal,
+                           bool SmoothShade, TypeRendMesh TRM = TRTriangle,
+                           std::vector<Geo::Point3<ScalarType>> *FaceCol = NULL,
+                           bool use_blend = false)
     {
-        glBegin(GL_LINE_LOOP);
-        for (size_t j=0;j<Connectivity[i].size();j++)
+        assert(Connectivity.size() == FaceNormal.size());
+        glEnable(GL_LIGHTING);
+        glEnable(GL_LIGHT0);
+        for (size_t i = 0; i < Connectivity.size(); i++)
         {
-            int IndexV=Connectivity[i][j];
-            assert(IndexV>=0);
-            assert(IndexV<(int)VertPos.size());
-            CoordType Pos=VertPos[IndexV];
-            glVertex(Pos);
-        }
-        glEnd();
-    }
-}
-
-
-template <class ScalarType>
-void GLDrawEdges(const std::vector<Geo::Point3<ScalarType> > &Pos,
-                 const std::vector<std::pair<int,int> > &Edges,
-                 const ScalarType LineWidth,
-                 const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0))
-{
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glDepthRange(0.0,0.9999);
-    glEnable(GL_COLOR_MATERIAL);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_BLEND);
-
-
-    glColor(colorLine);
-    glLineWidth (LineWidth);
-
-    glBegin (GL_LINES);
-
-    for (size_t i=0;i<Edges.size();i++)
-    {
-        int VIdx0=Edges[i].first;
-        int VIdx1=Edges[i].second;
-        assert(VIdx0>=0);
-        assert(VIdx1>=0);
-        assert(VIdx0<(int)Pos.size());
-        assert(VIdx1<(int)Pos.size());
-        Geo::Point3<ScalarType> Pos0=Pos[VIdx0];
-        Geo::Point3<ScalarType> Pos1=Pos[VIdx1];
-        glVertex(Pos0);
-        glVertex(Pos1);
-    }
-    glEnd ();
-
-    glPopAttrib();
-}
-
-template <class ScalarType>
-void GLDrawEdges(const std::vector<Geo::Point3<ScalarType> > &Pos,
-                 const std::vector<std::pair<int,int> > &Edges,
-                 const ScalarType LineWidth,
-                 const std::vector<Geo::Point3<ScalarType> >  &colorEdges)
-{
-    assert(colorEdges.size()==Edges.size());
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glDepthRange(0.0,0.9999);
-    glEnable(GL_COLOR_MATERIAL);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_BLEND);
-
-
-    glLineWidth (LineWidth);
-
-    glBegin (GL_LINES);
-
-    for (size_t i=0;i<Edges.size();i++)
-    {
-        glColor(colorEdges[i]);
-
-        int VIdx0=Edges[i].first;
-        int VIdx1=Edges[i].second;
-        assert(VIdx0>=0);
-        assert(VIdx1>=0);
-        assert(VIdx0<(int)Pos.size());
-        assert(VIdx1<(int)Pos.size());
-        Geo::Point3<ScalarType> Pos0=Pos[VIdx0];
-        Geo::Point3<ScalarType> Pos1=Pos[VIdx1];
-        glVertex(Pos0);
-        glVertex(Pos1);
-    }
-    glEnd ();
-
-    glPopAttrib();
-}
-
-////template <class ScalarType>
-//void GLDrawEdges2(const std::vector<std::vector<float> >  &Pos,
-//                  const std::vector<std::pair<int,int> > &Edges,
-//                  const float LineWidth,
-//                  std::vector<float> colorLine)
-//{
-
-//    glPushAttrib(GL_ALL_ATTRIB_BITS);
-//    glDepthRange(0.0,0.9999);
-//    glEnable(GL_COLOR_MATERIAL);
-//    glDisable(GL_LIGHTING);
-//    glDisable(GL_BLEND);
-
-
-//    assert(colorLine.size()==3);
-//    glColor3f(colorLine[0],colorLine[1],colorLine[2]);
-
-//    glLineWidth(LineWidth);
-
-//    glBegin (GL_LINES);
-
-//    for (size_t i=0;i<Edges.size();i++)
-//    {
-//        int VIdx0=Edges[i].first;
-//        int VIdx1=Edges[i].second;
-//        assert(VIdx0>=0);
-//        assert(VIdx1>=0);
-//        assert(VIdx0<(int)Pos.size());
-//        assert(VIdx1<(int)Pos.size());
-//        //should have x y and z
-//        assert(Pos[VIdx0].size()==3);
-//        assert(Pos[VIdx1].size()==3);
-
-//        glVertex3f(Pos[VIdx0][0],Pos[VIdx0][1],Pos[VIdx0][2]);
-//        glVertex3f(Pos[VIdx1][0],Pos[VIdx1][1],Pos[VIdx1][2]);
-//    }
-
-//    glEnd ();
-
-//    glPopAttrib();
-//}
-
-
-//template <class ScalarType>
-//void GLDrawEdges(const std::vector<Geo::Point3<ScalarType> > &Pos,
-//                 const std::vector<std::pair<int,int> > &Edges,
-//                 const ScalarType LineWidth,
-//                 const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0))
-//{
-//    std::vector<std::vector<float> >  Posf(Pos.size());
-//    for (size_t i=0;i<Pos.size();i++)
-//    {
-//        Posf[i].push_back((float)Pos[i].X);
-//        Posf[i].push_back((float)Pos[i].Y);
-//        Posf[i].push_back((float)Pos[i].Z);
-//    }
-//    std::vector<float> colorLineV;
-//    colorLineV.push_back(colorLine.X);
-//    colorLineV.push_back(colorLine.Y);
-//    colorLineV.push_back(colorLine.Z);
-
-//    GLDrawEdges2(Posf,Edges,(float)LineWidth,colorLineV);
-//}
-
-template <class ScalarType>
-void GLDrawEdges(const std::vector<Geo::Point2<ScalarType> > &Pos,
-                 const std::vector<std::pair<int,int> > &Edges,
-                 const ScalarType LineWidth,
-                 const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0))
-{
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glDepthRange(0.0,0.9999);
-    glEnable(GL_COLOR_MATERIAL);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_BLEND);
-
-
-    glColor(colorLine);
-    glLineWidth (LineWidth);
-
-    glBegin (GL_LINES);
-
-    for (size_t i=0;i<Edges.size();i++)
-    {
-        int VIdx0=Edges[i].first;
-        int VIdx1=Edges[i].second;
-        assert(VIdx0>=0);
-        assert(VIdx1>=0);
-        assert(VIdx0<(int)Pos.size());
-        assert(VIdx1<(int)Pos.size());
-        Geo::Point2<ScalarType> Pos0=Pos[VIdx0];
-        Geo::Point2<ScalarType> Pos1=Pos[VIdx1];
-        glVertex(Pos0);
-        glVertex(Pos1);
-    }
-    glEnd ();
-
-    glPopAttrib();
-}
-
-
-template <class ScalarType>
-void GLDrawBorders(const std::vector<Geo::Point3<ScalarType> > &Pos,
-                   const std::vector<std::vector<int> > &Connectivity,
-                   const std::vector<std::vector<int> > &NextF,
-                   const ScalarType LineWidth,
-                   const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0))
-{
-    std::vector<std::pair<int,int> > BorderE;
-    Geo::getBorderEdges(Connectivity,NextF,BorderE);
-    GLDrawEdges<ScalarType>(Pos,BorderE,LineWidth,colorLine);
-}
-
-template <class ScalarType>
-void GLDrawBorders(const std::vector<Geo::Point2<ScalarType> > &Pos,
-                   const std::vector<std::vector<int> > &Connectivity,
-                   const std::vector<std::vector<int> > &NextF,
-                   const ScalarType LineWidth,
-                   const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0))
-{
-    std::vector<std::pair<int,int> > BorderE;
-    Geo::getBorderEdges(Connectivity,NextF,BorderE);
-    GLDrawEdges<ScalarType>(Pos,BorderE,LineWidth,colorLine);
-}
-
-template <class ScalarType>
-void DrawSurfaceMesh(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                     const std::vector<std::vector<int> > &Connectivity,
-                     const std::vector<Geo::Point3<ScalarType> > &FaceNormal,
-                     const std::vector<Geo::Point3<ScalarType> > &VertNormal,
-                     bool drawsurface=true, bool drawire=false,
-                     bool smoothShade=true,bool use_blend=true,
-                     TypeRendMesh TRM=TRTriangle,
-                     std::vector<Geo::Point3<ScalarType> > *FaceCol=NULL)
-{
-    typedef typename Geo::Point3<ScalarType> CoordType;
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS );
-
-    if (use_blend)
-    {
-        glDisable(GL_CULL_FACE);
-        glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-        glEnable(GL_BLEND);                //activate blending mode
-        glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA);
-    }
-    glEnable(GL_POLYGON_OFFSET_FILL);
-    glPolygonOffset(1.0, 1);
-
-    if (drawsurface)
-        DrawSurfaceFill3D<ScalarType>(VertPos,Connectivity,FaceNormal,
-                                      VertNormal,smoothShade,TRM,FaceCol,
-                                      use_blend);
-
-
-    glDisable(GL_POLYGON_OFFSET_FILL);
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK,GL_AMBIENT_AND_DIFFUSE);
-
-    if (drawire)
-    {
-        glColor4f(.3f,.3f,.3f,.3f);
-        DrawSurfaceWire<CoordType>(VertPos,Connectivity);
-    }
-    glPopAttrib();
-}
-
-template <class ScalarType>
-void DrawUVMesh(std::vector<Geo::Point2<ScalarType> > &UVPos,
-                std::vector<std::vector<int> > &Connectivity,
-                bool drawire=false,bool drawfill=true,
-                TypeRendMesh TRM=TRTriangle,
-                std::vector<Geo::Point3<ScalarType> > *FaceCol=NULL)
-{
-    typedef typename Geo::Point2<ScalarType> CoordType;
-    //typedef typename Geo::Point3<ScalarType> ColorType;
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS );
-
-    glEnable(GL_POLYGON_OFFSET_FILL);
-    glPolygonOffset(1.0, 1);
-
-    if (drawfill)
-        DrawSurfaceFillUV<ScalarType>(UVPos,Connectivity,TRM,FaceCol);
-
-    glDisable(GL_POLYGON_OFFSET_FILL);
-    glEnable(GL_COLOR_MATERIAL);
-    glColorMaterial(GL_FRONT_AND_BACK,GL_AMBIENT_AND_DIFFUSE);
-
-    if (drawire)
-    {
-        glColor4f(.3f,.3f,.3f,.3f);
-        DrawSurfaceWire<CoordType>(UVPos,Connectivity);
-    }
-    glPopAttrib();
-}
-
-//template <class ScalarType>
-//void DrawPolylines(const std::vector<std::vector<Geo::Point3<ScalarType> > > &PolyLines,
-//                   const std::vector<Geo::Point3<ScalarType> > &PolyColor)
-//{
-
-//    glPushAttrib(GL_ALL_ATTRIB_BITS);
-
-//    glDisable(GL_LIGHTING);
-
-//    glLineWidth(10);
-//    //glColor3f((float)polyLCol.X,(float)polyLCol.Y,(float)polyLCol.Z);
-//    assert(PolyColor.size()==PolyLines.size());
-//    for (size_t i=0;i<PolyLines.size();i++)
-//    {
-//        glColor3f((float)PolyColor[i].X,(float)PolyColor[i].Y,(float)PolyColor[i].Z);
-//        glBegin(GL_LINE_STRIP);
-//        for (size_t j=0;j<PolyLines[i].size();j++)
-//        {
-//            Geo::Point3<ScalarType> CurrPos=PolyLines[i][j];
-//            //glColor3f((float)polyLCol.X,(float)polyLCol.Y,(float)polyLCol.Z);
-//            glVertex(CurrPos);
-//        }
-//        glEnd();
-//    }
-//    glPopAttrib();
-//}
-
-template <class ScalarType>
-void GLDrawTetras(const std::vector<std::vector<int> > &TetConnectivity,
-                  const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                  const std::vector<int> &TetraToDraw,
-                  const Geo::Point3<ScalarType> &TetColor)
-{
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-
-    glDisable(GL_LIGHTING);
-
-    glLineWidth(10);
-
-    glColor3f((float)TetColor.X,(float)TetColor.Y,(float)TetColor.Z);
-    for (size_t i=0;i<TetraToDraw.size();i++)
-    {
-        size_t IndexT=TetraToDraw[i];
-        glBegin(GL_LINES);
-        for (size_t j=0;j<TetConnectivity[IndexT].size()-1;j++)
-            for (size_t k=(j+1);k<TetConnectivity[IndexT].size();k++)
+            if (FaceCol != NULL)
             {
-                Geo::Point3<ScalarType> Pos0=VertPos[TetConnectivity[IndexT][j]];
-                Geo::Point3<ScalarType> Pos1=VertPos[TetConnectivity[IndexT][k]];
-                glVertex(Pos0);
-                glVertex(Pos1);
+                if (use_blend)
+                    glColorAlpha((*FaceCol)[i], 0.5);
+                else
+                    glColor((*FaceCol)[i]);
             }
+            if (TRM == TRTriangle)
+                glBegin(GL_TRIANGLES);
+            if (TRM == TrQuad)
+                glBegin(GL_QUADS);
+            if (TRM == TrQuad)
+                glBegin(GL_POLYGON);
+
+            if (!SmoothShade)
+                glNormal(FaceNormal[i]);
+
+            for (size_t j = 0; j < Connectivity[i].size(); j++)
+            {
+                int IndexV = Connectivity[i][j];
+                assert(IndexV >= 0);
+                assert(IndexV < (int)VertPos.size());
+
+                if (SmoothShade)
+                    glNormal(VertNormal[IndexV]);
+
+                Geo::Point3<ScalarType> Pos = VertPos[IndexV];
+                glVertex(Pos);
+            }
+            glEnd();
+        }
     }
-    glEnd();
-    glPopAttrib();
-}
+
+    template <class ScalarType>
+    void DrawSurfaceFillUV(std::vector<Geo::Point2<ScalarType>> &VertPos,
+                           std::vector<std::vector<int>> &Connectivity,
+                           TypeRendMesh TRM = TRTriangle,
+                           std::vector<Geo::Point3<ScalarType>> *FaceCol = NULL)
+    {
+        glEnable(GL_LIGHTING);
+        glEnable(GL_LIGHT0);
+        for (size_t i = 0; i < Connectivity.size(); i++)
+        {
+            if (FaceCol != NULL)
+                glColor((*FaceCol)[i]);
+
+            if (TRM == TRTriangle)
+                glBegin(GL_TRIANGLES);
+            if (TRM == TrQuad)
+                glBegin(GL_QUADS);
+            if (TRM == TrQuad)
+                glBegin(GL_POLYGON);
+
+            glNormal(Geo::Point3<float>(0, 0, 1.f));
+
+            for (size_t j = 0; j < Connectivity[i].size(); j++)
+            {
+                int IndexV = Connectivity[i][j];
+                assert(IndexV >= 0);
+                assert(IndexV < (int)VertPos.size());
+
+                Geo::Point2<ScalarType> Pos = VertPos[IndexV];
+                glVertex(Pos);
+            }
+            glEnd();
+        }
+    }
+
+    template <class CoordType>
+    void DrawSurfaceWire(const std::vector<CoordType> &VertPos,
+                         const std::vector<std::vector<int>> &Connectivity)
+    {
+        glDisable(GL_LIGHTING);
+        for (size_t i = 0; i < Connectivity.size(); i++)
+        {
+            glBegin(GL_LINE_LOOP);
+            for (size_t j = 0; j < Connectivity[i].size(); j++)
+            {
+                int IndexV = Connectivity[i][j];
+                assert(IndexV >= 0);
+                assert(IndexV < (int)VertPos.size());
+                CoordType Pos = VertPos[IndexV];
+                glVertex(Pos);
+            }
+            glEnd();
+        }
+    }
+
+    template <class ScalarType>
+    void GLDrawEdges(const std::vector<Geo::Point3<ScalarType>> &Pos,
+                     const std::vector<std::pair<int, int>> &Edges,
+                     const ScalarType LineWidth,
+                     const Geo::Point3<ScalarType> colorLine = Geo::Point3<ScalarType>(0, 0, 0))
+    {
+
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        glDepthRange(0.0, 0.9999);
+        glEnable(GL_COLOR_MATERIAL);
+        glDisable(GL_LIGHTING);
+        glDisable(GL_BLEND);
+
+        glColor(colorLine);
+        glLineWidth(LineWidth);
+
+        glBegin(GL_LINES);
+
+        for (size_t i = 0; i < Edges.size(); i++)
+        {
+            int VIdx0 = Edges[i].first;
+            int VIdx1 = Edges[i].second;
+            assert(VIdx0 >= 0);
+            assert(VIdx1 >= 0);
+            assert(VIdx0 < (int)Pos.size());
+            assert(VIdx1 < (int)Pos.size());
+            Geo::Point3<ScalarType> Pos0 = Pos[VIdx0];
+            Geo::Point3<ScalarType> Pos1 = Pos[VIdx1];
+            glVertex(Pos0);
+            glVertex(Pos1);
+        }
+        glEnd();
+
+        glPopAttrib();
+    }
+
+    template <class ScalarType>
+    void GLDrawEdges(const std::vector<Geo::Point3<ScalarType>> &Pos,
+                     const std::vector<std::pair<int, int>> &Edges,
+                     const ScalarType LineWidth,
+                     const std::vector<Geo::Point3<ScalarType>> &colorEdges)
+    {
+        assert(colorEdges.size() == Edges.size());
+
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        glDepthRange(0.0, 0.9999);
+        glEnable(GL_COLOR_MATERIAL);
+        glDisable(GL_LIGHTING);
+        glDisable(GL_BLEND);
+
+        glLineWidth(LineWidth);
+
+        glBegin(GL_LINES);
+
+        for (size_t i = 0; i < Edges.size(); i++)
+        {
+            glColor(colorEdges[i]);
+
+            int VIdx0 = Edges[i].first;
+            int VIdx1 = Edges[i].second;
+            assert(VIdx0 >= 0);
+            assert(VIdx1 >= 0);
+            assert(VIdx0 < (int)Pos.size());
+            assert(VIdx1 < (int)Pos.size());
+            Geo::Point3<ScalarType> Pos0 = Pos[VIdx0];
+            Geo::Point3<ScalarType> Pos1 = Pos[VIdx1];
+            glVertex(Pos0);
+            glVertex(Pos1);
+        }
+        glEnd();
+
+        glPopAttrib();
+    }
+
+    ////template <class ScalarType>
+    // void GLDrawEdges2(const std::vector<std::vector<float> >  &Pos,
+    //                   const std::vector<std::pair<int,int> > &Edges,
+    //                   const float LineWidth,
+    //                   std::vector<float> colorLine)
+    //{
+
+    //    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    //    glDepthRange(0.0,0.9999);
+    //    glEnable(GL_COLOR_MATERIAL);
+    //    glDisable(GL_LIGHTING);
+    //    glDisable(GL_BLEND);
+
+    //    assert(colorLine.size()==3);
+    //    glColor3f(colorLine[0],colorLine[1],colorLine[2]);
+
+    //    glLineWidth(LineWidth);
+
+    //    glBegin (GL_LINES);
+
+    //    for (size_t i=0;i<Edges.size();i++)
+    //    {
+    //        int VIdx0=Edges[i].first;
+    //        int VIdx1=Edges[i].second;
+    //        assert(VIdx0>=0);
+    //        assert(VIdx1>=0);
+    //        assert(VIdx0<(int)Pos.size());
+    //        assert(VIdx1<(int)Pos.size());
+    //        //should have x y and z
+    //        assert(Pos[VIdx0].size()==3);
+    //        assert(Pos[VIdx1].size()==3);
+
+    //        glVertex3f(Pos[VIdx0][0],Pos[VIdx0][1],Pos[VIdx0][2]);
+    //        glVertex3f(Pos[VIdx1][0],Pos[VIdx1][1],Pos[VIdx1][2]);
+    //    }
+
+    //    glEnd ();
+
+    //    glPopAttrib();
+    //}
+
+    // template <class ScalarType>
+    // void GLDrawEdges(const std::vector<Geo::Point3<ScalarType> > &Pos,
+    //                  const std::vector<std::pair<int,int> > &Edges,
+    //                  const ScalarType LineWidth,
+    //                  const Geo::Point3<ScalarType> colorLine=Geo::Point3<ScalarType>(0,0,0))
+    //{
+    //     std::vector<std::vector<float> >  Posf(Pos.size());
+    //     for (size_t i=0;i<Pos.size();i++)
+    //     {
+    //         Posf[i].push_back((float)Pos[i].X);
+    //         Posf[i].push_back((float)Pos[i].Y);
+    //         Posf[i].push_back((float)Pos[i].Z);
+    //     }
+    //     std::vector<float> colorLineV;
+    //     colorLineV.push_back(colorLine.X);
+    //     colorLineV.push_back(colorLine.Y);
+    //     colorLineV.push_back(colorLine.Z);
+
+    //    GLDrawEdges2(Posf,Edges,(float)LineWidth,colorLineV);
+    //}
+
+    template <class ScalarType>
+    void GLDrawEdges(const std::vector<Geo::Point2<ScalarType>> &Pos,
+                     const std::vector<std::pair<int, int>> &Edges,
+                     const ScalarType LineWidth,
+                     const Geo::Point3<ScalarType> colorLine = Geo::Point3<ScalarType>(0, 0, 0))
+    {
+
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        glDepthRange(0.0, 0.9999);
+        glEnable(GL_COLOR_MATERIAL);
+        glDisable(GL_LIGHTING);
+        glDisable(GL_BLEND);
+
+        glColor(colorLine);
+        glLineWidth(LineWidth);
+
+        glBegin(GL_LINES);
+
+        for (size_t i = 0; i < Edges.size(); i++)
+        {
+            int VIdx0 = Edges[i].first;
+            int VIdx1 = Edges[i].second;
+            assert(VIdx0 >= 0);
+            assert(VIdx1 >= 0);
+            assert(VIdx0 < (int)Pos.size());
+            assert(VIdx1 < (int)Pos.size());
+            Geo::Point2<ScalarType> Pos0 = Pos[VIdx0];
+            Geo::Point2<ScalarType> Pos1 = Pos[VIdx1];
+            glVertex(Pos0);
+            glVertex(Pos1);
+        }
+        glEnd();
+
+        glPopAttrib();
+    }
+
+    template <class ScalarType>
+    void GLDrawBorders(const std::vector<Geo::Point3<ScalarType>> &Pos,
+                       const std::vector<std::vector<int>> &Connectivity,
+                       const std::vector<std::vector<int>> &NextF,
+                       const ScalarType LineWidth,
+                       const Geo::Point3<ScalarType> colorLine = Geo::Point3<ScalarType>(0, 0, 0))
+    {
+        std::vector<std::pair<int, int>> BorderE;
+        Geo::getBorderEdges(Connectivity, NextF, BorderE);
+        GLDrawEdges<ScalarType>(Pos, BorderE, LineWidth, colorLine);
+    }
+
+    template <class ScalarType>
+    void GLDrawBorders(const std::vector<Geo::Point2<ScalarType>> &Pos,
+                       const std::vector<std::vector<int>> &Connectivity,
+                       const std::vector<std::vector<int>> &NextF,
+                       const ScalarType LineWidth,
+                       const Geo::Point3<ScalarType> colorLine = Geo::Point3<ScalarType>(0, 0, 0))
+    {
+        std::vector<std::pair<int, int>> BorderE;
+        Geo::getBorderEdges(Connectivity, NextF, BorderE);
+        GLDrawEdges<ScalarType>(Pos, BorderE, LineWidth, colorLine);
+    }
+
+    template <class ScalarType>
+    void DrawSurfaceMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                         const std::vector<std::vector<int>> &Connectivity,
+                         const std::vector<Geo::Point3<ScalarType>> &FaceNormal,
+                         const std::vector<Geo::Point3<ScalarType>> &VertNormal,
+                         bool drawsurface = true, bool drawire = false,
+                         bool smoothShade = true, bool use_blend = true,
+                         TypeRendMesh TRM = TRTriangle,
+                         std::vector<Geo::Point3<ScalarType>> *FaceCol = NULL)
+    {
+        typedef typename Geo::Point3<ScalarType> CoordType;
+
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+        if (use_blend)
+        {
+            glDisable(GL_CULL_FACE);
+            glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+            glEnable(GL_BLEND); // activate blending mode
+            glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA);
+        }
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(1.0, 1);
+
+        if (drawsurface)
+            DrawSurfaceFill3D<ScalarType>(VertPos, Connectivity, FaceNormal,
+                                          VertNormal, smoothShade, TRM, FaceCol,
+                                          use_blend);
+
+        glDisable(GL_POLYGON_OFFSET_FILL);
+        glEnable(GL_COLOR_MATERIAL);
+        glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+        if (drawire)
+        {
+            glColor4f(.3f, .3f, .3f, .3f);
+            DrawSurfaceWire<CoordType>(VertPos, Connectivity);
+        }
+        glPopAttrib();
+    }
+
+    template <class ScalarType>
+    void DrawUVMesh(std::vector<Geo::Point2<ScalarType>> &UVPos,
+                    std::vector<std::vector<int>> &Connectivity,
+                    bool drawire = false, bool drawfill = true,
+                    TypeRendMesh TRM = TRTriangle,
+                    std::vector<Geo::Point3<ScalarType>> *FaceCol = NULL)
+    {
+        typedef typename Geo::Point2<ScalarType> CoordType;
+        // typedef typename Geo::Point3<ScalarType> ColorType;
+
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(1.0, 1);
+
+        if (drawfill)
+            DrawSurfaceFillUV<ScalarType>(UVPos, Connectivity, TRM, FaceCol);
+
+        glDisable(GL_POLYGON_OFFSET_FILL);
+        glEnable(GL_COLOR_MATERIAL);
+        glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+        if (drawire)
+        {
+            glColor4f(.3f, .3f, .3f, .3f);
+            DrawSurfaceWire<CoordType>(UVPos, Connectivity);
+        }
+        glPopAttrib();
+    }
+
+    // template <class ScalarType>
+    // void DrawPolylines(const std::vector<std::vector<Geo::Point3<ScalarType> > > &PolyLines,
+    //                    const std::vector<Geo::Point3<ScalarType> > &PolyColor)
+    //{
+
+    //    glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+    //    glDisable(GL_LIGHTING);
+
+    //    glLineWidth(10);
+    //    //glColor3f((float)polyLCol.X,(float)polyLCol.Y,(float)polyLCol.Z);
+    //    assert(PolyColor.size()==PolyLines.size());
+    //    for (size_t i=0;i<PolyLines.size();i++)
+    //    {
+    //        glColor3f((float)PolyColor[i].X,(float)PolyColor[i].Y,(float)PolyColor[i].Z);
+    //        glBegin(GL_LINE_STRIP);
+    //        for (size_t j=0;j<PolyLines[i].size();j++)
+    //        {
+    //            Geo::Point3<ScalarType> CurrPos=PolyLines[i][j];
+    //            //glColor3f((float)polyLCol.X,(float)polyLCol.Y,(float)polyLCol.Z);
+    //            glVertex(CurrPos);
+    //        }
+    //        glEnd();
+    //    }
+    //    glPopAttrib();
+    //}
+
+    template <class ScalarType>
+    void GLDrawTetras(const std::vector<std::vector<int>> &TetConnectivity,
+                      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                      const std::vector<int> &TetraToDraw,
+                      const Geo::Point3<ScalarType> &TetColor)
+    {
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+        glDisable(GL_LIGHTING);
+
+        glLineWidth(10);
+
+        glColor3f((float)TetColor.X, (float)TetColor.Y, (float)TetColor.Z);
+        for (size_t i = 0; i < TetraToDraw.size(); i++)
+        {
+            size_t IndexT = TetraToDraw[i];
+            glBegin(GL_LINES);
+            for (size_t j = 0; j < TetConnectivity[IndexT].size() - 1; j++)
+                for (size_t k = (j + 1); k < TetConnectivity[IndexT].size(); k++)
+                {
+                    Geo::Point3<ScalarType> Pos0 = VertPos[TetConnectivity[IndexT][j]];
+                    Geo::Point3<ScalarType> Pos1 = VertPos[TetConnectivity[IndexT][k]];
+                    glVertex(Pos0);
+                    glVertex(Pos1);
+                }
+        }
+        glEnd();
+        glPopAttrib();
+    }
 
 };
-
-
 
 #endif

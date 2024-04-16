@@ -26,19 +26,25 @@ void DrawDirectionVect(const Geo::Point3<ScalarType> &P0,
     Geo::Point3<ScalarType> P_0=P0+(P_1-P0)*moveVal;
 
     glDisable(GL_LIGHTING);
-    glLineWidth(lineSize);
-    glPointSize(pointSize);
+    
+    if(pointSize>0)
+    {
+        glPointSize(pointSize);
+        glColor3f((float)Col0.X,(float)Col0.Y,(float)Col0.Z);
+        glBegin(GL_POINTS);
+        glVertex(P_0);
+        glEnd();
+    }
 
-    glColor3f((float)Col0.X,(float)Col0.Y,(float)Col0.Z);
-    glBegin(GL_POINTS);
-    glVertex(P_0);
-    glEnd();
-
-    glColor3f((float)Col1.X,(float)Col1.Y,(float)Col1.Z);
-    glBegin(GL_LINES);
-    glVertex(P_0);
-    glVertex(P_1);
-    glEnd();
+    if(lineSize>0)
+    {
+        glLineWidth(lineSize);
+        glColor3f((float)Col1.X,(float)Col1.Y,(float)Col1.Z);
+        glBegin(GL_LINES);
+        glVertex(P_0);
+        glVertex(P_1);
+        glEnd();
+    }
 }
 
 template <class ScalarType>

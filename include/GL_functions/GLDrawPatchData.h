@@ -21,7 +21,8 @@ class GLDrawPatchData
 public:
 
     static void DrawCorners(Geo::PatchManaging<ScalarType> &PM,
-                            const int &IndexPatch,const ScalarType PointSize=20)
+                            const int &IndexPatch,
+                            const ScalarType PointSize=20)
     {
         assert(IndexPatch<PM.PData.VisualCornerType.size());
         assert(PM.PData.VisualCorners[IndexPatch].size()==PM.PData.VisualCornerType[IndexPatch].size());
@@ -51,7 +52,7 @@ public:
                 ColPoints=Geo::Point3<ScalarType>(1,1,0);
                 break;
              default:
-                ColPoints=Geo::Point3<ScalarType>(0,10,0);
+                ColPoints=Geo::Point3<ScalarType>(0,1,0);
             }
 
             GLDraw::glColor(ColPoints);
@@ -64,7 +65,8 @@ public:
         glPopAttrib();
     }
 
-    static void DrawCorners(Geo::PatchManaging<ScalarType> &PM,const ScalarType PointSize=20)
+    static void DrawCorners(Geo::PatchManaging<ScalarType> &PM,
+                            const ScalarType PointSize=20)
     {
         for (size_t i=0;i<PM.PData.VisualCorners.size();i++)
             DrawCorners(PM,i,PointSize);
@@ -107,10 +109,13 @@ public:
         }
     }
 
-    static void DrawCandidates(const Geo::CrossPathSampling<ScalarType> &PathSampl,ScalarType ScaleSize)
+    static void DrawCandidates(const Geo::CrossPathSampling<ScalarType> &PathSampl,
+                                ScalarType ScaleSize,
+                                int curr_cant=-1)
     {
         for (size_t i=0;i<PathSampl.Candidates.size();i++)
         {
+            if ((curr_cant!=-1)&&(curr_cant!=i))continue;
             int IndexC=PathSampl.Candidates[i].second;
             assert(IndexC<PathSampl.SampledPaths.size());
             assert(IndexC<PathSampl.SampledPaths_Status.size());

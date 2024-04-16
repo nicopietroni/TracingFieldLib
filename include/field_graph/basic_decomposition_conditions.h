@@ -184,7 +184,7 @@ public:
 
         //if there is more than one hole return false
         //if (PatchM.PData.SideLenghts[IndexPatch].size()>1)return false;
-        if (PatchM.NumSides(IndexPatch))return false;
+        if (PatchM.NumBorders(IndexPatch)!=1)return false;
         return (IsCatmullClarkable(PatchM.PData.SideLenghts[IndexPatch][0],SideThr,true));
     }
 

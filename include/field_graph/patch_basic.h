@@ -4,7 +4,7 @@
 
 namespace Geo{
 
-    enum CornerType{CTypeFlat,CTypeConvex,CTypeSpike,CTypeConcave,CTNone};
+    enum CornerType{CTypeFlat,CTypeConvex,CTypeSpike,CTypeConcave,CTypeNone};
 
 }
 #endif

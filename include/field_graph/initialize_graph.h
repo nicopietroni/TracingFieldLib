@@ -1020,8 +1020,12 @@ namespace Geo
 
                         TGraph.NodeType(IndexN0) =TangentDomain;
                         TGraph.NodeType(IndexN1) =TangentDomain;
-                        TGraph.NodeType(IndexN2) =ExitDomain;
-                        TGraph.NodeType(IndexN3) =ExitDomain;
+                        // TGraph.NodeType(IndexN2) =TangentDomain;
+                        // TGraph.NodeType(IndexN3) =TangentDomain;
+                        // TGraph.NodeType(IndexN2) =ExitDomain;
+                        // TGraph.NodeType(IndexN3) =ExitDomain;
+                        TGraph.NodeType(IndexN2) =ConvexExitDomain;
+                        TGraph.NodeType(IndexN3) =ConvexExitDomain;
                     }
                     //in this case is dart
                     else
@@ -1031,7 +1035,9 @@ namespace Geo
                         int IndexN2 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDir0 + 2) % 4);
                         int IndexN3 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDir0 + 3) % 4);
 
-                        TGraph.NodeType(IndexN0) =TangentDomain;
+                        //TGraph.NodeType(IndexN0) =TangentDomain;
+                        TGraph.NodeType(IndexN0) =TangentExitDomain;
+                        //TGraph.NodeType(IndexN0) =ExitDomain;
                         TGraph.NodeType(IndexN1) =Internal;
                         TGraph.NodeType(IndexN2) =Internal;
                         TGraph.NodeType(IndexN3) =Internal;
@@ -1076,8 +1082,7 @@ namespace Geo
                     int IndexTang0 = Field::CrossFieldGraph::NodeOfElemDir(i, BestDir0);
                     int IndexTang1 = Field::CrossFieldGraph::NodeOfElemDir(i, BestDir1);
                    
-                    TGraph.NodeType(IndexTang0) =TangentDomain;
-                    TGraph.NodeType(IndexTang1) =TangentDomain;
+                    
 
                     int IntTest0=(BestDir0+2)%4;
                     int IntTest1=(BestDir1+2)%4;
@@ -1094,11 +1099,19 @@ namespace Geo
                     assert(IntTest1!=BestDir1);
                     if (CurrA<180)//in this case convex
                     {
-                        TGraph.NodeType(IndexTest0) =ExitDomain;
-                        TGraph.NodeType(IndexTest1) =ExitDomain;
+                        // TGraph.NodeType(IndexTest0) =ExitDomain;
+                        // TGraph.NodeType(IndexTest1) =ExitDomain;
+                        TGraph.NodeType(IndexTang0) =TangentDomain;
+                        TGraph.NodeType(IndexTang1) =TangentDomain;
+                        TGraph.NodeType(IndexTest0) =ConvexExitDomain;
+                        TGraph.NodeType(IndexTest1) =ConvexExitDomain;
                     }
                     else//in this case concave
                     {
+                        // TGraph.NodeType(IndexTang0) =ExitDomain;
+                        // TGraph.NodeType(IndexTang1) =ExitDomain;
+                        TGraph.NodeType(IndexTang0) =TangentExitDomain;
+                        TGraph.NodeType(IndexTang1) =TangentExitDomain;
                         TGraph.NodeType(IndexTest0) =Internal;
                         TGraph.NodeType(IndexTest1) =Internal;
                     }

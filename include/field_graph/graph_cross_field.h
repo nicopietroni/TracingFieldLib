@@ -59,6 +59,14 @@ static void NodesOfSameElem(int IndexN,std::vector<int> &IndexNodes)
     NodesOfElem(ElemIDX,IndexNodes);
 }
 
+// static void NodesOfElemType(int IndexN,Geo::CornerType CType,
+//                             std::vector<int> &IndexNodes,
+//                             const TGraph &CurrGraph)
+// {
+//     std::vector<int> IndexNtest;
+//     NodesOfElem(IndexN,IndexNtest);
+// }
+
 static int OppositeNodeCrossField(int IndexN)
 {
     int DirI=DirOfNode(IndexN);
