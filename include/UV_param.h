@@ -311,7 +311,8 @@ public:
     static bool TutteEmbedding(const std::vector<Geo::Point3<ScalarType> > &VertPos,
                                const std::vector<std::vector<int> > &Faces,
                                const std::vector<int> &CornerIDX,
-                               std::vector<Geo::Point2<ScalarType> > &VertUV)
+                               std::vector<Geo::Point2<ScalarType> > &VertUV,
+                               bool uniformE=false)
     {
 
         VertUV.clear();
@@ -332,8 +333,10 @@ public:
         }
         else
         {
-             Geo::UVUtils<ScalarType>::MapToAPolygon(VertPos,BorderVIdx[0],Radius,CornerIDX,vert_UV);
+            bool done_map=Geo::UVUtils<ScalarType>::MapToAPolygon(VertPos,BorderVIdx[0],Radius,CornerIDX,vert_UV,uniformE);
+            if (!done_map)return false;
         }
+
         //check if there is at least one unknown or not
         if (BorderVIdx[0].size()==VertPos.size())
         {

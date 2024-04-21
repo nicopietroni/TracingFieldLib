@@ -10,6 +10,7 @@
 #include "basic_decomposition_conditions.h"
 #include "connectivity.h"
 #include "tangent_space_smooth.h"
+#include "segment2.h"
 // #include "mesh_functions.h"
 
 namespace Geo
@@ -113,7 +114,7 @@ namespace Geo
         //         // get the nodes of the vertex
         //         std::vector<int> IndexN;
         //         Field::CrossFieldGraph::NodesOfElem(BorderUnsolved[i], IndexN);
-               
+
         //         for (size_t j = 0; j < IndexN.size(); j++)
         //         {
         //             int currN = IndexN[j];
@@ -130,6 +131,8 @@ namespace Geo
         //         }
         //     }
         // }
+
+        bool to_init_distance;
 
     public:
         bool stop_when_solved;
@@ -327,14 +330,14 @@ namespace Geo
             }
         }
 
-        void InitArrivalPoint(bool and_sample)
+        void InitArrivalPoint(bool and_allow_pass)
         {
             bool allArrival = (end_border && end_concave && end_spike);
 
             if (allArrival)
             {
-                if (and_sample)
-                    PathSampl.allow_arrive_to = PathSampl.sample_on;
+                if (and_allow_pass)
+                    PathSampl.allow_arrive_to = PathSampl.allow_path_on;
                 else
                     std::fill(PathSampl.allow_arrive_to.begin(),
                               PathSampl.allow_arrive_to.end(), true);
@@ -371,16 +374,16 @@ namespace Geo
                 assert(IndexV >= 0);
                 assert(IndexV < PatchMan.VertPos.size());
                 assert(IndexV < PathSampl.allow_arrive_to.size());
-                if (!and_sample)
+                if (!and_allow_pass)
                     PathSampl.allow_arrive_to[IndexV] = true;
                 else
                 {
                     assert(IndexV < PathSampl.allow_arrive_to.size());
-                    PathSampl.allow_arrive_to[IndexV] = PathSampl.sample_on[IndexV];
+                    PathSampl.allow_arrive_to[IndexV] = PathSampl.allow_path_on[IndexV];
                 }
             }
         }
-        
+
         void UpdateCondition(const int &IndexPatch)
         {
             for (size_t i = 0; i < PConditions.size(); i++)
@@ -465,6 +468,12 @@ namespace Geo
         //     std::cout<<"Num Concave:"<<ConcaveBorderVert.size()<<std::endl;
         //     std::cout<<"Num Dart:"<<DartBorderVert.size()<<std::endl;
         // }
+
+        void Init()
+        {
+            PathSampl.Init();
+            to_init_distance = true;
+        }
 
         void UpdateAllUnsolvedPatches()
         {
@@ -565,7 +574,7 @@ namespace Geo
             PathSampl.InitSingularityNodes(false);
 
             MarkUnsolvedPatches(true, true);
-            PathSampl.allow_path_on=PathSampl.must_pass_on;
+            PathSampl.allow_path_on = PathSampl.must_pass_on;
 
             InitSamplingSpace(true);
             InitForceSamplingSpace(false);
@@ -580,8 +589,8 @@ namespace Geo
                 PathSampl.SetBorderCanPassToExit(BorderUnsolved);
             }
 
-            PathSampl.SampleCandidates(false);
-
+            PathSampl.SampleCandidates(to_init_distance);
+            to_init_distance = false;
             if (end_border)
             {
                 PathSampl.RestoreNodeType();
@@ -1108,10 +1117,10 @@ namespace Geo
         //        return is_removable;
         //    }
 
-        bool RemoveIfPossible(int &Path_To_remove)
+        bool RemoveIfPossible(int &Path_To_remove, bool debug_msg = false)
         {
-
-            std::cout << "Checking Path:" << Path_To_remove << std::endl;
+            if (debug_msg)
+                std::cout << "Checking Path:" << Path_To_remove << std::endl;
 
             assert(Path_To_remove >= 0);
             assert(Path_To_remove < PathSampl.SelectedPaths.size());
@@ -1168,7 +1177,10 @@ namespace Geo
 
                 if (PatchMan.isEmpty(TestPatch))
                     continue;
-                PatchMan.WriteStats(TestPatch);
+
+                if (debug_msg)
+                    PatchMan.WriteStats(TestPatch);
+
                 UpdateCondition(TestPatch);
             }
 
@@ -1244,12 +1256,14 @@ namespace Geo
             time_rem4 += (std::chrono::duration_cast<std::chrono::milliseconds>(time5 - time4)).count();
 
             // Print the duration in microseconds
-            std::cout << "Time 0: " << time_rem0 << " milli microseconds" << std::endl;
-            std::cout << "Time 1: " << time_rem1 << " milli microseconds" << std::endl;
-            std::cout << "Time 2: " << time_rem2 << " milli microseconds" << std::endl;
-            std::cout << "Time 3: " << time_rem3 << " milli microseconds" << std::endl;
-            std::cout << "Time 4: " << time_rem4 << " milli microseconds" << std::endl;
-
+            if (debug_msg)
+            {
+                std::cout << "Time 0: " << time_rem0 << " milli microseconds" << std::endl;
+                std::cout << "Time 1: " << time_rem1 << " milli microseconds" << std::endl;
+                std::cout << "Time 2: " << time_rem2 << " milli microseconds" << std::endl;
+                std::cout << "Time 3: " << time_rem3 << " milli microseconds" << std::endl;
+                std::cout << "Time 4: " << time_rem4 << " milli microseconds" << std::endl;
+            }
             return is_removable;
         }
 
@@ -1288,9 +1302,6 @@ namespace Geo
 
         bool RemoveNextIfPossible()
         {
-            //        if ((current_rem_cand<0)||(current_rem_cand>PathSampl.SelectedPaths.size()))
-            //              current_rem_cand=PathSampl.SelectedPaths.size()-1;
-            //        //std::cout<<"starting:"<<current_rem_cand<<" num paths:"<<PathSampl.SelectedPaths.size()<<std::endl;
             if (current_rem_cand > PathSampl.SelectedPaths.size())
                 current_rem_cand = PathSampl.SelectedPaths.size() - 1;
 
@@ -1336,7 +1347,7 @@ namespace Geo
             // // mark the ones on border
             // PathSampl.UnMarkAll(1);
 
-            PathSampl.Init();
+            // PathSampl.Init();
 
             InitSamplingSpace(false);
             InitForceSamplingSpace(false);
@@ -1345,6 +1356,7 @@ namespace Geo
             // MarkStartSamples(0,false);
             //  PathSampl.sample_only_on[0] = true;
             PathSampl.SampleCandidates(true);
+            to_init_distance = false;
             // PathSampl.sample_only_on[0] = false;
         }
 
@@ -1378,22 +1390,63 @@ namespace Geo
             end_border = true;
             end_concave = true;
             end_spike = true;
+
+            to_init_distance = true;
         }
 
         //    std::set<int> TestedRemovedPath;
         //    std::map<int,std::vector<int> > TestedRemovedPathNeigh;
 
-        void AddAllPaths()
+        void SetFeatureFeatureConfiguration()
+        {
+            start_internal = false;
+            start_border = false;
+            start_concave = true;
+            start_spike = true;
+
+            end_border = false;
+            end_concave = true;
+            end_spike = true;
+        }
+
+        void SetFeatureAllConfiguration()
+        {
+            start_internal = false;
+            start_border = false;
+            start_concave = true;
+            start_spike = true;
+
+            end_border = true;
+            end_concave = true;
+            end_spike = true;
+        }
+
+        void SetBaseConfiguration()
+        {
+            start_internal = true;
+            start_border = true;
+            start_concave = true;
+            start_spike = true;
+
+            end_border = true;
+            end_concave = true;
+            end_spike = true;
+        }
+
+        bool AddAllPaths()
         {
             bool all_solved = false;
             bool added_sample = false;
+            bool added_once=false;
             std::cout << "ADDING PATHS" << std::endl;
             do
             {
                 AddNext(all_solved, added_sample);
+                added_once|=added_sample;
             } while ((!all_solved) && (added_sample));
 
             CompactData();
+            return(added_once);
         }
 
         void RemovePaths()
@@ -1435,22 +1488,62 @@ namespace Geo
             // PathSampl.MergeCollinearPath();
         }
 
-        void Decompose(bool Do_remove)
+        bool SolveAllFeatures()
         {
+            // SetFeatureFeatureConfiguration();
+            // RetraceOnUnsolved();
+            // AddAllPaths();
+            SetFeatureAllConfiguration();
+            RetraceOnUnsolved();
+            bool has_added=AddAllPaths();
+            SetBaseConfiguration();
+            return has_added;
+        }
 
-            AddAllPaths();
+        bool SolveAllMesh()
+        {
+            SetBaseConfiguration();
+            RetraceOnUnsolved();
+            bool has_added=AddAllPaths();
+            return has_added;
+        }
 
-            if (Do_remove)
-            {
-                RemovePaths();
-            }
+        // void Decompose(bool Do_remove)
+        // {
+
+        //     AddAllPaths();
+
+        //     if (Do_remove)
+        //     {
+        //         RemovePaths();
+        //     }
+
+        //     if (split_removal)
+        //     {
+        //         RemoveSplitted();
+        //     }
+        // }
+
+        void BatchDecompose(bool Do_remove,bool Do_split_remove)
+        {
+           bool has_added=false;
+            do{
+                has_added=false;
+                has_added|=SolveAllFeatures();
+
+                if (has_added && Do_remove)
+                    RemovePaths();
+
+                has_added|=SolveAllMesh();
+                if (has_added && Do_remove)
+                    RemovePaths();
+            }while (has_added);
 
             if (split_removal)
             {
                 RemoveSplitted();
             }
         }
-
         bool SavePatchesLayout(const std::string meshFile)
         {
             CompactData();

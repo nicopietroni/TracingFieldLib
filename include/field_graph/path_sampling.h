@@ -442,6 +442,18 @@ namespace Geo
         //     }
         // }
 
+        void DisableNonAllowPath()
+        {
+            for (size_t i=0;i<VertPos.size();i++)
+            {
+                if (allow_path_on[i])continue;
+                std::vector<int> IndexN;
+                Field::CrossFieldGraph::NodesOfElem(i,IndexN);
+                for (size_t j=0;j<IndexN.size();j++)
+                    TGraph.DisableNode(IndexN[j]);
+            }
+        }
+
         void EnableSingularities()
         {
             for (size_t i = 0; i < SingIndex.size(); i++)
@@ -666,44 +678,13 @@ namespace Geo
             {
                 std::vector<int> SingSingSampledVert;
                 SampleCloseSingTracingVert(SingSingSampledVert, minSingResample);
-                SampledVert.insert(SampledVert.end(), SingSingSampledVert.begin(), SingSingSampledVert.end());
+                for (size_t i=0;i<SingSingSampledVert.size();i++)
+                {
+                    if (!sample_on[SingSingSampledVert[i]])continue;
+                    SampledVert.push_back(SingSingSampledVert[i]);
+                }
+                //SampledVert.insert(SampledVert.end(), SingSingSampledVert.begin(), SingSingSampledVert.end());
             }
-
-            // int IndexLimit=-1;
-            // for (size_t i=0;i<VERT_MARK_SIZE;i++)
-            //     if (limit_path_to[i])IndexLimit=i;
-
-            // then set exit nodes if needed to stop the tracing
-            //  std::vector<std::pair<int,NType> > SwapNodeType;
-            //  if (IndexLimit!=-1)
-            //  {
-            //      //can't use the same flags
-            //      assert(IndexLimit!=MarkSample);
-
-            //     std::vector<int> MarkedV;
-            //     GetMarkedVert(IndexLimit,MarkedV);
-
-            //     for (size_t i=0;i<MarkedV.size();i++)
-            //     {
-            //         //get the nodes of the vertex
-            //         std::vector<int> IndexN;
-            //         Field::CrossFieldGraph::NodesOfElem(MarkedV[i],IndexN);
-            //         //check if
-            //         //std::vector<int> StartingNodesSet()
-
-            //         for (size_t j=0;j<IndexN.size();j++)
-            //         {
-            //             int currN=IndexN[j];
-            //             if (ConflictNodes.count(currN)>0)continue;
-            //             if (!IsTraceable(currN))continue;
-            //             int NumNeghTest=NumMarkedNeigh(IndexN[j],MarkSample);
-            //             if (NumNeghTest>0)continue;
-            //             std::pair<int,NType> Entry(currN,TGraph.NodeType(currN));
-            //             SwapNodeType.push_back(Entry);
-            //             TGraph.NodeType(currN)=Geo::ExitDomain;
-            //         }
-            //     }
-            // }
 
             // FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
             FindSampledNodesFromVertex(SampledVert, StartingNodes);
@@ -713,8 +694,7 @@ namespace Geo
             int non_traced = 0;
             int self_intersected = 0;
 
-            // if (MarkSample!=-1)
-            //     DisableNonMarked(MarkSample);
+            //DisableNonAllowPath();
 
             std::vector<int> ArrivalNodes;
             GetArrivalNodes(ArrivalNodes);

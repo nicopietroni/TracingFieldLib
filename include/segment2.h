@@ -189,6 +189,15 @@ ScalarType Distance( const Segment2<ScalarType> &s0,
     return ClosestPoint(s0,s1,p0,p1);
 }
 
+template <class ScalarType>
+ScalarType InterpValue(const Segment2<ScalarType> &s,
+                       const Point2<ScalarType> &p)
+{
+    ScalarType Dist0=(s.P(0)-p).Norm();
+    ScalarType Dist1=(s.P(1)-p).Norm();
+    return (1-Dist0/(Dist0+Dist1));
+}
+
 //const SCALAR_TYPE Eps= SCALAR_TYPE(1e-8);
 //SCALAR_TYPE lambda0,lambda1;
 //const Point2<SCALAR_TYPE> & p0 = seg0.P0();
@@ -215,6 +224,7 @@ ScalarType Distance( const Segment2<ScalarType> &s0,
 //    return false;
 //p_inters = p0*(1-lambda0)+p1*lambda0;
 //return true;
+
 } //namespace
 
 

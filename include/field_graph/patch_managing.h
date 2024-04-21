@@ -1159,6 +1159,183 @@ namespace Geo
             return true;
         }
 
+        // // get the sequence from the first corner found
+        // bool GetGlobalSeqFromCorner(const int &IndexPatch,
+        //                             std::vector<int> &BoundVIdx)
+        // {
+        //     if (NumSides(IndexPatch)==0)return false;
+        //     for (size_t i=0;i<NumSides(IndexPatch);i++)
+        //     {
+        //         std::vector<int> SideVert;
+        //         GetAllSideVert(IndexPatch,SideVert);
+        //         MapToOriginal(IndexPatch,SideVert);
+
+        //     }
+        //     // std::vector<int> PatchCornerGlobal;
+        //     // GetAllCorners(IndexPatch,PatchCornerGlobal);
+        //     // std::set<int> PatchCornerGlobalSet(PatchCornerGlobal.begin(),PatchCornerGlobal.end());
+        //     // BoundVIdx.clear();
+
+        //     // // sort with respect to one vertex
+        //     // for (size_t i = 0; i < BoundVIdx.size(); i++)
+        //     // {
+        //     //     bool found = false;
+        //     //     for (size_t j = 0; j < BoundVIdx[i].size(); j++)
+        //     //     {
+        //     //         int CurrV = BoundVIdx[i][j];
+        //     //         if (CornerSet.count(CurrV) > 0)
+        //     //         {
+        //     //             std::rotate(BoundVIdx[i].begin(), BoundVIdx[i].begin() + j, BoundVIdx[i].end());
+        //     //             found = true;
+        //     //             break;
+        //     //         }
+        //     //     }
+        //     //     if (!found)
+        //     //         return false;
+        //     // }
+        //     // return true;
+        // }
+
+        // reorganise the sequence from the first corner found
+        bool SortFromCorner(std::vector<int> &BoundVIdx,
+                            const int &IndexC)
+        {
+
+            // sort with respect to one vertex
+            for (size_t i = 0; i < BoundVIdx.size(); i++)
+            {
+                int CurrV = BoundVIdx[i];
+                if (IndexC == CurrV)
+                {
+                    std::rotate(BoundVIdx.begin(), BoundVIdx.begin() + i, BoundVIdx.end());
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // bool GetGlobalSubsides1(const int IndexPatch,
+        //                         const std::set<int> &AllCornersSet,
+        //                         std::vector<std::vector<int> > &SidesVert)
+        // {
+        //     if (NumBorders(IndexPatch)!=1)return false;
+        //     // get boundary
+        //     std::vector<std::vector<int>> BoundVIdx;
+        //     getBorderSequncesVert(PData.SubPatchFaces[IndexPatch], NextF, NextE, BoundVIdx);
+        //     if (BoundVIdx.size()!=1)return false;
+        //     if (BoundVIdx[0].size() == 0) return false;
+        //     std::vector<int> GlobalBound=BoundVIdx[0];
+
+        //     //map it to global
+        //     MapToOriginal(IndexPatch,GlobalBound);
+
+        //     //get corners of the patch
+        //     assert(PData.PatchCorners[IndexPatch].size()==1);
+        //     std::vector<int> PatchCorner=PData.PatchCorners[IndexPatch][0];
+        //     MapToOriginal(IndexPatch,PatchCorner);
+
+        //     //sort with respect to first corner
+        //     std::set<int> PatchCornersSet(PatchCorner.begin(),PatchCorner.end());
+        //     bool has_sorted = SortFromCorner(GlobalBound, PatchCorner[0]);
+        //     if (!has_sorted)
+        //         return false;
+
+        //     // allocate first side
+        //     SidesVert.resize(1);
+        //     // add first sub sequence
+        //     SidesVert[0].resize(1);
+
+        //     // add first vert
+        //     int FirstV=GlobalBound[0];
+        //     SidesVert.back().back().push_back(FirstV);
+
+        //     for (size_t i = 1; i < GlobalBound.size(); i++)
+        //     {
+        //         //get the vertex
+        //         int IndexV = GlobalBound[i];
+        //         //add to current subside
+        //         SidesVert.back().back().push_back(GlobalBound);
+        //         bool IsGlobalCorner=(AllCornersSet.count(IndexV)>0);
+        //         bool IsPatchCorner=(PatchCornersSet.count(IndexV)>0);
+        //         // then check if need to allocate a new edge
+        //         if (IsPatchCorner)
+        //         {
+        //             assert(IsGlobalCorner);
+        //             // then add a new side
+        //             SidesVert.resize(SidesVert.size() + 1);
+        //             //add a new subside
+        //             SidesVert.back().resize(SidesVert.back().size()+1);
+        //             // add this as the first of the new edge
+        //             SidesVertt.back().back().push_back(IndexV);
+        //             continue;
+        //         }
+        //         if (IsGlobalCorner)
+        //         {
+        //             //managed in previous branch
+        //             assert(!IsPatchCorner);
+        //             //add a new subside
+        //             SidesVert.back().resize(SidesVert.back().size()+1);
+        //             // add this as the first of the new edge
+        //             SidesVertt.back().back().push_back(IndexV);
+        //             continue;
+        //         }
+        //     }
+        //      // add the first one
+        //     SidesVert[i].back().back().push_back(FirstV);
+
+        //     //sanity check
+        //     assert(SidesVert.size()>0);
+
+        //     // //for each side
+        //     // for (size_t i=0;i<SidesVert.size();i++)
+        //     // {
+        //     //     for (size_t j=0;j<SidesVert[i].size();j++)
+        //     //     {
+        //     //         //at least 2 vertices for each side
+        //     //         assert(SidesVert[i][j].size()>=2);
+        //     //         int IndexV0=SidesVert[i][0][0];
+        //     //         int IndexV1=SidesVert[i].back().back();
+        //     //         bool IsGlobalCorner=(AllCornersSet.count(IndexV0)>0);
+        //     //         bool IsPatchCorner=(PatchCornersSet.count(IndexV0)>0);
+
+        //     //         assert(IsGlobalCorner);
+        //     //         assert(IsPatchCorner);
+
+        //     //         IsGlobalCorner=(AllCornersSet.count(IndexV1)>0);
+        //     //         IsPatchCorner=(PatchCornersSet.count(IndexV1)>0);
+
+        //     //         assert(IsGlobalCorner);
+        //     //         assert(IsPatchCorner);
+
+        //     //         for (size_t k=1;k<SidesVert[i].size()-1;j++)
+        //     //         {
+        //     //             int IndexV=SidesVert[i][j];
+        //     //             IsGlobalCorner=(AllCornersSet.count(IndexV)>0);
+        //     //             IsPatchCorner=(PatchCornersSet.count(IndexV)>0);
+        //     //             assert(IsGlobalCorner);
+        //     //             assert(!IsPatchCorner);
+        //     //         }
+        //     //     }
+        //     // }
+        //     return true;
+        // }
+
+        // bool GetGlobalSubsides1(std::vector<std::vector<std::vector<int>> > &SidesVert)
+        // {
+        //      // first get all corners
+
+        //     std::vector<int> AllCorners;
+        //     GetAllCorners(AllCorners);
+        //     std::set<int> CornerSet(AllCorners.begin(),AllCorners.end());
+
+        //     SidesVert.resize(NumPatches());
+        //     for (int i = 0; i < NumPatches(); i++)
+        //     {
+        //         if (isEmpty(i))continue;
+        //         GetGlobalSubsides1(i,AllCorners,SidesVert)
+        //     }
+        // }
+
         // return sides considering global indexes
         bool GetGlobalSubsides(const int IndexPatch, const std::set<int> &CornerSet,
                                std::vector<std::vector<std::vector<int>>> &SidesVert)
@@ -1212,8 +1389,7 @@ namespace Geo
         std::map<int, int> SingValence;
 
     public:
-
-        void GetPatchGlobalVertOfType(const int &IndexP, 
+        void GetPatchGlobalVertOfType(const int &IndexP,
                                       const CornerType &CType,
                                       std::vector<int> &SelectedVert)
         {
@@ -1231,14 +1407,15 @@ namespace Geo
             }
         }
 
-        void GetAllGlobalVertOfType(const CornerType CType,std::vector<int> &SelectedVert)
+        void GetAllGlobalVertOfType(const CornerType CType, std::vector<int> &SelectedVert)
         {
             SelectedVert.clear();
-            for (size_t i=0;i<NumPatches();i++)
+            for (size_t i = 0; i < NumPatches(); i++)
             {
-                if (isEmpty(i))continue;
+                if (isEmpty(i))
+                    continue;
                 std::vector<int> SelectedPatchVert;
-                GetPatchGlobalVertOfType(i,CType,SelectedPatchVert);
+                GetPatchGlobalVertOfType(i, CType, SelectedPatchVert);
                 SelectedVert.insert(SelectedVert.end(),
                                     SelectedPatchVert.begin(),
                                     SelectedPatchVert.end());
@@ -1410,6 +1587,7 @@ namespace Geo
 
         void GetAllSideVert(int IndexP, int IndexE, std::vector<int> &SideV) const
         {
+            //SideV.clear();
             assert(IndexP < NumPatches());
             assert(IndexP >= 0);
             assert(!isEmpty(IndexP));
@@ -1417,6 +1595,17 @@ namespace Geo
                 SideV.push_back(PData.EdgePatchSides[IndexP][0][IndexE][i].first);
 
             SideV.push_back(PData.EdgePatchSides[IndexP][0][IndexE].back().second);
+        }
+
+        void GetAllSideVert(int IndexP, std::vector<int> &SideV) const
+        {
+            SideV.clear();
+            for (size_t i = 0; i < NumSides(IndexP); i++)
+            {
+                std::vector<int> CurrSide;
+                GetAllSideVert(IndexP, i, CurrSide);
+                SideV.insert(SideV.end(), CurrSide.begin(), CurrSide.end());
+            }
         }
 
         void GetAllSidePos(std::vector<Geo::Point3<ScalarType>> &MidSidePos,
@@ -1446,6 +1635,23 @@ namespace Geo
                         Geo::Point3<ScalarType> CurrP = PData.SubPatchVertPos[i][IndexV];
                         MidSidePos.push_back(CurrP);
                     }
+                }
+            }
+        }
+
+        void GetPatchSidePos(int IndexPatch, int IndexSide, std::vector<Geo::Point3<ScalarType>> &SidePos) const
+        {
+            // should have one loop
+            assert(this->PData.EdgePatchSides[IndexPatch].size() == 1);
+            for (size_t j = 0; j < PData.EdgePatchSides[IndexPatch][0].size(); j++)
+            {
+                std::vector<int> SideV;
+                GetAllSideVert(IndexPatch, j, SideV);
+                for (size_t k = 0; k < SideV.size(); k++)
+                {
+                    int CurrIdx = SideV[k];
+                    Geo::Point3<ScalarType> CurrP = PData.SubPatchVertPos[IndexPatch][CurrIdx];
+                    SidePos.push_back(CurrP);
                 }
             }
         }
@@ -1830,6 +2036,18 @@ namespace Geo
                     return true;
             }
             return false;
+        }
+
+        void PatchSingularities(const int IndexPatch, std::vector<int> &PatchSing) const
+        {
+            PatchSing.clear();
+            for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size(); i++)
+            {
+                int IndexVOr = PData.SubPatchVertToOriginal[IndexPatch][i];
+                if (SingValence.count(IndexVOr) == 0)
+                    continue;
+                PatchSing.push_back(i);
+            }
         }
 
         bool MatchSingularity(int IndexPatch) const

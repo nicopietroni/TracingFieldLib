@@ -32,7 +32,7 @@ namespace GLGraphDraw
             {
                 DrawPath = true;
                 pointSize = 0;
-                lineSize = 5;
+                lineSize = 0;
                 ColPoint = Geo::Point3<ScalarType>(0, 0, 1);
                 ColLine = Geo::Point3<ScalarType>(0, 0, 0);
                 moveVal = (ScalarType)0.1;
