@@ -1508,21 +1508,21 @@ namespace Geo
             return has_added;
         }
 
-        // void Decompose(bool Do_remove)
-        // {
+        void Decompose(bool Do_remove)
+        {
 
-        //     AddAllPaths();
+            AddAllPaths();
 
-        //     if (Do_remove)
-        //     {
-        //         RemovePaths();
-        //     }
+            if (Do_remove)
+            {
+                RemovePaths();
+            }
 
-        //     if (split_removal)
-        //     {
-        //         RemoveSplitted();
-        //     }
-        // }
+            if (split_removal)
+            {
+                RemoveSplitted();
+            }
+        }
 
         void BatchDecompose(bool Do_remove,bool Do_split_remove)
         {

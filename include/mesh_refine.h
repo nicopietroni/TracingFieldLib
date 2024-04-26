@@ -614,7 +614,6 @@ public:
                                          ScalarType minAlpha=0.05,
                                          bool split_edpoints=true)
     {
-
         if (PolyL.size()<2)return;
 
         std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > MarkedE;
@@ -652,6 +651,19 @@ public:
                 std::pair<int,int> KeyE(std::min(IndexV0,IndexV1),std::max(IndexV0,IndexV1));
                 NewEdges.push_back(KeyE);
             }
+        // if (OldVertToNew!=NULL)
+        // {
+        //     (*OldVertToNew).clear();
+        //     (*OldVertToNew).resize(OLDPos.size(),-1);
+        //     for (size_t i=0;i<Pos3D.size();i++)
+        //     {
+        //         if (OLDPos.count(Pos3D[i])==0)continue;
+        //         int indexOld=OLDPos[Pos3D[i]];
+        //         (*OldVertToNew)[indexOld]=i;
+        //     }
+        //     for (size_t i=0;i<(*OldVertToNew).size();i++)
+        //         assert((*OldVertToNew)[i]!=-1);
+        // }
     }
 
 

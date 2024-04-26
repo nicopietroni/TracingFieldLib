@@ -12,398 +12,558 @@
 #include <mesh_functions.h>
 #include <connectivity.h>
 #include <UV_utils.h>
+#include <solve/uv_poisson_solver.h>
 
-namespace Geo{
+namespace Geo
+{
 
-template <class ScalarType >
-class UVParam{
-
-    static int SelectBestConstraintOrientedAlong(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                                                 const std::vector<int> &Candidates,
-                                                 const int &Vert0)
+    template <class ScalarType>
+    class UVParam
     {
-        assert(Vert0>=0);
-        assert(Vert0<VertPos.size());
-        //        Geo::Point3<ScalarType> DirTarget=Geo::Point3<ScalarType>(1,0,0),
-        //        Geo::Point3<ScalarType> DirOrtho=Geo::Point3<ScalarType>(0,1,0)
-        Geo::Box3<ScalarType> MeshBB;
-        MeshBB.Init(VertPos);
 
-        //get two directions, better to do with PCA in the future
-        std::vector<std::pair<ScalarType,Geo::Point3<ScalarType> > > DimDir;
-        std::pair<ScalarType,Geo::Point3<ScalarType> > P0(MeshBB.DimX(),Geo::Point3<ScalarType>(1,0,0));
-        std::pair<ScalarType,Geo::Point3<ScalarType> > P1(MeshBB.DimY(),Geo::Point3<ScalarType>(0,1,0));
-        std::pair<ScalarType,Geo::Point3<ScalarType> > P2(MeshBB.DimZ(),Geo::Point3<ScalarType>(0,0,1));
-        DimDir.push_back(P0);
-        DimDir.push_back(P1);
-        DimDir.push_back(P2);
-        std::sort(DimDir.begin(),DimDir.end());
-        Geo::Point3<ScalarType> DirTarget=DimDir[2].second;
-        Geo::Point3<ScalarType> DirOrtho=DimDir[1].second;
-
-        ScalarType BestDot=std::numeric_limits<double>::lowest();;
-        int Vert1=-1;
-
-        for (int i=0;i<(int)Candidates.size();i++)
+        static int SelectBestConstraintOrientedAlong(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                                     const std::vector<int> &Candidates,
+                                                     const int &Vert0)
         {
-            int IndexVTest=Candidates[i];
-            if (IndexVTest==Vert0)continue;
+            assert(Vert0 >= 0);
+            assert(Vert0 < VertPos.size());
+            //        Geo::Point3<ScalarType> DirTarget=Geo::Point3<ScalarType>(1,0,0),
+            //        Geo::Point3<ScalarType> DirOrtho=Geo::Point3<ScalarType>(0,1,0)
+            Geo::Box3<ScalarType> MeshBB;
+            MeshBB.Init(VertPos);
 
-            Geo::Point3<ScalarType> DirTest(VertPos[IndexVTest]-VertPos[Vert0]);
-            ScalarType AlignDot=Dot(DirTest,DirTarget);
-            ScalarType OrthoDot=fabs(Geo::Dot(DirTest,DirOrtho));
-            ScalarType TestDot=AlignDot-OrthoDot;
+            // get two directions, better to do with PCA in the future
+            std::vector<std::pair<ScalarType, Geo::Point3<ScalarType>>> DimDir;
+            std::pair<ScalarType, Geo::Point3<ScalarType>> P0(MeshBB.DimX(), Geo::Point3<ScalarType>(1, 0, 0));
+            std::pair<ScalarType, Geo::Point3<ScalarType>> P1(MeshBB.DimY(), Geo::Point3<ScalarType>(0, 1, 0));
+            std::pair<ScalarType, Geo::Point3<ScalarType>> P2(MeshBB.DimZ(), Geo::Point3<ScalarType>(0, 0, 1));
+            DimDir.push_back(P0);
+            DimDir.push_back(P1);
+            DimDir.push_back(P2);
+            std::sort(DimDir.begin(), DimDir.end());
+            Geo::Point3<ScalarType> DirTarget = DimDir[2].second;
+            Geo::Point3<ScalarType> DirOrtho = DimDir[1].second;
 
-            if (TestDot<BestDot)continue;
+            ScalarType BestDot = std::numeric_limits<double>::lowest();
+            ;
+            int Vert1 = -1;
 
-            BestDot=TestDot;
-            Vert1=IndexVTest;
-        }
-        assert(Vert1>=0);
-        return Vert1;
-    }
-
-    //    static int ClosestVert(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-    //                    const Geo::Point3<ScalarType> &TargetPos)
-    //    {
-    //        ScalarType DistMin=std::numeric_limits<ScalarType>::max();
-    //        int IndexV=-1;
-    //        for (size_t i=0;i<VertPos.size();i++)
-    //        {
-    //            ScalarType TestDist=(VertPos[i]-TargetPos).Norm();
-    //            if (TestDist>DistMin)continue;
-    //            DistMin=TestDist;
-    //            IndexV=i;
-    //        }
-    //        return IndexV;
-    //    }
-
-    static void GetDefaultPairVertexToFix_AlongX(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                                                 std::vector<size_t> &FixedV,
-                                                 std::vector<Geo::Point2<ScalarType> > &FixedUV)
-    {
-
-        Geo::Box3<ScalarType> BB;
-        BB.Init(VertPos);
-
-        int Vert0=ClosestVertFromVect<ScalarType>(VertPos,BB.Center());
-        std::vector<int> Candidates;
-        for (int i=0;i<(int)VertPos.size();i++)
-            Candidates.push_back(i);
-
-        int Vert1=SelectBestConstraintOrientedAlong(VertPos,Candidates,Vert0);
-
-        ScalarType Dist=(VertPos[Vert0]-VertPos[Vert1]).Norm();
-        //the conformal is folded so check this then
-        FixedV.push_back(Vert0);
-        FixedUV.push_back(Geo::Point2<ScalarType>(0,0));
-        FixedV.push_back(Vert1);
-        FixedUV.push_back(Geo::Point2<ScalarType>(Dist,0));
-    }
-
-    static void GetDefaultEdgeToFix(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                                    const std::vector<std::vector<int> > &Faces,
-                                    std::vector<size_t> &FixedV,
-                                    std::vector<Geo::Point2<ScalarType> > &FixedUV)
-    {
-
-        Geo::Box3<ScalarType> BB;
-        BB.Init(VertPos);
-
-        int Vert0=ClosestVert(VertPos,BB.Center());
-
-        //then get the edge
-        std::vector<std::vector<int> > Kernel;
-        Geo::FindVertexStar(Faces,VertPos.size(),Kernel);
-
-        std::vector<int> Candidates=Kernel[Vert0];
-        int Vert1=SelectBestConstraintOrientedAlong(VertPos,Candidates,Vert0);
-
-        ScalarType Dist=(VertPos[Vert0]-VertPos[Vert1]).Norm();
-        //the conformal is folded so check this then
-        FixedV.push_back(Vert0);
-        FixedUV.push_back(Geo::Point2<ScalarType>(0,0));
-        FixedV.push_back(Vert1);
-        FixedUV.push_back(Geo::Point2<ScalarType>(Dist,0));
-    }
-
-public:
-
-    static bool IsFoldedParam(const std::vector<std::vector<int> > &Faces,
-                              const std::vector<Geo::Point2<ScalarType> > &VertUV)
-    {
-        ScalarType meshArea2D = Area(VertUV,Faces,false);
-        return (meshArea2D<0);
-    }
-
-    static void FoldParam(std::vector<Geo::Point2<ScalarType> > &VertUV)
-    {
-        Geo::Box2<ScalarType> BBoxUV;
-        BBoxUV.Init(VertUV);
-        Geo::Point2<ScalarType> CenterUV=BBoxUV.Center();
-        for(size_t i=0;i<VertUV.size();i++)
-            VertUV[i]=CenterUV+(CenterUV-VertUV[i]);
-    }
-
-    // static void ScaleToMatchAreas(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-    //                               const std::vector<std::vector<int> > &Faces,
-    //                               std::vector<Geo::Point2<ScalarType> > &VertUV)
-    // {
-    //     //Rescale the parametrization to match the 3D area
-    //     ScalarType meshArea2D = Area(VertUV,Faces);
-    //     ScalarType meshArea3D = Area(VertPos,Faces);
-        
-    //     std::cout<<"Area 2D:"<<meshArea2D<<std::endl;
-    //     std::cout<<"Area 3D:"<<meshArea3D<<std::endl;
-    //     ScalarType scaleFact = std::sqrt(meshArea3D / meshArea2D);
-
-    //     for (size_t i=0; i<VertUV.size(); i++)
-    //         VertUV[i]= VertUV[i]*scaleFact;
-    // }
-
-    static bool LeastSquaresConformal(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                                      const std::vector<std::vector<int> > &Faces,
-                                      std::vector<size_t> &FixedV,
-                                      std::vector<Geo::Point2<ScalarType> > &FixedUV,
-                                      std::vector<Geo::Point2<ScalarType> > &VertUV,
-                                      bool rescale_to_match_area=true)
-    {
-        assert(FixedV.size()==FixedUV.size());
-
-        Eigen::MatrixXi F;
-        typename EigenInterface<ScalarType>::MatrixXm Vf;
-
-        EigenInterface<ScalarType>::GetTriMeshData(VertPos,Faces,F,Vf);
-        Eigen::MatrixXd V = Vf.template cast<double>();
-
-        Eigen::VectorXi b;
-        Eigen::MatrixXd bc;
-        Eigen::MatrixXd V_uv;
-
-        if (FixedUV.size()==0)
-            GetDefaultPairVertexToFix_AlongX(VertPos,FixedV,FixedUV);
-        //GetDefaultEdgeToFix(VertPos,Faces,FixedV,FixedUV);
-
-        b.resize(FixedV.size());
-        bc.resize(FixedV.size(),2);
-        for (int i=0; i<(int)FixedV.size(); i++)
-        {
-            b(i) = FixedV[i];
-            bc(i,0) = FixedUV[i].X;
-            bc(i,1) = FixedUV[i].Y;
-        }
-        // apply Least Square Conformal Maps
-        bool solved=igl::lscm(V,F,b,bc,V_uv);
-        if (!solved)return false;
-        VertUV.resize(VertPos.size());
-        // copy results back to mesh
-        for (int i=0; i<(int)VertUV.size(); i++) {
-            VertUV[i].X = V_uv(i,0);
-            VertUV[i].Y = V_uv(i,1);
-        }
-
-        if (rescale_to_match_area)
-            Geo::UVUtils<ScalarType>::ScaleToMatchArea(VertPos,Faces,VertUV);
-
-        return true;
-    }
-
-    static bool LeastSquaresConformal(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                                      const std::vector<std::vector<int> > &Faces,
-                                      std::vector<Geo::Point2<ScalarType> > &VertUV)
-    {
-        std::vector<size_t> FixedV;
-        std::vector<Geo::Point2<ScalarType> > FixedUV;
-        return LeastSquaresConformal(VertPos,Faces,FixedV,FixedUV,VertUV);
-    }
-
-    static bool Arap(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                     const std::vector<std::vector<int> > &Faces,
-                     std::vector<size_t> &FixedV,
-                     std::vector<Geo::Point2<ScalarType> > &FixedUV,
-                     std::vector<Geo::Point2<ScalarType> > &VertUV,
-                     bool InitializeConformal=true, int MaxIte=100)
-    {
-
-        bool solved=true;
-        bool Has_No_Constr=(FixedV.size()==0);
-        if (InitializeConformal)
-        {
-            solved=LeastSquaresConformal(VertPos,Faces,FixedV,FixedUV,VertUV);
-            if (!solved)return false;
-            if (Has_No_Constr)
+            for (int i = 0; i < (int)Candidates.size(); i++)
             {
-                FixedV.clear();
-                FixedUV.clear();
+                int IndexVTest = Candidates[i];
+                if (IndexVTest == Vert0)
+                    continue;
+
+                Geo::Point3<ScalarType> DirTest(VertPos[IndexVTest] - VertPos[Vert0]);
+                ScalarType AlignDot = Dot(DirTest, DirTarget);
+                ScalarType OrthoDot = fabs(Geo::Dot(DirTest, DirOrtho));
+                ScalarType TestDot = AlignDot - OrthoDot;
+
+                if (TestDot < BestDot)
+                    continue;
+
+                BestDot = TestDot;
+                Vert1 = IndexVTest;
             }
-        }
-        else
-        {
-            assert(VertUV.size()==VertPos.size());
+            assert(Vert1 >= 0);
+            return Vert1;
         }
 
-        Eigen::MatrixXd V_uv;
-        V_uv.resize(VertPos.size(),2);
-        for (unsigned i=0;i<V_uv.rows();++i)
-        {
-            V_uv(i,0)=VertUV[i].X;
-            V_uv(i,1)=VertUV[i].Y;
-        }
-
-        Eigen::MatrixXi F;
-        typename EigenInterface<ScalarType>::MatrixXm Vf;
-
-        //Eigen::MatrixXd PD1,PD2,PV1,PV2;
-        EigenInterface<ScalarType>::GetTriMeshData(VertPos,Faces,F,Vf);
-        Eigen::MatrixXd V = Vf.template cast<double>();
-
-        Eigen::VectorXi b;
-        Eigen::MatrixXd bc;
-
-        if (Has_No_Constr)
-        {
-            FixedV.push_back(0);
-            FixedUV.push_back(VertUV[0]);
-        }
-        //            FixedV.push_back(1);
-        //            FixedUV.push_back(VertUV[1]);
-        ////            GetDefaultPairVertexToFix_AlongX(VertPos,FixedV,FixedUV);
+        //    static int ClosestVert(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+        //                    const Geo::Point3<ScalarType> &TargetPos)
+        //    {
+        //        ScalarType DistMin=std::numeric_limits<ScalarType>::max();
+        //        int IndexV=-1;
+        //        for (size_t i=0;i<VertPos.size();i++)
+        //        {
+        //            ScalarType TestDist=(VertPos[i]-TargetPos).Norm();
+        //            if (TestDist>DistMin)continue;
+        //            DistMin=TestDist;
+        //            IndexV=i;
         //        }
+        //        return IndexV;
+        //    }
 
-        b.resize(FixedV.size());
-        bc.resize(FixedV.size(),2);
-        for (int i=0; i<(int)FixedV.size(); i++)
+        static void GetDefaultPairVertexToFix_AlongX(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                                     std::vector<size_t> &FixedV,
+                                                     std::vector<Geo::Point2<ScalarType>> &FixedUV)
         {
-            b(i) = FixedV[i];
-            bc(i,0) = FixedUV[i].X;
-            bc(i,1) = FixedUV[i].Y;
-        }
-        // Add dynamic regularization to avoid to specify boundary conditions
-        igl::ARAPData arap_data;
-        arap_data.max_iter = MaxIte;
-        arap_data.with_dynamics = false;
 
-        // compute ARAP parametrization
-        solved=igl::arap_precomputation(V, F, 2, b, arap_data);
-        if (!solved)return false;
+            Geo::Box3<ScalarType> BB;
+            BB.Init(VertPos);
 
-        igl::arap_solve(bc, arap_data, V_uv);
-        VertUV.resize(VertPos.size());
-        // copy results back to mesh
-        for (int i=0; i<(int)VertUV.size(); i++) {
-            VertUV[i].X = V_uv(i,0);
-            VertUV[i].Y = V_uv(i,1);
-        }
+            int Vert0 = ClosestVertFromVect<ScalarType>(VertPos, BB.Center());
+            std::vector<int> Candidates;
+            for (int i = 0; i < (int)VertPos.size(); i++)
+                Candidates.push_back(i);
 
-        return true;
-    }
+            int Vert1 = SelectBestConstraintOrientedAlong(VertPos, Candidates, Vert0);
 
-    static bool Arap(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                     const std::vector<std::vector<int> > &Faces,
-                     std::vector<Geo::Point2<ScalarType> > &VertUV,
-                     bool InitializeConformal=true, int MaxIte=100)
-    {
-        std::vector<size_t> FixedV;
-        std::vector<Geo::Point2<ScalarType> > FixedUV;
-        return Arap(VertPos,Faces,FixedV,FixedUV,VertUV,InitializeConformal,MaxIte);
-    }
-
-    static bool TutteEmbedding(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                               const std::vector<std::vector<int> > &Faces,
-                               const std::vector<int> &CornerIDX,
-                               std::vector<Geo::Point2<ScalarType> > &VertUV,
-                               bool uniformE=false)
-    {
-
-        VertUV.clear();
-
-        std::vector<std::vector<int> > NextF,NextE;
-        getFFAdjacency(Faces,NextF,NextE);
-        std::vector<std::vector<int> > BorderVIdx;
-        getBorderSequncesVert(Faces,NextF,NextE,BorderVIdx);
-        if (BorderVIdx.size()==0)return false;//multiple boundaries
-
-        ScalarType AreaM=Area(VertPos,Faces);
-        ScalarType Radius=sqrt(AreaM/M_PI);
-        std::vector<Geo::Point2<ScalarType> > vert_UV;
-
-        if (CornerIDX.size()<=2)
-        {
-            Geo::UVUtils<ScalarType>::MapToACircle(VertPos,BorderVIdx[0],Radius,vert_UV);
-        }
-        else
-        {
-            bool done_map=Geo::UVUtils<ScalarType>::MapToAPolygon(VertPos,BorderVIdx[0],Radius,CornerIDX,vert_UV,uniformE);
-            if (!done_map)return false;
+            ScalarType Dist = (VertPos[Vert0] - VertPos[Vert1]).Norm();
+            // the conformal is folded so check this then
+            FixedV.push_back(Vert0);
+            FixedUV.push_back(Geo::Point2<ScalarType>(0, 0));
+            FixedV.push_back(Vert1);
+            FixedUV.push_back(Geo::Point2<ScalarType>(Dist, 0));
         }
 
-        //check if there is at least one unknown or not
-        if (BorderVIdx[0].size()==VertPos.size())
+        static void GetDefaultEdgeToFix(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                        const std::vector<std::vector<int>> &Faces,
+                                        std::vector<size_t> &FixedV,
+                                        std::vector<Geo::Point2<ScalarType>> &FixedUV)
         {
-            VertUV.resize(VertPos.size());
-            for (size_t i=0;i<BorderVIdx[0].size();i++)
+
+            Geo::Box3<ScalarType> BB;
+            BB.Init(VertPos);
+
+            int Vert0 = ClosestVert(VertPos, BB.Center());
+
+            // then get the edge
+            std::vector<std::vector<int>> Kernel;
+            Geo::FindVertexStar(Faces, VertPos.size(), Kernel);
+
+            std::vector<int> Candidates = Kernel[Vert0];
+            int Vert1 = SelectBestConstraintOrientedAlong(VertPos, Candidates, Vert0);
+
+            ScalarType Dist = (VertPos[Vert0] - VertPos[Vert1]).Norm();
+            // the conformal is folded so check this then
+            FixedV.push_back(Vert0);
+            FixedUV.push_back(Geo::Point2<ScalarType>(0, 0));
+            FixedV.push_back(Vert1);
+            FixedUV.push_back(Geo::Point2<ScalarType>(Dist, 0));
+        }
+
+    public:
+        static bool IsFoldedParam(const std::vector<std::vector<int>> &Faces,
+                                  const std::vector<Geo::Point2<ScalarType>> &VertUV)
+        {
+            ScalarType meshArea2D = Area(VertUV, Faces, false);
+            return (meshArea2D < 0);
+        }
+
+        static void FoldParam(std::vector<Geo::Point2<ScalarType>> &VertUV)
+        {
+            Geo::Box2<ScalarType> BBoxUV;
+            BBoxUV.Init(VertUV);
+            Geo::Point2<ScalarType> CenterUV = BBoxUV.Center();
+            for (size_t i = 0; i < VertUV.size(); i++)
+                VertUV[i] = CenterUV + (CenterUV - VertUV[i]);
+        }
+
+        // static void ScaleToMatchAreas(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+        //                               const std::vector<std::vector<int> > &Faces,
+        //                               std::vector<Geo::Point2<ScalarType> > &VertUV)
+        // {
+        //     //Rescale the parametrization to match the 3D area
+        //     ScalarType meshArea2D = Area(VertUV,Faces);
+        //     ScalarType meshArea3D = Area(VertPos,Faces);
+
+        //     std::cout<<"Area 2D:"<<meshArea2D<<std::endl;
+        //     std::cout<<"Area 3D:"<<meshArea3D<<std::endl;
+        //     ScalarType scaleFact = std::sqrt(meshArea3D / meshArea2D);
+
+        //     for (size_t i=0; i<VertUV.size(); i++)
+        //         VertUV[i]= VertUV[i]*scaleFact;
+        // }
+
+        static bool LeastSquaresConformal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                          const std::vector<std::vector<int>> &Faces,
+                                          std::vector<size_t> &FixedV,
+                                          std::vector<Geo::Point2<ScalarType>> &FixedUV,
+                                          std::vector<Geo::Point2<ScalarType>> &VertUV,
+                                          bool rescale_to_match_area = true)
+        {
+            assert(FixedV.size() == FixedUV.size());
+
+            Eigen::MatrixXi F;
+            typename EigenInterface<ScalarType>::MatrixXm Vf;
+
+            EigenInterface<ScalarType>::GetTriMeshData(VertPos, Faces, F, Vf);
+            Eigen::MatrixXd V = Vf.template cast<double>();
+
+            Eigen::VectorXi b;
+            Eigen::MatrixXd bc;
+            Eigen::MatrixXd V_uv;
+
+            if (FixedUV.size() == 0)
+                GetDefaultPairVertexToFix_AlongX(VertPos, FixedV, FixedUV);
+            // GetDefaultEdgeToFix(VertPos,Faces,FixedV,FixedUV);
+
+            b.resize(FixedV.size());
+            bc.resize(FixedV.size(), 2);
+            for (int i = 0; i < (int)FixedV.size(); i++)
             {
-                int CurrIndexV=BorderVIdx[0][i];
-                assert(CurrIndexV>=0);
-                assert(CurrIndexV<VertUV.size());
-                VertUV[CurrIndexV]=vert_UV[i];
+                b(i) = FixedV[i];
+                bc(i, 0) = FixedUV[i].X;
+                bc(i, 1) = FixedUV[i].Y;
             }
+            // apply Least Square Conformal Maps
+            bool solved = igl::lscm(V, F, b, bc, V_uv);
+            if (!solved)
+                return false;
+            VertUV.resize(VertPos.size());
+            // copy results back to mesh
+            for (int i = 0; i < (int)VertUV.size(); i++)
+            {
+                VertUV[i].X = V_uv(i, 0);
+                VertUV[i].Y = V_uv(i, 1);
+            }
+
+            if (rescale_to_match_area)
+                Geo::UVUtils<ScalarType>::ScaleToMatchArea(VertPos, Faces, VertUV);
+
             return true;
         }
 
-        Eigen::MatrixXi F;
-        typename EigenInterface<ScalarType>::MatrixXm Vf;
-        EigenInterface<ScalarType>::GetTriMeshData(VertPos,Faces,F,Vf);
+        // static bool LeastSquaresConformal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+        //                                   const std::vector<std::vector<int>> &Faces,
+        //                                   const std::vector<int> &Corners,
+        //                                   std::vector<Geo::Point2<ScalarType>> &VertUV)
+        // {
 
-        Eigen::VectorXi b;
-        Eigen::MatrixXd bc;
-        //set the boundary constraints
-        //        if (CornerIDX.size()<=2)
-        //        {
-        b.resize(BorderVIdx[0].size());
-        bc.resize(BorderVIdx[0].size(),2);
-        for (int i=0; i<(int)BorderVIdx[0].size(); i++)
+        //     // std::vector<std::vector<int>> BorderVIdx;
+        //     // getBorderSequncesVert(Faces, BorderVIdx);
+
+        //     // ScalarType AreaM = Area(VertPos, Faces);
+        //     // ScalarType Radius = sqrt(AreaM / M_PI);
+        //     // std::vector<Geo::Point2<ScalarType>> border_uv;
+        //     // Geo::UVUtils<ScalarType>::MapToAPolygon(VertPos, BorderVIdx[0], Radius, Corners, border_uv, false);
+
+        //     std::vector<size_t> FixedIdx;
+        //     std::vector<Geo::Point2<ScalarType>> FixedUV;
+
+        //     std::set<int> CornerSet(Corners.begin(), Corners.end());
+        //     int currI = 0;
+        //     for (int i = 0; i < (int)BorderVIdx[0].size(); i++)
+        //     {
+        //         size_t IndexV = BorderVIdx[0][i];
+        //         if (CornerSet.count(IndexV) == 0)
+        //             continue;
+
+        //         FixedIdx.push_back(IndexV);
+        //         FixedUV.push_back(border_uv[i]);
+        //     }
+
+        //     // LeastSquaresConformal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+        //     //                               const std::vector<std::vector<int>> &Faces,
+        //     //                               std::vector<size_t> &FixedV,
+        //     //                               std::vector<Geo::Point2<ScalarType>> &FixedUV,
+        //     //                               std::vector<Geo::Point2<ScalarType>> &VertUV,
+        //     //                               bool rescale_to_match_area = true)
+        //     return (LeastSquaresConformal(VertPos,Faces,FixedIdx,FixedUV,VertUV,true));
+        // }
+
+        static bool LeastSquaresConformal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                          const std::vector<std::vector<int>> &Faces,
+                                          std::vector<Geo::Point2<ScalarType>> &VertUV)
         {
-            b(i) = BorderVIdx[0][i];
-            bc(i,0) = vert_UV[i].X;
-            bc(i,1) = vert_UV[i].Y;
+            std::vector<size_t> FixedV;
+            std::vector<Geo::Point2<ScalarType>> FixedUV;
+            return LeastSquaresConformal(VertPos, Faces, FixedV, FixedUV, VertUV);
         }
-        //        }else
-        //        {
-        //            b.resize(CornerIDX.size());
-        //            bc.resize(CornerIDX.size(),2);
-        //            for (int i=0; i<(int)CornerIDX.size(); i++)
-        //            {
-        //                int IndexV=CornerIDX[i];
-        //                b(i) = IndexV;
-        //                bc(i,0) = vert_UV[IndexV].X;
-        //                bc(i,1) = vert_UV[IndexV].Y;
-        //            }
 
-        //        }
+        static bool Arap(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                         const std::vector<std::vector<int>> &Faces,
+                         std::vector<size_t> &FixedV,
+                         std::vector<Geo::Point2<ScalarType>> &FixedUV,
+                         std::vector<Geo::Point2<ScalarType>> &VertUV,
+                         bool InitializeConformal = true, int MaxIte = 100)
+        {
 
+            bool solved = true;
+            bool Has_No_Constr = (FixedV.size() == 0);
+            if (InitializeConformal)
+            {
+                solved = LeastSquaresConformal(VertPos, Faces, FixedV, FixedUV, VertUV);
+                if (!solved)
+                    return false;
+                if (Has_No_Constr)
+                {
+                    FixedV.clear();
+                    FixedUV.clear();
+                }
+            }
+            else
+            {
+                assert(VertUV.size() == VertPos.size());
+            }
 
-        Eigen::MatrixXd uv_harm;
-        bool solved=igl::harmonic(F, b, bc ,1, uv_harm);
-        if (!solved)return false;
+            Eigen::MatrixXd V_uv;
+            V_uv.resize(VertPos.size(), 2);
+            for (unsigned i = 0; i < V_uv.rows(); ++i)
+            {
+                V_uv(i, 0) = VertUV[i].X;
+                V_uv(i, 1) = VertUV[i].Y;
+            }
 
-        VertUV.resize(VertPos.size());
-        // copy results back to mesh
-        for (int i=0; i<(int)VertUV.size(); i++) {
-            VertUV[i].X = uv_harm(i,0);
-            VertUV[i].Y = uv_harm(i,1);
+            Eigen::MatrixXi F;
+            typename EigenInterface<ScalarType>::MatrixXm Vf;
+
+            // Eigen::MatrixXd PD1,PD2,PV1,PV2;
+            EigenInterface<ScalarType>::GetTriMeshData(VertPos, Faces, F, Vf);
+            Eigen::MatrixXd V = Vf.template cast<double>();
+
+            Eigen::VectorXi b;
+            Eigen::MatrixXd bc;
+
+            if (Has_No_Constr)
+            {
+                FixedV.push_back(0);
+                FixedUV.push_back(VertUV[0]);
+            }
+            //            FixedV.push_back(1);
+            //            FixedUV.push_back(VertUV[1]);
+            ////            GetDefaultPairVertexToFix_AlongX(VertPos,FixedV,FixedUV);
+            //        }
+
+            b.resize(FixedV.size());
+            bc.resize(FixedV.size(), 2);
+            for (int i = 0; i < (int)FixedV.size(); i++)
+            {
+                b(i) = FixedV[i];
+                bc(i, 0) = FixedUV[i].X;
+                bc(i, 1) = FixedUV[i].Y;
+            }
+            // Add dynamic regularization to avoid to specify boundary conditions
+            igl::ARAPData arap_data;
+            arap_data.max_iter = MaxIte;
+            arap_data.with_dynamics = false;
+
+            // compute ARAP parametrization
+            solved = igl::arap_precomputation(V, F, 2, b, arap_data);
+            if (!solved)
+                return false;
+
+            igl::arap_solve(bc, arap_data, V_uv);
+            VertUV.resize(VertPos.size());
+            // copy results back to mesh
+            for (int i = 0; i < (int)VertUV.size(); i++)
+            {
+                VertUV[i].X = V_uv(i, 0);
+                VertUV[i].Y = V_uv(i, 1);
+            }
+
+            return true;
         }
-        return true;
 
-    }
-    static bool TutteEmbedding(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                               const std::vector<std::vector<int> > &Faces,
-                               std::vector<Geo::Point2<ScalarType> > &VertUV)
-    {
-        std::vector<int> CornerIDX;
-        return TutteEmbedding(VertPos,Faces,CornerIDX,VertUV);
-    }
-};
+        static bool Arap(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                         const std::vector<std::vector<int>> &Faces,
+                         std::vector<Geo::Point2<ScalarType>> &VertUV,
+                         bool InitializeConformal = true, int MaxIte = 100)
+        {
+            std::vector<size_t> FixedV;
+            std::vector<Geo::Point2<ScalarType>> FixedUV;
+            return Arap(VertPos, Faces, FixedV, FixedUV, VertUV, InitializeConformal, MaxIte);
+        }
+
+        static bool TutteEmbedding(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                   const std::vector<std::vector<int>> &Faces,
+                                   const std::vector<int> &CornerIDX,
+                                   std::vector<Geo::Point2<ScalarType>> &VertUV,
+                                   bool uniformE = false)
+        {
+
+            VertUV.clear();
+
+            std::vector<std::vector<int>> NextF, NextE;
+            getFFAdjacency(Faces, NextF, NextE);
+            std::vector<std::vector<int>> BorderVIdx;
+            getBorderSequncesVert(Faces, NextF, NextE, BorderVIdx);
+            if (BorderVIdx.size() == 0)
+                return false; // multiple boundaries
+
+            ScalarType AreaM = Area(VertPos, Faces);
+            ScalarType Radius = sqrt(AreaM / M_PI);
+            std::vector<Geo::Point2<ScalarType>> vert_UV;
+
+            if (CornerIDX.size() <= 2)
+            {
+                Geo::UVUtils<ScalarType>::MapToACircle(VertPos, BorderVIdx[0], Radius, vert_UV);
+            }
+            else
+            {
+                bool done_map = Geo::UVUtils<ScalarType>::MapToAPolygon(VertPos, BorderVIdx[0], Radius, CornerIDX, vert_UV, uniformE);
+                if (!done_map)
+                    return false;
+            }
+
+            // check if there is at least one unknown or not
+            if (BorderVIdx[0].size() == VertPos.size())
+            {
+                VertUV.resize(VertPos.size());
+                for (size_t i = 0; i < BorderVIdx[0].size(); i++)
+                {
+                    int CurrIndexV = BorderVIdx[0][i];
+                    assert(CurrIndexV >= 0);
+                    assert(CurrIndexV < VertUV.size());
+                    VertUV[CurrIndexV] = vert_UV[i];
+                }
+                return true;
+            }
+
+            Eigen::MatrixXi F;
+            typename EigenInterface<ScalarType>::MatrixXm Vf;
+            EigenInterface<ScalarType>::GetTriMeshData(VertPos, Faces, F, Vf);
+
+            Eigen::VectorXi b;
+            Eigen::MatrixXd bc;
+            // set the boundary constraints
+            //         if (CornerIDX.size()<=2)
+            //         {
+            // if ((CornerIDX.size() >= 2) && (fix_corner_only))
+            // {
+            //     b.resize(CornerIDX.size());
+            //     bc.resize(CornerIDX.size(), 2);
+            //     std::set<int> CornerIDXSet(CornerIDX.begin(),CornerIDX.end());
+            //     int currI=0;
+            //     for (int i = 0; i < (int)BorderVIdx[0].size(); i++)
+            //     {
+            //         int IndexV=BorderVIdx[0][i];
+            //         if (CornerIDXSet.count(IndexV)==0)continue;
+            //         b(currI) = IndexV;
+            //         bc(currI, 0) = vert_UV[i].X;
+            //         bc(currI, 1) = vert_UV[i].Y;
+            //         currI++;
+            //     }
+            // }
+            // else
+            // {
+            b.resize(BorderVIdx[0].size());
+            bc.resize(BorderVIdx[0].size(), 2);
+            for (int i = 0; i < (int)BorderVIdx[0].size(); i++)
+            {
+                b(i) = BorderVIdx[0][i];
+                bc(i, 0) = vert_UV[i].X;
+                bc(i, 1) = vert_UV[i].Y;
+            }
+            //}
+            //        }else
+            //        {
+            //            b.resize(CornerIDX.size());
+            //            bc.resize(CornerIDX.size(),2);
+            //            for (int i=0; i<(int)CornerIDX.size(); i++)
+            //            {
+            //                int IndexV=CornerIDX[i];
+            //                b(i) = IndexV;
+            //                bc(i,0) = vert_UV[IndexV].X;
+            //                bc(i,1) = vert_UV[IndexV].Y;
+            //            }
+
+            //        }
+
+            Eigen::MatrixXd uv_harm;
+            bool solved = igl::harmonic(F, b, bc, 1, uv_harm);
+            if (!solved)
+                return false;
+
+            VertUV.resize(VertPos.size());
+            // copy results back to mesh
+            for (int i = 0; i < (int)VertUV.size(); i++)
+            {
+                VertUV[i].X = uv_harm(i, 0);
+                VertUV[i].Y = uv_harm(i, 1);
+            }
+            Geo::UVUtils<ScalarType>::ScaleToMatchArea(VertPos, Faces, VertUV);
+            return true;
+        }
+
+        static bool TutteEmbedding(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                   const std::vector<std::vector<int>> &Faces,
+                                   std::vector<Geo::Point2<ScalarType>> &VertUV)
+        {
+            std::vector<int> CornerIDX;
+            return TutteEmbedding(VertPos, Faces, CornerIDX, VertUV);
+        }
+
+        // static void Poisson(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+        //                     const std::vector<std::vector<int>> &Faces,
+        //                     const std::vector<Field::CrossF<ScalarType>> &FacrCurv,
+        //                     std::vector<Geo::Point2<ScalarType>> &VertUV)
+        // {
+        //     int t0, t1, t2, t3;
+
+        //     // // ///Initializing Matrix
+        //     // // if (_write_messages)
+        //     // // {
+        //     // //     printf("\n INITIALIZING THE MATRIX \n");
+        //     // //     t0=clock();
+        //     // // }
+
+        //     // // /// set vertex indexes
+        //     // // InitIndex();
+
+        //     // // if (use_direction_field)
+        //     // // {
+        //     // //     assert(to_fix.size() > 0);
+        //     // // }
+        //     // // else
+        //     // // {
+        //     // //     assert(to_fix.size() > 1);
+        //     // // }
+
+
+        //     // n_fixed_vars = 1;//to_fix.size();
+
+        //     // /// initialize the matrix ALLOCATING SPACE
+        //     // //InitMatrix();
+
+        //     // //n_vert_vars=mesh.vn;
+        //     // //initialize matrix size
+        //     // total_size = (n_fixed_vars + VertPos.size())*2;///must be multiplied by 2 becasue of u and v
+
+        //     // Eigen::SparseMatrix<double> A; // A
+        //     // Eigen::VectorXd b,x;// x and b
+
+        //     // //--- Allocates the data for Ax=b
+        //     // A=Eigen::SparseMatrix<ScalarType>(total_size, total_size); // A
+        //     // //A.reserve(Eigen::VectorXi::Constant(total_size,32));  // This prealloaction trick greatly speed up the acc
+        //     // b = Eigen::VectorXd::Zero(total_size);  // x and 
+
+        //     // /// build the laplacian system
+        //     // BuildLaplacianMatrix(fieldScale);
+
+        //     // //add the lagrange multiplier
+        //     // FixPointLSquares();
+
+        //     // if (_write_messages)
+        //     // {
+        //     //     t1 = clock();
+        //     //     printf("\n time:%d \n", t1 - t0);
+        //     //     printf("\n SOLVING \n");
+        //     // }
+
+        //     // // int n_vars=(n_vert_vars)*2;
+        //     // // int integer_constr_size=(n_transition_vars+n_fixed_vars+n_bary_transition_vars)*2;
+        //     // // X=std::vector< double >(n_vars+n_fixed_vars*2);
+        //     // bool done = Solve();
+        //     // if (!done)
+        //     //     return false;
+        //     // if (_write_messages)
+        //     // {
+        //     //     t2 = clock();
+        //     //     printf("\n time:%d \n", t2 - t1);
+        //     //     printf("\n ASSIGNING COORDS \n");
+        //     // }
+
+        //     // MapCoords(false, fieldScale);
+        //     // if (_write_messages)
+        //     // {
+        //     //     t3 = clock();
+        //     //     printf("\n time:%d \n", t3 - t2);
+        //     // }
+
+        //     // /// then check if majority of faces are folded
+        //     // if (!solve_global_fold)
+        //     //     return true;
+        //     // if (tri::Distortion<MeshType, false>::GloballyUnFolded(mesh))
+        //     // {
+        //     //     tri::UV_Utils<MeshType>::GloballyMirrorX(mesh);
+        //     //     bool isUnfolded = tri::Distortion<MeshType, false>::GloballyUnFolded(mesh);
+        //     //     assert(!isUnfolded);
+        //     // }
+        //     // return true;
+        // }
+    };
 
 }
 

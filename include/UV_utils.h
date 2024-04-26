@@ -282,7 +282,7 @@ namespace Geo
                                             (ScalarType)CornerIDX.size();
                 for (size_t i = 0; i < CornerIDX.size(); i++)
                 {
-                    Geo::Point2<ScalarType> CurrUV = AngleToUV(curr_alpha);
+                    Geo::Point2<ScalarType> CurrUV = AngleToUV(curr_alpha)*Radius;
                     CornerUV.push_back(CurrUV);
                     curr_alpha += interval_alpha;
                 }
@@ -546,6 +546,7 @@ namespace Geo
             assert(ClosestIDX != -1);
             return ClosestIDX;
         }
+
     };
 
 }
