@@ -50,11 +50,13 @@ int selected_rend_item = 5;
 
 bool DrawInitalPos = false;
 bool DrawCandidates = false;
-int curr_cand=-1;
+int curr_cand = -1;
 
 bool DrawSamplesPaths = false;
 
 bool showMesh = true;
+bool showPaths = true;
+bool showDual = true;
 bool showCross = true;
 bool showSing = true;
 bool has_graph = false;
@@ -63,14 +65,15 @@ bool DrawTangentNode = false;
 bool DrawExitNode = false;
 bool DrawInternalNode = false;
 bool DrawCorners = false;
+bool DrawDualCorners = false;
+
 bool DrawSides = false;
 
-
-bool Draw_must_pass_on=false;
-bool Draw_sample_on=false;
-bool Draw_force_sample=false;
-bool Draw_allow_path_on=false;
-bool Draw_allow_arrive_to=false;
+bool Draw_must_pass_on = false;
+bool Draw_sample_on = false;
+bool Draw_force_sample = false;
+bool Draw_allow_path_on = false;
+bool Draw_allow_arrive_to = false;
 
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
@@ -80,6 +83,13 @@ bool Draw_allow_arrive_to=false;
 #endif
 
 typedef double ScalarType;
+
+// DUAL MESH DATA
+std::vector<Geo::Point3<ScalarType>> DualVertPos;
+std::vector<std::vector<int>> DualConnectivity;
+std::vector<Geo::Point3<ScalarType>> DualFaceNormals;
+std::vector<Geo::Point3<ScalarType>> DualVertNormals;
+std::vector<std::vector<int>> DualNextF, DualNextE;
 
 // MESH DATA
 bool loadedMesh = false;
@@ -112,6 +122,7 @@ Geo::CrossPathSampling<ScalarType> PathSampl(VertPos, Connectivity, TGraph, Vert
 std::vector<Geo::Point3<ScalarType>> PathColors;
 
 std::vector<Geo::Point3<ScalarType>> FaceCol;
+std::vector<Geo::Point3<ScalarType>> FaceColDual;
 Geo::PatchManaging<ScalarType> PatchM(VertPos, Connectivity, VertCurv, TGraph, PathSampl.SelectedPaths);
 
 int CurrCol = 0;
@@ -200,9 +211,9 @@ void InitGraph()
 {
     Geo::TragingGraphFunctions<ScalarType>::InitFromVertCrossField(TGraph, VertPos, Connectivity, VertCurv,
                                                                    drift_penalty, maxAngle, diffuse_step);
-    //TGraph.DeSelectAll(0);
-    // TGraph.SelectNoteType(Geo::ExitDomain, 0);
-    // TGraph.SelectNoteType(Geo::TangentDomain, 0);
+    // TGraph.DeSelectAll(0);
+    //  TGraph.SelectNoteType(Geo::ExitDomain, 0);
+    //  TGraph.SelectNoteType(Geo::TangentDomain, 0);
 }
 
 bool UpdateConditions()
@@ -252,7 +263,7 @@ void InitConditions()
     }
     if (CCability >= 1)
     {
-        ScalarType AvVAl = AvgEdgeLen(VertPos, Connectivity)*CCability;
+        ScalarType AvVAl = AvgEdgeLen(VertPos, Connectivity) * CCability;
         PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(AvVAl));
     }
     if (isometric_uv)
@@ -280,32 +291,32 @@ void InitConditions()
 void SampleTracing()
 {
     // PathN.clear();
-    //PathSampl.Init();
+    // PathSampl.Init();
     PDeco.SampleInitialCandidates();
 }
 
-void AddAllPaths(bool upd_patches = true)
-{
-    // auto start = std::chrono::high_resolution_clock::now();
-    PathSampl.InsertAllPaths();
-    //    auto end = std::chrono::high_resolution_clock::now();
-    //    // Calculate the elapsed time
-    //    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    //    double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
-    //    std::cout << "Adding Paths Elapsed time: " << elapsed_seconds << " seconds " <<std::endl;
+// void AddAllPaths(bool upd_patches = true)
+// {
+//     // auto start = std::chrono::high_resolution_clock::now();
+//     PathSampl.InsertAllPaths();
+//     //    auto end = std::chrono::high_resolution_clock::now();
+//     //    // Calculate the elapsed time
+//     //    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+//     //    double elapsed_seconds = duration.count() * 1e-6; // Convert microseconds to seconds
+//     //    std::cout << "Adding Paths Elapsed time: " << elapsed_seconds << " seconds " <<std::endl;
 
-    PathColors.resize(PathSampl.SelectedPaths.size());
-    Geo::ScatterColor<ScalarType>(PathColors);
+//     PathColors.resize(PathSampl.SelectedPaths.size());
+//     Geo::ScatterColor<ScalarType>(PathColors);
 
-    std::vector<int> UpdatedPatches;
-    if (upd_patches)
-    {
-        PatchM.Update(UpdatedPatches);
-        PDeco.UpdateAllUnsolvedPatches();
-        CurrCol = 1;
-        UpdateColor();
-    }
-}
+//     std::vector<int> UpdatedPatches;
+//     if (upd_patches)
+//     {
+//         PatchM.Update(UpdatedPatches);
+//         PDeco.UpdateAllUnsolvedPatches();
+//         CurrCol = 1;
+//         UpdateColor();
+//     }
+// }
 
 void SmoothPaths()
 {
@@ -343,66 +354,9 @@ void InitPatches()
 {
     PatchM.Init();
     InitConditions();
-    //PDeco.InitBorderVertType();
+    // PDeco.InitBorderVertType();
+    PDeco.Init();
     PDeco.UpdateAllUnsolvedPatches();
-}
-
-void BatchProcess()
-{
-    //    std::cout << "*** INIT GRAPHS *** " <<std::endl;
-    //    auto start = std::chrono::high_resolution_clock::now();
-    //    InitGraph();
-    //    auto end0 = std::chrono::high_resolution_clock::now();
-    //    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
-
-    //    std::cout << "*** INIT PATCHES *** " <<std::endl;
-    //    InitPatches();
-    //    auto end1 = std::chrono::high_resolution_clock::now();
-    //    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - end0);
-
-    //    std::cout << "*** INIT TRACING *** " <<std::endl;
-    //    InitTracing();
-    //    auto end2 = std::chrono::high_resolution_clock::now();
-    //    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
-
-    //    std::cout << "*** ADD ALL PATHS *** " <<std::endl;
-    //    AddAllPaths(false);
-    //    auto end3 = std::chrono::high_resolution_clock::now();
-    //    auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
-
-    //    std::cout << "*** UPDATING PATCHES *** " <<std::endl;
-    //    std::vector<int> UpdatedPatches;
-    //    PatchM.Update(UpdatedPatches);
-    //    CurrCol=1;
-    //    UpdateColor();
-    //    PatchM.CompactEmptyPatches();
-
-    //    auto end4 = std::chrono::high_resolution_clock::now();
-    //    auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
-
-    //    std::cout << "*** SMOOTH PATCHES *** " <<std::endl;
-    //    SmoothPaths();
-    //    auto end5 = std::chrono::high_resolution_clock::now();
-    //    auto elapsed5 = std::chrono::duration_cast<std::chrono::microseconds>(end5 - end4);
-
-    //    //PatchM.InitVisualCornersEdges();
-
-    //    double elapsed_seconds0 = elapsed0.count() * 1e-6; // Convert microseconds to seconds
-    //    double elapsed_seconds1 = elapsed1.count() * 1e-6; // Convert microseconds to seconds
-    //    double elapsed_seconds2 = elapsed2.count() * 1e-6; // Convert microseconds to seconds
-    //    double elapsed_seconds3 = elapsed3.count() * 1e-6; // Convert microseconds to seconds
-    //    double elapsed_seconds4 = elapsed4.count() * 1e-6; // Convert microseconds to seconds
-    //    double elapsed_seconds5 = elapsed5.count() * 1e-6; // Convert microseconds to seconds
-
-    //    showCross=false;
-
-    //    std::cout << "*** TIMINGS (sec) *** " <<std::endl;
-    //    std::cout << "* Init Graph Elapsed time: " << elapsed_seconds0 <<std::endl;
-    //    std::cout << "* Init Patches: " << elapsed_seconds1 <<std::endl;
-    //    std::cout << "* Init Tracing: " << elapsed_seconds2  <<std::endl;
-    //    std::cout << "* Adding Paths: " << elapsed_seconds3  <<std::endl;
-    //    std::cout << "* Updating Patches: " << elapsed_seconds4  <<std::endl;
-    //    std::cout << "* Smooth Patches: " << elapsed_seconds5  <<std::endl;
 }
 
 // void TestTrace()
@@ -642,6 +596,7 @@ void SetRenderBar()
                                           "Flat",
                                           "Smooth Wire",
                                           "Flat Wire"};
+    ImGui::Checkbox("Draw Dual", &showDual);
     ImGui::SetNextItemWidth(100);
     ImGui::Combo("Mesh Mode", &DrawMeshMode, itemsDrawMode, IM_ARRAYSIZE(itemsDrawMode));
 
@@ -653,29 +608,36 @@ void SetRenderBar()
 
     ImGui::Checkbox("Draw Singularities", &showSing);
 
-    ImGui::Separator();
-    ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
-    //  ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
-    // ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
-    ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
-    ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
-    ImGui::Checkbox("Draw Internal Node", &DrawInternalNode);
+    ImGui::Checkbox("Draw Paths", &showPaths);
 
-    ImGui::Separator();
-    ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW SAMPLING");
-    ImGui::Checkbox("Draw Must Pass", &Draw_must_pass_on);
-    ImGui::Checkbox("Draw Sample On", &Draw_sample_on);
-    ImGui::Checkbox("Draw Force Sample", &Draw_force_sample);
-    ImGui::Checkbox("Draw Allow Path", &Draw_allow_path_on);
-    ImGui::Checkbox("Draw Allow Arrive", &Draw_allow_arrive_to);
-    
-    ImGui::Checkbox("Draw Initial Pos", &DrawInitalPos);
-    ImGui::InputInt("Cand Idx",&curr_cand);
-    ImGui::Checkbox("Draw Candidates", &DrawCandidates);
-    
+    // ImGui::Separator();
+    // ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
+    if (ImGui::CollapsingHeader("DRAW GRAPH"))
+    {
+        //  ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
+        // ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
+        ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
+        ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
+        ImGui::Checkbox("Draw Internal Node", &DrawInternalNode);
+    }
+    // ImGui::Separator();
+    if (ImGui::CollapsingHeader("DRAW SAMPLING"))
+    {
+        // ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW SAMPLING");
+        ImGui::Checkbox("Draw Must Pass", &Draw_must_pass_on);
+        ImGui::Checkbox("Draw Sample On", &Draw_sample_on);
+        ImGui::Checkbox("Draw Force Sample", &Draw_force_sample);
+        ImGui::Checkbox("Draw Allow Path", &Draw_allow_path_on);
+        ImGui::Checkbox("Draw Allow Arrive", &Draw_allow_arrive_to);
+
+        ImGui::Checkbox("Draw Initial Pos", &DrawInitalPos);
+        ImGui::InputInt("Cand Idx", &curr_cand);
+        ImGui::Checkbox("Draw Candidates", &DrawCandidates);
+    }
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW PATCH");
     ImGui::Checkbox("Draw Corners", &DrawCorners);
+    ImGui::Checkbox("Draw DualCorners", &DrawDualCorners);
     ImGui::Checkbox("Draw Sides", &DrawSides);
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "COLOR PATCHES");
     static const char *itemsShape[] = {"Uniform",
@@ -712,12 +674,94 @@ void UpdateAfterRemesh()
     UpdateColor();
 }
 
+bool remove_batch = true;
+bool remove_split = false;
+
+void BatchProcess()
+{
+    auto start = std::chrono::high_resolution_clock::now();
+    std::cout << "*** REFINE *** " << std::endl;
+    Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(VertPos, Connectivity,
+                                                             FaceCurv, SingIndex,
+                                                             min_sing_distance);
+    MeshBox.Init(VertPos);
+    UpdateAfterRemesh();
+    auto end0 = std::chrono::high_resolution_clock::now();
+    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
+
+    std::cout << "*** INIT GRAPHS *** " << std::endl;
+    InitGraph();
+    auto end1 = std::chrono::high_resolution_clock::now();
+    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - end0);
+
+    std::cout << "*** INIT PATCHES *** " << std::endl;
+    InitPatches();
+    auto end2 = std::chrono::high_resolution_clock::now();
+    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
+
+    std::cout << "*** ADD ALL PATHS *** " << std::endl;
+    PDeco.BatchDecompose(remove_batch, remove_split);
+    auto end3 = std::chrono::high_resolution_clock::now();
+    auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
+
+    //    std::cout << "*** UPDATING PATCHES *** " <<std::endl;
+    //    std::vector<int> UpdatedPatches;
+    //    PatchM.Update(UpdatedPatches);
+    //    CurrCol=1;
+    //    UpdateColor();
+    //    PatchM.CompactEmptyPatches();
+
+    //    auto end4 = std::chrono::high_resolution_clock::now();
+    //    auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
+
+    std::cout << "*** SMOOTH PATCHES *** " << std::endl;
+    SmoothPaths();
+    auto end4 = std::chrono::high_resolution_clock::now();
+    auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
+
+    // PatchM.InitVisualCornersEdges();
+
+    double elapsed_seconds0 = elapsed0.count() * 1e-6; // Convert microseconds to seconds
+    double elapsed_seconds1 = elapsed1.count() * 1e-6; // Convert microseconds to seconds
+    double elapsed_seconds2 = elapsed2.count() * 1e-6; // Convert microseconds to seconds
+    double elapsed_seconds3 = elapsed3.count() * 1e-6; // Convert microseconds to seconds
+    double elapsed_seconds4 = elapsed4.count() * 1e-6; // Convert microseconds to seconds
+
+    showCross = false;
+
+    std::cout << "*** TIMINGS (sec) *** " << std::endl;
+    std::cout << "* Remeshing time: " << elapsed_seconds0 << std::endl;
+    std::cout << "* Init Graph Elapsed time: " << elapsed_seconds1 << std::endl;
+    std::cout << "* Init Patches: " << elapsed_seconds2 << std::endl;
+    std::cout << "* Adding Paths: " << elapsed_seconds3 << std::endl;
+    std::cout << "* Smooth Patches: " << elapsed_seconds4 << std::endl;
+}
+
 void SetDecomposeBar()
 {
+
     ImGui::Begin("Decompose", NULL, ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello, world!" and append into it.
+
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "BATCH");
+    if (ImGui::Button("PROCESS"))
+    {
+        BatchProcess();
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+        UpdateColor();
+    }
+    ImGui::SetNextItemWidth(100);
+    ImGui::SameLine();
+    ImGui::InputInt("Density", &PathSampl.NumSamples);
+    ImGui::SameLine();
+    ImGui::Checkbox("Remove", &remove_batch);
+    ImGui::SameLine();
+    ImGui::Checkbox("Split", &remove_split);
+
+    ImGui::Separator();
+
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "PREPROCESS");
 
-    
     if (ImGui::Button("Refine Sing"))
     {
         Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(VertPos, Connectivity,
@@ -734,7 +778,6 @@ void SetDecomposeBar()
     // {
     //     TestSampling();
     // }
-    
 
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "INIT");
     ImGui::SetNextItemWidth(150);
@@ -751,123 +794,8 @@ void SetDecomposeBar()
         has_graph = true;
         showCross = false;
     }
-    if (!has_graph)
-    {
-        ImGui::End();
-        return;
-    }
-
-    
-    // if (ImGui::Button("Init Patches"))
-    // {
-    //     InitPatches();
-    //     has_init_patches=true;
-    // }
-    // if (!has_init_patches){
-    //     ImGui::End();
-    //     return;
-    // }
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATH SAMPLING");
-
-    ImGui::SetNextItemWidth(80);
-    ImGui::InputInt("Samples", &PathSampl.NumSamples);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(80);
-    ImGui::InputInt("Sing Dist", &PathSampl.minSingResample);
-
-    ImGui::BeginTable("Involved Nodes", 5);
-    ImGui::TableSetupColumn("");
-    ImGui::TableSetupColumn("Dart");
-    ImGui::TableSetupColumn("Concave");
-    ImGui::TableSetupColumn("Border");
-    ImGui::TableSetupColumn("Internal");
-    ImGui::TableHeadersRow();
-
-    ImGui::TableNextRow();
-    ImGui::TableSetColumnIndex(0);
-    ImGui::Text("Start");
-
-    ImGui::TableSetColumnIndex(1);
-    ImGui::Checkbox("##foo1", &PDeco.start_spike);
-    ImGui::TableSetColumnIndex(2);
-    ImGui::Checkbox("##foo2", &PDeco.start_concave);
-    ImGui::TableSetColumnIndex(3);
-    ImGui::Checkbox("##foo3", &PDeco.start_border);
-    ImGui::TableSetColumnIndex(4);
-    ImGui::Checkbox("##foo4", &PDeco.start_internal);
-
-    ImGui::TableNextRow();
-    ImGui::TableSetColumnIndex(0);
-    ImGui::Text("End");
-
-    ImGui::TableSetColumnIndex(1);
-    ImGui::Checkbox("##foo5", &PDeco.end_spike);
-    ImGui::TableSetColumnIndex(2);
-    ImGui::Checkbox("##foo6", &PDeco.end_concave);
-    ImGui::TableSetColumnIndex(3);
-    ImGui::Checkbox("##foo7", &PDeco.end_border);
-    ImGui::TableSetColumnIndex(4);
-    //ImGui::Checkbox("##foo8", &PDeco.end_internal);
-
-    ImGui::EndTable();
-    if (ImGui::Button("Sample Candidates"))
-    {
-        SampleTracing();
-    }
-
-    ImGui::Separator();
-    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATH DISTRIBUTION");
-
-    //    if (ImGui::Button("Init Patches"))
-    //    {
-    //        InitPatches();
-    //    }
-    if (ImGui::Button("Add Next"))
-    {
-        bool terminated = false;
-        bool solved = false;
-        PDeco.AddNext(solved, terminated);
-
-        PathColors.resize(PathSampl.SelectedPaths.size());
-        Geo::ScatterColor<ScalarType>(PathColors);
-        UpdateColor();
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button("Resample"))
-    {
-        PDeco.RetraceOnUnsolved();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Remove"))
-    {
-        PDeco.RemoveNextIfPossible();
-
-        PathColors.resize(PathSampl.SelectedPaths.size());
-        Geo::ScatterColor<ScalarType>(PathColors);
-        UpdateColor();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Split"))
-    {
-        PathSampl.SplitPaths();
-        PathColors.resize(PathSampl.SelectedPaths.size());
-        Geo::ScatterColor<ScalarType>(PathColors);
-        UpdateColor();
-    }
-
-    ImGui::SetNextItemWidth(120);
-    ImGui::Checkbox("Dynamic Upd", &PathSampl.dynamicUpdates);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(120);
-    ImGui::Checkbox("Only Needed", &PDeco.add_only_where_needed);
-    ImGui::SetNextItemWidth(120);
-    ImGui::Checkbox("Stop Solved", &PDeco.stop_when_solved);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(120);
-    ImGui::Checkbox("Dynamic Smth", &PDeco.dynamic_smooth);
-
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "CONDITIONS");
     ImGui::TextColored(ImVec4(0, 0, 1, 1), "structure");
     ImGui::Checkbox("Darts", &PDeco.allow_darts);
     ImGui::SameLine();
@@ -917,7 +845,6 @@ void SetDecomposeBar()
         isometric_uv = false;
         conformal_uv = true;
     }
-
     float max_uvDistf = max_uvDist;
     ImGui::SetNextItemWidth(100);
     ImGui::InputFloat("Max UV Distortion", &max_uvDistf);
@@ -929,6 +856,163 @@ void SetDecomposeBar()
         InitConditions();
         PDeco.UpdateAllUnsolvedPatches();
     }
+
+    if (!has_graph)
+    {
+        ImGui::End();
+        return;
+    }
+
+    // if (ImGui::Button("Init Patches"))
+    // {
+    //     InitPatches();
+    //     has_init_patches=true;
+    // }
+    // if (!has_init_patches){
+    //     ImGui::End();
+    //     return;
+    // }
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATH SAMPLING");
+
+    ImGui::SetNextItemWidth(80);
+    ImGui::InputInt("Samples", &PathSampl.NumSamples);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80);
+    ImGui::InputInt("Sing Dist", &PathSampl.minSingResample);
+
+    if (ImGui::Button("FEATURES"))
+    {
+        PDeco.SolveAllFeatures();
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+        UpdateColor();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("ALL"))
+    {
+        PDeco.SolveAllMesh();
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+        UpdateColor();
+        // SampleTracing();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("REMOVE"))
+    {
+        PDeco.RemovePaths();
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+        UpdateColor();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("SPLIT REMOVE"))
+    {
+        PDeco.RemoveSplitted();
+        PathColors.resize(PathSampl.SelectedPaths.size());
+        Geo::ScatterColor<ScalarType>(PathColors);
+        UpdateColor();
+    }
+    if (ImGui::CollapsingHeader("Sample Step"))
+    {
+        ImGui::BeginTable("Involved Nodes", 5);
+        ImGui::TableSetupColumn("");
+        ImGui::TableSetupColumn("Dart");
+        ImGui::TableSetupColumn("Concave");
+        ImGui::TableSetupColumn("Border");
+        ImGui::TableSetupColumn("Internal");
+        ImGui::TableHeadersRow();
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Start");
+
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Checkbox("##foo1", &PDeco.start_spike);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::Checkbox("##foo2", &PDeco.start_concave);
+        ImGui::TableSetColumnIndex(3);
+        ImGui::Checkbox("##foo3", &PDeco.start_border);
+        ImGui::TableSetColumnIndex(4);
+        ImGui::Checkbox("##foo4", &PDeco.start_internal);
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("End");
+
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Checkbox("##foo5", &PDeco.end_spike);
+        ImGui::TableSetColumnIndex(2);
+        ImGui::Checkbox("##foo6", &PDeco.end_concave);
+        ImGui::TableSetColumnIndex(3);
+        ImGui::Checkbox("##foo7", &PDeco.end_border);
+        ImGui::TableSetColumnIndex(4);
+        // ImGui::Checkbox("##foo8", &PDeco.end_internal);
+
+        ImGui::EndTable();
+        if (ImGui::Button("Sample Candidates"))
+        {
+            SampleTracing();
+        }
+    }
+
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "PATH DISTRIBUTION");
+
+    //    if (ImGui::Button("Init Patches"))
+    //    {
+    //        InitPatches();
+    //    }
+    if (ImGui::CollapsingHeader("Distributing Step"))
+    {
+        if (ImGui::Button("Add Next"))
+        {
+            bool terminated = false;
+            bool solved = false;
+            PDeco.AddNext(solved, terminated);
+
+            PathColors.resize(PathSampl.SelectedPaths.size());
+            Geo::ScatterColor<ScalarType>(PathColors);
+            UpdateColor();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Resample"))
+        {
+            PDeco.RetraceOnUnsolved();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Remove"))
+        {
+            bool has_removed = PDeco.RemoveNextIfPossible();
+            if (has_removed)
+                PathSampl.MergeCollinearPath();
+
+            PathColors.resize(PathSampl.SelectedPaths.size());
+            Geo::ScatterColor<ScalarType>(PathColors);
+            UpdateColor();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Split"))
+        {
+            PathSampl.SplitPaths();
+            PathColors.resize(PathSampl.SelectedPaths.size());
+            Geo::ScatterColor<ScalarType>(PathColors);
+            UpdateColor();
+        }
+
+        ImGui::SetNextItemWidth(120);
+        ImGui::Checkbox("Dynamic Upd", &PathSampl.dynamicUpdates);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120);
+        ImGui::Checkbox("Only Needed", &PDeco.add_only_where_needed);
+        ImGui::SetNextItemWidth(120);
+        ImGui::Checkbox("Stop Solved", &PDeco.stop_when_solved);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120);
+        ImGui::Checkbox("Dynamic Smth", &PDeco.dynamic_smooth);
+    }
+
     ImGui::End();
 }
 
@@ -968,16 +1052,123 @@ void SaveAll()
     SaveMesh();
 }
 
+std::vector<Geo::Point3<ScalarType>> VisCornerPos;
+
+void SaveDualPatches()
+{
+    std::vector<std::vector<Geo::Point3<ScalarType>>> SubMeshesV;
+    std::vector<std::vector<std::vector<int>>> SubMeshesF;
+    std::vector<std::vector<int>> OriginalV, OriginalF;
+    SplitByFFConnectedComponenent(DualVertPos, DualConnectivity, SubMeshesV, SubMeshesF, OriginalV, OriginalF);
+    for (size_t i = 0; i < SubMeshesV.size(); i++)
+    {
+        std::string FinalMFilename = ProjectName;
+        std::string IDX = std::to_string(i);
+        FinalMFilename.append(IDX);
+        FinalMFilename.append("_dual.obj");
+        std::cout << "Saving to:" << FinalMFilename.c_str() << std::endl;
+        WriteOBJ(FinalMFilename.c_str(), SubMeshesV[i], SubMeshesF[i]);
+    }
+    // ConnectedCO
+}
+
+Geo::DualPatch<ScalarType>::DualParameter DualParam;
+int EvenMode = 0;
+int OnlyDualP = -1;
 void SetExportBar()
 {
-    ImGui::Begin("Export", NULL, ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello, world!" and append into it.
+    ImGui::Begin("Finalize", NULL, ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello, world!" and append into it.
 
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "SMOOTH");
+
+    ImGui::SetNextItemWidth(80);
     ImGui::InputInt("Smooth Steps", &smooth_steps);
+    ImGui::SameLine();
     if (ImGui::Button("Smooth"))
         SmoothPaths();
 
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "DUALIZE");
+
+    ImGui::Checkbox("Only Non-Quad", &DualParam.OnlyNonQuad);
+    ImGui::Checkbox("Init Sing Pos", &DualParam.InitSingPos);
+    ImGui::Checkbox("Fix Sing Pos", &DualParam.FixSingPos);
+    ImGui::Checkbox("Joint Border", &DualParam.JointBorder);
+
+    if (DualParam.RType == Geo::DualPatch<ScalarType>::RTypeOrtho)
+        EvenMode = 1;
+    else
+        EvenMode = 0;
+
+    static const char *itemsEvenMode[] = {"Even",
+                                          "Ortho"};
+
+    ImGui::Combo("Dual Mode", &EvenMode, itemsEvenMode, IM_ARRAYSIZE(itemsEvenMode));
+
+    if (EvenMode == 1)
+        DualParam.RType = Geo::DualPatch<ScalarType>::RTypeOrtho;
+    else
+        DualParam.RType = Geo::DualPatch<ScalarType>::RTypeEven;
+
+    ImGui::InputInt("Only Patch", &OnlyDualP);
+    DualParam.OnlyPatch.clear();
+    if (OnlyDualP < -1)
+        OnlyDualP = -1;
+    OnlyDualP = std::min(OnlyDualP, PatchM.NumPatches() - 1);
+
+    if (OnlyDualP >= 0)
+        DualParam.OnlyPatch.push_back(OnlyDualP);
+
     if (ImGui::Button("Extract Dual"))
-        Geo::DualPatch<ScalarType>::ExtractDual(VertPos, Connectivity, PatchM, SidesMidP);
+    {
+
+        std::vector<std::vector<int>> PerPatchVertIDX;
+        std::vector<std::vector<int>> PerPatchFaceIDX;
+        std::vector<std::vector<int>> PerPatchCornerIDX;
+        Geo::DualPatch<ScalarType>::ExtractDual(VertPos, Connectivity, PatchM,
+                                                DualParam, DualVertPos, DualConnectivity,
+                                                PerPatchVertIDX, PerPatchFaceIDX,
+                                                PerPatchCornerIDX);
+        // // UPDATE COLOR
+        // FaceColDual.clear();
+        // FaceColDual.resize(DualConnectivity.size(),
+        //                    Geo::Point3<ScalarType>(0.5, 1, 0.83));
+
+        // for (size_t i = 0; i < PerPatchFaceIDX.size(); i++)
+        // {
+        //     Geo::Point3<ScalarType> CurrCol = Geo::ScatterColor<ScalarType>(PerPatchFaceIDX.size(), i);
+        //     for (size_t j = 0; j < PerPatchFaceIDX[i].size(); j++)
+        //     {
+        //         int IndexF = PerPatchFaceIDX[i][j];
+        //         FaceColDual[IndexF] = CurrCol;
+        //     }
+        // }
+        // UPDATE MESH DATA
+        ComputeNormals(DualVertPos, DualConnectivity,
+                       DualFaceNormals, DualVertNormals);
+
+        Geo::getFFAdjacency(DualConnectivity, DualNextF, DualNextE);
+
+        // EXTRACT CORNER POS
+        // Geo::DualPatch<ScalarType>::ExtractCornerVisPos(DualVertPos, DualConnectivity,
+        //                                                 PerPatchFaceIDX, PerPatchCornerIDX,
+        //                                                 VisCornerPos);
+        // CONTROLS FOR VISUALIZATION
+        showMesh = false;
+        showDual = true;
+        showPaths = false;
+    }
+    if (ImGui::Button("Save Dual Patches"))
+    {
+        SaveDualPatches();
+    }
+    if (ImGui::Button("Save Dual Mesh"))
+    {
+        std::string FinalMFilename = ProjectName;
+        FinalMFilename.append("_dual.obj");
+        WriteOBJ(FinalMFilename.c_str(), DualVertPos, DualConnectivity);
+    }
     // PatchM.ExtractDual();
 
     ImGui::Separator();
@@ -1041,8 +1232,11 @@ void GLDrawMesh()
     GLDraw::glScale(3 / MeshBox.Diag());
     GLDraw::glTranslate(-MeshBox.Center());
 
-    if (showMesh)
+    if (showDual || showMesh)
     {
+        // glColor4f(mesh_color.x * mesh_color.w, mesh_color.y * mesh_color.w, mesh_color.z * mesh_color.w, mesh_color.w);
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+
         // glColor4f(mesh_color.x * mesh_color.w, mesh_color.y * mesh_color.w, mesh_color.z * mesh_color.w, mesh_color.w);
         glPushAttrib(GL_ALL_ATTRIB_BITS);
         bool wire = true;
@@ -1066,9 +1260,23 @@ void GLDrawMesh()
             smoothshade = false;
             break;
         }
-        GLDraw::GLDrawBorders<ScalarType>(VertPos, Connectivity, NextF, 1);
-        glLineWidth(line_thick);
-        GLDraw::DrawSurfaceMesh<ScalarType>(VertPos, Connectivity, FaceNormals, VertNormals, true, wire, smoothshade, false, GLDraw::TRTriangle, &FaceCol);
+        if (showDual)
+        {
+            GLDraw::glColor(Geo::Point3<ScalarType>(0.8, 0.8, 0.8));
+            GLDraw::GLDrawBorders<ScalarType>(DualVertPos, DualConnectivity, DualNextF, 5);
+            glLineWidth(line_thick);
+            GLDraw::DrawSurfaceMesh<ScalarType>(DualVertPos, DualConnectivity, DualFaceNormals, DualVertNormals,
+                                                true, wire, smoothshade, false, GLDraw::TRTriangle);//, &FaceColDual);
+        }
+        if (showMesh)
+        {
+
+            GLDraw::GLDrawBorders<ScalarType>(VertPos, Connectivity, NextF, 1);
+            glLineWidth(line_thick);
+            GLDraw::DrawSurfaceMesh<ScalarType>(VertPos, Connectivity, FaceNormals, VertNormals,
+                                                true, wire, smoothshade, false, GLDraw::TRTriangle, &FaceCol);
+            glPopAttrib();
+        }
         glPopAttrib();
     }
 
@@ -1089,13 +1297,16 @@ void GLDrawMesh()
 
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam;
     PDParam.DrawPath = true;
-    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(TGraph, VertCurv, PathSampl.SelectedPaths, MeshBox.Diag() * 0.005,
-                                                          PDParam, PathColors);
+    if (showPaths)
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(TGraph, VertCurv, PathSampl.SelectedPaths, MeshBox.Diag() * 0.005,
+                                                              PDParam, PathColors);
 
     PDParam.DrawPath = false;
 
     if (DrawCorners)
         GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCorners(PatchM);
+    if (DrawDualCorners)
+        GLDraw::DrawPoints(VisCornerPos);
 
     if (DrawSides)
         GLGraphDraw::GLDrawPatchData<ScalarType>::DrawSides(PatchM);
@@ -1103,33 +1314,33 @@ void GLDrawMesh()
     if (DrawInitalPos)
     {
         GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam1;
-        PDParam1.ColPoint=Geo::Point3<ScalarType>(1,0,1);
-        PDParam1.pointSize=20;
-        PDParam1.lineSize=10;
-        PDParam1.DrawPath=false;
+        PDParam1.ColPoint = Geo::Point3<ScalarType>(1, 0, 1);
+        PDParam1.pointSize = 20;
+        PDParam1.lineSize = 10;
+        PDParam1.DrawPath = false;
         std::vector<int> NodesIdx;
         PathSampl.GetStartingNodes(NodesIdx);
-        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(TGraph,VertCurv,
-                                                            NodesIdx,MeshBox.Diag() * 0.005,
-                                                            PDParam1);
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(TGraph, VertCurv,
+                                                              NodesIdx, MeshBox.Diag() * 0.005,
+                                                              PDParam1);
         // std::vector<int> StartIDX;
         // PathSampl.GetStartingNodes(StartIDX);
         // GLDraw::DrawVertices(VertPos, StartIDX);
     }
 
     if (Draw_must_pass_on)
-        GLDraw::DrawVertices<ScalarType>(VertPos,PathSampl.must_pass_on);
+        GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.must_pass_on);
     if (Draw_sample_on)
-        GLDraw::DrawVertices<ScalarType>(VertPos,PathSampl.sample_on);
+        GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.sample_on);
     if (Draw_force_sample)
-        GLDraw::DrawVertices<ScalarType>(VertPos,PathSampl.force_sample);
+        GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.force_sample);
     if (Draw_allow_path_on)
-        GLDraw::DrawVertices<ScalarType>(VertPos,PathSampl.allow_path_on);
+        GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.allow_path_on);
     if (Draw_allow_arrive_to)
-        GLDraw::DrawVertices<ScalarType>(VertPos,PathSampl.allow_arrive_to);
+        GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.allow_arrive_to);
 
     if (DrawCandidates)
-        GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCandidates(PathSampl, MeshBox.Diag() * 0.005,curr_cand);
+        GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCandidates(PathSampl, MeshBox.Diag() * 0.005, curr_cand);
 
     PDParam.lineSize = 5;
     if (DrawExitNode)

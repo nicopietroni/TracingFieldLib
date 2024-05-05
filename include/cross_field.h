@@ -123,8 +123,8 @@ namespace Field
 
         int BestIntervalI(const Geo::Point3<ScalarType> &TargetD) const
         {
-            ScalarType BestDot=-2;
-            int BestDir=-1;
+            ScalarType BestDot = -2;
+            int BestDir = -1;
             for (size_t d = 0; d < 4; d++)
             {
                 Geo::Point3<ScalarType> TestDir0 = GetDirection(d);
@@ -326,6 +326,16 @@ namespace Field
             std::cout << "Norm D1:" << D1.Norm() << std::endl;
 
             std::cout << "Dot D0 D1:" << fabs(Dot(D0, D1)) << std::endl;
+        }
+
+        void InitFromDirection(const Geo::Point3<ScalarType> &D0,
+                               const Geo::Point3<ScalarType> &N)
+        {
+            D[0] = D0;
+            D[1] = Cross(N, D[0]);
+            K[0] = 1;
+            K[1] = 1;
+            Q = 1;
         }
     };
 

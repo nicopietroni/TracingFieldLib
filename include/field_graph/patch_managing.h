@@ -1573,6 +1573,19 @@ namespace Geo
             CornerVert.erase(last, CornerVert.end());
         }
 
+        void GetAllCornerPos(int IndexP,std::vector<Geo::Point3<ScalarType>> &CornerPos) const
+        {
+            CornerPos.clear();
+            std::vector<int> CornerVert;
+            std::vector<CornerType> CurrType;
+            GetAllCorners(IndexP,CornerVert,CurrType);
+            for (size_t i = 0; i < CornerVert.size(); i++)
+            {
+                int IndexV = CornerVert[i];
+                CornerPos.push_back(PData.SubPatchVertPos[IndexP][IndexV]);
+            }
+        }
+
         void GetAllCornerPos(std::vector<Geo::Point3<ScalarType>> &CornerPos) const
         {
             CornerPos.clear();

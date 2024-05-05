@@ -173,13 +173,13 @@ namespace Geo
             // add again the first one
             VertSubSeq.back().push_back(BorderSeq[0]);
 
-            //final check
-            for (size_t i=0;i<VertSubSeq.size();i++)
+            // final check
+            for (size_t i = 0; i < VertSubSeq.size(); i++)
             {
                 assert(CornerIDXSet.count(VertSubSeq[i][0]) > 0);
                 assert(CornerIDXSet.count(VertSubSeq[i].back()) > 0);
-                for (size_t j=1;j<VertSubSeq[i].size()-1;j++)
-                     assert(CornerIDXSet.count(VertSubSeq[i][j]) == 0);
+                for (size_t j = 1; j < VertSubSeq[i].size() - 1; j++)
+                    assert(CornerIDXSet.count(VertSubSeq[i][j]) == 0);
             }
             return true;
         }
@@ -200,9 +200,9 @@ namespace Geo
             ScalarType CurrL = 0;
             for (size_t i = 0; i < VertSeq.size() - 1; i++)
             {
-                ScalarType ratio = 1 - CurrL / LSeq;//1-(ScalarType)i/(ScalarType)(VertSeq.size()-1);///
-                assert(ratio>=0);
-                assert(ratio<=1);
+                ScalarType ratio = 1 - CurrL / LSeq; // 1-(ScalarType)i/(ScalarType)(VertSeq.size()-1);///
+                assert(ratio >= 0);
+                assert(ratio <= 1);
                 Geo::Point2<ScalarType> CurrUV = UV0 * ratio + UV1 * (1 - ratio);
                 UVSeq.push_back(CurrUV);
 
@@ -229,7 +229,8 @@ namespace Geo
         {
             UVArap,
             UVLSConformal,
-            UVTutte
+            UVTutte,
+            UVPoisson
         };
 
         static void MapToACircle(const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -282,7 +283,7 @@ namespace Geo
                                             (ScalarType)CornerIDX.size();
                 for (size_t i = 0; i < CornerIDX.size(); i++)
                 {
-                    Geo::Point2<ScalarType> CurrUV = AngleToUV(curr_alpha)*Radius;
+                    Geo::Point2<ScalarType> CurrUV = AngleToUV(curr_alpha) * Radius;
                     CornerUV.push_back(CurrUV);
                     curr_alpha += interval_alpha;
                 }
@@ -293,8 +294,8 @@ namespace Geo
                 for (size_t i = 0; i < CornerIDX.size(); i++)
                 {
                     ScalarType SubSeqL = LenghtSequence(VertPos, VertSubSeq[i], false);
-                    ScalarType Ratio =SubSeqL/TotL; //1/(ScalarType)CornerIDX.size();
-                    Geo::Point2<ScalarType> CurrUV = AngleToUV(curr_alpha)*Radius;
+                    ScalarType Ratio = SubSeqL / TotL; // 1/(ScalarType)CornerIDX.size();
+                    Geo::Point2<ScalarType> CurrUV = AngleToUV(curr_alpha) * Radius;
                     CornerUV.push_back(CurrUV);
                     curr_alpha += Ratio * (ScalarType)(2 * M_PI);
                 }
@@ -306,16 +307,16 @@ namespace Geo
             for (size_t i = 0; i < CornerIDX.size(); i++)
             {
                 Geo::Point2<ScalarType> CurrUV0 = CornerUV[i];
-                Geo::Point2<ScalarType> CurrUV1 = CornerUV[(i + 1)%CornerUV.size()];
+                Geo::Point2<ScalarType> CurrUV1 = CornerUV[(i + 1) % CornerUV.size()];
                 std::vector<Geo::Point2<ScalarType>> UVSeq;
                 InterpolateLinearUV(CurrUV0, CurrUV1, VertPos, VertSubSeq[i], UVSeq);
-                assert(UVSeq.size() == VertSubSeq[i].size());      
+                assert(UVSeq.size() == VertSubSeq[i].size());
                 // Insert elements from the beginning but the last because it is repeated in the next
-                vert_UV.insert(vert_UV.end(), UVSeq.begin(), UVSeq.end()-1);
+                vert_UV.insert(vert_UV.end(), UVSeq.begin(), UVSeq.end() - 1);
             }
-            assert(vert_UV.size()==BorderSeq.size());
-            //FINAL CHECK
-            //std::cout<<"First UV 0 :"<<vert_UV[0].X<<","<<vert_UV[0].Y<<std::endl;
+            assert(vert_UV.size() == BorderSeq.size());
+            // FINAL CHECK
+            // std::cout<<"First UV 0 :"<<vert_UV[0].X<<","<<vert_UV[0].Y<<std::endl;
             std::rotate(vert_UV.rbegin(),
                         vert_UV.rbegin() + IndexFirst,
                         vert_UV.rend());
@@ -326,7 +327,7 @@ namespace Geo
             //     std::cout<<"First UV 1 : "<<vert_UV[i].X<<","<<vert_UV[i].Y<<std::endl;
             //     break;
             // }
-            //std::cout<<"First UV 1 : "<<vert_UV[CornerIDX[0]].X<<","<<vert_UV[CornerIDX[0]].Y<<std::endl;
+            // std::cout<<"First UV 1 : "<<vert_UV[CornerIDX[0]].X<<","<<vert_UV[CornerIDX[0]].Y<<std::endl;
             return true;
         }
 
@@ -547,6 +548,33 @@ namespace Geo
             return ClosestIDX;
         }
 
+        /// return the number of folded faces
+        static bool IsFolded(const std::vector<Geo::Point2<ScalarType>> &VertUV,
+                             const std::vector<std::vector<int>> &Faces,
+                             const int IndexF)
+        {
+            ScalarType areaUV = Area(VertUV, Faces, IndexF, false);
+            return (areaUV < 0);
+        }
+
+        static int FoldedNum(const std::vector<Geo::Point2<ScalarType>> &VertUV,
+                             const std::vector<std::vector<int>> &Faces)
+        {
+            int folded = 0;
+
+            for (size_t i = 0; i < Faces.size(); i++)
+                if (IsFolded(VertUV, Faces, i))
+                    folded++;
+
+            return folded;
+        }
+
+        static bool GloballyUnFolded(const std::vector<Geo::Point2<ScalarType>> &VertUV,
+                                     const std::vector<std::vector<int>> &Faces)
+        {
+            int num = FoldedNum(VertUV,Faces);
+            return (num > (Faces.size()) / 2);
+        }
     };
 
 }

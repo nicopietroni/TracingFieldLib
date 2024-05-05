@@ -56,6 +56,8 @@ namespace Geo
 
             VertUV.clear();
             VertUV.resize(VertPos.size(), Geo::Point2<ScalarType>(0, 0));
+
+            std::vector<Field::CrossF<ScalarType>> FaceCurv;
             for (size_t i = 0; i < SubMeshesV.size(); i++)
             {
                 std::vector<Geo::Point2<ScalarType>> CompVertUV;
@@ -76,9 +78,14 @@ namespace Geo
                     //     return false;
                     break;
 
+                case Geo::UVUtils<ScalarType>::UVPoisson:
+
+                    solved = Geo::UVParam<ScalarType>::Poisson(SubMeshesV[i], SubMeshesF[i], FaceCurv,
+                                                               false, 1, CompVertUV);
+                    break;
                 default:
 
-                    assert(PatchParam.ParamType == UVTutte);
+                    assert(MPatchParam.ParamType == Geo::UVUtils<ScalarType>::UVTutte);
                     std::vector<std::vector<int>> SubCorner;
                     std::set<int> CornerIdxSet(MPatchParam.CornerIdx.begin(),
                                                MPatchParam.CornerIdx.end());

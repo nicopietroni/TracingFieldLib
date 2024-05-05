@@ -65,6 +65,7 @@ namespace Geo
                     return false;
                 if (Dist.size() != NumEl)
                     return false;
+                return true;
             }
 
             void Allocate(const int &NumEl)

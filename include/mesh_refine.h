@@ -392,7 +392,13 @@ public:
             Geo::Point3<ScalarType> Pos1=Pos[KeyE.second];
             Geo::Point2<ScalarType> PosUV0=PosUV[KeyE.first];
             Geo::Point2<ScalarType> PosUV1=PosUV[KeyE.second];
-
+            // if (Pos1<Pos0)
+            // {
+            //     std::swap(Pos0,Pos1);
+            //     std::swap(PosUV0,PosUV1);
+            //     AlphaVal=1-AlphaVal;
+            //     //std::swap(KeyE.first,KeyE.second);
+            // }
             Geo::Point3<ScalarType> InterpPos3D=Pos0*AlphaVal+Pos1*(1-AlphaVal);
             Geo::Point2<ScalarType> InterpPosUV=PosUV0*AlphaVal+PosUV1*(1-AlphaVal);
 

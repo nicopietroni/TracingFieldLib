@@ -152,6 +152,25 @@ public:
         PosIn.erase(last, PosIn.end());
     }
 
+    void PointsInSphere(const std::vector<Geo::Point3<ScalarType> > &pos,
+                        const Geo::Point3<ScalarType> &center,
+                        const ScalarType &radius,
+                        std::vector<int> &PosIn)const
+    {
+        PosIn.clear();
+        Geo::Box3<ScalarType> sphereBB;
+        sphereBB.Set(center);
+        sphereBB.Inflate(radius);
+        std::vector<int> InBox;
+        PointsInBox(pos,sphereBB,InBox);
+        for (size_t i=0;i<InBox.size();i++)
+        {
+            int IndexV=InBox[i];
+            Geo::Point3<ScalarType> curr_pos=pos[IndexV];
+            if ((curr_pos-center).Norm()>radius)continue;
+            PosIn.push_back(IndexV);
+        }
+    }
 
     bool GridClosest(const std::vector<Geo::Point3<ScalarType> > &vert,
                      const CoordType &_p,

@@ -360,7 +360,8 @@ namespace Geo
                                    const std::vector<std::vector<int>> &Faces,
                                    const std::vector<int> &CornerIDX,
                                    std::vector<Geo::Point2<ScalarType>> &VertUV,
-                                   bool uniformE = false)
+                                   bool uniformE = false,
+                                   bool solve_global_fold = true)
         {
 
             VertUV.clear();
@@ -407,27 +408,7 @@ namespace Geo
 
             Eigen::VectorXi b;
             Eigen::MatrixXd bc;
-            // set the boundary constraints
-            //         if (CornerIDX.size()<=2)
-            //         {
-            // if ((CornerIDX.size() >= 2) && (fix_corner_only))
-            // {
-            //     b.resize(CornerIDX.size());
-            //     bc.resize(CornerIDX.size(), 2);
-            //     std::set<int> CornerIDXSet(CornerIDX.begin(),CornerIDX.end());
-            //     int currI=0;
-            //     for (int i = 0; i < (int)BorderVIdx[0].size(); i++)
-            //     {
-            //         int IndexV=BorderVIdx[0][i];
-            //         if (CornerIDXSet.count(IndexV)==0)continue;
-            //         b(currI) = IndexV;
-            //         bc(currI, 0) = vert_UV[i].X;
-            //         bc(currI, 1) = vert_UV[i].Y;
-            //         currI++;
-            //     }
-            // }
-            // else
-            // {
+
             b.resize(BorderVIdx[0].size());
             bc.resize(BorderVIdx[0].size(), 2);
             for (int i = 0; i < (int)BorderVIdx[0].size(); i++)
@@ -436,20 +417,6 @@ namespace Geo
                 bc(i, 0) = vert_UV[i].X;
                 bc(i, 1) = vert_UV[i].Y;
             }
-            //}
-            //        }else
-            //        {
-            //            b.resize(CornerIDX.size());
-            //            bc.resize(CornerIDX.size(),2);
-            //            for (int i=0; i<(int)CornerIDX.size(); i++)
-            //            {
-            //                int IndexV=CornerIDX[i];
-            //                b(i) = IndexV;
-            //                bc(i,0) = vert_UV[IndexV].X;
-            //                bc(i,1) = vert_UV[IndexV].Y;
-            //            }
-
-            //        }
 
             Eigen::MatrixXd uv_harm;
             bool solved = igl::harmonic(F, b, bc, 1, uv_harm);
@@ -464,6 +431,16 @@ namespace Geo
                 VertUV[i].Y = uv_harm(i, 1);
             }
             Geo::UVUtils<ScalarType>::ScaleToMatchArea(VertPos, Faces, VertUV);
+
+            // then check if majority of faces are folded
+            if (solve_global_fold &&
+                (Geo::UVUtils<ScalarType>::GloballyUnFolded(VertUV, Faces)))
+            {
+                Geo::UVUtils<ScalarType>::Mirror(VertUV, 0);
+                bool isUnfolded = Geo::UVUtils<ScalarType>::GloballyUnFolded(VertUV, Faces);
+                assert(!isUnfolded);
+            }
+
             return true;
         }
 
@@ -475,94 +452,43 @@ namespace Geo
             return TutteEmbedding(VertPos, Faces, CornerIDX, VertUV);
         }
 
-        // static void Poisson(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-        //                     const std::vector<std::vector<int>> &Faces,
-        //                     const std::vector<Field::CrossF<ScalarType>> &FacrCurv,
-        //                     std::vector<Geo::Point2<ScalarType>> &VertUV)
-        // {
-        //     int t0, t1, t2, t3;
+        static bool Poisson(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            const std::vector<std::vector<int>> &Faces,
+                            const std::vector<Field::CrossF<ScalarType>> &FaceCurv,
+                            const bool use_direction_field,
+                            const ScalarType fieldScale,
+                            std::vector<Geo::Point2<ScalarType>> &VertUV,
+                            const bool solve_global_fold = true)
+        {
+            std::vector<size_t> to_fix;
+            std::vector<Geo::Point2<ScalarType>> to_fixUV;
 
-        //     // // ///Initializing Matrix
-        //     // // if (_write_messages)
-        //     // // {
-        //     // //     printf("\n INITIALIZING THE MATRIX \n");
-        //     // //     t0=clock();
-        //     // // }
+            Geo::UVPoissonSolver<ScalarType> PoissSolv(VertPos, Faces, FaceCurv);
+            PoissSolv.Init(use_direction_field, true, fieldScale);
 
-        //     // // /// set vertex indexes
-        //     // // InitIndex();
+            /// then fix only one vertex
+            if (use_direction_field)
+            {
+                to_fix.push_back(0);
+                to_fixUV.push_back(Point2<ScalarType>(0, 0));
+            }
+            else
+            {
+                GetDefaultPairVertexToFix_AlongX(VertPos, PoissSolv.to_fix, PoissSolv.to_fixUV);
+            }
 
-        //     // // if (use_direction_field)
-        //     // // {
-        //     // //     assert(to_fix.size() > 0);
-        //     // // }
-        //     // // else
-        //     // // {
-        //     // //     assert(to_fix.size() > 1);
-        //     // // }
+            bool has_solved = PoissSolv.SolvePoisson(VertUV, false, fieldScale);
 
-
-        //     // n_fixed_vars = 1;//to_fix.size();
-
-        //     // /// initialize the matrix ALLOCATING SPACE
-        //     // //InitMatrix();
-
-        //     // //n_vert_vars=mesh.vn;
-        //     // //initialize matrix size
-        //     // total_size = (n_fixed_vars + VertPos.size())*2;///must be multiplied by 2 becasue of u and v
-
-        //     // Eigen::SparseMatrix<double> A; // A
-        //     // Eigen::VectorXd b,x;// x and b
-
-        //     // //--- Allocates the data for Ax=b
-        //     // A=Eigen::SparseMatrix<ScalarType>(total_size, total_size); // A
-        //     // //A.reserve(Eigen::VectorXi::Constant(total_size,32));  // This prealloaction trick greatly speed up the acc
-        //     // b = Eigen::VectorXd::Zero(total_size);  // x and 
-
-        //     // /// build the laplacian system
-        //     // BuildLaplacianMatrix(fieldScale);
-
-        //     // //add the lagrange multiplier
-        //     // FixPointLSquares();
-
-        //     // if (_write_messages)
-        //     // {
-        //     //     t1 = clock();
-        //     //     printf("\n time:%d \n", t1 - t0);
-        //     //     printf("\n SOLVING \n");
-        //     // }
-
-        //     // // int n_vars=(n_vert_vars)*2;
-        //     // // int integer_constr_size=(n_transition_vars+n_fixed_vars+n_bary_transition_vars)*2;
-        //     // // X=std::vector< double >(n_vars+n_fixed_vars*2);
-        //     // bool done = Solve();
-        //     // if (!done)
-        //     //     return false;
-        //     // if (_write_messages)
-        //     // {
-        //     //     t2 = clock();
-        //     //     printf("\n time:%d \n", t2 - t1);
-        //     //     printf("\n ASSIGNING COORDS \n");
-        //     // }
-
-        //     // MapCoords(false, fieldScale);
-        //     // if (_write_messages)
-        //     // {
-        //     //     t3 = clock();
-        //     //     printf("\n time:%d \n", t3 - t2);
-        //     // }
-
-        //     // /// then check if majority of faces are folded
-        //     // if (!solve_global_fold)
-        //     //     return true;
-        //     // if (tri::Distortion<MeshType, false>::GloballyUnFolded(mesh))
-        //     // {
-        //     //     tri::UV_Utils<MeshType>::GloballyMirrorX(mesh);
-        //     //     bool isUnfolded = tri::Distortion<MeshType, false>::GloballyUnFolded(mesh);
-        //     //     assert(!isUnfolded);
-        //     // }
-        //     // return true;
-        // }
+            // then check if majority of faces are folded
+            if (solve_global_fold &&
+                (Geo::UVUtils<ScalarType>::GloballyUnFolded(VertUV, Faces)))
+            {
+                Geo::UVUtils<ScalarType>::Mirror(VertUV, 0);
+                bool isUnfolded = Geo::UVUtils<ScalarType>::GloballyUnFolded(VertUV, Faces);
+                assert(!isUnfolded);
+            }
+            return has_solved;
+        }
     };
 
 }
