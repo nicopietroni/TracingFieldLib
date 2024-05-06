@@ -30,6 +30,7 @@ namespace Geo
             int Max_iteNum; // for Arap
             typename Geo::UVUtils<ScalarType>::UVType ParamType;
             std::vector<int> CornerIdx; // for Tutte
+            bool solve_degenerate;
 
             MultiPatchParameters()
             {
@@ -37,6 +38,7 @@ namespace Geo
                 rearrange = true;
                 Max_iteNum = 100;
                 ParamType = Geo::UVUtils<ScalarType>::UVLSConformal;
+                solve_degenerate = true;
             }
         };
 
@@ -62,6 +64,9 @@ namespace Geo
             {
                 std::vector<Geo::Point2<ScalarType>> CompVertUV;
                 bool solved = false;
+                // if (MPatchParam.solve_degenerate)
+                //     SmoothDegerateTriangles<ScalarType>(SubMeshesV[i], SubMeshesF[i], 1);
+
                 switch (MPatchParam.ParamType)
                 {
                 case Geo::UVUtils<ScalarType>::UVLSConformal:
@@ -69,7 +74,27 @@ namespace Geo
                     solved = Geo::UVParam<ScalarType>::LeastSquaresConformal(SubMeshesV[i],
                                                                              SubMeshesF[i],
                                                                              CompVertUV);
-
+                    {
+                        Geo::Box2<ScalarType> BBUV;
+                        BBUV.Init(CompVertUV);
+                        if (std::isnan(BBUV.DimX()))
+                        {
+                            std::cout<<"SOLVING"<<std::endl;
+                            //SmoothLaplacian<ScalarType>(SubMeshesV[i], SubMeshesF[i], 1);
+                            //SmoothDegerateTriangles<ScalarType>(SubMeshesV[i], SubMeshesF[i], 1);
+                            Geo::UVParam<ScalarType>::LeastSquaresConformal(SubMeshesV[i],
+                                                                            SubMeshesF[i],
+                                                                            CompVertUV);
+                            Geo::Box2<ScalarType> BBUV;
+                            BBUV.Init(CompVertUV);
+                            if (std::isnan(BBUV.DimX()))
+                            {
+                                WriteOBJ("testNaN.obj", SubMeshesV[i], SubMeshesF[i]);
+                                std::cout << "DE boia" << std::endl;
+                                //exit(0);
+                            }
+                        }
+                    }
                     break;
                 case Geo::UVUtils<ScalarType>::UVArap:
                     solved = Geo::UVParam<ScalarType>::Arap(SubMeshesV[i], SubMeshesF[i], CompVertUV,

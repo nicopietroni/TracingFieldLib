@@ -1,6 +1,6 @@
 ﻿#ifndef _OUTLINE_PACKER
 #define _OUTLINE_PACKER
-#define _GRID_SIZE 50
+#define _GRID_SIZE 100
 #include <iostream>
 #include <vector>
 #include <point2.h>
@@ -39,10 +39,10 @@ class OutlinePacker
         Geo::Box2<ScalarType> B2;
 
         ScalarType SizeX()
-        {return B2.SizeX();}
+        {return B2.DimX();}
 
         ScalarType SizeY()
-        {return B2.SizeY();}
+        {return B2.DimY();}
 
         ScalarType MaxSize()const
         {
@@ -187,12 +187,15 @@ class OutlinePacker
             //std::cout<<"NEW COMPONENT"<<UVPart[i].size()<<std::endl;
             Geo::Box2<ScalarType> BBPart;
             BBPart.Init(UVPart[i]);
+        
+            // std::cout<<"Area 0:"<<BBPart.Area()<<std::endl;
+            // std::cout<<"Border Size:"<<BBPart.Area()<<std::endl;
+
             BBPart.Inflate(Border);
 
             Coord2DType Mov=-BBPart.Min;
             Translate(UVPart[i],Mov);
             BBPart.Translate(Mov);
-
             Area+=BBPart.Area();
             Rectangle R(BBPart.Min,BBPart.Max,i);
             Rects.push_back(R);
@@ -222,7 +225,15 @@ class OutlinePacker
             //then add one by one
             Coord2DType Transl;
             bool found=GetBestTranslation(Rects[i],Transl);
-            if (!found)return false;
+            if (!found)
+            {
+                // std::cout<<"Index:"<<i<<std::endl;
+                // std::cout<<"size X Rect:"<<Rects[i].SizeX()<<std::endl;
+                // std::cout<<"size Y Rect:"<<Rects[i].SizeY()<<std::endl;
+                // std::cout<<"size Space:"<<SpaceBB.DimX()<<std::endl;
+                // std::cout<<"size Space:"<<SpaceBB.DimY()<<std::endl;
+                return false;
+            }
             Rects[i].Translate(Transl);
             int IndexP=Rects[i].Index;
             assert(IndexP>=0);
@@ -260,7 +271,7 @@ public:
         ScalarType InflateConst=2;
         bool has_fit=false;
         int curr_step=1;
-        while ((!has_fit)&&(curr_step<10))
+        while ((!has_fit)&&(curr_step<2))
         {
             std::cout<<"Fit Step:"<<curr_step<<std::endl;
             has_fit=PackStep(UVPartitions,Border,InflateConst,Translation);
@@ -278,6 +289,7 @@ public:
         std::vector<std::vector<int> > ComponentsV;
         FFConnectedComponenent(Faces,ComponentsF,ComponentsV);
 
+        std::cout<<"0"<<std::endl;
         //initialize UV per partitions
         std::vector<std::vector<Coord2DType> > UVPartitions;
         UVPartitions.resize(ComponentsV.size());
@@ -290,18 +302,26 @@ public:
                 UVPartitions[i].push_back(UVVert[IndexV]);
             }
 
+        std::cout<<"1"<<std::endl;
         //find optimal translation
         std::vector<Coord2DType> Translation;
         GetTranslation(UVPartitions,Translation,Border);
         assert(Translation.size()==UVPartitions.size());
 
+        std::cout<<"2"<<std::endl;
+
         //then apply
+        std::cout<<"Size UV Partitions:"<<UVPartitions.size()<<std::endl;
+        std::cout<<"Size ComponentsV:"<<ComponentsV.size()<<std::endl;
+        std::cout<<"Size Translation:"<<Translation.size()<<std::endl;
+
         for (size_t i=0;i<UVPartitions.size();i++)
             for (size_t j=0;j<ComponentsV[i].size();j++)
             {
                 int IndexV=ComponentsV[i][j];
                 UVVert[IndexV]+=Translation[i];
             }
+        std::cout<<"3"<<std::endl;
     }
 
 }; // end class

@@ -188,7 +188,7 @@ void MergeCloseVert(std::vector<Geo::Point3<ScalarType>> &VertPos,
     //             continue;
     //         VertPos[i] = VertPos[j];
     //     }
-    ClusterCloseVert(VertPos,Faces,delta);
+    ClusterCloseVert(VertPos, Faces, delta);
     RemoveDuplicatedVert(VertPos, Faces);
 }
 
@@ -1078,16 +1078,21 @@ static void MirrorMesh(std::vector<Geo::Point3<ScalarType>> &Pos3D,
                        std::vector<std::vector<int>> &Faces,
                        const Geo::Plane3<ScalarType> &SplitPl,
                        const std::set<int> &MiddleV)
+//,bool SnapClosePlane=true)
 {
     std::vector<Geo::Point3<ScalarType>> MirroredPos3D = Pos3D;
     std::vector<std::vector<int>> MirroredFaces = Faces;
-    //    std::vector<bool> IsB;
-    //    Geo::getBorderVert(Faces,IsB);
+    std::vector<bool> IsB;
+    Geo::getBorderVert(Faces, IsB);
+    // ScalarType delta = 0.0000001;
     for (size_t i = 0; i < MirroredPos3D.size(); i++)
     {
         // no need to mirror on the place
         if (MiddleV.count(i) > 0)
             continue;
+        ScalarType Dist = fabs(SplitPl.SignedDistance(MirroredPos3D[i]));
+        // if ((IsB[i])&&(Dist<delta)&&(SnapClosePlane))continue;
+        // ScalarType delta = std::numeric_limits<ScalarType>::epsilon() * 2;
         MirroredPos3D[i] = SplitPl.Mirror(MirroredPos3D[i]);
     }
 
@@ -1158,6 +1163,140 @@ static bool HasNaNVert(const std::vector<Geo::Point3<ScalarType>> &VertPos)
     }
     return false;
 }
+
+static void GetDegenerateConnectivityTriangles(const std::vector<std::vector<int>> &Connectivity,
+                                               std::vector<int> &DegenerateF)
+{
+    DegenerateF.clear();
+    for (size_t i = 0; i < Connectivity.size(); i++)
+    {
+        assert(Connectivity[i].size() == 3);
+        std::set<int> FaceVSet(Connectivity[i].begin(), Connectivity[i].end());
+        if (FaceVSet.size() == Connectivity[i].size())
+            continue;
+        DegenerateF.push_back(i);
+    }
+}
+
+template <class ScalarType>
+static void RemoveDegenerateConnectivityTriangles(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                                  std::vector<std::vector<int>> &Connectivity,
+                                                  std::vector<Geo::Point3<ScalarType>> &FaceNormals)
+{
+    std::vector<int> DegenerateF;
+    GetDegenerateConnectivityTriangles(Connectivity, DegenerateF);
+    if (DegenerateF.size() == 0)
+        return;
+
+    std::set<int> DegenerateSet(DegenerateF.begin(), DegenerateF.end());
+    std::vector<std::vector<int> > NewF;
+    std::vector<Geo::Point3<ScalarType> > NewNorm;
+    for (size_t i = 0; i < Connectivity.size(); i++)
+    {
+        if (DegenerateSet.count(i) > 0)
+            continue;
+
+        NewF.push_back(Connectivity[i]);
+        NewNorm.push_back(FaceNormals[i]);
+    }
+    FaceNormals=NewNorm;
+    Connectivity=NewF;
+    RemoveUnfererencedVert(VertPos, Connectivity);
+}
+
+template <class ScalarType>
+static void GetDegenerateTriangles(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                   const std::vector<std::vector<int>> &Connectivity,
+                                   const ScalarType &angleDelta,
+                                   std::vector<int> &DegenerateF)
+{
+    for (size_t i = 0; i < Connectivity.size(); i++)
+    {
+        assert(Connectivity[i].size() == 3);
+        for (size_t j = 0; j < 3; j++)
+        {
+            int IndexV = Connectivity[i][j];
+            int IndexV0 = Connectivity[i][(j + 2) % 3];
+            int IndexV1 = Connectivity[i][(j + 1) % 3];
+            Geo::Point3<ScalarType> P = VertPos[IndexV];
+            Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
+            Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
+            Geo::Point3<ScalarType> Dir0 = P0 - P;
+            Geo::Point3<ScalarType> Dir1 = P1 - P;
+            Dir0.Normalize();
+            Dir1.Normalize();
+            ScalarType Angle = Geo::AngleDeg(Dir0, Dir1);
+            if ((std::isnan(Angle)) ||
+                (Angle < angleDelta) ||
+                (Angle > (180 - angleDelta)))
+            {
+                DegenerateF.push_back(i);
+                break;
+            }
+        }
+    }
+}
+
+template <class ScalarType>
+static void SmoothDegerateTriangles(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                    const std::vector<std::vector<int>> &Connectivity,
+                                    const ScalarType &angleDelta)
+{
+    std::vector<int> DegenerateF;
+    GetDegenerateTriangles(VertPos, Connectivity, angleDelta, DegenerateF);
+    std::vector<bool> IsFix = std::vector<bool>(VertPos.size(), true);
+    for (size_t i = 0; i < DegenerateF.size(); i++)
+    {
+        int IndexF = DegenerateF[i];
+        for (size_t j = 0; j < 3; j++)
+        {
+            int IndexV = Connectivity[IndexF][j];
+            IsFix[IndexV] = false;
+        }
+    }
+    std::vector<int> FixedVert;
+    int To_Smooth = 0;
+    for (size_t i = 0; i < IsFix.size(); i++)
+    {
+        if (!IsFix[i])
+        {
+            To_Smooth++;
+            continue;
+        }
+        FixedVert.push_back(i);
+    }
+    if (To_Smooth == 0)
+        return;
+    std::cout << "**have to smooth:" << To_Smooth << std::endl;
+    const std::vector<std::pair<int, int>> Features;
+    SmoothLaplacian<ScalarType>(VertPos, Connectivity, 1,
+                                FixedVert, Features, false);
+}
+// if (cleanF)
+// {
+//     std::vector<bool> IsFix = std::vector<bool>(SubMeshesV[i].size(), true);
+//     ScalarType delta = AvgEdgeLen(SubMeshesV[i], SubMeshesF[i]) * 0.0001;
+//     for (size_t j = 0; j < SubMeshesF[i].size(); j++)
+//     {
+//         for (size_t k = 0; k < 3; k++)
+//         {
+//             int IndexV0 = SubMeshesF[i][j][k];
+//             int IndexV1 = SubMeshesF[i][j][(k + 1) % 3];
+//             Geo::Point3<ScalarType> P0 = SubMeshesV[i][IndexV0];
+//             Geo::Point3<ScalarType> P1 = SubMeshesV[i][IndexV1];
+//             if ((P0 - P1).Norm() > delta)
+//                 continue;
+//             IsFix[IndexV0] = false;
+//             IsFix[IndexV1] = false;
+//         }
+//     }
+//     std::vector<int> FixedVert;
+//     for (size_t j = 0; j < IsFix.size(); j++)
+//     {
+//         if (!IsFix[i])continue;
+//         FixedVert.push_back(j);
+//     }
+//     SmoothLaplacian<ScalarType>(SubMeshesV[i],SubMeshesF[i],10,FixedVert);
 
 // template <class ScalarType>
 // static bool EdgeManifold(std::vector<Geo::Point3<ScalarType> > &Pos3D,

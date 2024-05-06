@@ -767,7 +767,6 @@ void SetDecomposeBar()
         Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(VertPos, Connectivity,
                                                                  FaceCurv, SingIndex, min_sing_distance);
         MeshBox.Init(VertPos);
-
         UpdateAfterRemesh();
         // WriteOBJ("refined_test.obj",VertPos,Connectivity);
     }
