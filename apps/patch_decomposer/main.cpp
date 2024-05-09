@@ -1125,6 +1125,7 @@ void SetExportBar()
         std::vector<std::vector<int>> PerPatchVertIDX;
         std::vector<std::vector<int>> PerPatchFaceIDX;
         std::vector<std::vector<int>> PerPatchCornerIDX;
+        Geo::DualPatch<ScalarType>::DisambiguateForDual(PatchM);
         Geo::DualPatch<ScalarType>::ExtractDual(VertPos, Connectivity, PatchM,
                                                 DualParam, DualVertPos, DualConnectivity,
                                                 PerPatchVertIDX, PerPatchFaceIDX,
@@ -1383,6 +1384,7 @@ int main(int argc, char *argv[])
 
     PathMesh = std::string(argv[1]);
     LoadMesh(PathMesh);
+    Geo::TracingPreprocess<ScalarType>::DesambiguateInitialDarts(VertPos, Connectivity);
     ProjectName = RemoveExtension(PathMesh);
     PathField = std::string(argv[2]);
     LoadField(PathField);

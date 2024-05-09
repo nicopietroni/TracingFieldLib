@@ -101,6 +101,32 @@ public:
 };
 
 template <class ScalarType>
+class DualMeshingCondition:public PatchCondition<ScalarType>
+{
+
+public:
+
+//    bool IsCorrect(const PatchManaging<ScalarType> &PatchM)const override
+//    {(void)PatchM; return true;}
+
+    bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
+                   const int &IndexPatch)const override
+    { 
+        std::vector<int> Istances;
+        PosInstances<ScalarType>(PatchM.PData.SubPatchVertPos[IndexPatch],Istances);
+        for (size_t i=0;i<Istances.size();i++)
+        {
+            assert(Istances[i]>0);
+            if (Istances[i]>1)return false;
+        }
+        return true;
+    }
+
+    std::string Name()const override
+    {return std::string("dual_meshing");}
+};
+
+template <class ScalarType>
 class MathchSingularityCondition:public PatchCondition<ScalarType>
 {
 

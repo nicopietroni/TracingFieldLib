@@ -93,8 +93,8 @@ public:
 
         InitFromConstraints<ScalarType>(LinConstr,A0,A);
 
-        if (hasNaNInf(A0))
-        {std::cout<<"Error on A0 in Init!!!!"<<std::endl;exit(0);}
+        // if (EigenInterface<ScalarType>::hasNaNInf(A0))
+        // {std::cout<<"Error on A0 in Init!!!!"<<std::endl;exit(0);}
 
         solver= new Eigen::SimplicialCholesky<Eigen::SparseMatrix<ScalarType > > (A);
         assert(solver->info() == Eigen::Success);

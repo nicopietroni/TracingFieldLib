@@ -14,6 +14,7 @@
 #include "connectivity.h"
 #include <pos3.h>
 #include "Space_Query/point_grid_3D.h"
+#include "smooth_mesh.h"
 // #include "Space_Query/triangle_grid_2D.h"
 
 template <class ScalarType>
@@ -1189,8 +1190,8 @@ static void RemoveDegenerateConnectivityTriangles(std::vector<Geo::Point3<Scalar
         return;
 
     std::set<int> DegenerateSet(DegenerateF.begin(), DegenerateF.end());
-    std::vector<std::vector<int> > NewF;
-    std::vector<Geo::Point3<ScalarType> > NewNorm;
+    std::vector<std::vector<int>> NewF;
+    std::vector<Geo::Point3<ScalarType>> NewNorm;
     for (size_t i = 0; i < Connectivity.size(); i++)
     {
         if (DegenerateSet.count(i) > 0)
@@ -1199,8 +1200,8 @@ static void RemoveDegenerateConnectivityTriangles(std::vector<Geo::Point3<Scalar
         NewF.push_back(Connectivity[i]);
         NewNorm.push_back(FaceNormals[i]);
     }
-    FaceNormals=NewNorm;
-    Connectivity=NewF;
+    FaceNormals = NewNorm;
+    Connectivity = NewF;
     RemoveUnfererencedVert(VertPos, Connectivity);
 }
 
@@ -1269,8 +1270,8 @@ static void SmoothDegerateTriangles(std::vector<Geo::Point3<ScalarType>> &VertPo
         return;
     std::cout << "**have to smooth:" << To_Smooth << std::endl;
     const std::vector<std::pair<int, int>> Features;
-    SmoothLaplacian<ScalarType>(VertPos, Connectivity, 1,
-                                FixedVert, Features, false);
+    Geo::SmoothLaplacian<ScalarType>(VertPos, Connectivity, 1,
+                                     FixedVert, Features, false);
 }
 // if (cleanF)
 // {
@@ -1307,4 +1308,46 @@ static void SmoothDegerateTriangles(std::vector<Geo::Point3<ScalarType>> &VertPo
 
 //}
 
+template <class ScalarType>
+void PosInstances(const std::vector<Geo::Point3<ScalarType>> &Pos3D,
+                  std::vector<int> &Istances)
+{
+    Istances = std::vector<int>(Pos3D.size(),0);
+    std::map<Geo::Point3<ScalarType>, int> PosCount;
+    for (size_t i = 0; i < Pos3D.size(); i++)
+        PosCount[Pos3D[i]]++;
+    for (size_t i = 0; i < Pos3D.size(); i++)
+    {
+        assert(PosCount.count(Pos3D[i] > 0));
+        Istances[i]=PosCount[Pos3D[i]];
+    }
+}
+
+template <class ScalarType>
+void DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
+                                 const std::vector<std::vector<int>> &Faces,
+                                 ScalarType delta)
+{
+    // first find vertices with double positions
+    std::map<Geo::Point3<ScalarType>, std::vector<int>> PosToIdx;
+    for (size_t i = 0; i < Pos3D.size(); i++)
+        PosToIdx[Pos3D[i]].push_back(i);
+
+    // then compute laplacian smooth
+    std::vector<Geo::Point3<ScalarType>> OldPos = Pos3D;
+    SmoothLaplacian<ScalarType>(Pos3D, Faces, 5);
+    for (size_t i = 0; i < OldPos.size(); i++)
+    {
+        assert(PosToIdx.count(OldPos[i] > 0));
+        if (PosToIdx[OldPos[i]].size() == 2)
+        {
+            Geo::Point3<ScalarType> DirMov = Pos3D[i] - OldPos[i];
+            DirMov.Normalize();
+            DirMov = DirMov * delta;
+            Pos3D[i] = OldPos[i] + DirMov;
+        }
+        else
+            Pos3D[i] = OldPos[i];
+    }
+}
 #endif

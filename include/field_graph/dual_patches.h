@@ -1162,6 +1162,27 @@ namespace Geo
             }
         }
 
+        static void DisambiguateForDual(PatchManaging<ScalarType> &PM)
+        {
+             // INITIALIZE
+            for (size_t i = 0; i < PM.NumPatches(); i++)
+            {
+                assert(IndexPatch < PatchM.PData.SideLenghts.size());
+                if (PM.NumBorders(i) != 1)
+                    continue;
+                if (PM.isEmpty(i))
+                    continue;
+                // ScalarType delta= AvgEdgeLen(Pos,Faces)*0.0001;
+                ScalarType delta = std::numeric_limits<float>::epsilon() * (ScalarType)2;
+                // DesambiguateSamePosVertices<ScalarType>(PM.PData.SubPatchVertPos[i],
+                //                                         PM.PData.SubPatchFaces[i],delta);
+                DesambiguateSamePosVertices<ScalarType>(PM.PData.SubPatchVertPos[i],
+                                                        PM.PData.SubPatchFaces[i], delta);
+                // return (IsCatmullClarkable(PatchM.PData.SideLenghts[IndexPatch][0],SideThr,true));
+            }
+
+        }
+
         static bool ExtractDual(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                                 const std::vector<std::vector<int>> &Faces,
                                 const PatchManaging<ScalarType> &PM,
@@ -1195,7 +1216,23 @@ namespace Geo
 
             auto t0 = std::chrono::high_resolution_clock::now();
 
-            // INITIALIZE
+            // // INITIALIZE
+            // for (size_t i = 0; i < PM.NumPatches(); i++)
+            // {
+            //     assert(IndexPatch < PatchM.PData.SideLenghts.size());
+            //     if (PM.NumBorders(i) != 1)
+            //         continue;
+            //     if (PM.isEmpty(i))
+            //         continue;
+            //     // ScalarType delta= AvgEdgeLen(Pos,Faces)*0.0001;
+            //     ScalarType delta = std::numeric_limits<float>::epsilon() * (ScalarType)2;
+            //     // DesambiguateSamePosVertices<ScalarType>(PM.PData.SubPatchVertPos[i],
+            //     //                                         PM.PData.SubPatchFaces[i],delta);
+            //     DesambiguateSamePosVertices<ScalarType>(PM.PData.SubPatchVertPos[i],
+            //                                             PM.PData.SubPatchFaces[i], delta);
+            //     // return (IsCatmullClarkable(PatchM.PData.SideLenghts[IndexPatch][0],SideThr,true));
+            // }
+
             for (size_t i = 0; i < PM.NumPatches(); i++)
             {
                 // avoid empty patches
@@ -1441,7 +1478,7 @@ namespace Geo
             typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam SmParam;
             SmParam.Steps = DualParam.SmoothSteps;
             if ((DualFaces.size() > 0) && (DualParam.SmoothSteps > 0))
-                Geo::Local_Param_Smooth<ScalarType>::SmoothWithInternalBorders(DualVertPos, DualFaces,true, SmParam);
+                Geo::Local_Param_Smooth<ScalarType>::SmoothWithInternalBorders(DualVertPos, DualFaces, true, SmParam);
 
             auto t3 = std::chrono::high_resolution_clock::now();
 

@@ -1,12 +1,12 @@
 #ifndef EIGEN_INTERFACE
 #define EIGEN_INTERFACE
 
+#include <Eigen/Geometry>
+#include <Eigen/Dense>
 #include <cmath>
 #include <vector>
 #include <stdio.h>
 #include "point3.h"
-#include <Eigen/Geometry>
-#include <Eigen/Dense>
 #include "mesh_functions.h"
 
 // return mesh as vector of vertices and faces
@@ -108,7 +108,7 @@ public:
             Geo::Point3<ScalarType> curr_V;
             for (int j = 0; j < eigen_v.cols(); ++j)
             {
-            curr_V.V(j)=eigen_v(i, j);
+                curr_V.V(j) = eigen_v(i, j);
             }
             VertPos.push_back(curr_V);
         }
@@ -208,6 +208,21 @@ public:
         for (size_t i = 0; i < P.size(); i++)
             ret.push_back(ToEigenVect(P[i]));
         return ret;
+    }
+
+    static bool hasNaNInf(const Eigen::SparseMatrix<ScalarType> &matrix)
+    {
+        for (int k = 0; k < matrix.outerSize(); ++k)
+        {
+            for (typename Eigen::SparseMatrix<ScalarType>::InnerIterator it(matrix, k); it; ++it)
+            {
+                if (std::isnan(it.value()) || std::isinf(it.value()))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 };
 
@@ -479,21 +494,21 @@ void SetTranslate(Eigen::Matrix4<ScalarType> &m,
     m(2, 3) = tz;
 }
 
-
-bool canMultiply(const Eigen::MatrixXd& A, const Eigen::VectorXd& V) {
+bool canMultiply(const Eigen::MatrixXd &A, const Eigen::VectorXd &V)
+{
     return A.cols() == V.rows();
 }
 
-template<typename ScalarType>
-bool hasNaNInf(const Eigen::SparseMatrix<ScalarType>& matrix) {
-    for (int k = 0; k < matrix.outerSize(); ++k) {
-        for (typename Eigen::SparseMatrix<ScalarType>::InnerIterator it(matrix, k); it; ++it) {
-            if (std::isnan(it.value())||std::isinf(it.value())) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
+// template<typename ScalarType>
+// bool hasNaNInf(const Eigen::SparseMatrix<ScalarType>& matrix) {
+//     for (int k = 0; k < matrix.outerSize(); ++k) {
+//         for (typename Eigen::SparseMatrix<ScalarType>::InnerIterator it(matrix, k); it; ++it) {
+//             if (std::isnan(it.value())||std::isinf(it.value())) {
+//                 return true;
+//             }
+//         }
+//     }
+//     return false;
+// }
 
 #endif
