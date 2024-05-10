@@ -1318,10 +1318,39 @@ void PosInstances(const std::vector<Geo::Point3<ScalarType>> &Pos3D,
         PosCount[Pos3D[i]]++;
     for (size_t i = 0; i < Pos3D.size(); i++)
     {
-        assert(PosCount.count(Pos3D[i] > 0));
+        assert(PosCount.count(Pos3D[i]) > 0);
         Istances[i]=PosCount[Pos3D[i]];
     }
 }
+
+// template <class ScalarType>
+// void DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
+//                                  const std::vector<std::vector<int>> &Faces,
+//                                  ScalarType delta)
+// {
+//     // first find vertices with double positions
+//     std::map<Geo::Point3<ScalarType>, std::vector<int>> PosToIdx;
+//     for (size_t i = 0; i < Pos3D.size(); i++)
+//         PosToIdx[Pos3D[i]].push_back(i);
+
+//     // then compute laplacian smooth
+//     std::vector<Geo::Point3<ScalarType>> OldPos = Pos3D;
+//     std::vector<std::pair<int,int> > Features;
+//     SmoothLaplacian<ScalarType>(Pos3D, Faces, 5,Features,false);
+//     for (size_t i = 0; i < OldPos.size(); i++)
+//     {
+//         assert(PosToIdx.count(OldPos[i]) > 0);
+//         if (PosToIdx[OldPos[i]].size() == 2)
+//         {
+//             Geo::Point3<ScalarType> DirMov = Pos3D[i] - OldPos[i];
+//             DirMov.Normalize();
+//             DirMov = DirMov * delta;
+//             Pos3D[i] = OldPos[i] + DirMov;
+//         }
+//         else
+//             Pos3D[i] = OldPos[i];
+//     }
+// }
 
 template <class ScalarType>
 void DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
@@ -1333,12 +1362,20 @@ void DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
     for (size_t i = 0; i < Pos3D.size(); i++)
         PosToIdx[Pos3D[i]].push_back(i);
 
+    std::vector<int> FixedV;
+    for (size_t i = 0; i < Pos3D.size(); i++)
+    {
+        if (PosToIdx[Pos3D[i]].size() == 1)
+            FixedV.push_back(i);
+    }
     // then compute laplacian smooth
     std::vector<Geo::Point3<ScalarType>> OldPos = Pos3D;
-    SmoothLaplacian<ScalarType>(Pos3D, Faces, 5);
+    std::vector<std::pair<int,int> > Features;
+
+    SmoothLaplacian<ScalarType>(Pos3D, Faces, 5,FixedV,Features,false);
     for (size_t i = 0; i < OldPos.size(); i++)
     {
-        assert(PosToIdx.count(OldPos[i] > 0));
+        assert(PosToIdx.count(OldPos[i]) > 0);
         if (PosToIdx[OldPos[i]].size() == 2)
         {
             Geo::Point3<ScalarType> DirMov = Pos3D[i] - OldPos[i];
@@ -1349,5 +1386,7 @@ void DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
         else
             Pos3D[i] = OldPos[i];
     }
+    
 }
+
 #endif

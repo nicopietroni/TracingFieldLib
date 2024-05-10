@@ -15,87 +15,85 @@
 ////directional stuff
 #include <directional/polyvector_field.h>
 #include <directional/polyvector_to_raw.h>
-
-
+#include "connectivity.h"
 
 template <class ScalarType>
-void ComputeCurvatureField(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                           const std::vector<std::vector<int> > &Faces,
-                           const std::vector<Geo::Point3<ScalarType> > &FacesNormals,
-                           const std::vector<Geo::Point3<ScalarType> > &VertNormals,
-                           std::vector<Field::CrossF<ScalarType> > &VertCurv,
-                           std::vector<Field::CrossF<ScalarType> > &FaceCurv,
-                           const size_t Nring=3,
-                           bool weightByAnisotropy=true)
+void ComputeCurvatureField(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                           const std::vector<std::vector<int>> &Faces,
+                           const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
+                           const std::vector<Geo::Point3<ScalarType>> &VertNormals,
+                           std::vector<Field::CrossF<ScalarType>> &VertCurv,
+                           std::vector<Field::CrossF<ScalarType>> &FaceCurv,
+                           const size_t Nring = 3,
+                           bool weightByAnisotropy = true)
 {
 
     Eigen::MatrixXi F;
     typename EigenInterface<ScalarType>::MatrixXm Vf;
 
-    Eigen::MatrixXd PD1,PD2,PV1,PV2;
-    EigenInterface<ScalarType>::GetTriMeshData(VertPos,Faces,F,Vf);
+    Eigen::MatrixXd PD1, PD2, PV1, PV2;
+    EigenInterface<ScalarType>::GetTriMeshData(VertPos, Faces, F, Vf);
     Eigen::MatrixXd V = Vf.template cast<double>();
 
-    std::cout<<"..Computing Curvature Directions"<<std::endl;
-    igl::principal_curvature(V,F,PD1,PD2,PV1,PV2,Nring,true);
+    std::cout << "..Computing Curvature Directions" << std::endl;
+    igl::principal_curvature(V, F, PD1, PD2, PV1, PV2, Nring, true);
 
-    //then copy curvature per vertex
+    // then copy curvature per vertex
     VertCurv.clear();
     FaceCurv.clear();
-    for (size_t i=0;i<VertPos.size();i++)
+    for (size_t i = 0; i < VertPos.size(); i++)
     {
-        Geo::Point3<ScalarType> D1(PD1(i,0),PD1(i,1),PD1(i,2));
-        Geo::Point3<ScalarType> D2(PD2(i,0),PD2(i,1),PD2(i,2));
-        ScalarType K1=PV1(i,0);
-        ScalarType K2=PV2(i,0);
-        Geo::Point3<ScalarType> Pos=VertPos[i];
+        Geo::Point3<ScalarType> D1(PD1(i, 0), PD1(i, 1), PD1(i, 2));
+        Geo::Point3<ScalarType> D2(PD2(i, 0), PD2(i, 1), PD2(i, 2));
+        ScalarType K1 = PV1(i, 0);
+        ScalarType K2 = PV2(i, 0);
+        Geo::Point3<ScalarType> Pos = VertPos[i];
 
         D1.Normalize();
         D2.Normalize();
 
-        assert(fabs(D1.Norm()-1)<0.00001);
-        assert(fabs(D2.Norm()-1)<0.00001);
+        assert(fabs(D1.Norm() - 1) < 0.00001);
+        assert(fabs(D2.Norm() - 1) < 0.00001);
 
-        Field::CrossF<ScalarType> VertCross(D1,D2,K1,K2,Pos);
-        //check for some broderline case
-        if (D1.Norm()==0)
+        Field::CrossF<ScalarType> VertCross(D1, D2, K1, K2, Pos);
+        // check for some broderline case
+        if (D1.Norm() == 0)
         {
-            assert(D2.Norm()==0);
-            VertCross.InitFromNormal(Pos,VertNormals[i]);
+            assert(D2.Norm() == 0);
+            VertCross.InitFromNormal(Pos, VertNormals[i]);
         }
         VertCurv.push_back(VertCross);
     }
 
+    // make the directions order coherent with normal orientation
+    std::cout << "..Make Vert Cross Coherent with Normals" << std::endl;
+    MakeDirectionNormalCoherent<ScalarType>(VertNormals, VertCurv);
 
-    //make the directions order coherent with normal orientation
-    std::cout<<"..Make Vert Cross Coherent with Normals"<<std::endl;
-    MakeDirectionNormalCoherent<ScalarType>(VertNormals,VertCurv);
+    // compute the anisotropy
+    std::cout << "..Init Quality as Anisotropy on Vert" << std::endl;
+    InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv, 0);
 
-    //compute the anisotropy
-    std::cout<<"..Init Quality as Anisotropy on Vert"<<std::endl;
-    InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv,0);
+    std::cout << "..Set Face Cross From Vert" << std::endl;
+    SetFaceCrossVectorFromVert<ScalarType>(Faces, FacesNormals, VertCurv, FaceCurv, weightByAnisotropy);
 
-    std::cout<<"..Set Face Cross From Vert"<<std::endl;
-    SetFaceCrossVectorFromVert<ScalarType>(Faces,FacesNormals,VertCurv,FaceCurv,weightByAnisotropy);
+    // compute the anisotropy
+    std::cout << "..Init Quality as Anisotropy on Faces" << std::endl;
+    InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv, 0);
 
-    //compute the anisotropy
-    std::cout<<"..Init Quality as Anisotropy on Faces"<<std::endl;
-    InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv,0);
+    // make the directions order coherent with normal orientation
+    std::cout << "..Make Face Cross Coherent with Normals" << std::endl;
+    MakeDirectionNormalCoherent<ScalarType>(FacesNormals, FaceCurv);
 
-    //make the directions order coherent with normal orientation
-    std::cout<<"..Make Face Cross Coherent with Normals"<<std::endl;
-    MakeDirectionNormalCoherent<ScalarType>(FacesNormals,FaceCurv);
-
-    for (size_t i=0;i<FaceCurv.size();i++)
+    for (size_t i = 0; i < FaceCurv.size(); i++)
     {
-        assert(fabs(FaceCurv[i].D[0].Norm()-1)<0.00001);
-        assert(fabs(FaceCurv[i].D[1].Norm()-1)<0.00001);
+        assert(fabs(FaceCurv[i].D[0].Norm() - 1) < 0.00001);
+        assert(fabs(FaceCurv[i].D[1].Norm() - 1) < 0.00001);
     }
 }
 
-
 template <class ScalarType>
-struct SmoothParam{
+struct SmoothParam
+{
     int NDir;
     ScalarType TopIntevalFix;
     ScalarType GlobalSmoothVal;
@@ -105,67 +103,69 @@ struct SmoothParam{
 
     SmoothParam()
     {
-        align_borders=true;
-        NDir=4;
-        TopIntevalFix=0;
-        GlobalSmoothVal=100;
-        iterations=10;
+        align_borders = true;
+        NDir = 4;
+        TopIntevalFix = 0;
+        GlobalSmoothVal = 100;
+        iterations = 10;
     }
 };
 
 template <class ScalarType>
-void AddHighQualityConstraint(const std::vector<Field::CrossF<ScalarType> > &FaceCurv,
-                              const ScalarType &TopIntevalFix,std::vector<size_t> &IndexF)
+void AddHighQualityConstraint(const std::vector<Field::CrossF<ScalarType>> &FaceCurv,
+                              const ScalarType &TopIntevalFix, std::vector<size_t> &IndexF)
 {
-    assert(TopIntevalFix>0);
-    assert(TopIntevalFix<0.5);
+    assert(TopIntevalFix > 0);
+    assert(TopIntevalFix < 0.5);
 
     ScalarType minQ;
     ScalarType maxQ;
-    Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv,minQ,maxQ);
-    maxQ*=(1-TopIntevalFix);
+    Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv, minQ, maxQ);
+    maxQ *= (1 - TopIntevalFix);
 
-    for (size_t i=0;i<FaceCurv.size();i++)
+    for (size_t i = 0; i < FaceCurv.size(); i++)
     {
-        if (FaceCurv[i].Q<maxQ)continue;
+        if (FaceCurv[i].Q < maxQ)
+            continue;
         IndexF.push_back(i);
     }
 }
 
 template <class ScalarType>
-void AddBorderConstraints(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                          const std::vector<std::vector<int> > &Faces,
-                          const std::vector<Geo::Point3<ScalarType> > &FacesNormals,
-                          std::vector<Field::CrossF<ScalarType> > &FaceCurv,
+void AddBorderConstraints(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                          const std::vector<std::vector<int>> &Faces,
+                          const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
+                          std::vector<Field::CrossF<ScalarType>> &FaceCurv,
                           std::vector<size_t> &IndexF)
 {
-    std::vector<std::vector<int> > NextF,NextE;
-    Geo::getFFAdjacency(Faces,NextF,NextE);
-    for (size_t i=0;i<NextF.size();i++)
+    std::vector<std::vector<int>> NextF, NextE;
+    Geo::getFFAdjacency(Faces, NextF, NextE);
+    for (size_t i = 0; i < NextF.size(); i++)
     {
-        int SizeF=Faces[i].size();
-        assert(SizeF==NextF[i].size());
-        for (size_t j=0;j<NextF[i].size();j++)
+        int SizeF = Faces[i].size();
+        assert(SizeF == NextF[i].size());
+        for (size_t j = 0; j < NextF[i].size(); j++)
         {
-            if (NextF[i][j]!=-1)continue;
+            if (NextF[i][j] != -1)
+                continue;
 
-            int IndexV0=Faces[i][j];
-            int IndexV1=Faces[i][(j+1)%SizeF];
+            int IndexV0 = Faces[i][j];
+            int IndexV1 = Faces[i][(j + 1) % SizeF];
 
-            Geo::Point3<ScalarType> P0=VertPos[IndexV0];
-            Geo::Point3<ScalarType> P1=VertPos[IndexV1];
-            Geo::Point3<ScalarType> Dir=P1-P0;
+            Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
+            Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
+            Geo::Point3<ScalarType> Dir = P1 - P0;
             Dir.Normalize();
 
-            //set the constrained directions
-            FaceCurv[i].D[0]=Dir;
-            FaceCurv[i].D[1]=Cross(FacesNormals[i],Dir);
+            // set the constrained directions
+            FaceCurv[i].D[0] = Dir;
+            FaceCurv[i].D[1] = Cross(FacesNormals[i], Dir);
             FaceCurv[i].D[0].Normalize();
             FaceCurv[i].D[1].Normalize();
 
-            //set high anisotropy
-            FaceCurv[i].K[0]=1;
-            FaceCurv[i].K[1]=0.1;
+            // set high anisotropy
+            FaceCurv[i].K[0] = 1;
+            FaceCurv[i].K[1] = 0.1;
 
             IndexF.push_back(i);
         }
@@ -173,123 +173,158 @@ void AddBorderConstraints(const std::vector<Geo::Point3<ScalarType> > &VertPos,
 }
 
 template <class ScalarType>
-static void GetHardConstraints(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                               const std::vector<std::vector<int> > &Faces,
-                               std::vector<Field::CrossF<ScalarType> > &FaceCurv,
-                               const std::vector<Geo::Point3<ScalarType> > &FacesNormals,
+static void GetHardConstraints(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                               const std::vector<std::vector<int>> &Faces,
+                               std::vector<Field::CrossF<ScalarType>> &FaceCurv,
+                               const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
                                const SmoothParam<ScalarType> &SParam,
                                std::vector<size_t> &IndexF)
 {
-    //clear all selected faces
+    // clear all selected faces
     IndexF.clear();
 
-    if (SParam.TopIntevalFix>0)
-        AddHighQualityConstraint(FaceCurv,SParam.TopIntevalFix,IndexF);
+    if (SParam.TopIntevalFix > 0)
+        AddHighQualityConstraint(FaceCurv, SParam.TopIntevalFix, IndexF);
 
-    //add border constraints
+    // add border constraints
     if (SParam.align_borders)
-        AddBorderConstraints(VertPos,Faces,FacesNormals,FaceCurv,IndexF);
+        AddBorderConstraints(VertPos, Faces, FacesNormals, FaceCurv, IndexF);
 
-    //add the fixed ones from user
-    IndexF.insert(IndexF.end(),SParam.FixedCross.begin(),SParam.FixedCross.end());
+    // add the fixed ones from user
+    IndexF.insert(IndexF.end(), SParam.FixedCross.begin(), SParam.FixedCross.end());
 
     std::sort(IndexF.begin(), IndexF.end());
     std::vector<size_t>::iterator last = std::unique(IndexF.begin(), IndexF.end());
     IndexF.erase(last, IndexF.end());
 }
 
-
 template <class ScalarType>
-static void CollectConstraintsData(const std::vector<Field::CrossF<ScalarType> > &FaceCurv,
+static void CollectConstraintsData(const std::vector<Field::CrossF<ScalarType>> &FaceCurv,
                                    const bool useCurvatureSoft,
                                    const std::vector<size_t> &FixedI,
-                                   Eigen::VectorXi &FaceI,   //target faces
-                                   Eigen::MatrixXd &FaceD,   //target directions
-                                   Eigen::VectorXd &alignWeights)//,SmoothParam &SParam)
+                                   Eigen::VectorXi &FaceI,        // target faces
+                                   Eigen::MatrixXd &FaceD,        // target directions
+                                   Eigen::VectorXd &alignWeights) //,SmoothParam &SParam)
 {
-//    const ScalarType FixedW=(ScalarType)10000;
+    //    const ScalarType FixedW=(ScalarType)10000;
 
     if (useCurvatureSoft)
     {
-        //in this case add one row for each face
-        int sizeF=FaceCurv.size();
-        FaceI=Eigen::VectorXi(sizeF);
-        FaceD=Eigen::MatrixXd(sizeF,3);
-        alignWeights=Eigen::VectorXd(sizeF);
-        for (size_t i=0;i<FaceCurv.size();i++)
+        // in this case add one row for each face
+        int sizeF = FaceCurv.size();
+        FaceI = Eigen::VectorXi(sizeF);
+        FaceD = Eigen::MatrixXd(sizeF, 3);
+        alignWeights = Eigen::VectorXd(sizeF);
+        for (size_t i = 0; i < FaceCurv.size(); i++)
         {
-            FaceI(i)=i;
+            FaceI(i) = i;
 
-            alignWeights(i)=FaceCurv[i].Q;
+            alignWeights(i) = FaceCurv[i].Q;
 
-            FaceD(i,0)=FaceCurv[i].D[0].X;
-            FaceD(i,1)=FaceCurv[i].D[0].Y;
-            FaceD(i,2)=FaceCurv[i].D[0].Z;
+            FaceD(i, 0) = FaceCurv[i].D[0].X;
+            FaceD(i, 1) = FaceCurv[i].D[0].Y;
+            FaceD(i, 2) = FaceCurv[i].D[0].Z;
         }
 
-        //then set the weight to -1 if constrained (seems have problems, so set high weight)
-        for (size_t i=0;i<FixedI.size();i++)
+        // then set the weight to -1 if constrained (seems have problems, so set high weight)
+        for (size_t i = 0; i < FixedI.size(); i++)
         {
-            assert(FixedI[i]<FaceCurv.size());
-            alignWeights(FixedI[i])=-1;
+            assert(FixedI[i] < FaceCurv.size());
+            alignWeights(FixedI[i]) = -1;
         }
     }
     else
     {
-        //otherwise just add the row for selected
-        int sizeV=(int)FixedI.size();
-        FaceI=Eigen::VectorXi(sizeV);
-        FaceD=Eigen::MatrixXd(sizeV,3);
-        //set the weights to -1, all fixed for those
-        alignWeights=Eigen::VectorXd(sizeV);
-        for (size_t i=0;i<FixedI.size();i++)
+        // otherwise just add the row for selected
+        int sizeV = (int)FixedI.size();
+        FaceI = Eigen::VectorXi(sizeV);
+        FaceD = Eigen::MatrixXd(sizeV, 3);
+        // set the weights to -1, all fixed for those
+        alignWeights = Eigen::VectorXd(sizeV);
+        for (size_t i = 0; i < FixedI.size(); i++)
         {
-            size_t IndexF=FixedI[i];
-            FaceI(i)=IndexF;
-            alignWeights(i)=-1;
-            FaceD(i,0)=FaceCurv[IndexF].D[0].X;
-            FaceD(i,1)=FaceCurv[IndexF].D[0].Y;
-            FaceD(i,2)=FaceCurv[IndexF].D[0].Z;
+            size_t IndexF = FixedI[i];
+            FaceI(i) = IndexF;
+            alignWeights(i) = -1;
+            FaceD(i, 0) = FaceCurv[IndexF].D[0].X;
+            FaceD(i, 1) = FaceCurv[IndexF].D[0].Y;
+            FaceD(i, 2) = FaceCurv[IndexF].D[0].Z;
         }
     }
 }
 
+template <class ScalarType>
+void FixFarFromSingularities(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                             const std::vector<std::vector<int>> &Faces,
+                             const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
+                             const std::vector<Field::CrossF<ScalarType>> &FaceCurv,
+                             SmoothParam<ScalarType> &SParam,
+                             int NRing = 2)
+{
+    std::vector<std::vector<int>> NextF, NextE;
+    Geo::getFFAdjacency(Faces, NextF, NextE);
+
+    std::vector<std::vector<int>> VF,VFIndex;
+    Geo::getVFAdjacency(Faces, VF, VFIndex);
+
+    std::vector<int> SingIndex, SingValue;
+    GetFaceSingularities(FaceCurv,VertPos,Faces,NextF,NextE,SingIndex,SingValue);
+
+    //std::cout<<"There are "<<SingIndex.size()<<" singularities"<<std::endl;
+    std::set<int> OptFaceSet;
+    for (size_t i = 0; i < SingIndex.size(); i++)
+    {
+        std::vector<int> FacesStar;
+        Geo::getVFStar(Faces, VF, SingIndex[i], NRing, FacesStar);
+        //std::cout<<"There are "<<FacesStar.size()<<" face star"<<std::endl;
+
+        OptFaceSet.insert(FacesStar.begin(), FacesStar.end());
+    }
+    
+    SParam.FixedCross.clear();
+    for (size_t i = 0; i < Faces.size(); i++)
+    {
+        if (OptFaceSet.count(i)>0)
+            continue;
+        SParam.FixedCross.push_back(i);
+    }
+    //std::cout<<"Fixing "<<SParam.FixedCross.size()<<" out of " <<Faces.size()<<std::endl;
+}
 
 template <class ScalarType>
-void SmoothGlobalPolyvector(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                            const std::vector<std::vector<int> > &Faces,
-                            const std::vector<Geo::Point3<ScalarType> > &FacesNormals,
-                            std::vector<Field::CrossF<ScalarType> > &FaceCurv,
+void SmoothGlobalPolyvector(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            const std::vector<std::vector<int>> &Faces,
+                            const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
+                            std::vector<Field::CrossF<ScalarType>> &FaceCurv,
                             SmoothParam<ScalarType> &SParam)
 {
-    const ScalarType eps=(ScalarType)0.000000001;
+    const ScalarType eps = (ScalarType)0.000000001;
 
-    assert(Faces.size()==FaceCurv.size());
-    assert(Faces.size()==FacesNormals.size());
+    assert(Faces.size() == FaceCurv.size());
+    assert(Faces.size() == FacesNormals.size());
 
     Eigen::MatrixXi F;
     typename EigenInterface<ScalarType>::MatrixXm Vf;
 
-    //Eigen::MatrixXd PD1,PD2,PV1,PV2;
-    EigenInterface<ScalarType>::GetTriMeshData(VertPos,Faces,F,Vf);
+    // Eigen::MatrixXd PD1,PD2,PV1,PV2;
+    EigenInterface<ScalarType>::GetTriMeshData(VertPos, Faces, F, Vf);
     Eigen::MatrixXd V = Vf.template cast<double>();
     Eigen::MatrixXcd output_field;
 
-    //get the hard constraints
+    // get the hard constraints
     std::vector<size_t> FixedI;
-    GetHardConstraints(VertPos,Faces,FaceCurv,FacesNormals,SParam,FixedI);
+    GetHardConstraints(VertPos, Faces, FaceCurv, FacesNormals, SParam, FixedI);
 
-    double roSyWeight=-1;
-    int Ndir=SParam.NDir;
+    double roSyWeight = -1;
+    int Ndir = SParam.NDir;
     Eigen::VectorXi FaceI;
     Eigen::MatrixXd FaceD;
     Eigen::VectorXd alignWeights;
-    bool useCurvatureSoft=(SParam.GlobalSmoothVal>0);
-    //std::vector<size_t> FixedI=SParam.FixedCross;
+    bool useCurvatureSoft = (SParam.GlobalSmoothVal > 0);
+    // std::vector<size_t> FixedI=SParam.FixedCross;
 
-    CollectConstraintsData<ScalarType>(FaceCurv,useCurvatureSoft,FixedI,
-                                       FaceI,FaceD,alignWeights);
-
+    CollectConstraintsData<ScalarType>(FaceCurv, useCurvatureSoft, FixedI,
+                                       FaceI, FaceD, alignWeights);
 
     directional::polyvector_field(V, F, FaceI, FaceD, SParam.GlobalSmoothVal,
                                   roSyWeight, alignWeights, Ndir, output_field);
@@ -299,62 +334,59 @@ void SmoothGlobalPolyvector(const std::vector<Geo::Point3<ScalarType> > &VertPos
     igl::local_basis(Vf, F, B1, B2, normals); // Compute a local orthogonal reference system for each triangle in the given mesh
     directional::polyvector_to_raw(B1, B2, output_field, Ndir, rawOutField);
 
-    assert(output_field.rows()==Faces.size());
-    //finally update the principal directions
-    for (size_t i=0;i<Faces.size();i++)
+    assert(output_field.rows() == Faces.size());
+    // finally update the principal directions
+    for (size_t i = 0; i < Faces.size(); i++)
     {
         Geo::Point3<ScalarType> dir1;
-        dir1.X=rawOutField(i,0);
-        dir1.Y=rawOutField(i,1);
-        dir1.Z=rawOutField(i,2);
+        dir1.X = rawOutField(i, 0);
+        dir1.Y = rawOutField(i, 1);
+        dir1.Z = rawOutField(i, 2);
 
         dir1.Normalize();
-        Geo::Point3<ScalarType> dir2=Cross(FacesNormals[i],dir1);
+        Geo::Point3<ScalarType> dir2 = Cross(FacesNormals[i], dir1);
         dir2.Normalize();
 
-        assert(fabs(dir1.Norm()-1)<eps);
-        assert(fabs(dir2.Norm()-1)<eps);
+        assert(fabs(dir1.Norm() - 1) < eps);
+        assert(fabs(dir2.Norm() - 1) < eps);
 
-        FaceCurv[i].D[0]=dir1;
-        FaceCurv[i].D[1]=dir2;
+        FaceCurv[i].D[0] = dir1;
+        FaceCurv[i].D[1] = dir2;
     }
-    MakeDirectionNormalCoherent<ScalarType>(FacesNormals,FaceCurv);
-
+    MakeDirectionNormalCoherent<ScalarType>(FacesNormals, FaceCurv);
 }
 
-
 template <class ScalarType>
-void SmoothCrossIterative(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                     const std::vector<std::vector<int> > &Faces,
-                     const std::vector<Geo::Point3<ScalarType> > &FacesNormals,
-                     std::vector<Field::CrossF<ScalarType> > &FaceCurv,
-                     SmoothParam<ScalarType> &SParam,
-                     bool weightByQuality=true)
+void SmoothCrossIterative(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                          const std::vector<std::vector<int>> &Faces,
+                          const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
+                          std::vector<Field::CrossF<ScalarType>> &FaceCurv,
+                          SmoothParam<ScalarType> &SParam,
+                          bool weightByQuality = true)
 {
     std::vector<size_t> IndexFixed;
-    GetHardConstraints<ScalarType>(VertPos,Faces,FaceCurv,FacesNormals,SParam,IndexFixed);
-    GLobalSmoothCrossWithGraph(VertPos,Faces,FacesNormals,IndexFixed,FaceCurv,weightByQuality,0.5,SParam.iterations);
+    GetHardConstraints<ScalarType>(VertPos, Faces, FaceCurv, FacesNormals, SParam, IndexFixed);
+    GLobalSmoothCrossWithGraph(VertPos, Faces, FacesNormals, IndexFixed, FaceCurv, weightByQuality, 0.5, SParam.iterations);
 }
 
-
 template <class ScalarType>
-void PropagateCrossFromFixed(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                        const std::vector<std::vector<int> > &Faces,
-                        const std::vector<Geo::Point3<ScalarType> > &FacesNormals,
-                        std::vector<Field::CrossF<ScalarType> > &FaceCurv,
-                        SmoothParam<ScalarType> &SParam,
-                        bool weightByQuality=true)
+void PropagateCrossFromFixed(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                             const std::vector<std::vector<int>> &Faces,
+                             const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
+                             std::vector<Field::CrossF<ScalarType>> &FaceCurv,
+                             SmoothParam<ScalarType> &SParam,
+                             bool weightByQuality = true)
 {
-    ScalarType OldTop=SParam.TopIntevalFix;
+    ScalarType OldTop = SParam.TopIntevalFix;
 
-    if ((SParam.TopIntevalFix==0)&&(SParam.FixedCross.size()==0))
-         SParam.TopIntevalFix=0.2;
+    if ((SParam.TopIntevalFix == 0) && (SParam.FixedCross.size() == 0))
+        SParam.TopIntevalFix = 0.2;
 
     std::vector<size_t> IndexFixed;
-    GetHardConstraints<ScalarType>(VertPos,Faces,FaceCurv,FacesNormals,SParam,IndexFixed);
-    PropagateCrossFromFixedGraph(VertPos,Faces,FacesNormals,IndexFixed,FaceCurv,weightByQuality);
+    GetHardConstraints<ScalarType>(VertPos, Faces, FaceCurv, FacesNormals, SParam, IndexFixed);
+    PropagateCrossFromFixedGraph(VertPos, Faces, FacesNormals, IndexFixed, FaceCurv, weightByQuality);
 
-    SParam.TopIntevalFix=OldTop;
+    SParam.TopIntevalFix = OldTop;
 }
 
 #endif

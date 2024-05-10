@@ -619,12 +619,23 @@ namespace Geo
 
             if ((CountDir[0] == 2) && (CountDir[2] == 0) && (angleDeg > 270))
                 return CTypeSpike;
+            if ((CountDir[0] == 2) && (CountDir[2] == 0) && (angleDeg < 90))
+                return CTypeConvex;
+
             if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg > 270))
                 return CTypeSpike;
+            if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg <90))
+                return CTypeConvex;
+
             if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg > 270))
                 return CTypeSpike;
+             if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg <90))
+                return CTypeConvex;
+
             if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg > 270))
                 return CTypeSpike;
+            if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg <90))
+                return CTypeConvex;
             //        if ((CountDir[1]==2)&&(CountDir[3]==2))
             //             return CTypeFlat;
 

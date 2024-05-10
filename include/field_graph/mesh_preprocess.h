@@ -143,7 +143,7 @@ namespace Geo
         static void DesambiguateInitialDarts(std::vector<Geo::Point3<ScalarType>> &Pos,
                                              std::vector<std::vector<int>> &Faces)
         {
-            ScalarType delta= AvgEdgeLen(Pos,Faces)*0.0001;
+            ScalarType delta= AvgEdgeLen(Pos,Faces)*0.01;
             //ScalarType delta=std::numeric_limits<float>::epsilon()*(ScalarType)2;
             DesambiguateSamePosVertices<ScalarType>(Pos, Faces,delta);
         }

@@ -75,6 +75,7 @@ namespace Field
                 return true;
             if (Q == 0)
                 return true;
+            //return false;
         }
 
         Geo::Point3<ScalarType> GetDirection(const size_t IndexD) const

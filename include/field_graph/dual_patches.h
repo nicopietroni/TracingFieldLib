@@ -1167,13 +1167,12 @@ namespace Geo
              // INITIALIZE
             for (size_t i = 0; i < PM.NumPatches(); i++)
             {
-                assert(IndexPatch < PatchM.PData.SideLenghts.size());
                 if (PM.NumBorders(i) != 1)
                     continue;
                 if (PM.isEmpty(i))
                     continue;
-                // ScalarType delta= AvgEdgeLen(Pos,Faces)*0.0001;
-                ScalarType delta = std::numeric_limits<float>::epsilon() * (ScalarType)2;
+                //ScalarType delta= AvgEdgeLen(PM.PData.SubPatchVertPos[i],PM.PData.SubPatchFaces[i])*0.0001;
+                ScalarType delta = std::numeric_limits<float>::epsilon() * (ScalarType)10;
                 // DesambiguateSamePosVertices<ScalarType>(PM.PData.SubPatchVertPos[i],
                 //                                         PM.PData.SubPatchFaces[i],delta);
                 DesambiguateSamePosVertices<ScalarType>(PM.PData.SubPatchVertPos[i],

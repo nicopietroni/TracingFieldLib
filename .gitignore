@@ -139,3 +139,13 @@ apps/local_mesh_optimizer/local_mesh_optimizer.app/Contents/MacOS/local_mesh_opt
 apps/local_mesh_optimizer/local_mesh_optimizer.app/Contents/PkgInfo
 apps/local_mesh_optimizer/local_mesh_optimizer.app/Contents/Resources/empty.lproj
 apps/local_mesh_optimizer/local_mesh_optimizer.pro.user
+apps/commandline_quadrangulator/build/CMakeCache.txt
+*.profraw
+apps/commandline_quadrangulator/.vscode/settings.json
+apps/commandline_quadrangulator/build/CMakeFiles/3.23.2/CompilerIdC/CMakeCCompilerId.c
+apps/commandline_quadrangulator/build/CMakeFiles/3.23.2/CompilerIdCXX/CMakeCXXCompilerId.cpp
+apps/commandline_quadrangulator/build/CMakeFiles/Makefile2
+apps/commandline_quadrangulator/build/CMakeFiles/quad_commandline.dir/link.txt
+apps/commandline_quadrangulator/build/CMakeFiles/TargetDirectories.txt
+apps/commandline_quadrangulator/build/Makefile
+apps/commandline_quadrangulator/build/quad_commandline

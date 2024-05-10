@@ -50,6 +50,7 @@ public:
                 return(!Cross.IsNull());
             if (_NType==FrameNode)
                 return(!Frame.IsNull());
+            //return false;
         }
 
     };
