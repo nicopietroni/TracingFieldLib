@@ -17,6 +17,7 @@
 #include <UV_param.h>
 #include <UV_distortion.h>
 #include <color_functions.h>
+#include <UV_multi_patch_param.h>
 
 typedef double ScalarType;
 
@@ -73,7 +74,7 @@ int oldColorItem = 0;
 
 ScalarType MaxJacDist=5;
 ScalarType MaxAreaDist=0.25;
-ScalarType MaxEdgeDist=0.25;
+ScalarType MaxEdgeDist=0.0025;
 ScalarType MaxAngleDist=0.025;
 
 bool hasUV=false;
@@ -151,8 +152,10 @@ void ParametrizeARAP()
     FixedUV.clear();
 
     //std::vector<Geo::Point2<ScalarType> > VertUV;
-    bool correct_param=Geo::UVParam<ScalarType>::Arap(VertPos,Connectivity,FixedV,FixedUV,VerPosUV);
-
+    //bool correct_param=Geo::UVParam<ScalarType>::Arap(VertPos,Connectivity,FixedV,FixedUV,VerPosUV);
+    Geo::UVMultiPatchParam<ScalarType>::MultiPatchParameters Param;
+    Param.ParamType=Geo::UVUtils<ScalarType>::UVArap;
+    bool correct_param= Geo::UVMultiPatchParam<ScalarType>::Parametrize(VertPos,Connectivity,VerPosUV,Param);
     if (correct_param)
     {
         DrawUV=true;
