@@ -7,6 +7,7 @@
 #include <mesh_functions.h>
 #include <outline_packer.h>
 #include <IO/io_obj.h>
+#include "mesh_manifold.h"
 
 namespace Geo
 {
@@ -64,24 +65,25 @@ namespace Geo
             {
                 std::vector<Geo::Point2<ScalarType>> CompVertUV;
                 bool solved = false;
-                // if (MPatchParam.solve_degenerate)
-                //     SmoothDegerateTriangles<ScalarType>(SubMeshesV[i], SubMeshesF[i], 1);
 
                 switch (MPatchParam.ParamType)
                 {
                 case Geo::UVUtils<ScalarType>::UVLSConformal:
-
+                    if (!EdgeManifold<ScalarType>(SubMeshesV[i],SubMeshesF[i]))exit(0);
+                    if (!VertManifold<ScalarType>(SubMeshesV[i],SubMeshesF[i]))exit(0);
                     solved = Geo::UVParam<ScalarType>::LeastSquaresConformal(SubMeshesV[i],
                                                                              SubMeshesF[i],
                                                                              CompVertUV);
+                    if (!solved)
+                        exit(0);
                     {
                         Geo::Box2<ScalarType> BBUV;
                         BBUV.Init(CompVertUV);
                         if (std::isnan(BBUV.DimX()))
                         {
-                            std::cout<<"SOLVING"<<std::endl;
-                            //SmoothLaplacian<ScalarType>(SubMeshesV[i], SubMeshesF[i], 1);
-                            //SmoothDegerateTriangles<ScalarType>(SubMeshesV[i], SubMeshesF[i], 1);
+                            std::cout << "SOLVING NaN" << std::endl;
+                            // SmoothLaplacian<ScalarType>(SubMeshesV[i], SubMeshesF[i], 1);
+                            // SmoothDegerateTriangles<ScalarType>(SubMeshesV[i], SubMeshesF[i], 1);
                             Geo::UVParam<ScalarType>::LeastSquaresConformal(SubMeshesV[i],
                                                                             SubMeshesF[i],
                                                                             CompVertUV);
@@ -91,7 +93,7 @@ namespace Geo
                             {
                                 WriteOBJ("testNaN.obj", SubMeshesV[i], SubMeshesF[i]);
                                 std::cout << "DE boia" << std::endl;
-                                //exit(0);
+                                // exit(0);
                             }
                         }
                     }

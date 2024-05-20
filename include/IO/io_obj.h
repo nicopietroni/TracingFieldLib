@@ -149,7 +149,7 @@ bool WriteOBJ(std::string meshFile,
     std::ofstream fout(meshFile.c_str());
     if(!fout) return false;
     
-    std::string MTLFile=GetFilanameNoExtension(meshFile);
+    std::string MTLFile=RemoveExtension(meshFile);
     MTLFile+=".mtl";
 
     if (!pathTxt.empty())
@@ -191,7 +191,7 @@ bool WriteOBJ(std::string meshFile,
         fout<<"illum 2\n";
         fout<<"Ns 0.000000\n";
         std::string TxtFile=GetFilaname(pathTxt);
-        TxtFile+=".mtl\n";
+        TxtFile+="\n";
         fout<<"map_Kd "<<TxtFile.c_str()<<"\n";
      }
     return true;

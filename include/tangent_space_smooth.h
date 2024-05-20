@@ -620,7 +620,8 @@ namespace Geo
             }
             std::sort(FeatureE.begin(), FeatureE.end());
             FeatureE.erase(std::unique(FeatureE.begin(), FeatureE.end()), FeatureE.end());
-            UVP.FeatureLines = FeatureE;
+            //UVP.FeatureLines = FeatureE;
+            UVP.FeatureLines.insert(UVP.FeatureLines.end(),FeatureE.begin(),FeatureE.end());
             Smooth(VertMerged, FacesMerged, UVP);
 
             // auto t2 = std::chrono::high_resolution_clock::now();

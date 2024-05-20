@@ -15,6 +15,10 @@
 #include <pos3.h>
 #include "Space_Query/point_grid_3D.h"
 #include "smooth_mesh.h"
+
+// #include <igl/is_vertex_manifold.h>
+// #include <igl/is_edge_manifold.h>
+// //#include "eigen_interface.h"
 // #include "Space_Query/triangle_grid_2D.h"
 
 template <class ScalarType>
@@ -438,6 +442,24 @@ ScalarType EdgeLenght(const std::vector<Geo::Point2<ScalarType>> &VertPos,
     Geo::Point2<ScalarType> P0 = VertPos[IndexV0];
     Geo::Point2<ScalarType> P1 = VertPos[IndexV1];
     return (P1 - P0).Norm();
+}
+
+template <class ScalarType>
+ScalarType BorderLenght(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                        const std::vector<std::vector<int>> &Faces)
+{
+    ScalarType BorderL=0;
+    std::vector<std::pair<int,int> > BorderE;
+    Geo::getBorderEdges(Faces,BorderE);
+    for (size_t i=0;i<BorderE.size();i++)
+    {
+        int IndexV0=BorderE[i].first;
+        int IndexV1=BorderE[i].second;
+        Geo::Point3<ScalarType> P0=VertPos[IndexV0];
+        Geo::Point3<ScalarType> P1=VertPos[IndexV1];
+        BorderL+=(P0-P1).Norm();
+    }
+    return BorderL;
 }
 
 template <class ScalarType>
@@ -1301,12 +1323,31 @@ static void SmoothDegerateTriangles(std::vector<Geo::Point3<ScalarType>> &VertPo
 
 // template <class ScalarType>
 // static bool EdgeManifold(std::vector<Geo::Point3<ScalarType> > &Pos3D,
-//                         std::vector<std::vector<int> > &Faces,
-//                        const Geo::Plane3<ScalarType> &SplitPl,
-//                        const std::set<int> &MiddleV)
-//{
+//                         std::vector<std::vector<int> > &Faces)
+// {
+//     Eigen::MatrixXi F;
+//     typename EigenInterface<ScalarType>::MatrixXm Vf;
 
-//}
+//     EigenInterface<ScalarType>::GetTriMeshData(Pos3D, Faces, F, Vf);
+//     Eigen::MatrixXd V = Vf.template cast<double>();
+
+//      bool is_manifold = igl::is_edge_manifold(F);
+//      return is_manifold;
+// }
+
+// template <class ScalarType>
+// static bool VertManifold(std::vector<Geo::Point3<ScalarType> > &Pos3D,
+//                         std::vector<std::vector<int> > &Faces)
+// {
+//     Eigen::MatrixXi F;
+//     typename EigenInterface<ScalarType>::MatrixXm Vf;
+
+//     EigenInterface<ScalarType>::GetTriMeshData(Pos3D, Faces, F, Vf);
+//     Eigen::MatrixXd V = Vf.template cast<double>();
+
+//     bool is_manifold = igl::is_vertex_manifold(F);
+//     return is_manifold;
+// }
 
 template <class ScalarType>
 void PosInstances(const std::vector<Geo::Point3<ScalarType>> &Pos3D,
@@ -1353,7 +1394,7 @@ void PosInstances(const std::vector<Geo::Point3<ScalarType>> &Pos3D,
 // }
 
 template <class ScalarType>
-void DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
+int DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
                                  const std::vector<std::vector<int>> &Faces,
                                  ScalarType delta)
 {
@@ -1373,6 +1414,7 @@ void DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
     std::vector<std::pair<int,int> > Features;
 
     SmoothLaplacian<ScalarType>(Pos3D, Faces, 5,FixedV,Features,false);
+    int Moved=0;
     for (size_t i = 0; i < OldPos.size(); i++)
     {
         assert(PosToIdx.count(OldPos[i]) > 0);
@@ -1382,11 +1424,12 @@ void DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
             DirMov.Normalize();
             DirMov = DirMov * delta;
             Pos3D[i] = OldPos[i] + DirMov;
+            Moved++;
         }
         else
             Pos3D[i] = OldPos[i];
     }
-    
+    return Moved;
 }
 
 #endif

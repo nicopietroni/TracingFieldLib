@@ -222,6 +222,8 @@ namespace GLDraw
     void DrawSurfaceWire(const std::vector<CoordType> &VertPos,
                          const std::vector<std::vector<int>> &Connectivity)
     {
+        // glColor(Geo::Point3<float>(0,0,0));
+        // glLineWidth(1.f);
         glDisable(GL_LIGHTING);
         for (size_t i = 0; i < Connectivity.size(); i++)
         {

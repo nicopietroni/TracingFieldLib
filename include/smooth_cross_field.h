@@ -27,7 +27,7 @@ void ComputeCurvatureField(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                            const size_t Nring = 3,
                            bool weightByAnisotropy = true)
 {
-
+    const ScalarType Eps=0.00000001;
     Eigen::MatrixXi F;
     typename EigenInterface<ScalarType>::MatrixXm Vf;
 
@@ -51,7 +51,36 @@ void ComputeCurvatureField(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 
         D1.Normalize();
         D2.Normalize();
-
+        
+        //Can happen when the mesh is flat, no direction
+        if ((fabs(K1)<Eps)&&(fabs(K2)<Eps))
+        {
+           K1=Eps;
+           K2=Eps;
+           ScalarType maxV;
+           size_t maxInd;
+           //V0.GetMaxAbsCoord(maxV,maxInd);
+           FacesNormals[i].GetMaxAbsCoord(maxV,maxInd);
+           D1.V(maxInd) = - (FacesNormals[i].cV((maxInd+2) % 3) / FacesNormals[i].cV(maxInd));
+           D1.V((maxInd+1) % 3) = 0;
+           D1.V((maxInd+2) % 3) = 1;
+           D1.Normalize();
+           D2=Geo::Cross(FacesNormals[i],D1);
+           D2.Normalize();
+           D1=Geo::Cross(D2,FacesNormals[i]);
+        }
+        if ((fabs(K1)<Eps)&&(fabs(K2)>Eps))
+        {
+           D1=Geo::Cross(D2,FacesNormals[i]);
+           D1.Normalize();
+           K1=Eps;
+        }
+        if ((fabs(K2)<Eps)&&(fabs(K1)>Eps))
+        {
+           D2=Geo::Cross(FacesNormals[i],D1);
+           D2.Normalize();
+           K2=Eps;
+        }
         assert(fabs(D1.Norm() - 1) < 0.00001);
         assert(fabs(D2.Norm() - 1) < 0.00001);
 

@@ -1140,6 +1140,7 @@ namespace Geo
                 JointBorder = true;
                 MaxIte = 5;
                 RType = RTypeEven;
+                //RType = RTypeOrtho;
                 SmoothSteps = 5;
             }
         };

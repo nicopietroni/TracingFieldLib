@@ -1490,9 +1490,9 @@ namespace Geo
 
         bool SolveAllFeatures()
         {
-            // SetFeatureFeatureConfiguration();
-            // RetraceOnUnsolved();
-            // AddAllPaths();
+            SetFeatureFeatureConfiguration();
+            RetraceOnUnsolved();
+            AddAllPaths();
             SetFeatureAllConfiguration();
             RetraceOnUnsolved();
             bool has_added=AddAllPaths();

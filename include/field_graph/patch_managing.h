@@ -515,10 +515,16 @@ namespace Geo
                     Geo::Point3<ScalarType> Dir1_Cross = Cross[IndexV].GetDirection(Dir1);
                     ScalarType Dot0 = fabs(Geo::Dot(Dir0_Cross, Dir));
                     ScalarType Dot1 = fabs(Geo::Dot(Dir1_Cross, Dir));
+                    size_t IndexN0=BorderN[0];
+                    size_t IndexN1=BorderN[1];
+                    // if (Dot0 > Dot1)
+                    //     BorderN.push_back(BorderN[0]);
+                    // else
+                    //     BorderN.push_back(BorderN[1]);
                     if (Dot0 > Dot1)
-                        BorderN.push_back(BorderN[0]);
+                        BorderN.push_back(IndexN0);
                     else
-                        BorderN.push_back(BorderN[1]);
+                        BorderN.push_back(IndexN1);
                 }
             }
         }
