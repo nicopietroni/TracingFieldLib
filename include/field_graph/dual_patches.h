@@ -14,6 +14,7 @@
 #include <Space_Query/segment_grid_2D.h>
 #include <chrono>
 #include <mesh_manifold.h>
+#include <point3.h>
 
 #define MIN_ALPHA 0.1
 

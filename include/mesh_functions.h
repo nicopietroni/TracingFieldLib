@@ -1413,7 +1413,7 @@ int DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
     std::vector<Geo::Point3<ScalarType>> OldPos = Pos3D;
     std::vector<std::pair<int,int> > Features;
 
-    SmoothLaplacian<ScalarType>(Pos3D, Faces, 5,FixedV,Features,false);
+    Geo::SmoothLaplacian<ScalarType>(Pos3D, Faces, 5,FixedV,Features,false);
     int Moved=0;
     for (size_t i = 0; i < OldPos.size(); i++)
     {
