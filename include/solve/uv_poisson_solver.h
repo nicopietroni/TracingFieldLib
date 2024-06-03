@@ -706,7 +706,8 @@ namespace Geo
         /// return true if is possible to
         bool IsFeasible()
         {
-            assert(0);
+            return true;
+            //assert(0);
             // tri::UpdateTopology<MeshType>::FaceFace(mesh);
             // int NNmanifoldE = tri::Clean<MeshType>::CountNonManifoldEdgeFF(mesh);
             // if (NNmanifoldE != 0)

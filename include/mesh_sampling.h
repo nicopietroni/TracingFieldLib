@@ -103,9 +103,9 @@ public:
 
         if (SampleFrom!=NULL)
         {
-            std::mt19937 gen(RandSeed);
-            std::shuffle((*SampleFrom).begin(),(*SampleFrom).end(), gen);
-            Selected=(*SampleFrom);
+            // std::mt19937 gen(RandSeed);
+            // std::shuffle((*SampleFrom).begin(),(*SampleFrom).end(), gen);
+            // Selected=(*SampleFrom);
             PruneSamples(NumVert,Connectivity,RadiusStar,Constraints,Selected);
         }
         else
