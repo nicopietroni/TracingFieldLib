@@ -945,7 +945,7 @@ namespace Geo
             if (dynamic_smooth)
             {
                 std::vector<int> PathsIDX = ToAdd;
-                PathsIDX.insert(PathsIDX.end(), ToRemove.begin(), ToRemove.end());
+                // PathsIDX.insert(PathsIDX.end(), ToRemove.begin(), ToRemove.end());
 
                 std::set<int> TouchedPatches;
                 PatchMan.GetTouchedPatchesFromPathIndex(PathsIDX, TouchedPatches);
@@ -1437,16 +1437,16 @@ namespace Geo
         {
             bool all_solved = false;
             bool added_sample = false;
-            bool added_once=false;
+            bool added_once = false;
             std::cout << "ADDING PATHS" << std::endl;
             do
             {
                 AddNext(all_solved, added_sample);
-                added_once|=added_sample;
+                added_once |= added_sample;
             } while ((!all_solved) && (added_sample));
 
             CompactData();
-            return(added_once);
+            return (added_once);
         }
 
         void RemovePaths()
@@ -1495,7 +1495,7 @@ namespace Geo
             AddAllPaths();
             SetFeatureAllConfiguration();
             RetraceOnUnsolved();
-            bool has_added=AddAllPaths();
+            bool has_added = AddAllPaths();
             SetBaseConfiguration();
             return has_added;
         }
@@ -1504,7 +1504,7 @@ namespace Geo
         {
             SetBaseConfiguration();
             RetraceOnUnsolved();
-            bool has_added=AddAllPaths();
+            bool has_added = AddAllPaths();
             return has_added;
         }
 
@@ -1524,26 +1524,81 @@ namespace Geo
             }
         }
 
-        void BatchDecompose(bool Do_remove,bool Do_split_remove)
+        void BatchDecompose(bool Do_remove, bool Do_split_remove)
         {
-           bool has_added=false;
-            do{
-                has_added=false;
-                has_added|=SolveAllFeatures();
+            bool has_added = false;
+            do
+            {
+                has_added = false;
+                has_added |= SolveAllFeatures();
 
                 if (has_added && Do_remove)
                     RemovePaths();
 
-                has_added|=SolveAllMesh();
+                has_added |= SolveAllMesh();
                 if (has_added && Do_remove)
                     RemovePaths();
-            }while (has_added);
+            } while (has_added);
 
             if (split_removal)
             {
                 RemoveSplitted();
             }
         }
+
+        bool SaveFPatchesLayout(const std::string fPatchesFile)
+        {
+            CompactData();
+
+            PatchMan.UpdateFaceToPatch();
+            std::ofstream fout(fPatchesFile.c_str());
+            if (!fout)
+                return false;
+
+            // write number of faces
+            fout << PatchMan.NumFaces() << "\n";
+
+            for (size_t i = 0; i < PatchMan.PData.OriginalFaceToPatch.size(); i++)
+                fout << PatchMan.PData.OriginalFaceToPatch[i] << "\n";
+
+            fout.close();
+            return true;
+        }
+
+        bool SaveCorners(const std::string cPatchesFile)
+        {
+            CompactData();
+
+            std::ofstream fout(cPatchesFile.c_str());
+            if (!fout)
+                return false;
+
+            // write number of patches
+            fout << PatchMan.NumPatches() << "\n";
+
+            for (size_t pi = 0; pi < PatchMan.NumPatches(); pi++)
+            {
+                assert(PatchMan.PData.PatchCorners[pi].size() == 1);
+                int NumC = PatchMan.PData.PatchCorners[pi][0].size();
+                fout << NumC << "\n";
+                for (size_t ci = 0; ci < PatchMan.PData.PatchCorners[pi][0].size(); ci++)
+                {
+                    int IndexC = PatchMan.PData.PatchCorners[pi][0][ci];
+                    IndexC = PatchMan.MapToOriginal(pi, IndexC);
+                    assert(IndexC >= 0);
+                    assert(IndexC < PatchMan.VertPos.size());
+                    fout << IndexC << "\n";
+                }
+            }
+            fout.close();
+            return true;
+        }
+
+        // bool SaveMeshColorByLayout(const std::string meshFile)
+        // {
+            
+        // }
+
         bool SavePatchesLayout(const std::string meshFile)
         {
             CompactData();

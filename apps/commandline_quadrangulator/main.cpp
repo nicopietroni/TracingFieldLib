@@ -43,6 +43,14 @@ bool use_curvature = true;
 bool dualize = false;
 bool smooth_tangent = false;
 
+bool single_boundary_cond = true;
+bool disk_like_cond = true;
+bool single_sing_cond = false;
+bool match_sing_cond = true;
+bool face_patch_cond = true;
+int MinSides = 3;
+int MaxSides = 6;
+
 ScalarType minQCrossVert, maxQCrossVert;
 
 std::vector<int> SingIndex, SingValue;
@@ -167,6 +175,19 @@ void SaveDual()
     WriteOBJ(FinalMFilename.c_str(), DualVertPos, DualConnectivity);
 }
 
+void SaveFPatch()
+{
+    if (!face_patch_cond)
+        return;
+    std::string FPatchFilename = ProjectName;
+    FPatchFilename.append("/patch_layout.fpatch");
+    PDeco.SaveFPatchesLayout(FPatchFilename);
+
+    std::string CPatchFilename = ProjectName;
+    CPatchFilename.append("/patch_layout.corners");
+    PDeco.SaveCorners(CPatchFilename);
+}
+
 void SaveAll()
 {
     SaveSubMeshes();
@@ -174,6 +195,7 @@ void SaveAll()
     SaveField();
     SaveMesh();
     SaveDual();
+    SaveFPatch();
 }
 
 void CreateOutputFolder()
@@ -216,12 +238,6 @@ void UpdateAfterRemesh()
     // UpdateColor();
 }
 
-bool single_boundary_cond = true;
-bool disk_like_cond = true;
-bool single_sing_cond = false;
-bool match_sing_cond = true;
-int MinSides = 3;
-int MaxSides = 6;
 
 void InitConditions()
 {
@@ -234,8 +250,8 @@ void InitConditions()
         PDeco.AddCondition(new Geo::SingleSingularityCondition<ScalarType>());
     if (match_sing_cond)
         PDeco.AddCondition(new Geo::MathchSingularityCondition<ScalarType>());
-    if (dualize)
-        PDeco.AddCondition(new Geo::DualMeshingCondition<ScalarType>());
+    if (dualize || face_patch_cond)
+        PDeco.AddCondition(new Geo::SelfConnectingPatchCondition<ScalarType>());
     if ((MinSides > 0) || (MaxSides > 0))
     {
         PDeco.AddCondition(new Geo::NumSidesCondition<ScalarType>());
@@ -371,7 +387,7 @@ void BatchProcess()
     if (!has_cross_field)
     {
         if (smooth_tangent)
-        SmoothTessellation();
+            SmoothTessellation();
 
         std::cout << "*** COMPUTING FIELD *** " << std::endl;
         SplitBorderEdges();
@@ -437,12 +453,10 @@ void BatchProcess()
     std::cout << "* Adding Paths: " << elapsed_seconds3 << std::endl;
     std::cout << "* Smooth Patches: " << elapsed_seconds4 << std::endl;
     std::cout << "* Dualize Patches: " << elapsed_seconds5 << std::endl;
-
 }
 
 int main(int argc, char *argv[])
 {
-
     std::stringstream commandLineStr;
     for (int i = 0; i < argc; ++i)
     {
@@ -486,6 +500,10 @@ int main(int argc, char *argv[])
             }
             continue;
         }
+        if (std::string(argv[i]) == std::string("fpatch"))
+        {
+            face_patch_cond = true;
+        }
         if (std::string(argv[i]) == std::string("dual"))
         {
             dualize = true;
@@ -504,11 +522,11 @@ int main(int argc, char *argv[])
         }
         if (std::string(argv[i]) == std::string("border"))
         {
-            use_curvature=false;
+            use_curvature = false;
         }
         if (std::string(argv[i]) == std::string("smoothtangent"))
         {
-            smooth_tangent=true;
+            smooth_tangent = true;
         }
         if (std::string(argv[i]) == std::string("no_match_sing_val"))
         {

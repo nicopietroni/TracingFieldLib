@@ -12,10 +12,14 @@
 #include <set>
 ////igl related stuff
 #include <igl/principal_curvature.h>
+#include "connectivity.h"
 ////directional stuff
+#ifdef USE_DIRECTIONAL
 #include <directional/polyvector_field.h>
 #include <directional/polyvector_to_raw.h>
-#include "connectivity.h"
+#else
+#include <polyvector_field.h>
+#endif
 
 template <class ScalarType>
 void ComputeCurvatureField(const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -27,7 +31,7 @@ void ComputeCurvatureField(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                            const size_t Nring = 3,
                            bool weightByAnisotropy = true)
 {
-    const ScalarType Eps=0.00000001;
+    const ScalarType Eps = 0.00000001;
     Eigen::MatrixXi F;
     typename EigenInterface<ScalarType>::MatrixXm Vf;
 
@@ -51,35 +55,35 @@ void ComputeCurvatureField(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 
         D1.Normalize();
         D2.Normalize();
-        
-        //Can happen when the mesh is flat, no direction
-        if ((fabs(K1)<Eps)&&(fabs(K2)<Eps))
+
+        // Can happen when the mesh is flat, no direction
+        if ((fabs(K1) < Eps) && (fabs(K2) < Eps))
         {
-           K1=Eps;
-           K2=Eps;
-           ScalarType maxV;
-           size_t maxInd;
-           //V0.GetMaxAbsCoord(maxV,maxInd);
-           FacesNormals[i].GetMaxAbsCoord(maxV,maxInd);
-           D1.V(maxInd) = - (FacesNormals[i].cV((maxInd+2) % 3) / FacesNormals[i].cV(maxInd));
-           D1.V((maxInd+1) % 3) = 0;
-           D1.V((maxInd+2) % 3) = 1;
-           D1.Normalize();
-           D2=Geo::Cross(FacesNormals[i],D1);
-           D2.Normalize();
-           D1=Geo::Cross(D2,FacesNormals[i]);
+            K1 = Eps;
+            K2 = Eps;
+            ScalarType maxV;
+            size_t maxInd;
+            // V0.GetMaxAbsCoord(maxV,maxInd);
+            FacesNormals[i].GetMaxAbsCoord(maxV, maxInd);
+            D1.V(maxInd) = -(FacesNormals[i].cV((maxInd + 2) % 3) / FacesNormals[i].cV(maxInd));
+            D1.V((maxInd + 1) % 3) = 0;
+            D1.V((maxInd + 2) % 3) = 1;
+            D1.Normalize();
+            D2 = Geo::Cross(FacesNormals[i], D1);
+            D2.Normalize();
+            D1 = Geo::Cross(D2, FacesNormals[i]);
         }
-        if ((fabs(K1)<Eps)&&(fabs(K2)>Eps))
+        if ((fabs(K1) < Eps) && (fabs(K2) > Eps))
         {
-           D1=Geo::Cross(D2,FacesNormals[i]);
-           D1.Normalize();
-           K1=Eps;
+            D1 = Geo::Cross(D2, FacesNormals[i]);
+            D1.Normalize();
+            K1 = Eps;
         }
-        if ((fabs(K2)<Eps)&&(fabs(K1)>Eps))
+        if ((fabs(K2) < Eps) && (fabs(K1) > Eps))
         {
-           D2=Geo::Cross(FacesNormals[i],D1);
-           D2.Normalize();
-           K2=Eps;
+            D2 = Geo::Cross(FacesNormals[i], D1);
+            D2.Normalize();
+            K2 = Eps;
         }
         assert(fabs(D1.Norm() - 1) < 0.00001);
         assert(fabs(D2.Norm() - 1) < 0.00001);
@@ -293,33 +297,34 @@ void FixFarFromSingularities(const std::vector<Geo::Point3<ScalarType>> &VertPos
     std::vector<std::vector<int>> NextF, NextE;
     Geo::getFFAdjacency(Faces, NextF, NextE);
 
-    std::vector<std::vector<int>> VF,VFIndex;
+    std::vector<std::vector<int>> VF, VFIndex;
     Geo::getVFAdjacency(Faces, VF, VFIndex);
 
     std::vector<int> SingIndex, SingValue;
-    GetFaceSingularities(FaceCurv,VertPos,Faces,NextF,NextE,SingIndex,SingValue);
+    GetFaceSingularities(FaceCurv, VertPos, Faces, NextF, NextE, SingIndex, SingValue);
 
-    //std::cout<<"There are "<<SingIndex.size()<<" singularities"<<std::endl;
+    // std::cout<<"There are "<<SingIndex.size()<<" singularities"<<std::endl;
     std::set<int> OptFaceSet;
     for (size_t i = 0; i < SingIndex.size(); i++)
     {
         std::vector<int> FacesStar;
         Geo::getVFStar(Faces, VF, SingIndex[i], NRing, FacesStar);
-        //std::cout<<"There are "<<FacesStar.size()<<" face star"<<std::endl;
+        // std::cout<<"There are "<<FacesStar.size()<<" face star"<<std::endl;
 
         OptFaceSet.insert(FacesStar.begin(), FacesStar.end());
     }
-    
+
     SParam.FixedCross.clear();
     for (size_t i = 0; i < Faces.size(); i++)
     {
-        if (OptFaceSet.count(i)>0)
+        if (OptFaceSet.count(i) > 0)
             continue;
         SParam.FixedCross.push_back(i);
     }
-    //std::cout<<"Fixing "<<SParam.FixedCross.size()<<" out of " <<Faces.size()<<std::endl;
+    // std::cout<<"Fixing "<<SParam.FixedCross.size()<<" out of " <<Faces.size()<<std::endl;
 }
 
+#ifdef USE_DIRECTIONAL
 template <class ScalarType>
 void SmoothGlobalPolyvector(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                             const std::vector<std::vector<int>> &Faces,
@@ -384,6 +389,75 @@ void SmoothGlobalPolyvector(const std::vector<Geo::Point3<ScalarType>> &VertPos,
     }
     MakeDirectionNormalCoherent<ScalarType>(FacesNormals, FaceCurv);
 }
+#else
+template <class ScalarType>
+void SmoothGlobalPolyvector(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            const std::vector<std::vector<int>> &Faces,
+                            const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
+                            std::vector<Field::CrossF<ScalarType>> &FaceCurv,
+                            SmoothParam<ScalarType> &SParam)
+{
+    const ScalarType eps = (ScalarType)0.000000001;
+
+    assert(Faces.size() == FaceCurv.size());
+    assert(Faces.size() == FacesNormals.size());
+
+    Eigen::MatrixXi F;
+    typename EigenInterface<ScalarType>::MatrixXm Vf;
+
+    // Eigen::MatrixXd PD1,PD2,PV1,PV2;
+    EigenInterface<ScalarType>::GetTriMeshData(VertPos, Faces, F, Vf);
+    Eigen::MatrixXd V = Vf.template cast<double>();
+    Eigen::MatrixXcd output_field;
+
+    // get the hard constraints
+    std::vector<size_t> FixedI;
+    GetHardConstraints(VertPos, Faces, FaceCurv, FacesNormals, SParam, FixedI);
+
+    double roSyWeight = -1;
+    int Ndir = SParam.NDir;
+    Eigen::VectorXi FaceI;
+    Eigen::MatrixXd FaceD;
+    Eigen::VectorXd alignWeights;
+    bool useCurvatureSoft = (SParam.GlobalSmoothVal > 0);
+    // std::vector<size_t> FixedI=SParam.FixedCross;
+
+    CollectConstraintsData<ScalarType>(FaceCurv, useCurvatureSoft, FixedI,
+                                       FaceI, FaceD, alignWeights);
+
+    PolyVectorField::Construct(V, F, FaceI, FaceD, SParam.GlobalSmoothVal,
+                               roSyWeight, alignWeights, Ndir, output_field);
+
+    // directional::polyvector_field(V, F, FaceI, FaceD, SParam.GlobalSmoothVal,
+    //                               roSyWeight, alignWeights, Ndir, output_field);
+
+    Eigen::MatrixXd rawOutField;
+    Eigen::MatrixXd normals, B1, B2;
+    igl::local_basis(Vf, F, B1, B2, normals); // Compute a local orthogonal reference system for each triangle in the given mesh
+    PolyVectorField::PolyvectorToField(B1, B2, output_field, Ndir, rawOutField);
+
+    assert(output_field.rows() == Faces.size());
+    // finally update the principal directions
+    for (size_t i = 0; i < Faces.size(); i++)
+    {
+        Geo::Point3<ScalarType> dir1;
+        dir1.X = rawOutField(i, 0);
+        dir1.Y = rawOutField(i, 1);
+        dir1.Z = rawOutField(i, 2);
+
+        dir1.Normalize();
+        Geo::Point3<ScalarType> dir2 = Cross(FacesNormals[i], dir1);
+        dir2.Normalize();
+
+        assert(fabs(dir1.Norm() - 1) < eps);
+        assert(fabs(dir2.Norm() - 1) < eps);
+
+        FaceCurv[i].D[0] = dir1;
+        FaceCurv[i].D[1] = dir2;
+    }
+    MakeDirectionNormalCoherent<ScalarType>(FacesNormals, FaceCurv);
+}
+#endif
 
 template <class ScalarType>
 void SmoothCrossIterative(const std::vector<Geo::Point3<ScalarType>> &VertPos,

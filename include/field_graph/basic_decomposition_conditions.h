@@ -101,7 +101,7 @@ public:
 };
 
 template <class ScalarType>
-class DualMeshingCondition:public PatchCondition<ScalarType>
+class SelfConnectingPatchCondition:public PatchCondition<ScalarType>
 {
 
 public:

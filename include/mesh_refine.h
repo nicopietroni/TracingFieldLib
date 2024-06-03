@@ -507,6 +507,9 @@ public:
             for (size_t j = 0; j < 3; j++)
             {
 
+                // if (bary.V(j) < (1 - minAlpha))
+                //     continue;
+
                 if (bary.V(j) < (1 - minAlpha))
                     continue;
 
@@ -592,13 +595,19 @@ public:
                         // check if need to snap
                         if (AlphaVal < minAlpha)
                         {
-                            if (SnapVSet.count(S1.P(0)) > 0)
+                            if ((SnapVSet.count(S1.P(0)) > 0) ||
+                                (SnapVSet.count(S1.P(1)) > 0))
                                 AlphaVal = 0;
+                            else
+                                AlphaVal = minAlpha;
                         }
                         if (AlphaVal > 1 - minAlpha)
                         {
-                            if (SnapVSet.count(S1.P(1)) > 0)
+                            if ((SnapVSet.count(S1.P(0)) > 0) ||
+                                (SnapVSet.count(S1.P(1)) > 0))
                                 AlphaVal = 1;
+                            else
+                                AlphaVal = 1 - minAlpha;
                         }
                         if ((AlphaVal != 0) && (AlphaVal != 1))
                         {
@@ -645,6 +654,9 @@ public:
                 if (has_added)
                     for (size_t i = 0; i < RefinedIdx.size(); i++)
                         RefinedPos.push_back(PosUV[RefinedIdx[i]]);
+                        
+                RefinedPos.push_back(PolyL[i][0]);
+                RefinedPos.push_back(PolyL[i].back());
             }
         }
         for (size_t i = 0; i < PolyL.size(); i++)

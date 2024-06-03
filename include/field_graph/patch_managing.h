@@ -515,8 +515,8 @@ namespace Geo
                     Geo::Point3<ScalarType> Dir1_Cross = Cross[IndexV].GetDirection(Dir1);
                     ScalarType Dot0 = fabs(Geo::Dot(Dir0_Cross, Dir));
                     ScalarType Dot1 = fabs(Geo::Dot(Dir1_Cross, Dir));
-                    size_t IndexN0=BorderN[0];
-                    size_t IndexN1=BorderN[1];
+                    size_t IndexN0 = BorderN[0];
+                    size_t IndexN1 = BorderN[1];
                     // if (Dot0 > Dot1)
                     //     BorderN.push_back(BorderN[0]);
                     // else
@@ -570,22 +570,6 @@ namespace Geo
             }
         }
 
-        void UpdateFaceToPatch()
-        {
-            // then update the correspondence
-            PData.OriginalFaceToPatch.clear();
-            PData.OriginalFaceToPatch.resize(Faces.size(), -1);
-
-            for (size_t i = 0; i < PData.PatchOriginalFaces.size(); i++)
-                for (size_t j = 0; j < PData.PatchOriginalFaces[i].size(); j++)
-                {
-                    int IndexF = PData.PatchOriginalFaces[i][j];
-                    assert(IndexF >= 0);
-                    assert(IndexF < PData.OriginalFaceToPatch.size());
-                    PData.OriginalFaceToPatch[IndexF] = i;
-                }
-        }
-
         struct VertDirs
         {
             int IndexV;
@@ -630,17 +614,17 @@ namespace Geo
 
             if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg > 270))
                 return CTypeSpike;
-            if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg <90))
+            if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg < 90))
                 return CTypeConvex;
 
             if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg > 270))
                 return CTypeSpike;
-             if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg <90))
+            if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg < 90))
                 return CTypeConvex;
 
             if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg > 270))
                 return CTypeSpike;
-            if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg <90))
+            if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg < 90))
                 return CTypeConvex;
             //        if ((CountDir[1]==2)&&(CountDir[3]==2))
             //             return CTypeFlat;
@@ -1406,6 +1390,22 @@ namespace Geo
         std::map<int, int> SingValence;
 
     public:
+    
+        void UpdateFaceToPatch()
+        {
+            // then update the correspondence
+            PData.OriginalFaceToPatch.clear();
+            PData.OriginalFaceToPatch.resize(Faces.size(), -1);
+
+            for (size_t i = 0; i < PData.PatchOriginalFaces.size(); i++)
+                for (size_t j = 0; j < PData.PatchOriginalFaces[i].size(); j++)
+                {
+                    int IndexF = PData.PatchOriginalFaces[i][j];
+                    assert(IndexF >= 0);
+                    assert(IndexF < PData.OriginalFaceToPatch.size());
+                    PData.OriginalFaceToPatch[IndexF] = i;
+                }
+        }
         void GetPatchGlobalVertOfType(const int &IndexP,
                                       const CornerType &CType,
                                       std::vector<int> &SelectedVert)
@@ -1590,12 +1590,12 @@ namespace Geo
             CornerVert.erase(last, CornerVert.end());
         }
 
-        void GetAllCornerPos(int IndexP,std::vector<Geo::Point3<ScalarType>> &CornerPos) const
+        void GetAllCornerPos(int IndexP, std::vector<Geo::Point3<ScalarType>> &CornerPos) const
         {
             CornerPos.clear();
             std::vector<int> CornerVert;
             std::vector<CornerType> CurrType;
-            GetAllCorners(IndexP,CornerVert,CurrType);
+            GetAllCorners(IndexP, CornerVert, CurrType);
             for (size_t i = 0; i < CornerVert.size(); i++)
             {
                 int IndexV = CornerVert[i];
@@ -1617,7 +1617,7 @@ namespace Geo
 
         void GetAllSideVert(int IndexP, int IndexE, std::vector<int> &SideV) const
         {
-            //SideV.clear();
+            // SideV.clear();
             assert(IndexP < NumPatches());
             assert(IndexP >= 0);
             assert(!isEmpty(IndexP));

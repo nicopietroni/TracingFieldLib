@@ -120,6 +120,7 @@ void SmoothGlobal(bool iterative = false)
 
     if (!iterative)
         SmoothGlobalPolyvector(VertPos, Connectivity, FaceNormals, FaceCurv, SParam);
+    // SmoothGlobalPolyvector(VertPos, Connectivity, FaceNormals, FaceCurv, SParam);
     else
         SmoothCrossIterative(VertPos, Connectivity, FaceNormals, FaceCurv, SParam);
 
