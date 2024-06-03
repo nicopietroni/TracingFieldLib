@@ -8,6 +8,7 @@
 #include <iostream>
 #include <point2.h>
 #include <math_utils.h>
+#include <assert.h>
 
 namespace  Geo{
 
