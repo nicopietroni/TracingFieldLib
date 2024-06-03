@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <math_utils.h>
+#include <cassert>
 
 namespace  Geo{
 

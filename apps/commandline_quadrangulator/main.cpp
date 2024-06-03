@@ -1,5 +1,6 @@
 #include <sstream>
 #include <iostream>
+#include <point2.h>
 #include <point3.h>
 #include <IO/io_obj.h>
 #include "IO/io_field.h"
