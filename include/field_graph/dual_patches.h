@@ -341,8 +341,41 @@ namespace Geo
             bool IsManifV = VertManifold(VertPos, PatchFaces);
             assert(IsManifV);
 
+            // then move the point on border on the established position
+            std::vector<Geo::Point3<ScalarType>> MidPos;
+            for (size_t i = 0; i < SplEdgesIdx.size(); i++)
+            {
+                int IndexV0 = SplEdgesIdx[i].first;
+                int IndexV1 = SplEdgesIdx[i].second;
+                Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
+                Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
+                if (P1 < P0)
+                    std::swap(P0, P1);
+                MidPos.push_back(P0 * 0.5 + P1 * 0.5 );
+            }
+
             std::vector<size_t> NewBorderVIDX;
             getBorderVert(PatchFaces, NewBorderVIDX);
+
+            for (size_t i = 0; i < MidPos.size(); i++)
+            {
+                Geo::Point3<ScalarType> TesPos0 = MidPos[i];
+                ScalarType minD = std::numeric_limits<ScalarType>::max();
+                int FoundIdx=-1;
+                for (size_t j = 0; j < NewBorderVIDX.size(); j++)
+                {
+                    int IndexV=NewBorderVIDX[j];
+                    Geo::Point3<ScalarType> TesPos1 = VertPos[IndexV];
+                    ScalarType testD = std::numeric_limits<ScalarType>::max();
+                    if ((TesPos0-TesPos1).Norm()>minD)continue;
+                    minD=(TesPos0-TesPos1).Norm();
+                    FoundIdx=IndexV;
+                }
+                assert(FoundIdx>=0);
+                VertPos[FoundIdx]=MidPos[i];
+            }
+            RemoveDuplicatedVert(VertPos,PatchFaces);
+
             for (size_t i = 0; i < NewBorderVIDX.size(); i++)
             {
                 int IndexV = NewBorderVIDX[i];
@@ -733,7 +766,7 @@ namespace Geo
             std::vector<ScalarType> Alpha(ToSplit.size(), 0.5);
             std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> MarkedE;
             RefineMesh<ScalarType>::SplitTriangleFaces(VertPos, PosUV, Faces, ToSplit, Alpha, MarkedE);
-
+            RemoveDuplicatedVert(VertPos, Faces);
             // REINTRODUCE INITIAL BORDER (REFINE unfortunately CANCEL IT)
             BorderE.clear();
             for (size_t i = 0; i < Faces.size(); i++)
@@ -1327,17 +1360,17 @@ namespace Geo
             assert(vert_manf);
             if (DualFaces.size() > 0)
             {
-                // RemoveDuplicatedVert(DualVertPos, DualFaces);
-                // WriteOBJ("test.obj", DualVertPos, DualFaces);
-                // exit(0);
+
                 MakeConsistent(DualVertPos, DualFaces, AllSplEdgesPos);
                 RemoveUnfererencedVert(DualVertPos, DualFaces);
-                //WriteOBJ("test1.obj", DualVertPos, DualFaces);
+                //RemoveDuplicatedVert(DualVertPos, DualFaces);
+                // WriteOBJ("test1.obj", DualVertPos, DualFaces);
+                // exit(0);
             }
             std::cout << "MADE CONSISTENT" << std::endl;
             edge_manf = EdgeManifold<ScalarType>(DualVertPos, DualFaces);
             vert_manf = VertManifold<ScalarType>(DualVertPos, DualFaces);
-            if ((!edge_manf)||(!vert_manf))
+            if ((!edge_manf) || (!vert_manf))
             {
                 WriteOBJ("non_manif.obj", DualVertPos, DualFaces);
                 exit(0);

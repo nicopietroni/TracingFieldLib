@@ -19,6 +19,7 @@ fi
 for obj_file in "$folder_name"/*.obj; do
     if [ -f "$obj_file" ]; then
         # Get the corresponding .ffield file
-            ./quad_commandline "$obj_file" dual smoothtangent no_match_sing_val
+            #./quad_commandline "$obj_file" dual smoothtangent no_match_sing_val
+            ./quad_commandline "$obj_file" dual
     fi
 done
