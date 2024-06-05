@@ -625,18 +625,21 @@ public:
 
     int &Steps(const size_t &IndexN)
     {
+        assert(IndexN>=0);
         assert(IndexN<S.size());
         return S[IndexN];
     }
 
     const NType &NodeType(const size_t &IndexN)const
-    {     
+    {    
+        assert(IndexN>=0);
         assert(IndexN<NT.size());
         return NT[IndexN];
     }
 
     NType &NodeType(const size_t &IndexN)
     {
+        assert(IndexN>=0);
         assert(IndexN<NT.size());
         return NT[IndexN];
     }
@@ -651,6 +654,7 @@ public:
 
     void SortNeigh(const size_t &IndexN)
     {
+        assert(IndexN>=0);
         assert(IndexN<N.size());
         std::sort(N[IndexN].begin(),N[IndexN].end());
     }

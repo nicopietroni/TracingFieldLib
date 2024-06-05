@@ -1,6 +1,7 @@
 #ifndef INITIALIZE_GRAPH
 #define INITIALIZE_GRAPH
 
+#include <cassert>
 #include <cmath>
 #include <vector>
 #include <stdio.h>
@@ -118,9 +119,9 @@ namespace Geo
 
         static int AddAdjacencyFrame(TracingGraph<ScalarType> &TGraph,
                                      const int IndexN0,
-                                     const std::vector<std::vector<int>> &Adjacency,
-                                     const std::set<std::pair<int, int>> &DirectConn,
-                                     const std::vector<Field::FrameField<ScalarType>> &FrameField,
+                                     const std::vector<std::vector<int> > &Adjacency,
+                                     const std::set<std::pair<int, int> > &DirectConn,
+                                     const std::vector<Field::FrameField<ScalarType> > &FrameField,
                                      const ScalarType &drift_penalty,
                                      const ScalarType maxAngle)
         {
@@ -978,6 +979,7 @@ namespace Geo
         {
             std::vector<ScalarType> VertAngle;
             ComputePerVertAngleDeg<ScalarType>(VertPos, Faces, VertAngle);
+            assert(VertAngle.size()==VertPos.size());
 
             // std::vector<std::vector<Geo::Point3<ScalarType>>> ExitDirs;
             std::vector<Point3<ScalarType>> FaceNormals, VertNormals;
@@ -992,7 +994,7 @@ namespace Geo
 
             std::vector<bool> IsB;
             Geo::getBorderVert(Faces, IsB);
-
+            assert(IsB.size()==VertPos.size());
             for (size_t i = 0; i < VertPos.size(); i++)
             {
                 if (!IsB[i]) continue;
@@ -1001,6 +1003,7 @@ namespace Geo
 
                 ScalarType CurrA = VertAngle[i];
 
+                assert(i<CrossField.size());
                 int BestDir0=CrossField[i].BestDirectionI(BorderDir[i][0]);
                 int BestDir1=CrossField[i].BestDirectionI(BorderDir[i][1]);
                 // std::cout<<"Dir 0:"<<BestDir0<<std::endl;
@@ -1017,7 +1020,7 @@ namespace Geo
                         int IndexN1 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDirInt + 1) % 4);
                         int IndexN2 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDirInt + 2) % 4);
                         int IndexN3 = Field::CrossFieldGraph::NodeOfElemDir(i, (BestDirInt + 3) % 4);
-
+                        
                         TGraph.NodeType(IndexN0) =TangentDomain;
                         TGraph.NodeType(IndexN1) =TangentDomain;
                         // TGraph.NodeType(IndexN2) =TangentDomain;
@@ -1058,11 +1061,12 @@ namespace Geo
                     int IntTest1=(BestDir1+1)%4;
                     Geo::Point3<ScalarType> DirTest0=CrossField[i].GetDirection(IntTest0);
                     Geo::Point3<ScalarType> DirTest1=CrossField[i].GetDirection(IntTest1);
+                    assert(i<InternalAVG.size());
                     Geo::Point3<ScalarType> IntDir=InternalAVG[i];
 
                     int IndexTest0 = Field::CrossFieldGraph::NodeOfElemDir(i, IntTest0);
                     int IndexTest1 = Field::CrossFieldGraph::NodeOfElemDir(i, IntTest1);
-                   
+
                     if (Geo::Dot(DirTest0,IntDir)>Geo::Dot(DirTest1,IntDir))
                     {
                         TGraph.NodeType(IndexTest0) =Internal;
@@ -1081,8 +1085,6 @@ namespace Geo
                     assert((BestDir0%2)!=(BestDir1%2));
                     int IndexTang0 = Field::CrossFieldGraph::NodeOfElemDir(i, BestDir0);
                     int IndexTang1 = Field::CrossFieldGraph::NodeOfElemDir(i, BestDir1);
-                   
-                    
 
                     int IntTest0=(BestDir0+2)%4;
                     int IntTest1=(BestDir1+2)%4;
@@ -1274,6 +1276,10 @@ namespace Geo
 
                     if (BorderESet.count(key) > 0)
                         continue;
+                    assert(IndexV0>=0);
+                    assert(IndexV0<NewAdjacency.size());
+                    assert(IndexV1>=0);
+                    assert(IndexV1<NewAdjacency.size());
                     NewAdjacency[IndexV0].push_back(IndexV1);
                 }
             Adjacency = NewAdjacency;

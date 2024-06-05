@@ -1,6 +1,7 @@
 #ifndef PATCH_DECOMPOSER
 #define PATCH_DECOMPOSER
 
+#include <iostream>
 #define SMOOTH_KERNEL 2
 #include <vector>
 // #include "../point3.h"
@@ -1490,12 +1491,14 @@ namespace Geo
 
         bool SolveAllFeatures()
         {
+            bool has_added =false;
             SetFeatureFeatureConfiguration();
             RetraceOnUnsolved();
-            AddAllPaths();
+            has_added |=AddAllPaths();
             SetFeatureAllConfiguration();
             RetraceOnUnsolved();
-            bool has_added = AddAllPaths();
+            has_added |= AddAllPaths();
+            //bool has_added = AddAllPaths();
             SetBaseConfiguration();
             return has_added;
         }
@@ -1531,7 +1534,7 @@ namespace Geo
             {
                 has_added = false;
                 has_added |= SolveAllFeatures();
-
+         
                 if (has_added && Do_remove)
                     RemovePaths();
 

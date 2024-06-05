@@ -2,7 +2,7 @@
 #define CROSS_FIELD_GRAPH
 
 #include "../cross_field.h"
-#include "graph.h"
+//#include "graph.h"
 
 namespace Field{
 

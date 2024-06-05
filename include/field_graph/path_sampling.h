@@ -21,10 +21,10 @@ namespace Geo
     class CrossPathSampling
     {
 
-        std::vector<Geo::Point3<ScalarType>> &VertPos;
-        std::vector<std::vector<int>> &Connectivity;
+        std::vector<Geo::Point3<ScalarType> > &VertPos;
+        std::vector<std::vector<int> > &Connectivity;
         Geo::TracingGraph<ScalarType> &TGraph;
-        std::vector<Field::CrossF<ScalarType>> &VertCurv;
+        std::vector<Field::CrossF<ScalarType> > &VertCurv;
 
         std::vector<int> &SingIndex, &SingValue;
         std::vector<int> SingNodes;
@@ -52,19 +52,19 @@ namespace Geo
         std::set<int> ConflictNodes;
 
         // these are used to detect when two path shared an edge and to solve it
-        std::set<std::pair<int, int>> ConflictEdges;
+        std::set<std::pair<int, int> > ConflictEdges;
 
     public:
         bool avoidSingularities;
 
-        std::vector<std::vector<int>> SampledPaths;
+        std::vector<std::vector<int> > SampledPaths;
         std::vector<SP_Status> SampledPaths_Status;
-        std::vector<std::pair<ScalarType, int>> Candidates;
+        std::vector<std::pair<ScalarType, int> > Candidates;
 
         int NumSamples;
 
         bool dynamicUpdates;
-        std::vector<std::vector<int>> SelectedPaths;
+        std::vector<std::vector<int> > SelectedPaths;
 
         // this determine the nodes that can emit
         std::vector<bool> CanEmit;
@@ -117,7 +117,7 @@ namespace Geo
             return TGraph;
         }
 
-        std::vector<Field::CrossF<ScalarType>> CrossF() const
+        std::vector<Field::CrossF<ScalarType> > CrossF() const
         {
             return VertCurv;
         }
@@ -175,7 +175,7 @@ namespace Geo
         {
             SampledVert.clear();
 
-            std::vector<std::vector<int>> VVAdj;
+            std::vector<std::vector<int> > VVAdj;
             Geo::FindVertexStar(Connectivity, VertPos.size(), VVAdj);
             typename Geo::Geodesic<ScalarType>::GeodesicParam GParam;
             GParam.MaxSteps = stepDist;
@@ -402,10 +402,15 @@ namespace Geo
         }
 
     private:
+    
         bool IsTraceable(int &IndexN)
         {
+            //std::cout<<"test A"<<std::endl;
+            //std::cout<<"Test:"<<IndexN<<std::endl;
             assert(IndexN >= 0);
-            assert(IndexN < TGraph.NumNodes());
+            //std::cout<<"test B"<<std::endl;
+            //assert(IndexN < TGraph.NumNodes());
+
             if (TGraph.NodeType(IndexN) == Geo::ExitDomain)
                 return false;
             if (TGraph.NodeType(IndexN) == Geo::TangentExitDomain)
@@ -414,6 +419,7 @@ namespace Geo
                 return false;
             if (TGraph.NodeType(IndexN) == Geo::ConvexExitDomain)
                 return false;
+
             return true;
         }
 
@@ -708,7 +714,7 @@ namespace Geo
                 assert(TGraph.NodeType(StartingNodes[i]) != ExitDomain);
                 assert(TGraph.NodeType(StartingNodes[i]) != TangentDomain);
                 assert(TGraph.IsEnabled(StartingNodes[i]));
-                auto start = std::chrono::high_resolution_clock::now();
+                std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
                 bool has_traced = Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(TGraph, StartingNodes[i],
                                                                                              CurrPath, true,
                                                                                              &ArrivalNodes);
@@ -716,8 +722,8 @@ namespace Geo
                 // assert(TGraph.NodeType(CurrPath[0])!=ExitDomain);
                 // assert(TGraph.NodeType(CurrPath.back())==ExitDomain);
                 // assert(0);
-                auto end = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+                std::chrono::time_point<std::chrono::high_resolution_clock> end = std::chrono::high_resolution_clock::now();
+                std::chrono::duration duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
                 // TimeTracing += duration.count() * 1e-6;
 
                 if (!has_traced)
@@ -1000,13 +1006,21 @@ namespace Geo
             SingNodes.clear();
             for (size_t j = 0; j < VertToUse.size(); j++)
             {
+
                 std::vector<int> IndexN;
                 Field::CrossFieldGraph::NodesOfElem(VertToUse[j], IndexN);
-                for (size_t j = 0; j < IndexN.size(); j++)
+                             
+                for (size_t k = 0; k < IndexN.size(); k++)
                 {
-                    if (!IsTraceable(VertToUse[j]))
+                    if (!IsTraceable(IndexN[k]))
                         continue;
-                    SingNodes.push_back(VertToUse[j]);
+                    
+                    SingNodes.push_back(IndexN[k]);
+
+                    // if (!IsTraceable(VertToUse[j]))
+                    //     continue;
+                    
+                    // SingNodes.push_back(VertToUse[j]);
                 }
             }
         }
@@ -1372,7 +1386,7 @@ namespace Geo
 
         //    }
 
-        std::vector<std::pair<int, NType>> SwapNodeType;
+        std::vector<std::pair<int, NType> > SwapNodeType;
 
         void SetBorderCanPassToExit(const std::vector<int> &TestVertex)
         {
@@ -1466,7 +1480,7 @@ namespace Geo
             // }
         }
 
-        void GetVertexSelectedPaths(std::vector<std::vector<int>> &VertPaths)
+        void GetVertexSelectedPaths(std::vector<std::vector<int> > &VertPaths)
         {
             VertPaths.clear();
             VertPaths.resize(SelectedPaths.size());
@@ -1480,7 +1494,7 @@ namespace Geo
         }
 
         void GetVertexSelectedPaths(const std::vector<int> &IndexPaths,
-                                    std::vector<std::vector<int>> &VertPaths)
+                                    std::vector<std::vector<int> > &VertPaths)
         {
             VertPaths.clear();
             VertPaths.resize(IndexPaths.size());
@@ -1735,10 +1749,10 @@ namespace Geo
             CleanEmptySelectedPaths();
         }
 
-        CrossPathSampling(std::vector<Geo::Point3<ScalarType>> &_VertPos,
-                          std::vector<std::vector<int>> &_Connectivity,
+        CrossPathSampling(std::vector<Geo::Point3<ScalarType> > &_VertPos,
+                          std::vector<std::vector<int> > &_Connectivity,
                           Geo::TracingGraph<ScalarType> &_TGraph,
-                          std::vector<Field::CrossF<ScalarType>> &_VertCurv,
+                          std::vector<Field::CrossF<ScalarType> > &_VertCurv,
                           std::vector<int> &_SingIndex,
                           std::vector<int> &_SingValue)
             : VertPos(_VertPos), Connectivity(_Connectivity),

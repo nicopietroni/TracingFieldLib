@@ -4,6 +4,7 @@
 // #include "point3.h"
 // #include "polyhedra_mesh.h"
 #include <algorithm>
+#include <cassert>
 #include <random>
 #include <vector>
 #include "connectivity.h"
@@ -227,6 +228,7 @@ namespace Geo
                                            std::vector<int> &Selected, const std::vector<int> *SampleFrom = NULL)
 
         {
+            assert(StepSize>0);
             std::set<int> SampleFromSet;
             if (SampleFrom != NULL)
                 SampleFromSet = std::set<int>((*SampleFrom).begin(), SampleFrom->end());
@@ -286,6 +288,7 @@ namespace Geo
         {
             ScalarType AreaC = (ScalarType)NumVer / (ScalarType)TargetSamples;
             int RadiusStar = floor(sqrt(AreaC) + 0.5);
+            RadiusStar=std::max(RadiusStar,1);
             return RadiusStar;
         }
     };

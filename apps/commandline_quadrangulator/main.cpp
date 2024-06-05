@@ -425,7 +425,7 @@ void BatchProcess()
     PDeco.BatchDecompose(remove_batch, remove_split);
     auto t4 = std::chrono::high_resolution_clock::now();
     auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3);
-
+    
     std::cout << "*** SMOOTH PATCHES *** " << std::endl;
     SmoothPaths();
     auto t5 = std::chrono::high_resolution_clock::now();

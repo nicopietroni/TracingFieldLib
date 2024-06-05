@@ -266,7 +266,7 @@ namespace Field
             }
         }
 
-        static void getMinMaxK(const std::vector<CrossF<ScalarType>> &Crosses,
+        static void getMinMaxK(const std::vector<CrossF<ScalarType> > &Crosses,
                                ScalarType &minK, ScalarType &maxK,
                                const ScalarType &percentile = 0.05)
         {
@@ -283,7 +283,7 @@ namespace Field
             maxK = Kval[IndexMax];
         }
 
-        static void getMinMaxQ(const std::vector<CrossF<ScalarType>> &Crosses,
+        static void getMinMaxQ(const std::vector<CrossF<ScalarType> > &Crosses,
                                ScalarType &minQ, ScalarType &maxQ,
                                const ScalarType &percentile = 0.05)
         {
@@ -341,7 +341,7 @@ namespace Field
     };
 
     template <typename ScalarType>
-    Field::CrossF<ScalarType> InterpolateTangentCrosses(const std::vector<Field::CrossF<ScalarType>> &Crosses,
+    Field::CrossF<ScalarType> InterpolateTangentCrosses(const std::vector<Field::CrossF<ScalarType> > &Crosses,
                                                         const std::vector<ScalarType> &W)
     {
         assert(Crosses.size() > 0);
@@ -401,7 +401,7 @@ namespace Field
     }
 
     template <typename ScalarType>
-    Field::CrossF<ScalarType> InterpolateCross(const std::vector<Field::CrossF<ScalarType>> &Crosses,
+    Field::CrossF<ScalarType> InterpolateCross(const std::vector<Field::CrossF<ScalarType> > &Crosses,
                                                const Geo::Point3<ScalarType> &TargetN,
                                                const std::vector<ScalarType> &W)
     {
@@ -411,7 +411,7 @@ namespace Field
         // this ensure the vectors are normalized and orthogonals
         assert(fabs(TargetN.Norm() - 1) < eps);
 
-        std::vector<Field::CrossF<ScalarType>> RotCrosses = Crosses;
+        std::vector<Field::CrossF<ScalarType> > RotCrosses = Crosses;
         for (size_t i = 0; i < RotCrosses.size(); i++)
             RotCrosses[i].MakeTangentTo(TargetN);
 
@@ -425,7 +425,7 @@ namespace Field
     }
 
     template <class ScalarType>
-    bool IsProperCrossField(const std::vector<Field::CrossF<ScalarType>> &FaceCross)
+    bool IsProperCrossField(const std::vector<Field::CrossF<ScalarType> > &FaceCross)
     {
         for (size_t i = 0; i < FaceCross.size(); i++)
             if (!FaceCross[i].IsProper())
