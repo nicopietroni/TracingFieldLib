@@ -447,6 +447,7 @@ void BatchProcess()
     double elapsed_seconds4 = elapsed4.count() * 1e-6;
     double elapsed_seconds5 = elapsed4.count() * 1e-6;
 
+    std::cout << std::endl<< std::endl;
     std::cout << "*** TIMINGS (sec) *** " << std::endl;
     std::cout << "* Field & Remd time: " << elapsed_seconds0 << std::endl;
     std::cout << "* Init Graph Elapsed time: " << elapsed_seconds1 << std::endl;
@@ -454,6 +455,12 @@ void BatchProcess()
     std::cout << "* Adding Paths: " << elapsed_seconds3 << std::endl;
     std::cout << "* Smooth Patches: " << elapsed_seconds4 << std::endl;
     std::cout << "* Dualize Patches: " << elapsed_seconds5 << std::endl;
+
+    std::cout << std::endl<< std::endl;
+    std::cout << "*** STATISTICS *** " << std::endl;
+    std::cout << "*Primal* " << std::endl;
+    PatchM.WriteStats();
+    PDeco.WriteStats();
 }
 
 int main(int argc, char *argv[])

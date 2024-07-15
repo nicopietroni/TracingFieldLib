@@ -9,8 +9,10 @@
 #include "mesh_functions.h"
 #include "basic_local_operations.h"
 #include "edge_flip.h"
+#include "vert_smooth.h"
 #include "pos3.h"
 #include "mesh_aspect_ratio.h"
+#include <iostream>
 //#include "../local_operations/crease_finder.h"
 
 namespace Geo{
@@ -216,7 +218,8 @@ class HeapEntry
             //Esteem Aspect Ratio of Faces
             ScalarType Q0=Geo::TriMeshAvgQuality(VertPos,Faces,involved_faces);
 //            //ScalarType Q0=WorstQuality(faces);
-
+            
+            //std::cout<<"Q0:"<<Q0<<std::endl;
             LOP->SaveOriginalStatus(involved_faces);
 
 //            std::cout<<"test flip A 0"<<std::endl;
@@ -245,7 +248,7 @@ class HeapEntry
             std::vector<int> involved_new_faces;
             LOP->GetInvolvedNEWFaces(involved_new_faces);
             ScalarType Q1=Geo::TriMeshAvgQuality(VertPos,Faces,involved_new_faces);
-
+            //std::cout<<"Q1:"<<Q1<<std::endl;
 //            ///Esteem Aspect Ratio of Faces
 //            ScalarType Q1=FaceQuality(faces);
 //            //ScalarType Q1=WorstQuality(faces);
@@ -300,7 +303,7 @@ class IterativeOptimizer
 
     std::vector<HEntryType> HeapOperations;
 
-    //bool addSmooth;
+    bool addSmooth;
     bool addFlip;
     //bool addEdgeColl;
 
@@ -385,8 +388,11 @@ class IterativeOptimizer
     {
         Geo::LocalOperation<ScalarType> *Lop=NULL;
         if (OpType==OpSmooth)
-            assert(0);
-        //Lop= new VertSmoothOperation<ScalarType>(VFAdj,CreaseF,&Faces,&Vert,&DeletedF,&DeletedV,Vp);
+            //assert(0);
+            Lop= new Geo::VertSmoothOperation<ScalarType>(pos,Faces,Vert,
+                                                          DeletedV,DeletedF,
+                                                          VF,VFIndex,NextF,NextE,
+                                                          VertNorm,FaceNorm);
         if (OpType==OpFlip)
             Lop = new Geo::TriangleEdgeFlipOperation<ScalarType>(pos,Faces,Vert,
                                                                  DeletedV,DeletedF,
@@ -443,7 +449,7 @@ class IterativeOptimizer
     void AddOperation(const Pos3 &pos)
     {
 
-        //if (addSmooth)   AddOperation(Vp,OpSmooth);
+        if (addSmooth)   AddOperation(pos,OpSmooth);
         if (addFlip)     AddOperation(pos,OpFlip);
         //if (addEdgeColl) AddOperation(Vp,OpEdgeCollapse);
     }
@@ -582,14 +588,14 @@ class IterativeOptimizer
             {
                 int size=Faces[i].size();
                 int IndexV0=Faces[i][j];
-                int IndexV1=Faces[i][(j+1) % size];
-                std::pair<int,int> Key(std::min(IndexV0,IndexV1),
-                                       std::max(IndexV0,IndexV1));
-                //already inserted in this case
-                if (insertedE.count(Key)>00)continue;
+                // int IndexV1=Faces[i][(j+1) % size];
+                // std::pair<int,int> Key(std::min(IndexV0,IndexV1),
+                //                        std::max(IndexV0,IndexV1));
+                // //already inserted in this case
+                // if (insertedE.count(Key)>00)continue;
                 Pos3 Pos(i,j,IndexV0);
                 AddOperation(Pos);
-                insertedE.insert(Key);
+                //insertedE.insert(Key);
             }
         }
         //then check
@@ -638,7 +644,7 @@ public:
 
 
     void Init(ScalarType _min_gain=0.001,
-              bool _addSmooth=false,
+              bool _addSmooth=true,
               bool _addFlip=true,
               bool _addEdgeColl=true)
     {
@@ -646,7 +652,7 @@ public:
         InitSupportStructures();
 
         min_gain=_min_gain;
-        //addSmooth=_addSmooth;
+        addSmooth=_addSmooth;
         addFlip=_addFlip;
         //addEdgeColl=_addEdgeColl;
 
@@ -756,7 +762,6 @@ public:
         int not_updated=0;
         //        int bad_priority=0;
         //        bad_priority=1;
-
         //       int smoothDone=0;
         int flipDone=0;
         //       int collapseDone=0;

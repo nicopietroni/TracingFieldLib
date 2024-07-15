@@ -886,6 +886,7 @@ void SetDecomposeBar()
         PathColors.resize(PathSampl.SelectedPaths.size());
         Geo::ScatterColor<ScalarType>(PathColors);
         UpdateColor();
+        ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
     }
     ImGui::SameLine();
     if (ImGui::Button("ALL"))
@@ -894,6 +895,7 @@ void SetDecomposeBar()
         PathColors.resize(PathSampl.SelectedPaths.size());
         Geo::ScatterColor<ScalarType>(PathColors);
         UpdateColor();
+        ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
         // SampleTracing();
     }
     ImGui::SameLine();
@@ -903,6 +905,7 @@ void SetDecomposeBar()
         PathColors.resize(PathSampl.SelectedPaths.size());
         Geo::ScatterColor<ScalarType>(PathColors);
         UpdateColor();
+        ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
     }
     ImGui::SameLine();
     if (ImGui::Button("SPLIT REMOVE"))
@@ -911,6 +914,7 @@ void SetDecomposeBar()
         PathColors.resize(PathSampl.SelectedPaths.size());
         Geo::ScatterColor<ScalarType>(PathColors);
         UpdateColor();
+        ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
     }
     if (ImGui::CollapsingHeader("Sample Step"))
     {
@@ -1010,6 +1014,8 @@ void SetDecomposeBar()
         ImGui::SameLine();
         ImGui::SetNextItemWidth(120);
         ImGui::Checkbox("Dynamic Smth", &PDeco.dynamic_smooth);
+        ImGui::SetNextItemWidth(120);
+        ImGui::Checkbox("Only Visible", &PathSampl.only_visible);
     }
 
     ImGui::End();

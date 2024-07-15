@@ -1,6 +1,7 @@
 #ifndef IO_OBJ
 #define IO_OBJ
 
+#include <cstddef>
 #include <iostream>
 #include <filesystem>
 #include <string>
@@ -10,6 +11,33 @@
 #include <sstream>
 #include <point3.h>
 #include <IO/file_path_functions.h>
+
+void parseFaceLine(const std::string& line, std::vector<int>& vertexIndices) 
+{
+    std::stringstream ss(line);
+    std::string token;
+    
+    while (ss >> token) {
+        std::string vertexIndex;
+        size_t pos = token.find('/');
+        
+        // Get the vertex index (before the first '/')
+        if (pos != std::string::npos) {
+            vertexIndex = token.substr(0, pos);
+        } else {
+            vertexIndex = token;
+        }
+        int IndexV=std::stoi(vertexIndex);
+        IndexV--;
+        // Convert to integer and store in the vector
+        vertexIndices.push_back(IndexV);
+    }
+    // std::cout<<"String "<<line.c_str()<<std::endl;
+    // std::cout<<"Read Face"<<std::endl;
+    // for (size_t i=0;i<vertexIndices.size();i++)
+    //     std::cout<<vertexIndices[i]<<","<<std::endl;
+    // exit(0);
+}
 
 template <class ScalarType>
 bool LoadOBJ(std::string meshFile,
@@ -51,18 +79,23 @@ bool LoadOBJ(std::string meshFile,
             //numF++;
             std::string  line;
             std::getline(fin, line);
-            std::stringstream linestream(line);
-            std::vector<int > FIdx;
-            do
-            {
-                int index;
-                linestream>>index;
-                //std::cout<<index<<" ";
-                //obj starts from 1
-                index--;
-                FIdx.push_back(index);
 
-            }while (!linestream.eof());
+            std::vector<int > FIdx;
+            parseFaceLine(line,FIdx); 
+
+            // std::stringstream linestream(line);
+            
+            // do
+            // {
+            //     int index;
+            //     linestream>>index;
+            //     //std::cout<<index<<" ";
+            //     //obj starts from 1
+            //     index--;
+            //     FIdx.push_back(index);
+
+            // }while (!linestream.eof());
+
             //            std::cout<<FIdx.size()<<std::endl;
             //            FIdx.resize(FIdx.size()-1);
 

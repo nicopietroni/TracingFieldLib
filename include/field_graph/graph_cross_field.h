@@ -2,8 +2,7 @@
 #define CROSS_FIELD_GRAPH
 
 #include "../cross_field.h"
-//#include "graph.h"
-
+#include <cstddef>
 namespace Field{
 
 class CrossFieldGraph
@@ -104,6 +103,7 @@ void OrthoNodesCrossField(int IndexN,std::vector<int> &OrthoN)
         OrthoN.push_back(NodeI);
     }
 }
+
 
 };
 }

@@ -105,6 +105,14 @@ Geo::Point3<ScalarType> ClosestPoint(const Traingle3<ScalarType> &T,
 }
 
 template <class ScalarType>
+ScalarType Distance(const Traingle3<ScalarType> &T,
+                    const Geo::Point3<ScalarType> &Test_pos)
+{
+    Geo::Point3<ScalarType> ClosP=ClosestPoint(T,Test_pos);
+    return(Test_pos-ClosP).Norm();
+}
+
+template <class ScalarType>
 Geo::Point3<ScalarType> ClosestVert(const Traingle3<ScalarType> &T,
                                     const Geo::Point3<ScalarType> &Test_pos)
 {

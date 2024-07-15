@@ -17,7 +17,7 @@ class LinearCongruentialGenerator
 public:
     using result_type = uint32_t;
 
-    LinearCongruentialGenerator(result_type seed) : state(seed) {}
+    LinearCongruentialGenerator(result_type seed=0) : state(seed) {}
 
     result_type operator()()
     {
@@ -106,6 +106,7 @@ namespace Geo
         }
 
     public:
+    
         static void SampleVert(const std::vector<std::vector<int>> &Connectivity,
                                const int NumVert, const int &RadiusStar,
                                std::vector<int> &Selected,

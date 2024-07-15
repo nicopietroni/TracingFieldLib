@@ -21,7 +21,7 @@ namespace Geo
         {
             std::vector<int> Fixed;
             std::vector<int> SmoothOnly;
-            std::vector<std::pair<int, int>> FeatureLines;
+            std::vector<std::pair<int, int> > FeatureLines;
             ScalarType Damp;
             size_t Steps;
 
@@ -525,6 +525,7 @@ namespace Geo
         }
 
     public:
+
         static void Smooth(std::vector<Geo::Point3<ScalarType>> &VertPos,
                            const std::vector<std::vector<int>> &Faces,
                            UVSmoothParam UVP = UVSmoothParam())

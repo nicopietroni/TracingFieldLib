@@ -298,7 +298,7 @@ public:
     void Init(const std::vector<std::vector<int> > &_Kernels,
               const std::vector<std::vector<ScalarType> > &_Weights,
               const std::vector<int> &_FixedVert,
-              const std::vector<LinearConstraint<ScalarType> > &_LinConstr=std::vector<std::vector<size_t> >(),
+              const std::vector<LinearConstraint<ScalarType> > &_LinConstr=std::vector<LinearConstraint<ScalarType> >(),
               bool WriteDBG=false)
     {
         Kernels=_Kernels;

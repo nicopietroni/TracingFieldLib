@@ -1,6 +1,7 @@
 #ifndef POS3
 #define POS3
 
+#include <cassert>
 #include <vector>
 #include <map>
 #include <iostream>
@@ -221,6 +222,29 @@ void GetSortedVertStar(const Pos3 &StartPos,
         PosFan[i].FlipV(Faces);
         VertFan.push_back(PosFan[i].V);
     }
+}
+
+void GetSortedVertStar(const int &IndexV,
+                       const std::vector<std::vector<int> > &Faces,
+                       const std::vector<std::vector<int> > &VF,
+                       const std::vector<std::vector<int> > &VFIndex,
+                       const std::vector<std::vector<int> > &NextF,
+                       const std::vector<std::vector<int> > &NextE,
+                       std::vector<int> &VertFan,bool &HasBorder)
+{
+   assert(IndexV>=0);
+   assert(IndexV<VF.size());
+   assert(IndexV<VFIndex.size());
+
+   VertFan.clear();
+   HasBorder=true;
+   //no faces for that edge
+   if (VFIndex[IndexV].size()==0)return;
+   assert(VF[IndexV].size()==VFIndex[IndexV].size());
+   int IndexF=VF[IndexV][0];
+   int IndexVLoc=VFIndex[IndexV][0];
+   Pos3 StartPos(IndexF,IndexVLoc,IndexV);
+   GetSortedVertStar(StartPos,Faces,NextF,NextE,VertFan,HasBorder);
 }
 
 void getBorderSequnces(const std::vector<std::vector<int> > &Faces,

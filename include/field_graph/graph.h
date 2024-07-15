@@ -1,6 +1,7 @@
 #ifndef FIELD_GRAPH
 #define FIELD_GRAPH
 
+#include <cassert>
 #include <cmath>
 #include <vector>
 #include <stdio.h>
@@ -296,13 +297,15 @@ public:
     void GetNeigh(const int &IndexN0,
                   bool onlyDirect,
                   bool onlyVisible,
-                  std::vector<int> &Neigh,
+                  std::vector<int> &NeighNode,
+                  std::vector<int> &NeighIdx,
                   std::vector<ScalarType> &NeighW)const
     {
         assert(IndexN0>=0);
         assert(IndexN0<(int)N.size());
-        Neigh.clear();
+        NeighNode.clear();
         NeighW.clear();
+        NeighIdx.clear();
 
         for (size_t i=0;i<N[IndexN0].size();i++)
         {
@@ -313,9 +316,37 @@ public:
            int IndexNeigh=N[IndexN0][i].N;
            if (!IsEnabled(IndexNeigh))continue;
 
-           Neigh.push_back(IndexNeigh);
+           NeighNode.push_back(IndexNeigh);
            NeighW.push_back(N[IndexN0][i].W);
+           NeighIdx.push_back(i);
         }
+    }
+
+    void GetNeigh(const int &IndexN0,
+                  bool onlyDirect,
+                  bool onlyVisible,
+                  std::vector<int> &NeighNode,
+                  std::vector<ScalarType> &NeighW)const
+    {
+        // assert(IndexN0>=0);
+        // assert(IndexN0<(int)N.size());
+        // Neigh.clear();
+        // NeighW.clear();
+
+        // for (size_t i=0;i<N[IndexN0].size();i++)
+        // {
+        //    if (!ActiveLink(IndexN0,i))continue;
+        //    if ((onlyDirect)&&(!DirectLink(IndexN0,i)))continue;
+        //    if ((onlyVisible)&&(!VisibleLink(IndexN0,i)))continue;
+
+        //    int IndexNeigh=N[IndexN0][i].N;
+        //    if (!IsEnabled(IndexNeigh))continue;
+
+        //    Neigh.push_back(IndexNeigh);
+        //    NeighW.push_back(N[IndexN0][i].W);
+        // }
+        std::vector<int> NeighIdx;
+        GetNeigh(IndexN0,onlyDirect,onlyVisible,NeighNode,NeighIdx,NeighW);
     }
 
     void GetNeighType(const int &IndexN0,
@@ -376,6 +407,26 @@ public:
         for (size_t i=0;i<N.size();i++)
             for (size_t j=0;j<N[i].size();j++)
                 N[i][j].Enabled=true;
+    }
+
+    void DisableArc(const int &IndexN,
+                    const int &IndexNeigh)
+    {
+        assert(IndexN>=0);
+        assert(IndexN<N.size());
+        assert(IndexNeigh>=0);
+        assert(IndexNeigh<N[IndexN].size());
+        N[IndexN][IndexNeigh].Enabled=false;
+    }
+
+    void EnableArc(const int &IndexN,
+                  const int &IndexNeigh)
+    {
+        assert(IndexN>=0);
+        assert(IndexN<N.size());
+        assert(IndexNeigh>=0);
+        assert(IndexNeigh<N[IndexN].size());
+        N[IndexN][IndexNeigh].Enabled=true;
     }
 
     void DisableNodeType(NType TypeNode)
@@ -659,6 +710,12 @@ public:
         std::sort(N[IndexN].begin(),N[IndexN].end());
     }
 
+    const std::vector<NeighInfo> &Neigh(const int &IndexN)const
+    {
+        assert(IndexN>=0);
+        assert(IndexN<N.size());
+        return (N[IndexN]);
+    }
 
     void SortAllNeigh()
     {

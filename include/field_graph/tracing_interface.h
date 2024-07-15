@@ -18,7 +18,8 @@ namespace Geo
         static bool CompleteTraceFrom(Geo::TracingGraph<ScalarType> &TGraph,
                                       const int &StartN, std::vector<int> &PathN,
                                       bool allow_loops, bool allow_exit_domains,
-                                      std::vector<int> *ArrivalNodes = NULL)
+                                      std::vector<int> *ArrivalNodes = NULL,
+                                      bool only_visible=true)
         {
 
             TGraph.DeSelectAll(0);
@@ -48,7 +49,7 @@ namespace Geo
             SParam.StopAtSel[0] = true;
             SParam.onlyDirect = false;
             SParam.stopAtPrevDist = false;
-
+            SParam.onlyVisible=only_visible;
             ScalarType PathL;
             std::vector<int> SourceNodes;
             SourceNodes.push_back(StartN);
@@ -74,18 +75,20 @@ namespace Geo
         }
 
     public:
+
         static bool TraceLoopOrBorderBorderFrom(Geo::TracingGraph<ScalarType> &TGraph,
                                                 const int &StartN,
                                                 std::vector<int> &PathN,
                                                 bool make_direct = true,
-                                                std::vector<int> *ArrivalNodes = NULL)
+                                                std::vector<int> *ArrivalNodes = NULL,
+                                                bool only_visible=true)
         {
 
             bool IsBorder = IsOppositeExitDomain(TGraph, StartN);
             IsBorder |= IsOppositeTangent(TGraph, StartN);
             assert(TGraph.IsEnabled(StartN));
             // std::cout<<"A"<<std::endl;
-            bool has_traced = CompleteTraceFrom(TGraph, StartN, PathN, true, true, ArrivalNodes);
+            bool has_traced = CompleteTraceFrom(TGraph, StartN, PathN, true, true, ArrivalNodes,only_visible);
             // std::cout<<"B"<<std::endl;
             if (!has_traced)
                 return false;
@@ -102,7 +105,7 @@ namespace Geo
                 std::vector<int> PathNOpp;
 
                 // std::cout<<"C"<<std::endl;
-                has_traced = CompleteTraceFrom(TGraph, StartOpp, PathNOpp, false, true, ArrivalNodes);
+                has_traced = CompleteTraceFrom(TGraph, StartOpp, PathNOpp, false, true, ArrivalNodes,only_visible);
                 // std::cout<<"D"<<std::endl;
 
                 if (!has_traced)

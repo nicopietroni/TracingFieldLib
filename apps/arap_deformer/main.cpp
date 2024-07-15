@@ -326,7 +326,17 @@ void SetRenderBar()
     bool changedRotation=ImGui::Checkbox("Use Rotation Invariant", &useRotInvadiant);
     if (changedDevelop || changedRotation)
         UpdateArap(true);
+     glfwMakeContextCurrent(window);
+     
+     ImGui::End();
+//   glfwSwapInterval(1); // Enable vsync
 
+//   // Setup window
+//   glfwSetErrorCallback(glfw_error_callback);
+//   glfwSetCursorPosCallback(window, cursor_position_callback);
+//   glfwSetMouseButtonCallback(window, mouse_button_callback);
+//   glfwSetScrollCallback(window, scroll_callback);
+//   glfwSetKeyCallback(window, key_callback);
 }
 
 void ConstraintVertKernel(const size_t &IndexV)
@@ -506,7 +516,7 @@ int main(int argc, char *argv[])
             SetRenderBar();
 
             //SetLogWindow();
-            showMainMenu();
+            //showMainMenu();
         }
         // Rendering
         ImGui::Render();

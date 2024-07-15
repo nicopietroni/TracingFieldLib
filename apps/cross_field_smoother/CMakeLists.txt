@@ -19,6 +19,10 @@ if(USE_DIRECTIONAL)
     set(DIRECTIONALPATH  = "../../external_lib/Directional/include/" CACHE INTERNAL "")
 endif()
 
+set(SANITIZE_FLAGS "-fsanitize=address -fsanitize=undefined")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${SANITIZE_FLAGS} -g -O1")
+set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} ${SANITIZE_FLAGS}")
+
 set(IGLLIB  = "../../external_lib/libigl/include/" CACHE INTERNAL "")
 #set(BROWS_DIR  = "../../external_lib/FileBrowser" CACHE INTERNAL "")
 
