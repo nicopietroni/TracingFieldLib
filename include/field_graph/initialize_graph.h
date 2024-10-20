@@ -16,7 +16,7 @@
 #include "best_rotation.h"
 #include "patch_basic.h"
 #define MAX_ANGLE_FOR_DIRECT 90
-
+#define DELTA 0.00001
 namespace Geo
 {
     template <class ScalarType>
@@ -27,7 +27,7 @@ namespace Geo
                                                const ScalarType &max_angle, const ScalarType &drift_penalty)
         {
             ScalarType drift = pow(angle / max_angle, 2);
-            ScalarType val = length * (ScalarType(1) + drift_penalty * drift);
+            ScalarType val = DELTA+length * (ScalarType(1) + drift_penalty * drift);
             return (val); //*Weight;
         }
 
@@ -211,7 +211,7 @@ namespace Geo
 
                 // then get the new node
                 int IndexN1 = Field::CrossFieldGraph::NodeOfElemDir(IndexVert1, IndexDir1);
-                ;
+                
                 // CHECK VISIBILITY
                 ScalarType EdgeW;
                 bool IsVisibleMaxA;

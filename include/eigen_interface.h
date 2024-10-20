@@ -46,7 +46,7 @@ public:
                                Eigen::MatrixXi &faces,
                                MatrixXm &vert)
     {
-        assert(!HasUnfererencedVert(VertPos, Faces));
+        //assert(!HasUnfererencedVert<ScalarType>(VertPos, Faces));
 
         // create eigen matrix of vertices
         vert = MatrixXm(VertPos.size(), 3);

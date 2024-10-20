@@ -1,9 +1,16 @@
 #ifndef TRACING_MESH_PREPROCESS
 #define TRACING_MESH_PREPROCESS
 
+#include "field_graph/graph_cross_field.h"
+#include "point3.h"
+#include <cassert>
 #include <connectivity.h>
+#include <cstddef>
 #include <set>
 #include <mesh_refine.h>
+#include <sys/_types/_size_t.h>
+#include <utility>
+#include <vector>
 
 namespace Geo
 {
@@ -88,10 +95,27 @@ namespace Geo
 
         static bool RefineCloseSingFacesStep(std::vector<Geo::Point3<ScalarType>> &Pos,
                                              std::vector<std::vector<int>> &Faces,
-                                             std::vector<Field::CrossF<ScalarType>> &FaceCurv,
+                                             std::vector<Field::CrossF<ScalarType> > &FaceCurv,
+                                             std::vector<std::pair<int,int>> &Features,
                                              const std::vector<int> &SingIndex,
                                              const int extend_step)
         {
+            //std::set<std::pair<int,int>> FeatureSet(Features.begin(),Features.end());
+            std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> MarkedE;
+            for (size_t i=0;i<Features.size();i++)
+            {
+                int IndexV0=Features[i].first;
+                int IndexV1=Features[i].second;
+                assert(IndexV0>=0);
+                assert(IndexV1>=0);
+                assert(IndexV0<Pos.size());
+                assert(IndexV1<Pos.size());
+                Geo::Point3<ScalarType> P0=Pos[IndexV0];
+                Geo::Point3<ScalarType> P1=Pos[IndexV1];
+                std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> Key(std::min(P0,P1),std::max(P0,P1));
+                MarkedE.insert(Key);
+            }
+            
             std::vector<int> CloseSingF;
             GetCloseSingFaces(Faces, SingIndex, extend_step, CloseSingF);
 
@@ -104,9 +128,10 @@ namespace Geo
 
             std::vector<ScalarType> Alpha(To_splitE.size(), 0.5);
             std::vector<int> OldF;
-            RefineMesh<ScalarType>::SplitTriangleFaces(Pos, Faces, To_splitE, Alpha, &OldF);
+            RefineMesh<ScalarType>::SplitTriangleFaces(Pos, Faces, To_splitE, Alpha,MarkedE,false, OldF);
             assert(OldF.size() == Faces.size());
 
+            //update cross field
             std::vector<Field::CrossF<ScalarType>> OldFaceCurv = FaceCurv;
             FaceCurv.clear();
             for (size_t i = 0; i < OldF.size(); i++)
@@ -124,6 +149,22 @@ namespace Geo
                 Geo::Point3<ScalarType> BaryF = (P0 + P1 + P2) / 3;
                 FaceCurv.back().Pos = BaryF;
             }
+
+            //update features
+            Features.clear();
+            for (size_t i = 0; i < Faces.size(); i++)
+            for (size_t j = 0; j < Faces[i].size(); j++)
+            {
+                int IndexV0 = Faces[i][j];
+                int IndexV1 = Faces[i][(j+1)%Faces[i].size()];
+                Geo::Point3<ScalarType> P0=Pos[IndexV0];
+                Geo::Point3<ScalarType> P1=Pos[IndexV1];
+                std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> Key(std::min(P0,P1),std::max(P0,P1));
+                if (MarkedE.count(Key)==0)continue;
+                Features.push_back(std::pair<int,int>(std::min(IndexV0,IndexV1),
+                                                      std::max(IndexV0,IndexV1)));
+            }
+
             return true;
         }
 
@@ -132,21 +173,52 @@ namespace Geo
         static void RefineCloseSingFaces(std::vector<Geo::Point3<ScalarType>> &Pos,
                                          std::vector<std::vector<int>> &Faces,
                                          std::vector<Field::CrossF<ScalarType>> &FaceCurv,
+                                         std::vector<std::pair<int,int>> &Features,
                                          const std::vector<int> &SingIndex,
                                          const int extend_step)
         {
-            while (RefineCloseSingFacesStep(Pos, Faces, FaceCurv, SingIndex, extend_step))
-            {
-            }
+            RefineCloseSingFacesStep(Pos, Faces, FaceCurv,Features, SingIndex, extend_step);
+            // while (RefineCloseSingFacesStep(Pos, Faces, FaceCurv,Features, SingIndex, extend_step))
+            // {}
         }
 
-        static void DesambiguateInitialDarts(std::vector<Geo::Point3<ScalarType>> &Pos,
-                                             std::vector<std::vector<int>> &Faces)
+        static void DesambiguateCoincidentBorders(std::vector<Geo::Point3<ScalarType>> &Pos,
+                                             std::vector<std::vector<int>> &Faces,
+                                             std::vector<int> *ModVert=NULL,
+                                             std::vector<Geo::Point3<ScalarType>> *OrigPos=NULL)
         {
             ScalarType delta= AvgEdgeLen(Pos,Faces)*0.01;
             //ScalarType delta=std::numeric_limits<float>::epsilon()*(ScalarType)2;
-            DesambiguateSamePosVertices<ScalarType>(Pos, Faces,delta);
+            DesambiguateSamePosVertices<ScalarType>(Pos, Faces,delta,ModVert,OrigPos);
         }
+
+        static void SplitFeatures(std::vector<Geo::Point3<ScalarType>> &Pos,
+                                  std::vector<std::vector<int>> &Faces,
+                                  std::vector<Field::CrossF<ScalarType>> &VertCurv,
+                                  std::vector<std::pair<int,int>> &Features)
+        {
+            assert(VertCurv.size()==Pos.size());
+            std::map<Geo::Point3<ScalarType>,Field::CrossF<ScalarType> > PosCross;
+            for (size_t i=0;i<Pos.size();i++)
+                PosCross[Pos[i]]=VertCurv[i];
+            
+            //std::vector<std::pair<int,int>> SplitE=Features;
+            // SplitMeshFromEdges(std::vector<Geo::Point3<ScalarType>> &Pos,
+            //             std::vector<std::vector<int>> &Faces,
+            //             const std::vector<std::pair<int, int>> &SplitEdges,
+            //             std::vector<std::pair<int, int>> &Features)
+
+            SplitMeshFromEdges<ScalarType>(Pos,Faces,Features);//,Features);
+            RemoveUnfererencedVert<ScalarType>(Pos,Faces);
+
+            VertCurv.clear();
+            for (size_t i=0;i<Pos.size();i++)
+            {
+                assert(PosCross.count(Pos[i])>0);
+                VertCurv.push_back(PosCross[Pos[i]]);
+            }     
+        }
+
     };
 }
 

@@ -9,6 +9,7 @@
 #include "point3.h"
 #include "box3.h"
 #include "connectivity.h"
+#include "normal.h"
 
 namespace Tetra
 {

@@ -35,8 +35,8 @@ public:
     // std::vector<std::vector<std::vector<int> > > PatchSideVert;
 
     // for each patch, for each loop, for each edge the sequence
-    std::vector<std::vector<std::vector<std::vector<std::pair<int, int>>>>>
-        EdgePatchSides;
+    std::vector<std::vector<std::vector<std::vector<std::pair<int, int>>>>> EdgePatchSides;
+
     // per patch per loop per side
     std::vector<std::vector<std::vector<ScalarType>>> SideLenghts;
 
@@ -602,8 +602,7 @@ private:
 
     // get the border sequences
     std::vector<std::vector<int>> BorderVIdx;
-    getBorderSequncesVert(PData.SubPatchFaces[IndexP], NextFPatch, NextEPatch,
-                          BorderVIdx);
+    getBorderSequncesVert(PData.SubPatchFaces[IndexP], NextFPatch, NextEPatch,BorderVIdx);
 
     std::set<int> CornerSet;
     assert(IndexP < PData.PatchCorners.size());
@@ -614,14 +613,19 @@ private:
     PData.TypeOfCorner[IndexP].clear();
     // PData.PatchSideVert[IndexP].clear();
 
+    //allocate for each loop 
+    //(usually is one in the usual patch decompositions but can handle general cases)
     PData.PatchCorners[IndexP].resize(BorderVIdx.size());
     PData.TypeOfCorner[IndexP].resize(BorderVIdx.size());
+
     // for each loop
     for (size_t i = 0; i < BorderVIdx.size(); i++) {
-
+      //borders are always loops that close on itself
+      // so need also to check last with first
       int sizeL = BorderVIdx[i].size();
 
       for (size_t j = 0; j < BorderVIdx[i].size(); j++) {
+        //get local vertices
         int IndexV_Prev = BorderVIdx[i][(j + sizeL - 1) % sizeL];
         int IndexV_Curr = BorderVIdx[i][j];
         int IndexV_Next = BorderVIdx[i][(j + 1) % sizeL];
@@ -639,11 +643,12 @@ private:
         assert(PData.PathsEdges.count(key_prev) > 0);
         assert(PData.PathsEdges.count(key_next) > 0);
 
-        // get the direction from nodes
+        // get the direction of all nodes inciding on considered vertex
+        // considering that edge
         std::vector<int> NodesV_prev = PData.PathsEdges[key_prev];
         std::vector<int> NodesV_next = PData.PathsEdges[key_next];
 
-        // add direction per vertex
+        // add direction per each of the previously found nodes
         std::vector<int> DirV_prev;
         Field::CrossFieldGraph::DirOfNodes(NodesV_prev, DirV_prev);
         std::vector<int> DirV_next;
@@ -1310,7 +1315,8 @@ private:
         continue;
       int sideN = NumSides(i);
       int cornN = NumCorners(i);
-      assert(sideN == cornN);
+      if ((NumBorders(i)==1)&&(sideN>1))
+      {assert(sideN == cornN);}
       CornerNumsMap[sideN]++;
     }
 
@@ -1323,6 +1329,8 @@ private:
   }
 
 public:
+
+  //this function set for each face the patch it belongs
   void UpdateFaceToPatch() {
     // then update the correspondence
     PData.OriginalFaceToPatch.clear();
@@ -2317,13 +2325,15 @@ public:
 
     // make one patch for each connected components
     FFConnectedComponenent(Faces, NextF, NextE, PData.PatchOriginalFaces);
+    //then update the corresponding maps
     UpdateFaceToPatch();
 
-    // get the submeshes if needed
+    // update the submeshes of each patch storing the corresponding index and maps
     std::cout << "- Updating SubMeshes" << std::endl;
     SplitByFFConnectedComponenent(
         VertPos, Faces, PData.SubPatchVertPos, PData.SubPatchFaces,
         PData.SubPatchVertToOriginal, PData.SubPatchFacesToOriginal);
+
     // safety checks
     assert(PData.PatchOriginalFaces.size() == PData.SubPatchVertPos.size());
     assert(PData.PatchOriginalFaces.size() == PData.SubPatchFaces.size());
@@ -2334,10 +2344,17 @@ public:
     assert(PData.PatchOriginalFaces.size() ==
            PData.SubPatchFacesToOriginal.size());
 
+    //then allocate the space for the different data for each patch
+    //lenght of each side
     PData.SideLenghts.resize(PData.PatchOriginalFaces.size());
+    //the index of corners
     PData.PatchCorners.resize(PData.PatchOriginalFaces.size());
+    //corner type
     PData.TypeOfCorner.resize(PData.PatchOriginalFaces.size());
+    //the sequence on each side
     PData.EdgePatchSides.resize(PData.PatchOriginalFaces.size());
+
+    //this is only for visualization purposes
     PData.VisualCorners.resize(PData.PatchOriginalFaces.size());
     PData.VisualCornerType.resize(PData.PatchOriginalFaces.size());
     PData.VisualPaths.resize(PData.PatchOriginalFaces.size());
@@ -2347,6 +2364,7 @@ public:
     std::cout << "- Add Border Paths" << std::endl;
     AddBorderPaths();
 
+    //update initial corners for each patch
     std::cout << "- Find Patch Corners" << std::endl;
     FindPatchCorners();
 

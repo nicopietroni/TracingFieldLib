@@ -161,12 +161,6 @@ public:
 
       if (!iboxtodo.IsEmpty()) {
 
-        //                std::cout<<"Size: X:"<<iboxtodo.Min.X<<"
-        //                "<<iboxtodo.Max.X<<std::endl; std::cout<<"Size:
-        //                Y:"<<iboxtodo.Min.Y<<" "<<iboxtodo.Max.Y<<std::endl;
-        //                std::cout<<"Size: Z:"<<iboxtodo.Min.Z<<"
-        //                "<<iboxtodo.Max.Z<<std::endl;
-
         for (int ix = iboxtodo.Min.X; ix <= iboxtodo.Max.X; ix++)
           for (int iy = iboxtodo.Min.Y; iy <= iboxtodo.Max.Y; iy++)
             for (int iz = iboxtodo.Min.Z; iz <= iboxtodo.Max.Z; iz++) {
@@ -199,16 +193,11 @@ public:
                 //                                std::cout<<"TestA"<<std::endl;
                 Geo::Traingle3<ScalarType> T(p0, p1, p2);
 
-                CoordType closP = ClosestVert(T, _p);
+                CoordType closP = ClosestPoint(T, _p);
                 ScalarType currD = (closP - _p).Norm();
                 if (currD > _minDist)
                   continue;
 
-                //                                closP=p0;//Geo::ClosestPoint(T,_p);
-                //                                //std::cout<<"Test"<<std::endl;
-
-                ////                                tested++;
-                ////                                currD=(closP-_p).Norm();
                 if (currD < _minDist) {
                   _minDist = currD;
                   closestF = currT;
@@ -222,9 +211,6 @@ public:
       if (closestF == -1) {
         radius = radius + voxel.Norm() / 4;
       } else {
-        //                std::cout<<"NumCell:"<<num_cell<<std::endl;
-        //                std::cout<<"Tested:"<<tested<<"total:
-        //                "<<face.size()<<std::endl;
         return true;
       }
 

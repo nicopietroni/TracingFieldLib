@@ -170,8 +170,12 @@ public:
 
     //type of node
     std::vector<NType> NT;
+    
     //set if a node is enabled or not
     std::vector<bool> EnabledN;
+
+    // //set if can pass to a node or not (similar to emabled but on)
+    // std::vector<bool> PassTrought;
 
     bool IsDirectPairE(const int &IndexN0,
                        const int &IndexN1)
@@ -210,6 +214,7 @@ public:
     {
         assert(IndexN0>=0);
         assert(IndexN0<(int)N.size());
+        assert(W>0);
         N[IndexN0].push_back(NeighInfo(IndexN1,W,Enabled,Direct,Visible));
     }
 

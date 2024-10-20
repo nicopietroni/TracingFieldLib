@@ -18,6 +18,7 @@
 
 #include <igl/is_vertex_manifold.h>
 #include <igl/is_edge_manifold.h>
+
 //#include "eigen_interface.h"
 // #include "Space_Query/triangle_grid_2D.h"
 

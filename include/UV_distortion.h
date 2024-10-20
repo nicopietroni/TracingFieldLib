@@ -76,30 +76,62 @@ public:
         return diff;
     }
 
-    static ScalarType ScaledJacobian(const Geo::Traingle3<ScalarType> &T_3D,
-                                     const Geo::Traingle2<ScalarType> &T_UV)
+    // static ScalarType ScaledJacobian(const Geo::Traingle3<ScalarType> &T_3D,
+    //                                  const Geo::Traingle2<ScalarType> &T_UV)
+    // {
+    //     // Create 3x3 Jacobian matrix
+    //     Eigen::Matrix3d Jacobian;
+
+    //     Geo::Point3<ScalarType> A_prime(T_UV.P(0).X,T_UV.P(0).Y,0);
+    //     Geo::Point3<ScalarType> B_prime(T_UV.P(1).X,T_UV.P(1).Y,0);
+    //     Geo::Point3<ScalarType> C_prime(T_UV.P(2).X,T_UV.P(2).Y,0);
+
+    //     Geo::Point3<ScalarType> A(T_3D.P(0).X,T_3D.P(0).Y,T_3D.P(0).Z);
+    //     Geo::Point3<ScalarType> B(T_3D.P(1).X,T_3D.P(1).Y,T_3D.P(1).Z);
+    //     Geo::Point3<ScalarType> C(T_3D.P(2).X,T_3D.P(2).Y,T_3D.P(2).Z);
+
+    //     // Populate the Jacobian matrix with partial derivatives
+    //     Jacobian << A_prime.X - A.X, B_prime.X - B.X, C_prime.X - C.X,
+    //             A_prime.Y - A.Y, B_prime.Y - B.Y, C_prime.Y - C.Y,
+    //             A_prime.Z - A.Z, B_prime.Z - B.Z, C_prime.Z - C.Z;
+
+    //     // Compute the scaled Jacobian distortion (determinant of the Jacobian matrix)
+    //     double scaledJacobianDistortion = Jacobian.determinant();
+
+    //     return scaledJacobianDistortion;
+    // }
+
+     static ScalarType ScaledJacobian(const Geo::Traingle3<ScalarType> &T_3D,
+                                      const Geo::Traingle2<ScalarType> &T_UV) 
     {
-        // Create 3x3 Jacobian matrix
-        Eigen::Matrix3d Jacobian;
+    // Calculate edge vectors in 3D
+    Geo::Point3<ScalarType> e1 = T_3D.P(1)-T_3D.P(0);
+    Geo::Point3<ScalarType> e2 = T_3D.P(2)-T_3D.P(0);
 
-        Geo::Point3<ScalarType> A_prime(T_UV.P(0).X,T_UV.P(0).Y,0);
-        Geo::Point3<ScalarType> B_prime(T_UV.P(1).X,T_UV.P(1).Y,0);
-        Geo::Point3<ScalarType> C_prime(T_UV.P(2).X,T_UV.P(2).Y,0);
+    // Calculate edge vectors in UV space
+    Geo::Point2<ScalarType> eu1 = T_UV.P(1)-T_UV.P(0);
+    Geo::Point2<ScalarType> eu2 = T_UV.P(2)-T_UV.P(0);
 
-        Geo::Point3<ScalarType> A(T_3D.P(0).X,T_3D.P(0).Y,T_3D.P(0).Z);
-        Geo::Point3<ScalarType> B(T_3D.P(1).X,T_3D.P(1).Y,T_3D.P(1).Z);
-        Geo::Point3<ScalarType> C(T_3D.P(2).X,T_3D.P(2).Y,T_3D.P(2).Z);
+    // Construct the Jacobian matrix
+    double J[2][3] = {
+        {eu1.X, eu2.X, 0},
+        {eu1.Y, eu2.Y, 0}
+    };
 
-        // Populate the Jacobian matrix with partial derivatives
-        Jacobian << A_prime.X - A.X, B_prime.X - B.X, C_prime.X - C.X,
-                A_prime.Y - A.Y, B_prime.Y - B.Y, C_prime.Y - C.Y,
-                A_prime.Z - A.Z, B_prime.Z - B.Z, C_prime.Z - C.Z;
+    // Calculate the area in UV space for normalization
+    double areaUV = std::fabs(eu1.X * eu2.Y - eu1.Y * eu2.X) / 2.0;
 
-        // Compute the scaled Jacobian distortion (determinant of the Jacobian matrix)
-        double scaledJacobianDistortion = Jacobian.determinant();
+    // Calculate the area in 3D space for normalization
+    double crossProductX = e1.Y * e2.Z - e1.Z * e2.Y;
+    double crossProductY = e1.Z * e2.X - e1.X * e2.Z;
+    double crossProductZ = e1.X * e2.Y - e1.Y * e2.X;
+    double area3D = std::sqrt(crossProductX * crossProductX + crossProductY * crossProductY + crossProductZ * crossProductZ) / 2.0;
 
-        return scaledJacobianDistortion;
-    }
+    // The scaled Jacobian is the determinant of the Jacobian matrix normalized by the area
+    double scaledJacobian = areaUV / area3D;
+
+    return scaledJacobian;
+}
 
     static ScalarType ScaledJacobianDistortion(const std::vector<Geo::Point3<ScalarType> > &Vert3D,
                                                const std::vector<Geo::Point2<ScalarType> > &VertUV,
@@ -183,6 +215,17 @@ public:
         std::sort(FaceDistortion.begin(),FaceDistortion.end());
         int IndexMax=floor(((ScalarType)FaceDistortion.size()*(1-percentile))+0.5);
         return (FaceDistortion[IndexMax]);
+    }
+
+    static ScalarType ComputeSumDistortion(const std::vector<Geo::Point3<ScalarType> > &Vert3D,
+                                           const std::vector<Geo::Point2<ScalarType> > &VertUV,
+                                           const std::vector<std::vector<int> > &Faces,
+                                           const DistType DType)
+    {
+        ScalarType SumDist=0;
+        for (size_t i=0;i<Faces.size();i++)
+            SumDist+=ComputeDistortion(Vert3D,VertUV,Faces,DType,i);
+        return SumDist;
     }
 };
 

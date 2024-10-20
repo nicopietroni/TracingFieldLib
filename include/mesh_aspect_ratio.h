@@ -1,6 +1,7 @@
 #ifndef MESH_ASPECT_RATIO
 #define MESH_ASPECT_RATIO
 
+#include <cassert>
 #include <mesh_functions.h>
 #include <triangle3.h>
 
@@ -47,6 +48,28 @@ ScalarType TriMeshAvgQuality(const std::vector<Geo::Point3<ScalarType> > &VertPo
     return (AvgQ);
 }
 
+template<class ScalarType>
+ScalarType TriMeshWorstQuality(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                              const std::vector<std::vector<int> > &Faces,
+                              const std::vector<int> &FacesIdx,QType QT=QTRadii)
+{
+    assert(FacesIdx.size()>0);
+    ScalarType WorstW=1;
+    for (size_t i=0;i<FacesIdx.size();i++)
+        WorstW=std::min(TriMeshQuality(VertPos,Faces,FacesIdx[i],QT),WorstW);
+    return (WorstW);
+}
+
+template<class ScalarType>
+ScalarType TriMeshWorstQuality(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                              const std::vector<std::vector<int> > &Faces,
+                              QType QT=QTRadii)
+{
+    ScalarType WorstW=1;
+    for (size_t i=0;i<Faces.size();i++)
+        WorstW=std::min(TriMeshQuality(VertPos,Faces,i,QT),WorstW);
+    return (WorstW);
+}
 //   assert(IsAllTris(VertPos,Faces));
 //   for (size)
 

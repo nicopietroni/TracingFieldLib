@@ -2,6 +2,9 @@
 #define GRAPH_TRACING
 
 #include "graph.h"
+#include <cassert>
+#include <cstdlib>
+#include <iostream>
 #include <list>
 #include <set>
 // #include "graph_frame_field.h"
@@ -154,8 +157,13 @@ public:
           continue;
 
         // then get the next weight
-        // ScalarType NextWeight=CurrWeight+TGraph.W[CurrN][i];
-        ScalarType NextWeight = CurrWeight + TGraph.WeightLink(CurrN, i);
+        ScalarType NextStep=TGraph.WeightLink(CurrN, i);//CurrWeight+TGraph.W[CurrN][i];
+        if(NextStep<=0)
+        {
+          std::cout<<"W:"<<NextStep<<std::endl;
+          exit(0);
+        }
+        ScalarType NextWeight = CurrWeight + NextStep;//TGraph.WeightLink(CurrN, i);
         ScalarType OldWeight = std::numeric_limits<ScalarType>::max();
 
         // check if has been explored or not

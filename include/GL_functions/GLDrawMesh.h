@@ -1,11 +1,13 @@
 #ifndef GL_DRAW_MESH
 #define GL_DRAW_MESH
 
+#include <sys/_types/_size_t.h>
 #include <vector>
 #include "GLDrawBase.h"
 #include <GL/glew.h>
 #include "../point3.h"
 #include "connectivity.h"
+#include "field_graph/t_junction.h"
 
 namespace GLDraw
 {
@@ -89,13 +91,15 @@ namespace GLDraw
 
     template <class ScalarType>
     void DrawVertices(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                      const std::vector<int> &To_Draw)
+                      const std::vector<int> &To_Draw,
+                      Geo::Point3<ScalarType> pointCol = Geo::Point3<ScalarType>(1, 0, 1),
+                      int size = 20)
     {
         glPushAttrib(GL_ALL_ATTRIB_BITS);
         glDepthRange(0.0, 0.9999);
         glDisable(GL_LIGHTING);
-        glPointSize(30);
-        glColor4f(1.f, 0.f, 1.f, 1.f);
+        glPointSize(size);
+        glColor4f(pointCol.X, pointCol.Y, pointCol.Y, 1.f);
         glBegin(GL_POINTS);
         for (size_t j = 0; j < To_Draw.size(); j++)
         {
@@ -143,6 +147,7 @@ namespace GLDraw
                            const std::vector<Geo::Point3<ScalarType>> &VertNormal,
                            bool SmoothShade, TypeRendMesh TRM = TRTriangle,
                            std::vector<Geo::Point3<ScalarType>> *FaceCol = NULL,
+                           std::vector<Geo::Point3<ScalarType>> *VertCol = NULL,
                            bool use_blend = false)
     {
         assert(Connectivity.size() == FaceNormal.size());
@@ -175,6 +180,16 @@ namespace GLDraw
 
                 if (SmoothShade)
                     glNormal(VertNormal[IndexV]);
+                
+                if (VertCol!=NULL)
+                {
+                    assert(IndexV >= 0);
+                    assert(IndexV < (int)(*VertCol).size());
+                    if (use_blend)
+                        glColorAlpha((*VertCol)[IndexV], 0.5);
+                    else
+                        glColor((*VertCol)[IndexV]);
+                }
 
                 Geo::Point3<ScalarType> Pos = VertPos[IndexV];
                 glVertex(Pos);
@@ -413,6 +428,28 @@ namespace GLDraw
     }
 
     template <class ScalarType>
+    void GLDrawTJunctions(const std::vector<Geo::Point3<ScalarType>> &Pos,
+                          const std::vector<Geo::TJunction> &TJunctions)
+    {
+        std::vector<std::pair<int, int>> FlatEdges,TEdges;
+        std::vector<int> CenterT;
+        for (size_t i=0;i<TJunctions.size();i++)
+        {
+            int V0=TJunctions[i].V0;
+            int V1=TJunctions[i].V1;
+            int V=TJunctions[i].V;
+            int VT=TJunctions[i].VT;
+            FlatEdges.push_back(std::pair<int, int>(V0,V));
+            FlatEdges.push_back(std::pair<int, int>(V1,V));
+            TEdges.push_back(std::pair<int, int>(VT,V));
+            CenterT.push_back(V);
+        }
+       GLDrawEdges<ScalarType>(Pos,FlatEdges,(ScalarType)15,Geo::Point3<ScalarType>(0, 1, 1));
+       GLDrawEdges<ScalarType>(Pos,TEdges,(ScalarType)15,Geo::Point3<ScalarType>(1, 1, 0));
+       DrawVertices<ScalarType>(Pos,CenterT,Geo::Point3<ScalarType>(0,0,1),(ScalarType)30);
+    }
+
+    template <class ScalarType>
     void GLDrawBorders(const std::vector<Geo::Point3<ScalarType>> &Pos,
                        const std::vector<std::vector<int>> &Connectivity,
                        const std::vector<std::vector<int>> &NextF,
@@ -444,7 +481,8 @@ namespace GLDraw
                          bool drawsurface = true, bool drawire = false,
                          bool smoothShade = true, bool use_blend = true,
                          TypeRendMesh TRM = TRTriangle,
-                         std::vector<Geo::Point3<ScalarType>> *FaceCol = NULL)
+                         std::vector<Geo::Point3<ScalarType>> *FaceCol = NULL,
+                         std::vector<Geo::Point3<ScalarType>> *VertCol = NULL)
     {
         typedef typename Geo::Point3<ScalarType> CoordType;
 
@@ -463,7 +501,7 @@ namespace GLDraw
         if (drawsurface)
             DrawSurfaceFill3D<ScalarType>(VertPos, Connectivity, FaceNormal,
                                           VertNormal, smoothShade, TRM, FaceCol,
-                                          use_blend);
+                                          VertCol,use_blend);
 
         glDisable(GL_POLYGON_OFFSET_FILL);
         glEnable(GL_COLOR_MATERIAL);

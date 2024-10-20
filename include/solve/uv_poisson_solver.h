@@ -10,6 +10,7 @@
 #include <connectivity.h>
 #include <UV_utils.h>
 #include <UV_distortion.h>
+#include "normal.h"
 
 namespace Geo
 {
@@ -335,7 +336,7 @@ namespace Geo
             Geo::Point3<ScalarType> scaled_Kreal;
             Geo::Point3<ScalarType> scaled_Kimag;
             // CoordType fNorm = f->N();
-            Geo::Point3<ScalarType> fNorm = Geo::Normal(VertPos, Faces, IndexF);
+            Geo::Point3<ScalarType> fNorm = Geo::Normal<ScalarType>(VertPos, Faces, IndexF);
             fNorm.Normalize();
 
             // CoordType p[3];

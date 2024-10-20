@@ -5,7 +5,7 @@
 #include <vector>
 #include <map>
 #include <iostream>
-#include <connectivity.h>
+#include "connectivity.h"
 
 class Pos3{
 
@@ -209,7 +209,7 @@ void GetSortedVertStar(const Pos3 &StartPos,
                        const std::vector<std::vector<int> > &Faces,
                        const std::vector<std::vector<int> > &NextF,
                        const std::vector<std::vector<int> > &NextE,
-                       std::vector<int > &VertFan,
+                       std::vector<int> &VertFan,
                        bool &HasBorder)
 {
     VertFan.clear();
@@ -309,5 +309,52 @@ void getBorderSequncesVert(const std::vector<std::vector<int> > &Faces,
     Geo::getFFAdjacency(Faces,NextF,NextE);
     getBorderSequncesVert(Faces,NextF,NextE,BorderVIdx);
 }
+
+bool IsBorderVertVF(const int &IndexV,
+                     const std::vector<std::vector<int>> &Faces,
+                     const std::vector<std::vector<int>> &VF,
+                     const std::vector<std::vector<int>> &VFIndex) 
+{
+  assert(IndexV >= 0);
+  assert(IndexV < VF.size());
+  assert(IndexV < VFIndex.size());
+  std::map<int, int> VertCount;
+  for (size_t i = 0; i < VF[IndexV].size(); i++) 
+  {
+    int IndexF = VF[IndexV][i];
+    int LocalVindex = VFIndex[IndexV][i];
+    assert(LocalVindex>=0);
+    assert(LocalVindex<3);
+    assert(Faces[IndexF][LocalVindex]==IndexV);
+    int LocalVindex1 = (LocalVindex+1)%3;
+    int LocalVindex2 = (LocalVindex+2)%3;
+    int IndexV1=Faces[IndexF][LocalVindex1];
+    int IndexV2=Faces[IndexF][LocalVindex2];
+    VertCount[IndexV1]++;
+    VertCount[IndexV2]++;
+  }
+
+  std::map<int, int> ::iterator iteMap;
+  for (iteMap=VertCount.begin();iteMap!=VertCount.end();iteMap++)
+    if ((*iteMap).second==1)return true;
+  return false;
+}
+
+// bool IstBorderVertFF(const int &IndexF,
+//                      const int &LocalV,
+//                      const std::vector<std::vector<int>> &Faces,
+//                      const std::vector<std::vector<int>> &NextF,
+//                      const std::vector<std::vector<int>> &NextE) 
+// {
+//   assert(IndexF>=0);
+//   assert(IndexF<Faces.size());
+//   assert(LocalV>=0);
+//   assert(LocalV<Faces[IndexF].size());
+//   Pos3 pos(IndexF,LocalV,Faces[IndexF][LocalV]);
+//   std::vector<Pos3> PosFan;
+//   bool HasBorder=true;
+//   GetSortedFacesFaceFun(pos,Faces,NextF,NextE,PosFan,HasBorder);
+//   return HasBorder;
+// }
 
 #endif

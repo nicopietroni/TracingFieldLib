@@ -2,6 +2,8 @@
 #define TRIANGLE2_H
 
 #include <assert.h>
+#include <cassert>
+#include <vector>
 #include "point2.h"
 #include "segment2.h"
 namespace Geo{
@@ -70,6 +72,21 @@ bool IsInside(const Traingle2<ScalarType> &T,
 }
 
 template <class ScalarType>
+bool IsInsideTriFace(const std::vector<std::vector<int> > &FacesIDX,
+                const std::vector<Geo::Point2<ScalarType> > &UVPos,
+                const int IndexF,const Geo::Point2<ScalarType> &Test_pos)
+{
+    assert(IndexF>=0);
+    assert(IndexF<FacesIDX.size());
+    assert(FacesIDX[IndexF].size()==3);
+    Geo::Point2<ScalarType> P0=UVPos[FacesIDX[IndexF][0]];
+    Geo::Point2<ScalarType> P1=UVPos[FacesIDX[IndexF][1]];
+    Geo::Point2<ScalarType> P2=UVPos[FacesIDX[IndexF][2]];
+    Geo::Traingle2<ScalarType> TFace(P0,P1,P2);
+    return (IsInside(TFace,Test_pos));
+}
+
+template <class ScalarType>
 ScalarType Distance(const Traingle2<ScalarType> &T,const Geo::Point2<ScalarType> &Test_pos)
 {
     if (IsInside(T,Test_pos))return 0;
@@ -81,6 +98,26 @@ ScalarType Distance(const Traingle2<ScalarType> &T,const Geo::Point2<ScalarType>
         if (currD>minD)minD=currD;
     }
     return minD;
+}
+
+template <class ScalarType>
+Traingle2<ScalarType> Scale(const Traingle2<ScalarType> &T,const ScalarType ratio)
+{
+    Geo::Point2<ScalarType> Bary=(T.P(0)+T.P(1)+T.P(2))/3;
+    Geo::Point2<ScalarType> TDiff[3];
+    for (size_t i=0;i<3;i++)
+        TDiff[i]=T.P(i)-Bary;
+    for (size_t i=0;i<3;i++)
+        TDiff[i]=TDiff[i]*ratio;
+     for (size_t i=0;i<3;i++)
+        TDiff[i]+=Bary;
+    return (Traingle2<ScalarType>(TDiff[0],TDiff[1],TDiff[2]));
+}
+
+template <class ScalarType>
+Traingle2<ScalarType> IsFoldedUV(const Traingle2<ScalarType> &T,const ScalarType ratio)
+{
+
 }
 
 } //namespace

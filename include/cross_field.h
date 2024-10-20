@@ -2,6 +2,7 @@
 #define CROSS_FIELD
 
 #include <cmath>
+#include <iostream>
 #include <vector>
 #include <stdio.h>
 #include "point3.h"
@@ -62,7 +63,7 @@ namespace Field
             Pos = _Pos;
             Q = 0;
         }
-
+        
         bool IsNull()
         {
             if (D[0] == PointType(0, 0, 0))
@@ -338,6 +339,13 @@ namespace Field
             K[1] = 1;
             Q = 1;
         }
+
+        void Rotate(ScalarType angle_deg)
+        {
+           Geo::Point3<ScalarType> N=OrthoDir();
+           D[0]=Geo::RotateVector<ScalarType>(D[0], N, angle_deg);
+           D[1]=Geo::RotateVector<ScalarType>(D[1], N, angle_deg);
+        }
     };
 
     template <typename ScalarType>
@@ -409,6 +417,11 @@ namespace Field
         assert(Crosses.size() > 0);
 
         // this ensure the vectors are normalized and orthogonals
+        if (abs(TargetN.Norm() - 1) > eps)
+        {
+            std::cout<<"Target N:"<<TargetN.X<<","<<TargetN.Y<<","<<TargetN.Z<<std::endl;
+        }
+
         assert(fabs(TargetN.Norm() - 1) < eps);
 
         std::vector<Field::CrossF<ScalarType> > RotCrosses = Crosses;

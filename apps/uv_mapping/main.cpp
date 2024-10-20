@@ -18,7 +18,8 @@
 #include <UV_distortion.h>
 #include <color_functions.h>
 #include <UV_multi_patch_param.h>
-
+#include "../include/normal.h"
+#include <connectivity.h>
 typedef double ScalarType;
 
 GLFWwindow* window;
@@ -50,6 +51,7 @@ std::vector<Geo::Point2<ScalarType> >  VerPosUV;
 
 //Connectivity of the mesh and Normals
 std::vector<std::vector<int> > Connectivity;
+std::vector<std::vector<int> > NextF,NextE;
 std::vector<Geo::Point3<ScalarType> > FaceNormals;
 std::vector<Geo::Point3<ScalarType> > VertNormals;
 
@@ -73,9 +75,9 @@ int currentColorItem = 0;
 int oldColorItem = 0;
 
 ScalarType MaxJacDist=5;
-ScalarType MaxAreaDist=0.25;
-ScalarType MaxEdgeDist=0.0025;
-ScalarType MaxAngleDist=0.025;
+ScalarType MaxAreaDist=0.02;
+ScalarType MaxEdgeDist=0.001;
+ScalarType MaxAngleDist=0.015;
 
 bool hasUV=false;
 
@@ -128,8 +130,11 @@ void ParametrizeConformal()
     FixedUV.clear();
 
     //std::vector<Geo::Point2<ScalarType> > VertUV;
-    bool correct_param=Geo::UVParam<ScalarType>::LeastSquaresConformal(VertPos,Connectivity,FixedV,FixedUV,VerPosUV);
-
+    //bool correct_param=Geo::UVParam<ScalarType>::LeastSquaresConformal(VertPos,Connectivity,FixedV,FixedUV,VerPosUV);
+    Geo::UVMultiPatchParam<ScalarType>::MultiPatchParameters Param;
+    Param.ParamType=Geo::UVUtils<ScalarType>::UVLSConformal;
+    bool correct_param= Geo::UVMultiPatchParam<ScalarType>::Parametrize(VertPos,Connectivity,VerPosUV,Param);
+    
     if (correct_param)
     {
         DrawUV=true;
@@ -175,13 +180,16 @@ void ParametrizeARAP()
 
 void LoadMesh(const std::string &path)
 {
-     loadedMesh=LoadOBJ(path,VertPos,Connectivity,true);
+    //loadedMesh=LoadOBJ(path,VertPos,Connectivity,true);
+    loadedMesh=LoadOBJ(path,VertPos,VerPosUV,Connectivity,true);
     if (loadedMesh)
     {
         std::cout<<"Loaded "<<Connectivity.size()<<" faces "<<VertPos.size()<<" vertices"<<std::endl;
         MeshBox.Init(VertPos);
         ComputeNormals(VertPos,Connectivity,FaceNormals,VertNormals);
         FaceColor=std::vector<Geo::Point3<ScalarType> > (Connectivity.size(),mesh_color);
+        Geo::getFFAdjacency(Connectivity,NextF,NextE);
+        if (VerPosUV.size()==VerPosUV.size())hasUV=true;
     }
     else
         std::cout<<"Mesh not loaded"<<std::endl;
@@ -402,6 +410,7 @@ void GLDrawMesh()
 
         if (DrawUV)
         {
+            GLDraw::GLDrawBorders<ScalarType>(VerPosUV,Connectivity,NextF,(ScalarType)10);
             GLDraw::DrawUVMesh<ScalarType>(VerPosUV,Connectivity,true,true,GLDraw::TRTriangle,&FaceColor);
         }
         else

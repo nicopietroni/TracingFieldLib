@@ -1,6 +1,7 @@
 #ifndef UV_DECOMPOSITION_CONDITION
 #define UV_DECOMPOSITION_CONDITION
 
+#include <iostream>
 #include <vector>
 #include "patch_managing.h"
 #include "basic_decomposition_conditions.h"
@@ -94,15 +95,14 @@ public:
                    const int &IndexPatch)const override
     {
         assert(IndexPatch<PatchM.NumPatches());
+
         //can't be parametrized in that case
-        //std::cout<<"test UV"<<std::endl;
+        if (PatchM.NumBorders(IndexPatch)!=1)return false;
         if (!PatchM.isDiskLike(IndexPatch))return false;
 
         assert(IndexPatch<PerPatchUVs.size());
         assert(IndexPatch<PerPatchUVDists.size());
         assert(PerPatchUVs[IndexPatch].size()==PatchM.PData.SubPatchVertPos[IndexPatch].size());
-
-
 
         //then compute the max (considering the percentile)
         ScalarType testD=MaxPercentile(PerPatchUVDists[IndexPatch],Percentile);

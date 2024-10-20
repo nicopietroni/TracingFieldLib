@@ -2,15 +2,19 @@
 #define PATH_FUNCTIONS
 
 #include "../math_utils.h"
+#include "connectivity.h"
 #include "graph.h"
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
 #include "graph_tracing.h"
+#include <cassert>
 #include <cstddef>
 #include <list>
 #include <set>
+#include <sys/_types/_size_t.h>
 #include <unordered_set>
 #include <vector>
+#include "t_junction.h"
 
 namespace Geo {
 
@@ -38,7 +42,8 @@ public:
     TGraph.Select(IndexN1, 0);
     SParam.onlyDirect = true;
     SParam.onlyVisible = false;
-    SParam.MaxSteps = TGraph.diffuse_step + 1;
+    //TO CHECK
+    //SParam.MaxSteps = TGraph.diffuse_step + 1;
     std::vector<int> SourceNodes(1, IndexN0);
     ScalarType PathL;
     bool has_connected = Geo::GraphQuery<ScalarType>::ShortestPaths(
@@ -68,8 +73,8 @@ public:
 
       // the new path can be only 3 + diffusion steps (should be 2 but one
       // because of singularities)
-      if (DirectPath.size() > (TGraph.diffuse_step + 3))
-        return false;
+      // if (DirectPath.size() > (TGraph.diffuse_step + 3))
+      //   return false;
       // then from second to one before the last
       for (size_t j = 1; j < DirectPath.size() - 1; j++)
         NewPath.push_back(DirectPath[j]);
@@ -356,6 +361,112 @@ public:
       }
     }
   }
+
+  static void FindEdgeM(const std::vector<std::vector<int>> &Paths,
+                        std::vector<int>  &EdgePathIdx,
+                        std::vector<std::vector<int> > &Edges) 
+  {
+    Edges.clear();
+    EdgePathIdx.clear();
+    for (size_t i=0;i<Paths.size();i++)
+    for (size_t j=0;j<Paths[i].size()-1;j++)
+    {
+      int V0=Paths[i][j];
+      int V1=Paths[i][j+1];
+      assert(V0!=V1);
+      Edges.resize(Edges.size()+1);
+      Edges.back().push_back(V0);
+      Edges.back().push_back(V1);
+      EdgePathIdx.push_back(i);
+    }
+  }
+
+  static void FindTJunctions(const std::vector<std::vector<int>> &Paths,
+                             std::vector<TJunction> &TJunctions) 
+  {
+    std::vector<int>  EdgePathIdx;
+    std::vector<std::vector<int> > Edges;
+    FindEdgeM(Paths,EdgePathIdx,Edges);
+
+    std::vector<std::vector<int>> Kernel;
+    FindVertexStar(Edges,Kernel);
+
+    std::map<std::pair<int,int>,int> VertPairToPath;
+    for (size_t i=0;i<Edges.size();i++)
+    {
+      assert(Edges[i].size()==2);
+      int V0=Edges[i][0];
+      int V1=Edges[i][1];
+      int IndexP=EdgePathIdx[i];
+      std::pair<int,int> Key(std::min(V0,V1),std::max(V0,V1));
+      assert(VertPairToPath.count(Key)==0);
+      VertPairToPath[Key]=IndexP;
+    }
+
+    TJunctions.clear();
+    for (size_t i=0;i<Kernel.size();i++)
+    {
+      int V=i;
+      //different than 3 cannot be a t-junction
+      if (Kernel[i].size()!=3)continue;
+      int Vk0=Kernel[i][0];
+      int Vk1=Kernel[i][1];
+      int Vk2=Kernel[i][2];
+
+      assert(Vk0>=0);
+      assert(Vk0<Kernel.size());
+      assert(Vk1>=0);
+      assert(Vk1<Kernel.size());
+      assert(Vk2>=0);
+      assert(Vk2<Kernel.size());
+
+      std::pair<int,int> E0(std::min(V,Vk0),std::max(V,Vk0));
+      std::pair<int,int> E1(std::min(V,Vk1),std::max(V,Vk1));
+      std::pair<int,int> E2(std::min(V,Vk2),std::max(V,Vk2));
+      assert(VertPairToPath.count(E0)>0);
+      assert(VertPairToPath.count(E1)>0);
+      assert(VertPairToPath.count(E2)>0);
+      int PIdx0=VertPairToPath[E0];
+      int PIdx1=VertPairToPath[E1];
+      int PIdx2=VertPairToPath[E2];
+
+      //three different path, no t-junction
+      if ((PIdx0!=PIdx1)&&(PIdx0!=PIdx2)&&(PIdx1!=PIdx2))continue;
+      //three belongs to the same path, MUST test geometrically?
+      if ((PIdx0==PIdx1)&&(PIdx0==PIdx2))continue;
+
+      int V0=-1;
+      int V1=-1;
+      int VT=-1;
+      //three belongs to the same path, then test geometrically
+      if (PIdx0==PIdx1)
+      {
+        assert(PIdx0!=PIdx2);
+        V0=Vk0;
+        V1=Vk1;
+        VT=Vk2;
+      }
+      if (PIdx1==PIdx2)
+      {
+        assert(PIdx0!=PIdx1);
+        V0=Vk1;
+        V1=Vk2;
+        VT=Vk0;
+      }
+      if ((PIdx0==PIdx2)&&(PIdx0!=PIdx1))
+      {
+        assert(PIdx0!=PIdx1);
+        V0=Vk0;
+        V1=Vk2;
+        VT=Vk1;
+      }
+      assert(V0!=-1);
+      assert(V1!=-1);
+      assert(VT!=-1);
+      TJunctions.push_back(TJunction(V,V0,V1,VT));
+    }
+  }
+
 };
 
 } // namespace Geo

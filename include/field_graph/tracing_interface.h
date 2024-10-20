@@ -75,8 +75,9 @@ namespace Geo
         }
 
     public:
+        enum TraceStatus{TraceSuccess,TraceIncomplete,TraceNotDirect};
 
-        static bool TraceLoopOrBorderBorderFrom(Geo::TracingGraph<ScalarType> &TGraph,
+        static TraceStatus TraceLoopOrBorderBorderFrom(Geo::TracingGraph<ScalarType> &TGraph,
                                                 const int &StartN,
                                                 std::vector<int> &PathN,
                                                 bool make_direct = true,
@@ -91,7 +92,7 @@ namespace Geo
             bool has_traced = CompleteTraceFrom(TGraph, StartN, PathN, true, true, ArrivalNodes,only_visible);
             // std::cout<<"B"<<std::endl;
             if (!has_traced)
-                return false;
+                return TraceIncomplete;
             bool IsLoop = Geo::PathFunctions<ScalarType>::IsLoop(PathN);
 
             bool has_to_complete = !(IsBorder || IsLoop);
@@ -109,7 +110,7 @@ namespace Geo
                 // std::cout<<"D"<<std::endl;
 
                 if (!has_traced)
-                    return false;
+                    return TraceIncomplete;
 
                 // revert the path
                 PathFunctions<ScalarType>::ReversePath(TGraph, PathNOpp);
@@ -131,7 +132,7 @@ namespace Geo
                 // std::cout<<"F"<<std::endl;
                 if (!has_direct)
                 {
-                    return false;
+                    return TraceNotDirect;
                 }
             }
 
@@ -158,7 +159,7 @@ namespace Geo
                 assert(IsExit_1 || IsExitOpp_1 || IsTagent_1 || IsTagentOpp_1);
             }
 
-            return true;
+            return TraceSuccess;
         }
     };
 

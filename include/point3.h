@@ -8,6 +8,7 @@
 #include <iostream>
 #include "point2.h"
 #include "math_utils.h"
+#include "triangle2.h"
 #include <assert.h>
 
 namespace  Geo{
@@ -70,7 +71,7 @@ public:
         {
             if (std::abs(cV(i)) > maxV)
             {
-                maxV    = cV(i);
+                maxV   = std::abs(cV(i));
                 maxInd = i;
             }
         }
@@ -305,103 +306,106 @@ void Normalize(Point3<ScalarType> &P)
     P.Normalize();
 }
 
-template <class ScalarType>
-Point3<ScalarType> Normal(const Point3<ScalarType> &P0,
-                          const Point3<ScalarType> &P1,
-                          const Point3<ScalarType> &P2)
-{
-    Point3<ScalarType> Dir0=P1-P0;
-    Point3<ScalarType> Dir1=P2-P0;
-    Dir0.Normalize();
-    Dir1.Normalize();
-    return(Cross(Dir0,Dir1));
-}
+// template <class ScalarType>
+// Point3<ScalarType> Normal(const Point3<ScalarType> &P0,
+//                           const Point3<ScalarType> &P1,
+//                           const Point3<ScalarType> &P2)
+// {
+//     Point3<ScalarType> Dir0=P1-P0;
+//     Point3<ScalarType> Dir1=P2-P0;
+//     Dir0.Normalize();
+//     Dir1.Normalize();
+//     Point3<ScalarType> Norm=Cross(Dir0,Dir1);
+//     Norm.Normalize();
+//     return(Norm);
+// }
 
-template <class ScalarType>
-Point3<ScalarType> Normal(const std::vector<Point3<ScalarType> > &Vert,
-                          const std::vector<std::vector<int> > &Faces,
-                          int IndexF)
-{
-    assert(IndexF>=0);
-    assert(IndexF<(int)Faces.size());
-    assert(Faces[IndexF].size()>2);
-    int sizeF=(int)Faces[IndexF].size();
-    if (sizeF==3)
-    {
-        int IndexV0=Faces[IndexF][0];
-        int IndexV1=Faces[IndexF][1];
-        int IndexV2=Faces[IndexF][2];
-        assert(IndexV0>=0);
-        assert(IndexV0<Vert.size());
-        assert(IndexV1>=0);
-        assert(IndexV1<Vert.size());
-        assert(IndexV2>=0);
-        assert(IndexV2<Vert.size());
-        Point3<ScalarType> P0=Vert[IndexV0];
-        Point3<ScalarType> P1=Vert[IndexV1];
-        Point3<ScalarType> P2=Vert[IndexV2];
-        Point3<ScalarType> Dir0=P1-P0;
-        Point3<ScalarType> Dir1=P2-P0;
-        Dir0.Normalize();
-        Dir1.Normalize();
-        Point3<ScalarType> NormDir=Cross(Dir0,Dir1);
-        NormDir.Normalize();
-        return(NormDir);
-    }
+// template <class ScalarType>
+// Point3<ScalarType> Normal(const std::vector<Point3<ScalarType> > &Vert,
+//                           const std::vector<std::vector<int> > &Faces,
+//                           int IndexF)
+// {
+//     assert(IndexF>=0);
+//     assert(IndexF<(int)Faces.size());
+//     assert(Faces[IndexF].size()>2);
+//     int sizeF=(int)Faces[IndexF].size();
+//     if (sizeF==3)
+//     {
+//         int IndexV0=Faces[IndexF][0];
+//         int IndexV1=Faces[IndexF][1];
+//         int IndexV2=Faces[IndexF][2];
+//         assert(IndexV0>=0);
+//         assert(IndexV0<Vert.size());
+//         assert(IndexV1>=0);
+//         assert(IndexV1<Vert.size());
+//         assert(IndexV2>=0);
+//         assert(IndexV2<Vert.size());
+//         Point3<ScalarType> P0=Vert[IndexV0];
+//         Point3<ScalarType> P1=Vert[IndexV1];
+//         Point3<ScalarType> P2=Vert[IndexV2];
+//         Point3<ScalarType> Dir0=P1-P0;
+//         Point3<ScalarType> Dir1=P2-P0;
+//         Dir0.Normalize();
+//         Dir1.Normalize();
+//         Point3<ScalarType> NormDir=Cross(Dir0,Dir1);
+//         NormDir.Normalize();
+//         return(NormDir);
+//     }
 
-    Point3<ScalarType> Norm(0,0,0);
-    for (int i=0;i<sizeF;i++)
-    {
-        int IndexV0=Faces[IndexF][(i+sizeF-1)%sizeF];
-        int IndexV1=Faces[IndexF][i];
-        int IndexV2=Faces[IndexF][(i+1)%sizeF];
-        Point3<ScalarType> P0=Vert[IndexV0];
-        Point3<ScalarType> P1=Vert[IndexV1];
-        Point3<ScalarType> P2=Vert[IndexV2];
-        Point3<ScalarType> Dir0=P1-P0;
-        Point3<ScalarType> Dir1=P2-P0;
-        Dir0.Normalize();
-        Dir1.Normalize();
-        Norm+=Cross(Dir0,Dir1);
-    }
-    Norm.Normalize();
-    return(Norm);
-}
+//     Point3<ScalarType> Norm(0,0,0);
+//     for (int i=0;i<sizeF;i++)
+//     {
+//         int IndexV0=Faces[IndexF][(i+sizeF-1)%sizeF];
+//         int IndexV1=Faces[IndexF][i];
+//         int IndexV2=Faces[IndexF][(i+1)%sizeF];
+//         Point3<ScalarType> P0=Vert[IndexV0];
+//         Point3<ScalarType> P1=Vert[IndexV1];
+//         Point3<ScalarType> P2=Vert[IndexV2];
+//         Point3<ScalarType> Dir0=P1-P0;
+//         Point3<ScalarType> Dir1=P2-P0;
+//         Dir0.Normalize();
+//         Dir1.Normalize();
+//         Norm+=Cross(Dir0,Dir1);
+//     }
+//     Norm.Normalize();
+//     return(Norm);
+// }
 
-template <class ScalarType>
-void ComputeNormals(const std::vector<Point3<ScalarType> > &Vert,
-                    const std::vector<std::vector<int> > &Faces,
-                    std::vector<Point3<ScalarType> > &FaceNormals,
-                    std::vector<Point3<ScalarType> > &VertNormals)
-{
-    FaceNormals.clear();
-    FaceNormals.resize(Faces.size());
+// template <class ScalarType>
+// void ComputeNormals(const std::vector<Point3<ScalarType> > &Vert,
+//                     const std::vector<std::vector<int> > &Faces,
+//                     std::vector<Point3<ScalarType> > &FaceNormals,
+//                     std::vector<Point3<ScalarType> > &VertNormals)
+// {
+//     FaceNormals.clear();
+//     FaceNormals.resize(Faces.size());
 
 
-    for (size_t i=0;i<Faces.size();i++)
-        FaceNormals[i]=Normal(Vert,Faces,i);
+//     for (size_t i=0;i<Faces.size();i++)
+//         FaceNormals[i]=Normal(Vert,Faces,i);
 
-    VertNormals.clear();
-    VertNormals.resize(Vert.size(),Point3<ScalarType>(0,0,0));
-    for (size_t i=0;i<Faces.size();i++)
-    {
-        Point3<ScalarType> FaceN=FaceNormals[i];
-        for (size_t j=0;j<Faces[i].size();j++)
-        {
-            int IndexV=Faces[i][j];
-            assert(IndexV>=0);
-            assert(IndexV<(int)VertNormals.size());
-            VertNormals[IndexV]+=FaceN;
-        }
-    }
+//     VertNormals.clear();
+//     VertNormals.resize(Vert.size(),Point3<ScalarType>(0,0,0));
+//     for (size_t i=0;i<Faces.size();i++)
+//     {
+//         Point3<ScalarType> FaceN=FaceNormals[i];
+//         for (size_t j=0;j<Faces[i].size();j++)
+//         {
+//             int IndexV=Faces[i][j];
+//             assert(IndexV>=0);
+//             assert(IndexV<(int)VertNormals.size());
+//             VertNormals[IndexV]+=FaceN;
+//         }
+//     }
 
-    for (size_t i=0;i<VertNormals.size();i++)
-    {
-        if (VertNormals[i]==Point3<ScalarType>(0,0,0))continue;
-        VertNormals[i].Normalize();
-    }
-}
+//     for (size_t i=0;i<VertNormals.size();i++)
+//     {
+//         if (VertNormals[i]==Point3<ScalarType>(0,0,0))continue;
+//         VertNormals[i].Normalize();
+//     }
+// }
 
+//ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
 
 template <class ScalarType>
 inline ScalarType AngleRad( Geo::Point3<ScalarType> const & p1,
@@ -482,6 +486,20 @@ inline Point3<ScalarType> MakeOrthogonalTo( Point3<ScalarType> const & v,
    Ret=Ret-TargetNorm*Geo::Dot(TargetNorm,vNorm);
    Ret.Normalize();
    return Ret;
+}
+
+// Rodrigues' rotation formula
+template <class ScalarType>
+inline Point3<ScalarType> RotateVector(const Point3<ScalarType> &v, 
+                                      const Point3<ScalarType> &axis, 
+                                      ScalarType angle_deg) {
+    ScalarType angle_rad = angle_deg * M_PI / 180.0;
+           
+    double cos_angle = std::cos(angle_rad);
+    double sin_angle = std::sin(angle_rad);
+
+    return v * cos_angle + (Geo::Cross(axis,v)) * sin_angle + 
+           axis * (Geo::Dot(axis,v)) * (1 - cos_angle);
 }
 
 }

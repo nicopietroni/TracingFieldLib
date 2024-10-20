@@ -42,6 +42,7 @@ void parseFaceLine(const std::string& line, std::vector<int>& vertexIndices)
 template <class ScalarType>
 bool LoadOBJ(std::string meshFile,
              std::vector<std::vector<ScalarType > > &VertPos,
+             std::vector<std::vector<ScalarType > > &VertUV,
              std::vector<std::vector<int> > &Connectivity,
              bool writeInfo=false)
 {
@@ -54,6 +55,7 @@ bool LoadOBJ(std::string meshFile,
     //    int numF=0;
     std::string str;
 
+    VertUV.clear();
     VertPos.clear();
     Connectivity.clear();
 
@@ -74,33 +76,24 @@ bool LoadOBJ(std::string meshFile,
             Pos.push_back(Z);
             VertPos.push_back(Pos);
         }
+        if (str==std::string("vt"))
+        {
+            //numV++;
+            ScalarType X,Y;
+            fin>>X;
+            fin>>Y;
+            std::vector<ScalarType > Pos;
+            Pos.push_back(X);
+            Pos.push_back(Y);
+            VertUV.push_back(Pos);
+        }
         if (str==std::string("f"))
         {
             //numF++;
             std::string  line;
             std::getline(fin, line);
-
             std::vector<int > FIdx;
             parseFaceLine(line,FIdx); 
-
-            // std::stringstream linestream(line);
-            
-            // do
-            // {
-            //     int index;
-            //     linestream>>index;
-            //     //std::cout<<index<<" ";
-            //     //obj starts from 1
-            //     index--;
-            //     FIdx.push_back(index);
-
-            // }while (!linestream.eof());
-
-            //            std::cout<<FIdx.size()<<std::endl;
-            //            FIdx.resize(FIdx.size()-1);
-
-            //            std::cout<<FIdx.size()<<std::endl;
-            //std::cout<<std::endl;
             Connectivity.push_back(FIdx);
         }
         //skip the line elsewhere
@@ -127,8 +120,9 @@ bool LoadOBJ(std::string meshFile,
     VertPos.clear();
     Connectivity.clear();
 
+    std::vector<std::vector<ScalarType > > VertUVVect;
     std::vector<std::vector<ScalarType > > VertPosVect;
-    bool has_loaded=LoadOBJ(meshFile,VertPosVect,Connectivity,writeInfo);
+    bool has_loaded=LoadOBJ(meshFile,VertPosVect,VertUVVect,Connectivity,writeInfo);
 
     if (has_loaded)
     {
@@ -138,6 +132,41 @@ bool LoadOBJ(std::string meshFile,
             VertPos.push_back(Geo::Point3<ScalarType>(VertPosVect[i][0],
                               VertPosVect[i][1],
                     VertPosVect[i][2]));
+        }
+    }
+
+    return has_loaded;
+}
+
+template <class ScalarType>
+bool LoadOBJ(std::string meshFile,
+             std::vector<Geo::Point3<ScalarType> > &VertPos,
+             std::vector<Geo::Point2<ScalarType> > &VertUV,
+             std::vector<std::vector<int> > &Connectivity,
+             bool writeInfo=false)
+{
+    VertPos.clear();
+    VertUV.clear();
+    Connectivity.clear();
+
+    std::vector<std::vector<ScalarType > > VertPosVect;
+    std::vector<std::vector<ScalarType > > VertUVVect;
+    bool has_loaded=LoadOBJ(meshFile,VertPosVect,VertUVVect,Connectivity,writeInfo);
+
+    if (has_loaded)
+    {
+        for (size_t i=0;i<VertPosVect.size();i++)
+        {
+            assert(VertPosVect[i].size()==3);
+            VertPos.push_back(Geo::Point3<ScalarType>(VertPosVect[i][0],
+                              VertPosVect[i][1],
+                    VertPosVect[i][2]));
+        }
+        for (size_t i=0;i<VertUVVect.size();i++)
+        {
+            assert(VertUVVect[i].size()==2);
+            VertUV.push_back(Geo::Point2<ScalarType>(VertUVVect[i][0],
+                              VertUVVect[i][1]));
         }
     }
 

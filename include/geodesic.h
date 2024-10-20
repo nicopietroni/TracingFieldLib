@@ -1,6 +1,8 @@
 #ifndef GEODESIC
 #define GEODESIC
 
+#include "mesh_functions.h"
+#include "point3.h"
 #include "temp_mark.h"
 #include <vector>
 #include <queue>
@@ -169,6 +171,7 @@ namespace Geo
                 {
                     // VertexPointer nextV = vertVec[i];
                     int NextNode = NextNodes[i];
+                    if (NextNode==-1)continue;
 
                     // if ((avoid_selected)&&(nextV->IsS()))continue;
                     if (GeoP.Avoid.count(NextNode) > 0)
@@ -220,7 +223,10 @@ namespace Geo
                 }
             }
         }
+
     };
+
+    
 
 }
 

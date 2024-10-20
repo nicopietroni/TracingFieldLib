@@ -12,7 +12,7 @@
 #include <connectivity.h>
 #include "best_rotation.h"
 #include "mesh_functions.h"
-
+#include "normal.h"
 
 template <typename ScalarType>
 Field::CrossF<ScalarType> InterpolateTangentCrosses(const std::vector<Field::CrossF<ScalarType>> &Crosses,
@@ -348,6 +348,14 @@ void AdaptFieldToMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 }
 
 template <class ScalarType>
+void RotateCrossesByAngle(std::vector<Field::CrossF<ScalarType>> &Crosses,
+                          const ScalarType angle)
+{
+    for (size_t i=0;i<Crosses.size();i++)
+        Crosses[i].Rotate(angle);
+}
+
+template <class ScalarType>
 void RotateCrossesToUV(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                        const std::vector<std::vector<int>> &Faces,
                        const std::vector<Geo::Point2<ScalarType>> &UVPos,
@@ -448,6 +456,23 @@ void RedistributeAnisotropy(const std::vector<Field::CrossF<ScalarType>> &Source
 }
 
 template <class ScalarType>
+void UpdateFaceCrossPositionFromMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                 const std::vector<std::vector<int>> &Faces,
+                                 std::vector<Field::CrossF<ScalarType>> &FaceCurv)
+{
+    assert(FaceCurv.size() == Faces.size());
+
+    for (size_t i = 0; i < Faces.size(); i++)
+    {
+        Geo::Point3<ScalarType> bary(0, 0, 0);
+        for (size_t j = 0; j < Faces[i].size(); j++)
+            bary += VertPos[Faces[i][j]];
+        bary /= Faces[i].size();
+        FaceCurv[i].Pos = bary;
+    }
+}
+
+template <class ScalarType>
 void UpdateCrossPositionFromMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                                  const std::vector<std::vector<int>> &Faces,
                                  std::vector<Field::CrossF<ScalarType>> &VertCurv,
@@ -458,15 +483,16 @@ void UpdateCrossPositionFromMesh(const std::vector<Geo::Point3<ScalarType>> &Ver
 
     for (size_t i = 0; i < VertPos.size(); i++)
         VertCurv[i].Pos = VertPos[i];
-
-    for (size_t i = 0; i < Faces.size(); i++)
-    {
-        Geo::Point3<ScalarType> bary(0, 0, 0);
-        for (size_t j = 0; j < Faces[i].size(); j++)
-            bary += VertPos[Faces[i][j]];
-        bary /= Faces[i].size();
-        FaceCurv[i].Pos = bary;
-    }
+    
+    UpdateFaceCrossPositionFromMesh(VertPos,Faces,FaceCurv);
+    // for (size_t i = 0; i < Faces.size(); i++)
+    // {
+    //     Geo::Point3<ScalarType> bary(0, 0, 0);
+    //     for (size_t j = 0; j < Faces[i].size(); j++)
+    //         bary += VertPos[Faces[i][j]];
+    //     bary /= Faces[i].size();
+    //     FaceCurv[i].Pos = bary;
+    // }
 }
 
 template <class ScalarType>

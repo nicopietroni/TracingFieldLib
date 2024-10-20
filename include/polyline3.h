@@ -2,6 +2,7 @@
 #define POLYLINE_3_H
 
 #include <assert.h>
+#include <vector>
 #include "point3.h"
 
 namespace Geo
@@ -10,22 +11,13 @@ namespace Geo
     template <class ScalarType>
     class Polyline3
     {
-        std::vector<Geo::Point3<ScalarType>> PolyPos;
-
+        std::vector<Geo::Point3<ScalarType> > PolyPos;
+        bool IsLoop;
+        
         void Add(const Geo::Point3<ScalarType> &P)
         {
             PolyPos.push_back(P);
         }
-        
-        // void SmoothStep()
-        // {
-        //     std::vector<Geo::Point3<ScalarType>> NewPolyPos;
-        //     std::vector<ScalarType> SampleW;
-        //     for (size_t i=1;i<PolyPos.size()-1;i++)
-        //     {
-
-        //     }
-        // }
 
         void SmoothBilaplacian()
         {
@@ -69,6 +61,45 @@ namespace Geo
             //         }
             //     }
         }
+        
+
+    // // Function to subdivide a polyline using Cubic B-Spline Subdivision
+    // void Subdivide(bool IsLoop,
+    //                 std::vector<bool> &ToSplit) {
+    //     // Subdivide each edge
+    //     std::vector<Geo::Point3<ScalarType> > new_points;
+    //     for (size_t i = 0; i < PolyPos.size(); ++i) {
+
+    //         // Original point P_i
+    //         Geo::Point3<ScalarType> p0 = PolyPos[i];
+    //         if (!ToSplit[i])continue;
+
+    //         // Add the original point to new_points
+    //         new_points.push_back(p0);
+
+    //         // Create new points only if we are not at the last point
+    //         int LastP=PolyPos.size()-1;
+    //         if (IsLoop)LastP=PolyPos.size();
+    //         if (i < LastP) {
+    //             Geo::Point3<ScalarType> p1 = PolyPos[(i + 1)%PolyPos.size()];
+    //             Geo::Point3<ScalarType> prev = (i > 0) ? PolyPos[i - 1] : p0;
+    //             Geo::Point3<ScalarType> next = (i < result.size() - 2) ? result[i + 2] : p1;  // Handle boundary
+
+    //             // New point: weighted average using B-Spline mask
+    //             Point3<T> new_point = (prev * T(1) + p0 * T(6) + p1 * T(1)) / T(8);
+
+    //             // Add the new point to the polyline
+    //             new_points.push_back(new_point);
+    //         }
+    //     }
+
+    //     // Update the polyline with new points
+    //     result = new_points;
+    // }
+
+    // return result;
+    // }
+
 
         // ScalarType Lenght()
         // {
