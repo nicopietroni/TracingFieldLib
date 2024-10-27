@@ -67,6 +67,7 @@ public:
     bool onlyDirect;
     bool onlyVisible;
     bool stopAtPrevDist;
+    bool uniformW;
     int MaxSteps;
 
     ShortestPathParam() {
@@ -78,6 +79,7 @@ public:
       onlyVisible = true;
       stopAtPrevDist = false;
       MaxSteps = -1;
+      uniformW=false;
     }
   };
 
@@ -157,7 +159,9 @@ public:
           continue;
 
         // then get the next weight
-        ScalarType NextStep=TGraph.WeightLink(CurrN, i);//CurrWeight+TGraph.W[CurrN][i];
+        ScalarType NextStep=1;
+        if (!SParam.uniformW)
+          NextStep=TGraph.WeightLink(CurrN, i);//CurrWeight+TGraph.W[CurrN][i];
         if(NextStep<=0)
         {
           std::cout<<"W:"<<NextStep<<std::endl;

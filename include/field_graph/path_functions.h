@@ -9,6 +9,7 @@
 #include "graph_tracing.h"
 #include <cassert>
 #include <cstddef>
+#include <iostream>
 #include <list>
 #include <set>
 #include <sys/_types/_size_t.h>
@@ -43,12 +44,80 @@ public:
     SParam.onlyDirect = true;
     SParam.onlyVisible = false;
     //TO CHECK
-    //SParam.MaxSteps = TGraph.diffuse_step + 1;
+    SParam.uniformW=true;
+    SParam.MaxSteps = TGraph.diffuse_step + 1;
     std::vector<int> SourceNodes(1, IndexN0);
     ScalarType PathL;
     bool has_connected = Geo::GraphQuery<ScalarType>::ShortestPaths(
         TGraph, SourceNodes, DirectPath, PathL, SParam);
+  //   for (size_t i=0;i<DirectPath.size();i++)
+  //   {
+  //     if (!TGraph.IsEnabled(DirectPath[i]))
+  //     {
+  //       std::cout<<"Error Enabled Path 1"<<std::endl;
+  //       exit(0);
+  //     }
+
+  //     if (TGraph.NodeType(DirectPath[i])==Geo::TangentDomain)
+  //     {
+  //       std::cout<<"Error Tangent Path 1"<<std::endl;
+  //       exit(0);
+  //     }
+  //  }
     return has_connected;
+  }
+
+  //simplify the connections to have one edge per triangle/tetra
+  //only considering the direct one
+  static bool SimplifyStep(TracingGraph<ScalarType> &TGraph,
+                           std::vector<int> &PathN) {
+    if (PathN.size()<3)return false;
+
+    std::vector<int> NewPath;
+    bool isLoop=IsLoop(PathN);
+    NewPath=PathN;
+
+    //remove the last one which is equal to the first one
+    //this is to make the right cycle then eventually put back at the end
+    if (isLoop){assert(NewPath[0]==NewPath.back());NewPath.pop_back();}
+
+    //first and last threated separately if needed (only if loop)
+    int StartIdx=0;
+    int EndIdx=NewPath.size();
+    if (!isLoop){StartIdx=1;EndIdx=NewPath.size()-1;}
+    for (size_t i = StartIdx; i < EndIdx; i++) {
+      int SizeP=NewPath.size();
+      int IndexN0 = PathN[(i+SizeP-1)%SizeP];
+      int IndexN1 = PathN[i];
+      int IndexN2 = PathN[(i + 1)%SizeP];
+
+      //see if there is a direct connection 
+      //then cancel the one in the middle
+      if (TGraph.IsDirectPairE(IndexN0, IndexN2))
+      {
+        NewPath.erase(NewPath.begin()+i);
+        //if loops reinsert the first one to the end
+        if (isLoop)NewPath.push_back(NewPath[0]);
+        //copy back to return
+        PathN=NewPath;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  //simplify the connections to have one edge per triangle/tetra
+  //only considering the direct one
+  static void SimplifyConnection(TracingGraph<ScalarType> &TGraph,
+                                 std::vector<int> &PathN) {
+    assert(IsProperPath(PathN));
+
+    if (PathN.size()<3)return;
+
+    //std::cout<<"Start Simpplify"<<std::endl;
+    while (SimplifyStep(TGraph,PathN)){};
+    //std::cout<<"Done"<<std::endl;
+
   }
 
   static bool MakeDirectConnection(TracingGraph<ScalarType> &TGraph,

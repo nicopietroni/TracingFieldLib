@@ -76,7 +76,7 @@ int oldColorItem = 0;
 
 ScalarType MaxJacDist=5;
 ScalarType MaxAreaDist=0.02;
-ScalarType MaxEdgeDist=0.001;
+ScalarType MaxEdgeDist=0.01;
 ScalarType MaxAngleDist=0.015;
 
 bool hasUV=false;

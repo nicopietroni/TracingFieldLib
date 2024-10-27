@@ -62,6 +62,7 @@ bool DrawSamplesPaths = false;
 bool showMesh = true;
 bool showFeatures = true;
 bool showPaths = true;
+int CurrSelP=-1;
 bool showDual = true;
 bool showCross = true;
 bool showSing = true;
@@ -186,19 +187,16 @@ ScalarType AVLen = 0;
 
 std::vector<std::pair<int, int>> Features;
 
-
 std::vector<int> ModSameBVert;
 std::vector<Geo::Point3<ScalarType>> ModSameBOrigPos;
 
-void RestoreOriginalPosOnSplitBorders()
-{
-  assert(ModSameBVert.size()==ModSameBOrigPos.size());
-  for (size_t i=0;i<ModSameBVert.size();i++)
-  {
-    int IndexV=ModSameBVert[i];
-    assert(IndexV>=0);
-    assert(IndexV<VertPos.size());
-    VertPos[IndexV]=ModSameBOrigPos[i];
+void RestoreOriginalPosOnSplitBorders() {
+  assert(ModSameBVert.size() == ModSameBOrigPos.size());
+  for (size_t i = 0; i < ModSameBVert.size(); i++) {
+    int IndexV = ModSameBVert[i];
+    assert(IndexV >= 0);
+    assert(IndexV < VertPos.size());
+    VertPos[IndexV] = ModSameBOrigPos[i];
   }
 }
 
@@ -388,18 +386,18 @@ void SmoothPaths() {
 }
 
 void InitPatches() {
-  //initialize patches corners
-  //and all remaining data
+  // initialize patches corners
+  // and all remaining data
   PatchM.Init();
-  
-  //then initialize the stopping conditions
+
+  // then initialize the stopping conditions
   InitConditions();
   // PDeco.InitBorderVertType();
 
-  //initialise the decomposer
+  // initialise the decomposer
   PDeco.Init();
 
-  //then check all patches and saved the unsolved ones
+  // then check all patches and saved the unsolved ones
   PDeco.UpdateAllUnsolvedPatches();
 }
 
@@ -657,6 +655,8 @@ void SetRenderBar() {
   ImGui::Checkbox("Draw Singularities", &showSing);
 
   ImGui::Checkbox("Draw Paths", &showPaths);
+  ImGui::InputInt("Curr Path", &CurrSelP);
+  CurrSelP=std::min(CurrSelP,(int)PathSampl.SelectedPaths.size()-1);
 
   // ImGui::Separator();
   // ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
@@ -685,7 +685,7 @@ void SetRenderBar() {
   ImGui::Checkbox("Draw Corners", &DrawCorners);
   ImGui::Checkbox("Draw DualCorners", &DrawDualCorners);
   ImGui::Checkbox("Draw TJunctions", &DrawTJunction);
-  
+
   ImGui::Checkbox("Draw Sides", &DrawSides);
   ImGui::TextColored(ImVec4(1, 0, 1, 1), "COLOR PATCHES");
   static const char *itemsShape[] = {"Uniform",      "By Patch",   "if Disk",
@@ -720,25 +720,24 @@ void UpdateAfterRemesh() {
 bool remove_batch = true;
 bool remove_split = false;
 
-
 void BatchProcess() {
   // WriteOBJ("test.obj",VertPos, Connectivity);
   // exit(0);
 
   auto start = std::chrono::high_resolution_clock::now();
   std::cout << "*** REFINE *** " << std::endl;
-  Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(VertPos, Connectivity, 
-                                                           FaceCurv, Features,
-                                                           SingIndex, 
-                                                           min_sing_distance);
+  Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(
+      VertPos, Connectivity, FaceCurv, Features, SingIndex, min_sing_distance);
   MeshBox.Init(VertPos);
   UpdateAfterRemesh();
 
   std::cout << "*** SPLIT FEATURES *** " << std::endl;
-  Geo::TracingPreprocess<ScalarType>::SplitFeatures(VertPos, Connectivity, VertCurv,Features);
-  Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(VertPos, Connectivity,&ModSameBVert,&ModSameBOrigPos);
+  Geo::TracingPreprocess<ScalarType>::SplitFeatures(VertPos, Connectivity,
+                                                    VertCurv, Features);
+  Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
+      VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
   UpdateAfterRemesh();
- 
+
   auto end0 = std::chrono::high_resolution_clock::now();
   auto elapsed0 =
       std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
@@ -756,10 +755,12 @@ void BatchProcess() {
       std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
 
   std::cout << "*** ADD ALL PATHS *** " << std::endl;
-  //PDeco.dynamic_smooth=false;
+  //PDeco.dynamic_smooth=true;
+  
   PDeco.BatchDecompose(remove_batch, remove_split);
   auto end3 = std::chrono::high_resolution_clock::now();
-  auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
+  auto elapsed3 =
+      std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
 
   //    std::cout << "*** UPDATING PATCHES *** " <<std::endl;
   //    std::vector<int> UpdatedPatches;
@@ -795,12 +796,25 @@ void BatchProcess() {
 
   showCross = false;
 
+  auto total_elapsed =
+      std::chrono::duration_cast<std::chrono::microseconds>(end4 - start);
+
+  double total_elapsed_seconds5 =
+      total_elapsed.count() * 1e-6; // Convert microseconds to seconds
+
   std::cout << "*** TIMINGS (sec) *** " << std::endl;
   std::cout << "* Remeshing time: " << elapsed_seconds0 << std::endl;
   std::cout << "* Init Graph Elapsed time: " << elapsed_seconds1 << std::endl;
   std::cout << "* Init Patches: " << elapsed_seconds2 << std::endl;
   std::cout << "* Adding Paths: " << elapsed_seconds3 << std::endl;
   std::cout << "* Smooth Patches: " << elapsed_seconds4 << std::endl;
+  std::cout << "* TOTAL TIME: " << total_elapsed_seconds5 << std::endl;
+
+  std::cout << std::endl<< std::endl;
+  std::cout << "*** STATISTICS *** " << std::endl;
+  std::cout << "*Primal* " << std::endl;
+  PatchM.WriteStats();
+  PDeco.WriteStats();
 }
 
 void SetDecomposeBar() {
@@ -830,29 +844,34 @@ void SetDecomposeBar() {
   ImGui::TextColored(ImVec4(1, 0, 1, 1), "PREPROCESS");
 
   if (ImGui::Button("Split Features")) {
-    Geo::TracingPreprocess<ScalarType>::SplitFeatures(VertPos, Connectivity,VertCurv,Features);
-    Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(VertPos, Connectivity,&ModSameBVert,&ModSameBOrigPos);
-    
-  // ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
-  // Geo::getFFAdjacency(Connectivity, NextF, NextE);
+    Geo::TracingPreprocess<ScalarType>::SplitFeatures(VertPos, Connectivity,
+                                                      VertCurv, Features);
+    Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
+        VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
 
-  // //InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv);
+    // ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
+    // Geo::getFFAdjacency(Connectivity, NextF, NextE);
 
-  // // SetVertCrossFromFace(VertPos, Connectivity, VertNormals, FaceCurv, VertCurv);
-  // // InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv);
+    // //InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv);
 
-  // Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv, minQCrossVert, maxQCrossVert);
-  // GetFaceSingularities(FaceCurv, VertPos, Connectivity, NextF, NextE, SingIndex,SingValue);
+    // // SetVertCrossFromFace(VertPos, Connectivity, VertNormals, FaceCurv,
+    // VertCurv);
+    // // InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv);
 
-  // PatchM.SetSingularities(SingIndex, SingValue);
+    // Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv, minQCrossVert,
+    // maxQCrossVert); GetFaceSingularities(FaceCurv, VertPos, Connectivity,
+    // NextF, NextE, SingIndex,SingValue);
 
-    //WriteOBJ("test_split.obj",VertPos, Connectivity);
+    // PatchM.SetSingularities(SingIndex, SingValue);
+
+    // WriteOBJ("test_split.obj",VertPos, Connectivity);
     UpdateAfterRemesh();
   }
 
   if (ImGui::Button("Refine Sing")) {
     Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(
-        VertPos, Connectivity, FaceCurv, Features,SingIndex, min_sing_distance);
+        VertPos, Connectivity, FaceCurv, Features, SingIndex,
+        min_sing_distance);
     MeshBox.Init(VertPos);
     UpdateAfterRemesh();
     // WriteOBJ("refined_test.obj",VertPos,Connectivity);
@@ -1376,10 +1395,17 @@ void GLDrawMesh() {
   if (showPaths) {
     if (DrawTJunction)
       GLDraw::GLDrawTJunctions<ScalarType>(VertPos, TJunctions);
-
+    
+    // PDParam.lineSize=10;
+    // PDParam.pointSize=20;
+    if (CurrSelP==-1)
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(
         TGraph, VertCurv, PathSampl.SelectedPaths, MeshBox.Diag() * 0.005,
         PDParam, PathColors);
+    else
+     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
+        TGraph, VertCurv, PathSampl.SelectedPaths[CurrSelP], MeshBox.Diag() * 0.005,
+        PDParam, PathColors[CurrSelP]);
   }
 
   PDParam.DrawPath = false;
@@ -1479,7 +1505,8 @@ int main(int argc, char *argv[]) {
       if (!loadedMesh)
         exit(0);
       AVLen = AvgEdgeLen(VertPos, Connectivity);
-      Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(VertPos, Connectivity);
+      Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
+          VertPos, Connectivity);
 
       ProjectName = RemoveExtension(PathMesh);
 

@@ -355,7 +355,8 @@ private:
           NumFold++;
         }
       }
-      //std::cout << "Folded F: " << NumFold << std::endl;
+      // if (NumFold>0)
+      // std::cout << "Folded F: " << NumFold << std::endl;
     } while (isFolded);
   }
 

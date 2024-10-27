@@ -2,6 +2,7 @@
 #define PATCH_DECOMPOSER
 
 #include <iostream>
+#include <ostream>
 #include <sys/_types/_size_t.h>
 #define SMOOTH_KERNEL 2
 #include <vector>
@@ -22,10 +23,10 @@ template <class ScalarType> class PatchDecomposer {
   Geo::CrossPathSampling<ScalarType> &PathSampl;
   std::vector<Geo::PatchCondition<ScalarType> *> PConditions;
   std::set<int> UnsolvedPatches;
-  std::vector<std::vector<int> > SmoothKernel;
-  std::vector<std::vector<int> > VFAdj;
-  std::vector<Field::CrossF<ScalarType> > &VertCurv;
-  std::vector<Field::CrossF<ScalarType> > &FaceCurv;
+  std::vector<std::vector<int>> SmoothKernel;
+  std::vector<std::vector<int>> VFAdj;
+  std::vector<Field::CrossF<ScalarType>> &VertCurv;
+  std::vector<Field::CrossF<ScalarType>> &FaceCurv;
 
   // Geo::CornerType StartTraceType;
   // Geo::CornerType EndTraceType;
@@ -66,7 +67,8 @@ template <class ScalarType> class PatchDecomposer {
   void MarkUnsolvedPatches(bool must_pass, bool sample_on) {
 
     if (must_pass)
-      std::fill(PathSampl.must_pass_on.begin(), PathSampl.must_pass_on.end(),false);
+      std::fill(PathSampl.must_pass_on.begin(), PathSampl.must_pass_on.end(),
+                false);
 
     if (sample_on)
       std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(), false);
@@ -76,8 +78,8 @@ template <class ScalarType> class PatchDecomposer {
     for (Ite = UnsolvedPatches.begin(); Ite != UnsolvedPatches.end(); Ite++) {
       int IndexPatch = (*Ite);
       assert(IndexPatch < PatchMan.NumPatches());
-      for (int i = 0;i < PatchMan.PData.SubPatchVertToOriginal[IndexPatch].size(); i++) 
-      {
+      for (int i = 0;
+           i < PatchMan.PData.SubPatchVertToOriginal[IndexPatch].size(); i++) {
         int IndexV = PatchMan.PData.SubPatchVertToOriginal[IndexPatch][i];
         assert(IndexV >= 0);
         assert(IndexV < PathSampl.must_pass_on.size());
@@ -141,6 +143,7 @@ public:
   bool allow_darts;
   bool allow_concave;
   bool dynamic_smooth;
+  bool dynamic_updates;
   bool split_removal;
 
   bool start_internal;
@@ -226,11 +229,12 @@ public:
   // }
 
   void InitForceSamplingSpace(bool and_sample) {
-    //force sampling on all points only for the case
-    //of tracing from concave or spike
+    // force sampling on all points only for the case
+    // of tracing from concave or spike
     bool NoForce = !(start_concave || start_spike);
     if (NoForce)
-      std::fill(PathSampl.force_sample.begin(), PathSampl.force_sample.end(),false);
+      std::fill(PathSampl.force_sample.begin(), PathSampl.force_sample.end(),
+                false);
 
     std::vector<int> to_Mark;
     if (start_concave) {
@@ -244,10 +248,11 @@ public:
       to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
     }
 
-    //initialize force sampling to false
-    std::fill(PathSampl.force_sample.begin(), PathSampl.force_sample.end(),false);
+    // initialize force sampling to false
+    std::fill(PathSampl.force_sample.begin(), PathSampl.force_sample.end(),
+              false);
 
-    //then set to force sampling on selected categories
+    // then set to force sampling on selected categories
     for (size_t i = 0; i < to_Mark.size(); i++) {
       int IndexV = to_Mark[i];
       assert(IndexV >= 0);
@@ -262,9 +267,9 @@ public:
     }
   }
 
-  //init the space where sampling the paths
-  //the flag use_previous is used to check if
-  //the sample set must AND (intersect) with previous one
+  // init the space where sampling the paths
+  // the flag use_previous is used to check if
+  // the sample set must AND (intersect) with previous one
   void InitSamplingSpace(bool use_previous) {
     bool allStart =
         (start_internal && start_border && start_concave && start_spike);
@@ -307,7 +312,8 @@ public:
         PathSampl.sample_on[IndexV] = true;
       }
     } else {
-      std::vector<bool> new_sample_on = std::vector<bool>(PathSampl.sample_on.size(), false);
+      std::vector<bool> new_sample_on =
+          std::vector<bool>(PathSampl.sample_on.size(), false);
       for (size_t i = 0; i < to_Mark.size(); i++) {
         int IndexV = to_Mark[i];
         assert(IndexV >= 0);
@@ -319,7 +325,7 @@ public:
     }
   }
 
-  //this one
+  // this one
   void InitArrivalPoint(bool and_allow_pass) {
     bool allArrival = (end_border && end_concave && end_spike);
 
@@ -536,60 +542,65 @@ public:
   //     PathSampl.sample_only_on[1] = false;
   // }
 
-  bool UseLenPriority()
-  {
-    //if only start from particular ones
-    if ((start_concave || start_spike)&&(!start_internal)&&(!start_border))return true;
+  bool UseLenPriority() {
+    // if only start from particular ones
+    if ((start_concave || start_spike) && (!start_internal) && (!start_border))
+      return true;
     return false;
   }
 
   void RetraceOnUnsolved() {
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+
     CompactData();
 
     // remove the space around singularities
     PathSampl.InitSingularityNodes(false);
 
-    //mark the patches that are not solved
-    //the first one says that useful path must pass on it
-    //the second says that it sample on them only
+    // mark the patches that are not solved
+    // the first one says that useful path must pass on it
+    // the second says that it sample on them only
     MarkUnsolvedPatches(true, true);
 
-    //allows paths to pass on the one that must solve only
+    // allows paths to pass on the one that must solve only
     PathSampl.allow_path_on = PathSampl.must_pass_on;
-
 
     InitSamplingSpace(true);
     InitForceSamplingSpace(false);
     InitArrivalPoint(true);
 
-    ///this one stops to previously found borders, useful for 
-    ///recursive call 
+    /// this one stops to previously found borders, useful for
+    /// recursive call
     if (end_border) {
       //  // get the non solved subpatches
       std::vector<int> BorderUnsolved;
       GetBorderUnsolved(BorderUnsolved);
-      //set artificially to exit so it stops to borders
+      // set artificially to exit so it stops to borders
       PathSampl.SetBorderCanPassToExit(BorderUnsolved);
     }
 
-    
-    //if ((start_concave || start_spike)&&(!start_internal)&&(!start_border)
+    // if ((start_concave || start_spike)&&(!start_internal)&&(!start_border)
     if (UseLenPriority())
-      PathSampl.PType=Geo::CrossPathSampling<ScalarType>::PrioLen;
+      PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioLen;
     else
-      PathSampl.PType=Geo::CrossPathSampling<ScalarType>::PrioDist;
+      PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioDist;
 
-    //sample the candidate
+    // sample the candidate
     PathSampl.SampleCandidates(to_init_distance);
 
-    //if not initialized at this point will be
+    // if not initialized at this point will be
     to_init_distance = false;
 
-    //restore the node type for borders that have been changed to exit
-    //for the recursive call
+    // restore the node type for borders that have been changed to exit
+    // for the recursive call
     if (end_border) {
       PathSampl.RestoreNodeType();
     }
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto elapsed0 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    TimeSampling += elapsed0.count() * 1e-6;
   }
 
   bool GetConditionPerFaceScalar(std::vector<ScalarType> &FaceV,
@@ -978,6 +989,7 @@ public:
     all_solved = (UnsolvedPatches.size() == 0);
   }
 
+  int time_savSt;
   int time_rem0;
   int time_rem1;
   int time_rem2;
@@ -1134,18 +1146,25 @@ public:
         return false;
     }
 
-    // SAVING STATUS
-    for (size_t i = 0; i < PConditions.size(); i++)
-      PConditions[i]->SaveStatus();
-    PatchMan.SaveStatus();
-
-    // END SAVING STATUS
-
     std::vector<int> TestPath = PathSampl.SelectedPaths[Path_To_remove];
 
     if (PathSampl.SelectedPaths[Path_To_remove].size() == 0)
       return false;
 
+    // SAVING STATUS
+    #ifdef SAVE_STATUS
+    auto timesave_0 = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < PConditions.size(); i++)
+      PConditions[i]->SaveStatus();
+    PatchMan.SaveStatus();
+
+    auto timesave_1 = std::chrono::high_resolution_clock::now();
+    time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
+                       timesave_1 - timesave_0))
+                      .count();
+    //END SAVING STATUS
+    #endif
+    
     PathSampl.SelectedPaths[Path_To_remove].clear();
 
     // Get the current time point before the first instruction
@@ -1216,18 +1235,31 @@ public:
     if (!is_removable) {
       PathSampl.SelectedPaths[Path_To_remove] = TestPath;
 
-      // RESTORING STATUS
+      // // RESTORING STATUS
+      #ifdef SAVE_STATUS
+      auto timesave_0 = std::chrono::high_resolution_clock::now();
       for (size_t i = 0; i < PConditions.size(); i++)
         PConditions[i]->RestoreStatus();
       PatchMan.RestoreStatus();
+      auto timesave_1 = std::chrono::high_resolution_clock::now();
+      time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
+                         timesave_1 - timesave_0))
+                        .count();
       // END RESTORING STATUS
+      #else
+      auto timesave_0 = std::chrono::high_resolution_clock::now();
+      std::vector<int> UpdatedPatches;
+      PatchMan.Update(UpdatedPatches);
+      //  std::cout<<"Updating
+      //  Rollback:"<<UpdatedPatches.size()<<std::endl<<std::endl;
+      for (size_t i = 0; i < UpdatedPatches.size(); i++)
+        UpdateCondition(UpdatedPatches[i]);
 
-      //          std::vector<int> UpdatedPatches;
-      //          PatchMan.Update(UpdatedPatches);
-      //          std::cout<<"Updating
-      //          Rollback:"<<UpdatedPatches.size()<<std::endl<<std::endl; for
-      //          (size_t i=0;i<UpdatedPatches.size();i++)
-      //              UpdateCondition(UpdatedPatches[i]);
+      auto timesave_1 = std::chrono::high_resolution_clock::now();
+      time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
+                         timesave_1 - timesave_0))
+                        .count();
+      #endif
     }
 
     // Get the current time point before the first instruction
@@ -1251,6 +1283,9 @@ public:
 
     // Print the duration in microseconds
     if (debug_msg) {
+
+      std::cout << "Time Save/Restore St: " << time_rem0
+                << " milli microseconds" << std::endl;
       std::cout << "Time 0: " << time_rem0 << " milli microseconds"
                 << std::endl;
       std::cout << "Time 1: " << time_rem1 << " milli microseconds"
@@ -1309,16 +1344,6 @@ public:
 
     bool has_removed = false;
     do {
-      //            if (TestedRemovedPath.count(current_rem_cand)>0)
-      //            {
-      //                assert(TestedRemovedPathNeigh.count(current_rem_cand)>0);
-
-      //                //check if some of the neighbours has been modified
-      //                for (size_t
-      //                i=0;i<TestedRemovedPathNeigh[current_rem_cand].size();i++)
-      //                current_rem_cand--;
-      //                continue;
-      //            }
       if (FixedPaths.count(current_rem_cand) > 0) {
         current_rem_cand--;
         continue;
@@ -1365,10 +1390,10 @@ public:
 
     // MarkStartSamples(0,false);
     //  PathSampl.sample_only_on[0] = true;
-     if (UseLenPriority())
-      PathSampl.PType=Geo::CrossPathSampling<ScalarType>::PrioLen;
+    if (UseLenPriority())
+      PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioLen;
     else
-      PathSampl.PType=Geo::CrossPathSampling<ScalarType>::PrioDist;
+      PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioDist;
     PathSampl.SampleCandidates(true);
     to_init_distance = false;
     // PathSampl.sample_only_on[0] = false;
@@ -1385,8 +1410,10 @@ public:
     allow_darts = false;
     allow_concave = false;
     current_rem_cand = -1;
-    dynamic_smooth = true;
+    dynamic_smooth = false;
+    dynamic_updates = true;
     split_removal = false;
+    time_savSt = 0;
     time_rem0 = 0;
     time_rem1 = 0;
     time_rem2 = 0;
@@ -1445,16 +1472,26 @@ public:
   }
 
   bool AddAllPaths() {
+    auto t0 = std::chrono::high_resolution_clock::now();
+
     bool all_solved = false;
     bool added_sample = false;
     bool added_once = false;
     std::cout << "ADDING PATHS" << std::endl;
+    std::cout << "There are " << PathSampl.Candidates.size() << " candidates"
+              << std::endl;
     do {
       AddNext(all_solved, added_sample);
       added_once |= added_sample;
     } while ((!all_solved) && (added_sample));
 
     CompactData();
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+
+    auto elapsed0 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    TimeAdd += elapsed0.count() * 1e-6;
     return (added_once);
   }
 
@@ -1463,6 +1500,17 @@ public:
     std::cout << "REMOVING PATHS" << std::endl;
     while (RemoveNextIfPossible()) {
     };
+
+    std::cout << "Time Save/Restore St: " << time_savSt << " milli microseconds"
+              << std::endl;
+    std::cout << "Time 0: " << time_rem0 << " milli microseconds" << std::endl;
+    std::cout << "Time 1: " << time_rem1 << " milli microseconds" << std::endl;
+    std::cout << "Time 2: " << time_rem2 << " milli microseconds" << std::endl;
+    std::cout << "Time 3: " << time_rem3 << " milli microseconds" << std::endl;
+    std::cout << "Time 4: " << time_rem4 << " milli microseconds" << std::endl;
+
+    // PatchMan.PData.PrintSize();
+
     CompactData();
   }
 
@@ -1495,17 +1543,22 @@ public:
 
   bool SolveAllFeatures() {
     bool has_added = false;
-    //first do feature to feature
+    // first do feature to feature
     SetFeatureFeatureConfiguration();
-    //then trace in the one unsolved
+
+    // then trace in the one unsolved
     RetraceOnUnsolved();
+
     has_added |= AddAllPaths();
-    //set features to all possible arrival points
+
+    // set features to all possible arrival points
     SetFeatureAllConfiguration();
     RetraceOnUnsolved();
+
     has_added |= AddAllPaths();
     // bool has_added = AddAllPaths();
     SetBaseConfiguration();
+
     return has_added;
   }
 
@@ -1529,29 +1582,58 @@ public:
     }
   }
 
+  double TimeSampling, TimeAdd, TimeRemove;
+
   void BatchDecompose(bool Do_remove, bool Do_split_remove) {
     bool has_added = false;
+
+    PathSampl.dynamicUpdates = dynamic_updates;
+
+    TimeSampling = 0;
+    TimeAdd = 0;
+    TimeRemove = 0;
+
     do {
-      //this firs step solve all the features (concave, spikes)
+      // this firs step solve all the features (concave, spikes)
       has_added = false;
       has_added |= SolveAllFeatures();
 
-      //remove unnecessary
+      auto t0 = std::chrono::high_resolution_clock::now();
+      // remove unnecessary
       if (has_added && Do_remove)
         RemovePaths();
-      
-      //add the remaining to solve all the rest of the objetive function
+      auto t1 = std::chrono::high_resolution_clock::now();
+      auto elapsed =
+          std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+      TimeRemove += elapsed.count() * 1e-6;
+
+      // add the remaining to solve all the rest of the objetive function
       has_added |= SolveAllMesh();
 
-      //then remove unnecessary
+      // then remove unnecessary
+      t0 = std::chrono::high_resolution_clock::now();
       if (has_added && Do_remove)
         RemovePaths();
+      t1 = std::chrono::high_resolution_clock::now();
+      elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+      TimeRemove += elapsed.count() * 1e-6;
+
     } while (has_added);
 
-    //final step, split and remove if possible the unnecessary
+    // final step, split and remove if possible the unnecessary
+    auto t0 = std::chrono::high_resolution_clock::now();
     if (split_removal) {
       RemoveSplitted();
     }
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto elapsed =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    TimeRemove += elapsed.count() * 1e-6;
+
+    std::cout << "<<< Decompose TIMINGS (sec) >>> " << std::endl;
+    std::cout << "* Sampling: " << TimeSampling << std::endl;
+    std::cout << "* Adding: " << TimeAdd << std::endl;
+    std::cout << "* Removing: " << TimeRemove << std::endl;
   }
 
   bool SaveFPatchesLayout(const std::string fPatchesFile) {

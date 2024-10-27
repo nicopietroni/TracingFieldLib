@@ -646,25 +646,20 @@ private:
   }
 
   void SamplePaths(int NumSamples) {
+
+    // double TimeSampling = 0;
+    // double TimeTracing = 0;
+    // double TimeSelfIntersect = 0;
+
     StartingNodes.clear();
     SampledPaths.clear();
 
     std::cout << "Sampling starting Nodes" << std::endl;
 
-    // int MarkSample=-1;
-    // for (size_t i=0;i<VERT_MARK_SIZE;i++)
-    //     if (sample_only_on[i])MarkSample=i;
+    //auto t0 = std::chrono::high_resolution_clock::now();
 
-    // if (MarkSample!=-1)
-    //     std::cout<<"Curr Mark Sampling:"<<MarkSample<<std::endl;
-
-    // InitTracingNodes(NumSamples,MarkSample);
     std::vector<int> SampledVert;
     SampleTracingVert(NumSamples, SampledVert);
-
-    // SampleTracingVert(NumSamples,SampledVert,MarkSample);
-    // std::cout<<"Sampled "<< SampledVert.size() << " starting Vert"
-    // <<std::endl;
 
     // add in between singularity samples
     if (minSingResample > 0) {
@@ -675,8 +670,6 @@ private:
           continue;
         SampledVert.push_back(SingSingSampledVert[i]);
       }
-      // SampledVert.insert(SampledVert.end(), SingSingSampledVert.begin(),
-      // SingSingSampledVert.end());
     }
 
     // NEW, make it unique
@@ -699,6 +692,10 @@ private:
     std::vector<int> ArrivalNodes;
     GetArrivalNodes(ArrivalNodes);
 
+    // auto t1 = std::chrono::high_resolution_clock::now();
+    // auto elapsed0 =
+    //     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    // TimeSampling += elapsed0.count() * 1e-6;
     // FindArrivalNodesFromVertex(SampledVert,StartingNodes);
 
     for (size_t i = 0; i < StartingNodes.size(); i++) {
@@ -711,29 +708,17 @@ private:
       assert(TGraph.NodeType(StartingNodes[i]) != TangentDomain);
       assert(TGraph.IsEnabled(StartingNodes[i]));
 
-      std::chrono::time_point<std::chrono::high_resolution_clock> start =
-          std::chrono::high_resolution_clock::now();
-
-      // bool has_traced =
-      // Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(TGraph,
-      // StartingNodes[i], CurrPath, true, &ArrivalNodes,only_visible);
+      //auto t0 = std::chrono::high_resolution_clock::now();
       typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
           Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(
               TGraph, StartingNodes[i], CurrPath, true, &ArrivalNodes,
               only_visible);
 
-      // std::cout<<"i:"<<i<<std::endl;
-      // assert(TGraph.NodeType(CurrPath[0])!=ExitDomain);
-      // assert(TGraph.NodeType(CurrPath.back())==ExitDomain);
-      // assert(0);
+      // auto t1 = std::chrono::high_resolution_clock::now();
+      // auto elapsed1 =
+      //     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+      // TimeTracing += elapsed1.count() * 1e-6;
 
-      std::chrono::time_point<std::chrono::high_resolution_clock> end =
-          std::chrono::high_resolution_clock::now();
-      std::chrono::duration duration =
-          std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-      // TimeTracing += duration.count() * 1e-6;
-
-      // if (!has_traced) {
       if (TStatus != Geo::GraphTracing<ScalarType>::TraceSuccess) {
         if (TStatus == Geo::GraphTracing<ScalarType>::TraceIncomplete)
           non_traced++;
@@ -743,15 +728,15 @@ private:
         continue;
       }
 
-      start = std::chrono::high_resolution_clock::now();
-
+      //t0 = std::chrono::high_resolution_clock::now();
+     
       bool self_intersect =
           Geo::PathFunctions<ScalarType>::SelfIntersectTangentially(TGraph,
                                                                     CurrPath);
-
-      end = std::chrono::high_resolution_clock::now();
-      duration =
-          std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+      // t1 = std::chrono::high_resolution_clock::now();
+      // auto elapsed2 =
+      //     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+      // TimeSelfIntersect += elapsed2.count() * 1e-6;
 
       // TimeConflict += duration.count() * 1e-6;
 
@@ -763,17 +748,6 @@ private:
       NewStartingNodes.push_back(StartingNodes[i]);
     }
 
-    // //then restore
-    // if (IndexLimit!=-1)
-    // {
-    //     for (size_t i=0;i<SwapNodeType.size();i++)
-    //     {
-    //         int IndexN=SwapNodeType[i].first;
-    //         NType TypeNode=SwapNodeType[i].second;
-    //         TGraph.NodeType(IndexN)=TypeNode;
-    //     }
-    // }
-
     StartingNodes = NewStartingNodes;
     SampledPaths_Status.clear();
     SampledPaths_Status.resize(SampledPaths.size(), SP_Evaluate);
@@ -782,6 +756,13 @@ private:
     std::cout << "self intersected " << self_intersected << std::endl;
     std::cout << "Non traced " << non_traced << std::endl;
     std::cout << "Non direct " << non_direct << std::endl;
+
+  
+    // std::cout << "Sampling Nodes Time: " << TimeSampling << std::endl;
+    // std::cout << "Tracing  Time: " << TimeTracing << std::endl;
+    // std::cout << "Self Intersecting Time: " << TimeSelfIntersect << std::endl;
+
+    // TimeSampling += elapsed0.count() * 1e-6;
   }
 
   void InitCandidates() {
@@ -1019,6 +1000,18 @@ private:
     std::vector<int> ArrivalNodes;
     GetArrivalNodes(ArrivalNodes);
 
+    // CHECK THIS ONE MIGHT MAKE SLOWER
+    TGraph.DisableNodeType(TangentDomain);
+
+    //   for (size_t i = 0; i < TGraph.NumNodes(); i++) {
+    //   if (TGraph.NodeType(i) == Geo::TangentDomain) {
+    //     if (TGraph.IsEnabled(i)) {
+    //       std::cout << "Error Enabled Node Graph cortano" << std::endl;
+    //       exit(0);
+    //     }
+    //   }
+    // }
+
     for (size_t i = 0; i < SampledPaths.size(); i++) {
       if (SampledPaths_Status[i] != SP_Evaluate)
         continue;
@@ -1051,6 +1044,18 @@ private:
         SampledPaths_Status[i] = SP_Discarded;
         continue;
       }
+
+      // for (size_t j = 0; j < SampledPaths[i].size(); j++) {
+      //   if (!TGraph.IsEnabled(SampledPaths[i][j])) {
+      //       std::cout << "Error Enabled Node Graph putignano" << std::endl;
+      //       exit(0);
+      //     }
+      //   if (TGraph.NodeType(SampledPaths[i][j]) == Geo::TangentDomain) {
+      //       std::cout << "Error Enabled Node Graph putignano" << std::endl;
+      //       exit(0);
+      //     }
+      // }
+
       bool self_intersect =
           Geo::PathFunctions<ScalarType>::SelfIntersectTangentially(
               TGraph, SampledPaths[i]);
@@ -1548,11 +1553,29 @@ public:
     // cannot pass trougth tangent domain nodes
     TGraph.DisableNodeType(TangentDomain);
 
+    // for (size_t i = 0; i < TGraph.NumNodes(); i++) {
+    //   if (TGraph.NodeType(i) == Geo::TangentDomain) {
+    //     if (TGraph.IsEnabled(i)) {
+    //       std::cout << "Error Enabled Node Graph boia" << std::endl;
+    //       exit(0);
+    //     }
+    //   }
+    // }
+
     // save the distance on another flag
     TGraph.CurrDistIndex() = 1;
 
     // sample the paths
     SamplePaths(NumSamples);
+
+    //  for (size_t i = 0; i < TGraph.NumNodes(); i++) {
+    //   if (TGraph.NodeType(i) == Geo::TangentDomain) {
+    //     if (TGraph.IsEnabled(i)) {
+    //       std::cout << "Error Enabled Node Graph boia" << std::endl;
+    //       exit(0);
+    //     }
+    //   }
+    // }
 
     TGraph.CurrDistIndex() = 0;
 
@@ -1883,7 +1906,7 @@ public:
 
     PType = PrioDist;
 
-    //NumSamples = 1000;
+    // NumSamples = 1000;
 
     dynamicUpdates = true;
     SelectedPaths.clear();
