@@ -133,9 +133,9 @@ class TracingGraph
         }
     };
 
+public:
     std::vector<std::vector<NeighInfo> > N;
 
-public:
     //the number of diffusion done
     int diffuse_step;
 
@@ -174,6 +174,8 @@ public:
     //set if a node is enabled or not
     std::vector<bool> EnabledN;
 
+    //if needed to save previous stage
+    std::vector<bool> SwapEnabledN;
     // //set if can pass to a node or not (similar to emabled but on)
     // std::vector<bool> PassTrought;
 
@@ -261,6 +263,58 @@ public:
         assert(LocalIdx>=0);
         assert(LocalIdx<(int)N[IndexN0].size());
         return (N[IndexN0][LocalIdx].Enabled);
+    }
+
+    int WhichConnection(const int &IndexN0,
+                       const int &IndexN1)const
+    {
+        assert(EnabledN[IndexN0]);
+        assert(EnabledN[IndexN1]);
+        for (size_t i=0;i<N[IndexN0].size();i++)
+        {
+            //if (!N[IndexN0][i].Enabled)continue;
+            if (N[IndexN0][i].N==IndexN1)return i;
+        }
+        return -1;
+    }
+
+    bool ActiveArcNodes(const int &IndexN0,
+                        const int &IndexN1)const
+    {
+        for (size_t i=0;i<N[IndexN0].size();i++)
+        {
+            if (N[IndexN0][i].N!=IndexN1)continue;
+            return ActiveLink(IndexN0,i);
+        }
+        assert(0);
+    }
+
+    void DisableArc(const int &IndexN,
+                    const int &IndexNeigh)
+    {
+        assert(IndexN>=0);
+        assert(IndexN<N.size());
+        assert(IndexNeigh>=0);
+        assert(IndexNeigh<N[IndexN].size());
+        assert(N[IndexN][IndexNeigh].Enabled==true);
+        N[IndexN][IndexNeigh].Enabled=false;
+    }
+
+    void EnableArc(const int &IndexN,
+                  const int &IndexNeigh)
+    {
+        assert(IndexN>=0);
+        assert(IndexN<N.size());
+        assert(IndexNeigh>=0);
+        assert(IndexNeigh<N[IndexN].size());
+        N[IndexN][IndexNeigh].Enabled=true;
+    }
+
+    void DectivateArc(const int &IndexN0,const int &IndexN1)
+    {
+        int ConnectIDX=WhichConnection(IndexN0,IndexN1);
+        assert(ConnectIDX!=-1);
+        DisableArc(IndexN0,ConnectIDX);
     }
 
     bool DirectLink(const int &IndexN0,const int &LocalIdx)const
@@ -397,6 +451,16 @@ public:
         }
     }
 
+    void SaveEnabledNodes()
+    {
+        SwapEnabledN=EnabledN;
+    }
+
+    void RestoreEnabledNodes()
+    {
+        EnabledN=SwapEnabledN;
+    }
+
     void EnableAllNodes()
     {
         EnabledN=std::vector<bool>(N.size(),true);
@@ -414,25 +478,7 @@ public:
                 N[i][j].Enabled=true;
     }
 
-    void DisableArc(const int &IndexN,
-                    const int &IndexNeigh)
-    {
-        assert(IndexN>=0);
-        assert(IndexN<N.size());
-        assert(IndexNeigh>=0);
-        assert(IndexNeigh<N[IndexN].size());
-        N[IndexN][IndexNeigh].Enabled=false;
-    }
-
-    void EnableArc(const int &IndexN,
-                  const int &IndexNeigh)
-    {
-        assert(IndexN>=0);
-        assert(IndexN<N.size());
-        assert(IndexNeigh>=0);
-        assert(IndexNeigh<N[IndexN].size());
-        N[IndexN][IndexNeigh].Enabled=true;
-    }
+    
 
     void DisableNodeType(NType TypeNode)
     {

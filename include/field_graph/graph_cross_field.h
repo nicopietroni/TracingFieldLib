@@ -3,6 +3,7 @@
 
 #include "../cross_field.h"
 #include <cstddef>
+#include <vector>
 namespace Field{
 
 class CrossFieldGraph
@@ -48,6 +49,18 @@ static void NodesOfElem(int IndexE,std::vector<int> &IndexN)
     assert(IndexE>=0);
     for (size_t j=0;j<4;j++)
         IndexN.push_back(NodeOfElemDir(IndexE,j));
+}
+
+static void NodesOfElems(const std::vector<int> &IndexElems,
+                        std::vector<int> &IndexN)
+{
+    IndexN.clear();
+    for (size_t i=0;i<IndexElems.size();i++)
+    {
+        std::vector<int> IndexNEl;
+        NodesOfElem(IndexElems[i],IndexNEl);
+        IndexN.insert(IndexN.end(),IndexNEl.begin(),IndexNEl.end());
+    }
 }
 
 static void NodesOfSameElem(int IndexN,std::vector<int> &IndexNodes)

@@ -3,6 +3,8 @@
 
 #include "graph.h"
 #include "path_functions.h"
+#include <cassert>
+#include <iostream>
 #include <list>
 #include <set>
 // #include "../cross_field.h"
@@ -43,6 +45,7 @@ template <class ScalarType> class GraphTracing {
     SParam.onlyDirect = false;
     SParam.stopAtPrevDist = false;
     SParam.onlyVisible = only_visible;
+    //SParam.uniformW=true;
     ScalarType PathL;
     std::vector<int> SourceNodes;
     SourceNodes.push_back(StartN);
@@ -91,6 +94,10 @@ public:
 
     bool has_to_complete = !(IsBorder || IsLoop);
 
+    //std::cout<<"TEST 0"<<std::endl;
+    //assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathN));
+    //std::cout<<"TEST 0 done"<<std::endl;
+
     if (has_to_complete) {
       // std::cout<<"Completing"<<std::endl;
       int StartOpp = PathFunctions<ScalarType>::OppositeNode(TGraph, StartN);
@@ -99,34 +106,41 @@ public:
       std::vector<int> PathNOpp;
 
       // std::cout<<"C"<<std::endl;
+      //std::cout<<"TEST 1"<<std::endl;
       has_traced = CompleteTraceFrom(TGraph, StartOpp, PathNOpp, false, true,
                                      ArrivalNodes, only_visible);
+      //std::cout<<"TEST 1 done"<<std::endl;
+
       // std::cout<<"D"<<std::endl;
 
       if (!has_traced)
         return TraceIncomplete;
 
       // revert the path
+      //std::cout<<"TEST 1.2"<<std::endl;
+      //assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathNOpp));
+      //std::cout<<"TEST 1.2 done"<<std::endl;
       PathFunctions<ScalarType>::ReversePath(TGraph, PathNOpp);
 
       assert(PathNOpp.back() == PathN[0]);
 
+      //std::cout<<"TEST 1.5"<<std::endl;
+      //assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathNOpp));
+      //std::cout<<"TEST 1.5 done"<<std::endl;
       // remove the last one
       PathNOpp.pop_back();
       // then append
       PathNOpp.insert(PathNOpp.end(), PathN.begin(), PathN.end());
       PathN = PathNOpp;
-      // assert(TGraph.IsEnabled(PathN[0]));
     }
 
     //auto t1 = std::chrono::high_resolution_clock::now();
-
+    // std::cout<<"TEST 2"<<std::endl;
+    assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathN));
+    //std::cout<<"TEST 2 done"<<std::endl;
 
     if (make_direct) {
-      // std::cout<<"E"<<std::endl;
-      bool has_direct =
-          Geo::PathFunctions<ScalarType>::MakeDirectConnection(TGraph, PathN);
-      // std::cout<<"F"<<std::endl;
+      bool has_direct = Geo::PathFunctions<ScalarType>::MakeDirectConnection(TGraph, PathN);
       if (!has_direct) {
         return TraceNotDirect;
       }
@@ -172,6 +186,21 @@ public:
     }
     //std::reverse(PathN.begin(),PathN.end());
     return TraceSuccess;
+  }
+  
+  static TraceStatus
+  TraceDirectLoopOrBorderBorderFrom(Geo::TracingGraph<ScalarType> &TGraph,
+                                    const int &StartN, std::vector<int> &PathN,
+                                    std::vector<int> *ArrivalNodes = NULL,
+                                    bool only_visible = true, bool simplify = true) 
+  {
+          TraceStatus Curr_Status=TraceIncomplete;
+          do {
+              Curr_Status=TraceLoopOrBorderBorderFrom(TGraph,StartN,PathN,
+                                                      true,ArrivalNodes,
+                                                      only_visible,simplify);
+          }while (Curr_Status==TraceNotDirect);
+          return Curr_Status;
   }
 };
 

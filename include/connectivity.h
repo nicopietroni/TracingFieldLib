@@ -12,23 +12,19 @@
 
 namespace Geo {
 
-int WhichVert(const std::vector<int> &Face, const int &VertIndex) 
-{
+int WhichVert(const std::vector<int> &Face, const int &VertIndex) {
   for (size_t i = 0; i < Face.size(); i++)
     if (Face[i] == VertIndex)
       return i;
   return -1;
 }
 
-int WhichEdge(const std::vector<int> &Face,
-              const int &V0,const int &V1) 
-{
-  for (size_t i = 0; i < Face.size(); i++)
-  {
-    if ((Face[i] == V0) && (Face[(i+1)%3] == V1))
+int WhichEdge(const std::vector<int> &Face, const int &V0, const int &V1) {
+  for (size_t i = 0; i < Face.size(); i++) {
+    if ((Face[i] == V0) && (Face[(i + 1) % 3] == V1))
       return i;
 
-    if ((Face[i] == V1) && (Face[(i+1)%3] == V0))
+    if ((Face[i] == V1) && (Face[(i + 1) % 3] == V0))
       return i;
   }
   return -1;
@@ -814,11 +810,10 @@ void FindFaceStar(const std::vector<std::vector<int>> &connections,
   Kernel.clear();
   Kernel.resize(NextF.size());
 
-  for (size_t i = 0; i < selected_faces.size(); i++)
-  {
-    int IndexF=selected_faces[i];
-    assert(IndexF>=0);
-    assert(IndexF<NextF.size());
+  for (size_t i = 0; i < selected_faces.size(); i++) {
+    int IndexF = selected_faces[i];
+    assert(IndexF >= 0);
+    assert(IndexF < NextF.size());
     for (size_t j = 0; j < NextF[IndexF].size(); j++)
       if (NextF[IndexF][j] != -1)
         Kernel[IndexF].push_back(NextF[IndexF][j]);
@@ -852,6 +847,15 @@ void getBorderVert(const std::vector<std::vector<int>> &connections,
   std::vector<std::vector<int>> NextF, NextE;
   Geo::getFFAdjacency(connections, NextF, NextE);
   getBorderVert(connections, NextF, BorderV);
+}
+
+void getBorderVert(const std::vector<std::vector<int>> &connections,
+                   std::vector<int> &BorderV) {
+  std::vector<size_t> BorderVu;
+  getBorderVert(connections, BorderVu);
+  BorderV.clear();
+  for (size_t i = 0; i < BorderVu.size(); i++)
+    BorderV.push_back((int)BorderVu[i]);
 }
 
 void getBorderEdges(const std::vector<std::vector<int>> &Faces,

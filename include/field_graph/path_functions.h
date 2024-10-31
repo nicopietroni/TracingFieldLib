@@ -7,15 +7,17 @@
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
 #include "graph_tracing.h"
+#include "t_junction.h"
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdlib>
 #include <iostream>
 #include <list>
 #include <set>
 #include <sys/_types/_size_t.h>
 #include <unordered_set>
 #include <vector>
-#include "t_junction.h"
 
 namespace Geo {
 
@@ -32,6 +34,35 @@ public:
     return (PathN[0] == PathN.back());
   }
 
+  static bool IsConnected(const TracingGraph<ScalarType> &TGraph,
+                          const std::vector<int> &PathN) {
+    for (size_t i = 0; i < PathN.size() - 1; i++) {
+      int IndexN0 = PathN[i];
+      int IndexN1 = PathN[(i + 1)];
+      if (!TGraph.IsEnabled(IndexN0))
+      {
+        std::cout<<"Non Enabled Node 0"<<std::endl;
+        return false;
+      }
+      if (!TGraph.IsEnabled(IndexN1))
+      {
+        std::cout<<"Non Enabled Node 1"<<std::endl;
+        return false;
+      }
+      if (TGraph.WhichConnection(IndexN0, IndexN1) == -1)
+      {
+        std::cout<<"Non Symmetric Arc"<<std::endl;
+        return false;
+      }
+      if (!TGraph.ActiveArcNodes(IndexN0, IndexN1))
+      {
+        std::cout<<"Non Active Arc"<<std::endl;
+        return false;
+      }
+    }
+    return true;
+  }
+
   static bool ConnectDirect(TracingGraph<ScalarType> &TGraph,
                             const int &IndexN0, const int &IndexN1,
                             std::vector<int> &DirectPath) {
@@ -43,85 +74,94 @@ public:
     TGraph.Select(IndexN1, 0);
     SParam.onlyDirect = true;
     SParam.onlyVisible = false;
-    //TO CHECK
-    SParam.uniformW=true;
+    // TO CHECK
+    SParam.uniformW = true;
     SParam.MaxSteps = TGraph.diffuse_step + 1;
     std::vector<int> SourceNodes(1, IndexN0);
     ScalarType PathL;
     bool has_connected = Geo::GraphQuery<ScalarType>::ShortestPaths(
         TGraph, SourceNodes, DirectPath, PathL, SParam);
-  //   for (size_t i=0;i<DirectPath.size();i++)
-  //   {
-  //     if (!TGraph.IsEnabled(DirectPath[i]))
-  //     {
-  //       std::cout<<"Error Enabled Path 1"<<std::endl;
-  //       exit(0);
-  //     }
+    //   for (size_t i=0;i<DirectPath.size();i++)
+    //   {
+    //     if (!TGraph.IsEnabled(DirectPath[i]))
+    //     {
+    //       std::cout<<"Error Enabled Path 1"<<std::endl;
+    //       exit(0);
+    //     }
 
-  //     if (TGraph.NodeType(DirectPath[i])==Geo::TangentDomain)
-  //     {
-  //       std::cout<<"Error Tangent Path 1"<<std::endl;
-  //       exit(0);
-  //     }
-  //  }
+    //     if (TGraph.NodeType(DirectPath[i])==Geo::TangentDomain)
+    //     {
+    //       std::cout<<"Error Tangent Path 1"<<std::endl;
+    //       exit(0);
+    //     }
+    //  }
     return has_connected;
   }
 
-  //simplify the connections to have one edge per triangle/tetra
-  //only considering the direct one
+  // simplify the connections to have one edge per triangle/tetra
+  // only considering the direct one
   static bool SimplifyStep(TracingGraph<ScalarType> &TGraph,
                            std::vector<int> &PathN) {
-    if (PathN.size()<3)return false;
+    if (PathN.size() < 3)
+      return false;
 
     std::vector<int> NewPath;
-    bool isLoop=IsLoop(PathN);
-    NewPath=PathN;
+    bool isLoop = IsLoop(PathN);
+    NewPath = PathN;
 
-    //remove the last one which is equal to the first one
-    //this is to make the right cycle then eventually put back at the end
-    if (isLoop){assert(NewPath[0]==NewPath.back());NewPath.pop_back();}
+    // remove the last one which is equal to the first one
+    // this is to make the right cycle then eventually put back at the end
+    if (isLoop) {
+      assert(NewPath[0] == NewPath.back());
+      NewPath.pop_back();
+    }
 
-    //first and last threated separately if needed (only if loop)
-    int StartIdx=0;
-    int EndIdx=NewPath.size();
-    if (!isLoop){StartIdx=1;EndIdx=NewPath.size()-1;}
+    // first and last threated separately if needed (only if loop)
+    int StartIdx = 0;
+    int EndIdx = NewPath.size();
+    if (!isLoop) {
+      StartIdx = 1;
+      EndIdx = NewPath.size() - 1;
+    }
     for (size_t i = StartIdx; i < EndIdx; i++) {
-      int SizeP=NewPath.size();
-      int IndexN0 = PathN[(i+SizeP-1)%SizeP];
+      int SizeP = NewPath.size();
+      int IndexN0 = PathN[(i + SizeP - 1) % SizeP];
       int IndexN1 = PathN[i];
-      int IndexN2 = PathN[(i + 1)%SizeP];
+      int IndexN2 = PathN[(i + 1) % SizeP];
 
-      //see if there is a direct connection 
-      //then cancel the one in the middle
-      if (TGraph.IsDirectPairE(IndexN0, IndexN2))
-      {
-        NewPath.erase(NewPath.begin()+i);
-        //if loops reinsert the first one to the end
-        if (isLoop)NewPath.push_back(NewPath[0]);
-        //copy back to return
-        PathN=NewPath;
+      // see if there is a direct connection
+      // then cancel the one in the middle
+      if (TGraph.IsDirectPairE(IndexN0, IndexN2)) {
+        NewPath.erase(NewPath.begin() + i);
+        // if loops reinsert the first one to the end
+        if (isLoop)
+          NewPath.push_back(NewPath[0]);
+        // copy back to return
+        PathN = NewPath;
         return true;
       }
     }
     return false;
   }
 
-  //simplify the connections to have one edge per triangle/tetra
-  //only considering the direct one
+  // simplify the connections to have one edge per triangle/tetra
+  // only considering the direct one
   static void SimplifyConnection(TracingGraph<ScalarType> &TGraph,
                                  std::vector<int> &PathN) {
     assert(IsProperPath(PathN));
 
-    if (PathN.size()<3)return;
+    if (PathN.size() < 3)
+      return;
 
-    //std::cout<<"Start Simpplify"<<std::endl;
-    while (SimplifyStep(TGraph,PathN)){};
-    //std::cout<<"Done"<<std::endl;
-
+    // std::cout<<"Start Simpplify"<<std::endl;
+    while (SimplifyStep(TGraph, PathN)) {
+    };
+    // std::cout<<"Done"<<std::endl;
   }
 
   static bool MakeDirectConnection(TracingGraph<ScalarType> &TGraph,
-                                   std::vector<int> &PathN) {
+                                   std::vector<int> &PathN,
+                                   bool UpdateArc = true) {
     assert(IsProperPath(PathN));
     std::vector<int> NewPath;
     for (size_t i = 0; i < PathN.size() - 1; i++) {
@@ -133,13 +173,25 @@ public:
 
       if (TGraph.IsDirectPairE(IndexN0, IndexN1))
         continue;
+
       std::vector<int> DirectPath;
       assert(TGraph.IsEnabled(IndexN0));
       assert(TGraph.IsEnabled(IndexN1));
-      bool connected = ConnectDirect(TGraph, IndexN0, IndexN1, DirectPath);
-      if (!connected)
-        return false;
+      assert(TGraph.WhichConnection(IndexN0, IndexN1) != -1);
+      assert(TGraph.ActiveArcNodes(IndexN0, IndexN1));
+      // assert(TGraph.WhichConnection(IndexN1,IndexN0)!=-1);
+      // assert(TGraph.ActiveArcNodes(IndexN1, IndexN0));
 
+      bool connected = ConnectDirect(TGraph, IndexN0, IndexN1, DirectPath);
+      if (!connected) {
+        if (UpdateArc) {
+          TGraph.DectivateArc(IndexN0, IndexN1);
+          int OppN1=Field::CrossFieldGraph::OppositeNodeCrossField(IndexN1);
+          int OppN0=Field::CrossFieldGraph::OppositeNodeCrossField(IndexN0);
+          TGraph.DectivateArc(OppN1, OppN0);
+        }
+        return false;
+      }
       // the new path can be only 3 + diffusion steps (should be 2 but one
       // because of singularities)
       // if (DirectPath.size() > (TGraph.diffuse_step + 3))
@@ -405,8 +457,7 @@ public:
 
   static void CrossEnableArcsOfPath(const std::vector<int> &PathN,
                                     Geo::TracingGraph<ScalarType> &Graph,
-                                    bool enable) 
-  {
+                                    bool enable) {
     int lastIDX = PathN.size();
     if (IsLoop(PathN))
       lastIDX--;
@@ -432,110 +483,104 @@ public:
   }
 
   static void FindEdgeM(const std::vector<std::vector<int>> &Paths,
-                        std::vector<int>  &EdgePathIdx,
-                        std::vector<std::vector<int> > &Edges) 
-  {
+                        std::vector<int> &EdgePathIdx,
+                        std::vector<std::vector<int>> &Edges) {
     Edges.clear();
     EdgePathIdx.clear();
-    for (size_t i=0;i<Paths.size();i++)
-    for (size_t j=0;j<Paths[i].size()-1;j++)
-    {
-      int V0=Paths[i][j];
-      int V1=Paths[i][j+1];
-      assert(V0!=V1);
-      Edges.resize(Edges.size()+1);
-      Edges.back().push_back(V0);
-      Edges.back().push_back(V1);
-      EdgePathIdx.push_back(i);
-    }
+    for (size_t i = 0; i < Paths.size(); i++)
+      for (size_t j = 0; j < Paths[i].size() - 1; j++) {
+        int V0 = Paths[i][j];
+        int V1 = Paths[i][j + 1];
+        assert(V0 != V1);
+        Edges.resize(Edges.size() + 1);
+        Edges.back().push_back(V0);
+        Edges.back().push_back(V1);
+        EdgePathIdx.push_back(i);
+      }
   }
 
   static void FindTJunctions(const std::vector<std::vector<int>> &Paths,
-                             std::vector<TJunction> &TJunctions) 
-  {
-    std::vector<int>  EdgePathIdx;
-    std::vector<std::vector<int> > Edges;
-    FindEdgeM(Paths,EdgePathIdx,Edges);
+                             std::vector<TJunction> &TJunctions) {
+    std::vector<int> EdgePathIdx;
+    std::vector<std::vector<int>> Edges;
+    FindEdgeM(Paths, EdgePathIdx, Edges);
 
     std::vector<std::vector<int>> Kernel;
-    FindVertexStar(Edges,Kernel);
+    FindVertexStar(Edges, Kernel);
 
-    std::map<std::pair<int,int>,int> VertPairToPath;
-    for (size_t i=0;i<Edges.size();i++)
-    {
-      assert(Edges[i].size()==2);
-      int V0=Edges[i][0];
-      int V1=Edges[i][1];
-      int IndexP=EdgePathIdx[i];
-      std::pair<int,int> Key(std::min(V0,V1),std::max(V0,V1));
-      assert(VertPairToPath.count(Key)==0);
-      VertPairToPath[Key]=IndexP;
+    std::map<std::pair<int, int>, int> VertPairToPath;
+    for (size_t i = 0; i < Edges.size(); i++) {
+      assert(Edges[i].size() == 2);
+      int V0 = Edges[i][0];
+      int V1 = Edges[i][1];
+      int IndexP = EdgePathIdx[i];
+      std::pair<int, int> Key(std::min(V0, V1), std::max(V0, V1));
+      assert(VertPairToPath.count(Key) == 0);
+      VertPairToPath[Key] = IndexP;
     }
 
     TJunctions.clear();
-    for (size_t i=0;i<Kernel.size();i++)
-    {
-      int V=i;
-      //different than 3 cannot be a t-junction
-      if (Kernel[i].size()!=3)continue;
-      int Vk0=Kernel[i][0];
-      int Vk1=Kernel[i][1];
-      int Vk2=Kernel[i][2];
+    for (size_t i = 0; i < Kernel.size(); i++) {
+      int V = i;
+      // different than 3 cannot be a t-junction
+      if (Kernel[i].size() != 3)
+        continue;
+      int Vk0 = Kernel[i][0];
+      int Vk1 = Kernel[i][1];
+      int Vk2 = Kernel[i][2];
 
-      assert(Vk0>=0);
-      assert(Vk0<Kernel.size());
-      assert(Vk1>=0);
-      assert(Vk1<Kernel.size());
-      assert(Vk2>=0);
-      assert(Vk2<Kernel.size());
+      assert(Vk0 >= 0);
+      assert(Vk0 < Kernel.size());
+      assert(Vk1 >= 0);
+      assert(Vk1 < Kernel.size());
+      assert(Vk2 >= 0);
+      assert(Vk2 < Kernel.size());
 
-      std::pair<int,int> E0(std::min(V,Vk0),std::max(V,Vk0));
-      std::pair<int,int> E1(std::min(V,Vk1),std::max(V,Vk1));
-      std::pair<int,int> E2(std::min(V,Vk2),std::max(V,Vk2));
-      assert(VertPairToPath.count(E0)>0);
-      assert(VertPairToPath.count(E1)>0);
-      assert(VertPairToPath.count(E2)>0);
-      int PIdx0=VertPairToPath[E0];
-      int PIdx1=VertPairToPath[E1];
-      int PIdx2=VertPairToPath[E2];
+      std::pair<int, int> E0(std::min(V, Vk0), std::max(V, Vk0));
+      std::pair<int, int> E1(std::min(V, Vk1), std::max(V, Vk1));
+      std::pair<int, int> E2(std::min(V, Vk2), std::max(V, Vk2));
+      assert(VertPairToPath.count(E0) > 0);
+      assert(VertPairToPath.count(E1) > 0);
+      assert(VertPairToPath.count(E2) > 0);
+      int PIdx0 = VertPairToPath[E0];
+      int PIdx1 = VertPairToPath[E1];
+      int PIdx2 = VertPairToPath[E2];
 
-      //three different path, no t-junction
-      if ((PIdx0!=PIdx1)&&(PIdx0!=PIdx2)&&(PIdx1!=PIdx2))continue;
-      //three belongs to the same path, MUST test geometrically?
-      if ((PIdx0==PIdx1)&&(PIdx0==PIdx2))continue;
+      // three different path, no t-junction
+      if ((PIdx0 != PIdx1) && (PIdx0 != PIdx2) && (PIdx1 != PIdx2))
+        continue;
+      // three belongs to the same path, MUST test geometrically?
+      if ((PIdx0 == PIdx1) && (PIdx0 == PIdx2))
+        continue;
 
-      int V0=-1;
-      int V1=-1;
-      int VT=-1;
-      //three belongs to the same path, then test geometrically
-      if (PIdx0==PIdx1)
-      {
-        assert(PIdx0!=PIdx2);
-        V0=Vk0;
-        V1=Vk1;
-        VT=Vk2;
+      int V0 = -1;
+      int V1 = -1;
+      int VT = -1;
+      // three belongs to the same path, then test geometrically
+      if (PIdx0 == PIdx1) {
+        assert(PIdx0 != PIdx2);
+        V0 = Vk0;
+        V1 = Vk1;
+        VT = Vk2;
       }
-      if (PIdx1==PIdx2)
-      {
-        assert(PIdx0!=PIdx1);
-        V0=Vk1;
-        V1=Vk2;
-        VT=Vk0;
+      if (PIdx1 == PIdx2) {
+        assert(PIdx0 != PIdx1);
+        V0 = Vk1;
+        V1 = Vk2;
+        VT = Vk0;
       }
-      if ((PIdx0==PIdx2)&&(PIdx0!=PIdx1))
-      {
-        assert(PIdx0!=PIdx1);
-        V0=Vk0;
-        V1=Vk2;
-        VT=Vk1;
+      if ((PIdx0 == PIdx2) && (PIdx0 != PIdx1)) {
+        assert(PIdx0 != PIdx1);
+        V0 = Vk0;
+        V1 = Vk2;
+        VT = Vk1;
       }
-      assert(V0!=-1);
-      assert(V1!=-1);
-      assert(VT!=-1);
-      TJunctions.push_back(TJunction(V,V0,V1,VT));
+      assert(V0 != -1);
+      assert(V1 != -1);
+      assert(VT != -1);
+      TJunctions.push_back(TJunction(V, V0, V1, VT));
     }
   }
-
 };
 
 } // namespace Geo

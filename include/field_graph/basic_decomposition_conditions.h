@@ -47,6 +47,9 @@ public:
 
     virtual void RestoreStatus()
     {}
+
+    virtual bool Mandatory()const
+    {return false;}
 };
 
 template <class ScalarType>
@@ -64,6 +67,9 @@ public:
 
     std::string Name()const override
     {return std::string("single_bound");}
+
+    bool Mandatory()const override
+    {return true;}
 };
 
 template <class ScalarType>
@@ -81,6 +87,9 @@ public:
 
     std::string Name()const override
     {return std::string("disk_like");}
+
+    bool Mandatory()const override
+    {return true;}
 };
 
 template <class ScalarType>

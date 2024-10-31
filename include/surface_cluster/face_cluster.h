@@ -118,11 +118,11 @@ void FindVoronoiClusters(std::vector<Geo::Point3<ScalarType>> &VertPos,
   CLEndCond.TargetL = TargetL;
   CLEndCond.TargetCl = TargetNum;
 
-  if ((TargetNum <= 0) && (ErrorPerc <= 0) && (TargetL <= 0)) {
-    CLEndCond.TargetE = MaxE * (ScalarType)10 * 0.0001;
-    CLEndCond.TargetL = -1;
-    CLEndCond.TargetCl = -1;
-  }
+  // if ((TargetNum <= 0) && (ErrorPerc <= 0) && (TargetL <= 0)) {
+  //   CLEndCond.TargetE = MaxE * (ScalarType)10 * 0.0001;
+  //   CLEndCond.TargetL = -1;
+  //   CLEndCond.TargetCl = -1;
+  // }
   FindClusters(VertPos, Faces, CLEndCond, ClusterFaces, &VoroClust, CParam);
 }
 
@@ -144,15 +144,14 @@ void FindVSAClusters(std::vector<Geo::Point3<ScalarType>> &VertPos,
   ScalarType MaxE = NormClust.TotalEnergy(VertPos, Faces);
 
   CLEndCond.TargetE = MaxE * ErrorPerc * 0.0001;
-  ;
   CLEndCond.TargetL = TargetL;
   CLEndCond.TargetCl = TargetNum;
 
-  if ((TargetNum <= 0) && (ErrorPerc <= 0) && (TargetL <= 0)) {
-    CLEndCond.TargetE = MaxE * (ScalarType)10 * 0.0001;
-    CLEndCond.TargetL = -1;
-    CLEndCond.TargetCl = -1;
-  }
+  // if ((TargetNum <= 0) && (ErrorPerc <= 0) && (TargetL <= 0)) {
+  //   CLEndCond.TargetE = MaxE * (ScalarType)10 * 0.0001;
+  //   CLEndCond.TargetL = -1;
+  //   CLEndCond.TargetCl = -1;
+  // }
 
   FindClusters(VertPos, Faces, CLEndCond, ClusterFaces, &NormClust, CParam);
 }

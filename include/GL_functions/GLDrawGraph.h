@@ -35,6 +35,27 @@ public:
     }
   };
 
+  static void DrawPath(const Geo::TracingGraph<ScalarType> &TGraph,
+                       const std::vector<Field::CrossF<ScalarType>> &Cross,
+                       const std::vector<int> &Nodes_To_Draw,
+                       const ScalarType Thick = 10,
+                       const Geo::Point3<ScalarType> &ColLine =
+                           Geo::Point3<ScalarType>(0, 1, 1)) {
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDepthRange(0.0, 0.9999);
+    glDisable(GL_LIGHTING);
+    glLineWidth(Thick);
+    GLDraw::glColor(ColLine);
+    glBegin(GL_LINE_STRIP);
+    for (size_t i = 0; i < Nodes_To_Draw.size(); i++) {
+      int currNode = Nodes_To_Draw[i];
+      int currVert = Field::CrossFieldGraph::ElemOfNode(currNode);
+      GLDraw::glVertex(Cross[currVert].Pos);
+    }
+    glEnd();
+    glPopAttrib();
+  }
+
   static void DrawNodes(const Geo::TracingGraph<ScalarType> &TGraph,
                         const std::vector<Field::CrossF<ScalarType>> &Cross,
                         const std::vector<int> &Nodes_To_Draw,
@@ -42,21 +63,12 @@ public:
                         const PathDrawParam &PDParam = PathDrawParam(),
                         const Geo::Point3<ScalarType> &ColLine =
                             Geo::Point3<ScalarType>(0, 1, 1)) {
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-
-    glDepthRange(0.0, 0.9999);
+    
     if (PDParam.DrawPath) {
-      glDisable(GL_LIGHTING);
-      glLineWidth(10);
-      GLDraw::glColor(ColLine);
-      glBegin(GL_LINE_STRIP);
-      for (size_t i = 0; i < Nodes_To_Draw.size(); i++) {
-        int currNode = Nodes_To_Draw[i];
-        int currVert = Field::CrossFieldGraph::ElemOfNode(currNode);
-        GLDraw::glVertex(Cross[currVert].Pos);
-      }
-      glEnd();
+      DrawPath(TGraph,Cross,Nodes_To_Draw,10,ColLine);
     }
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glDepthRange(0.0, 0.9999);
     for (size_t i = 0; i < Nodes_To_Draw.size(); i++) {
       int currNode = Nodes_To_Draw[i];
       assert(currNode >= 0);
@@ -82,16 +94,17 @@ public:
     glPopAttrib();
   }
 
-//   static void DrawNodes(const Geo::TracingGraph<ScalarType> &TGraph,
-//                         const std::vector<Field::CrossF<ScalarType>> &Cross,
-//                         const std::vector<std::vector<int>> &Nodes_To_Draw,
-//                         const ScalarType scaleVal,
-//                         const PathDrawParam &PDParam = PathDrawParam(),
-//                         const Geo::Point3<ScalarType> &ColLine =
-//                             Geo::Point3<ScalarType>(0, 1, 1)) {
-//     for (size_t i = 0; i < Nodes_To_Draw.size(); i++)
-//       DrawNodes(TGraph, Cross, Nodes_To_Draw[i], scaleVal, PDParam, ColLine);
-//   }
+  //   static void DrawNodes(const Geo::TracingGraph<ScalarType> &TGraph,
+  //                         const std::vector<Field::CrossF<ScalarType>>
+  //                         &Cross, const std::vector<std::vector<int>>
+  //                         &Nodes_To_Draw, const ScalarType scaleVal, const
+  //                         PathDrawParam &PDParam = PathDrawParam(), const
+  //                         Geo::Point3<ScalarType> &ColLine =
+  //                             Geo::Point3<ScalarType>(0, 1, 1)) {
+  //     for (size_t i = 0; i < Nodes_To_Draw.size(); i++)
+  //       DrawNodes(TGraph, Cross, Nodes_To_Draw[i], scaleVal, PDParam,
+  //       ColLine);
+  //   }
 
   static void DrawPaths(const Geo::TracingGraph<ScalarType> &TGraph,
                         const std::vector<Field::CrossF<ScalarType>> &Cross,
@@ -106,6 +119,24 @@ public:
                   PathColors[i]);
       else
         DrawNodes(TGraph, Cross, Paths_To_Draw[i], scaleVal, PDParam);
+    }
+  }
+
+  static void DrawPathsRank(const Geo::TracingGraph<ScalarType> &TGraph,
+                            const std::vector<Field::CrossF<ScalarType>> &Cross,
+                            const std::vector<std::vector<int>> &Paths_To_Draw,
+                            const ScalarType minThick = 2, const ScalarType maxThick = 20,
+                            const Geo::Point3<ScalarType> MinCol = Geo::Point3<ScalarType>(0.3, 0.3, 0.3),
+                            const Geo::Point3<ScalarType> MaxCol = Geo::Point3<ScalarType>(0, 0, 0)) 
+  {
+    for (size_t i = 0; i < Paths_To_Draw.size(); i++) {
+      ScalarType rank=((ScalarType)(Paths_To_Draw.size()-i))/
+                      ((ScalarType)(Paths_To_Draw.size()));
+
+      ScalarType CurrThick=minThick+(maxThick-minThick)*rank;
+      Geo::Point3<ScalarType> CurrCol=MinCol*(1-rank)+MaxCol*rank;
+
+      DrawPath(TGraph,Cross,Paths_To_Draw[i],CurrThick,CurrCol);
     }
   }
 

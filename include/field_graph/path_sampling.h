@@ -173,6 +173,35 @@ public:
     }
   }
 
+  void FindExitAllowForMandatory(const std::vector<int> &TestVertex,
+                                  std::vector<int> &ExitNodes) {
+    ExitNodes.clear();
+    for (size_t i = 0; i < TestVertex.size(); i++) {
+
+      // get the nodes of the vertex
+      std::vector<int> IndexN;
+      Field::CrossFieldGraph::NodesOfElem(TestVertex[i], IndexN);
+      
+      int bestN=-1;
+      int bestNegh=0;
+      for (size_t j = 0; j < IndexN.size(); j++) {
+        int currN = IndexN[j];
+
+        int NumNeghTest = NumAllowPathNeigh(currN);
+        if (NumNeghTest > bestNegh)
+        {
+          bestNegh=NumNeghTest;
+          bestN=j;
+        }
+      }
+      for (size_t j = 0; j < IndexN.size(); j++) {
+        if (j==bestN)continue;
+        //if (force_sample[IndexN[j]])continue;
+        ExitNodes.push_back(IndexN[j]);
+      }
+    }
+  }
+
   void SampleCloseSingTracingVert(std::vector<int> &SampledVert, int stepDist) {
     SampledVert.clear();
 
@@ -635,13 +664,18 @@ private:
         continue;
       std::vector<int> IndexN;
       Field::CrossFieldGraph::NodesOfElem(i, IndexN);
+      //int added_node=0;
       for (size_t j = 0; j < IndexN.size(); j++) {
         int currN = IndexN[j];
         bool isExit = ((TGraph.NodeType(currN) == Geo::ExitDomain) ||
                        (TGraph.NodeType(currN) == Geo::TangentExitDomain));
         if (isExit)
+        {
           ArrivalNodes.push_back(currN);
+          //added_node++;
+        }
       }
+      //std::cout<<"Arrival Nodes "<<added_node<<std::endl;
     }
   }
 
@@ -660,7 +694,7 @@ private:
 
     std::vector<int> SampledVert;
     SampleTracingVert(NumSamples, SampledVert);
-
+ 
     // add in between singularity samples
     if (minSingResample > 0) {
       std::vector<int> SingSingSampledVert;
@@ -674,12 +708,16 @@ private:
 
     // NEW, make it unique
     std::sort(SampledVert.begin(), SampledVert.end());
-    std::vector<int>::iterator last =
-        std::unique(SampledVert.begin(), SampledVert.end());
+    std::vector<int>::iterator last = std::unique(SampledVert.begin(), SampledVert.end());
     SampledVert.erase(last, SampledVert.end());
 
     // FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
     FindSampledNodesFromVertex(SampledVert, StartingNodes);
+
+    // std::cout << "Sampled " << StartingNodes.size()<<" starting Nodes de de"<<std::endl;
+    // for (size_t i=0;i<StartingNodes.size();i++)
+    //   std::cout << "Sampling N " << StartingNodes[i]<<std::endl;
+  
 
     std::vector<int> NewStartingNodes;
 
@@ -709,9 +747,13 @@ private:
       assert(TGraph.IsEnabled(StartingNodes[i]));
 
       //auto t0 = std::chrono::high_resolution_clock::now();
-      typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
-          Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(
-              TGraph, StartingNodes[i], CurrPath, true, &ArrivalNodes,
+      // typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
+      //     Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(
+      //         TGraph, StartingNodes[i], CurrPath, true, &ArrivalNodes,
+      //         only_visible);
+       typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
+          Geo::GraphTracing<ScalarType>::TraceDirectLoopOrBorderBorderFrom(
+              TGraph, StartingNodes[i], CurrPath,&ArrivalNodes,
               only_visible);
 
       // auto t1 = std::chrono::high_resolution_clock::now();
@@ -971,6 +1013,7 @@ public:
   }
 
 private:
+
   void UpdateDistancesWithLastInsertedPath() {
     std::vector<int> StartN;
     StartN.insert(StartN.end(), SelectedPaths.back().begin(),
@@ -1036,10 +1079,15 @@ private:
       //   SampledPaths_Status[i] = SP_Discarded;
       //   continue;
       // }
+      // typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
+      //     Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(
+      //         TGraph, StartingNodes[i], SampledPaths[i], true, &ArrivalNodes,
+      //         only_visible);
       typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
-          Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(
-              TGraph, StartingNodes[i], SampledPaths[i], true, &ArrivalNodes,
+          Geo::GraphTracing<ScalarType>::TraceDirectLoopOrBorderBorderFrom(
+              TGraph, StartingNodes[i], SampledPaths[i],&ArrivalNodes,
               only_visible);
+              
       if (TStatus != Geo::GraphTracing<ScalarType>::TraceSuccess) {
         SampledPaths_Status[i] = SP_Discarded;
         continue;
@@ -1379,24 +1427,6 @@ public:
       if (SampledPaths_Status[IndexPath] != SP_Evaluate)
         continue;
 
-      // //CHECK OF PASSING ON REQUIRED PATCHES
-      // bool pass_on_patches=true;
-      // for (size_t j=0;j<VERT_MARK_SIZE;j++)
-      //     if (check_pass_on[j])pass_on_patches=false;
-
-      // if (!pass_on_patches)
-      // {
-      //     //std::cout<<"checking useful path"<<std::endl;
-      //     for (size_t j=0;j<VERT_MARK_SIZE;j++)
-      //     {
-      //         if (check_pass_on[j] && (HasMarkedVert(IndexPath,j)))
-      //         {
-      //             pass_on_patches=true;
-      //             break;
-      //         }
-      //     }
-      // }
-
       // CHECK OF PASSING ON REQUIRED PATCHES
       bool pass_on_must_vertices = PassOnMustVertex(IndexPath);
 
@@ -1520,6 +1550,34 @@ public:
 
   std::vector<std::pair<int, NType>> SwapNodeType;
 
+  void SetNodesToExit(const std::vector<int> &IndexN) 
+  {
+    SwapNodeType.clear();
+     //set as exit node
+    for (size_t i = 0; i < IndexN.size(); i++) {
+      int currN = IndexN[i];
+      std::pair<int, NType> Entry(currN, TGraph.NodeType(currN));
+      SwapNodeType.push_back(Entry);
+      TGraph.NodeType(currN) = Geo::ExitDomain;
+    }
+  }
+
+  void SetAllBordersPathToExit(const std::vector<int> &TestVertex) 
+  {
+    SwapNodeType.clear();
+    std::vector<int> IndexN;
+    //std::cout<<"DEDE DE Vertices"<<TestVertex.size()<<std::endl;
+    FindExitAllowForMandatory(TestVertex, IndexN);
+    std::cout<<"DEDE DE Nodes"<<IndexN.size()<<std::endl;
+    //set as exit node
+    for (size_t i = 0; i < IndexN.size(); i++) {
+      int currN = IndexN[i];
+      std::pair<int, NType> Entry(currN, TGraph.NodeType(currN));
+      SwapNodeType.push_back(Entry);
+      TGraph.NodeType(currN) = Geo::ExitDomain;
+    }
+  }
+
   void SetBorderCanPassToExit(const std::vector<int> &TestVertex) {
     SwapNodeType.clear();
     // set ones possible to exit
@@ -1583,8 +1641,10 @@ public:
       EnableSingularities();
 
     if (Init_Distances) {
+      TGraph.SaveEnabledNodes();
       TGraph.EnableAllNodes();
       InitializeDistance();
+      TGraph.RestoreEnabledNodes();
     }
 
     InitCandidates();
@@ -1944,6 +2004,7 @@ public:
     //     sample_only_on[i]=false;
     // }
   }
+
 };
 
 } // namespace Geo

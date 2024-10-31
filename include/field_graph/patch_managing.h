@@ -1784,6 +1784,7 @@ private:
 
   // END FUNCTION FOR SUBDIVIDE
   std::map<int, int> SingValence;
+  std::map<int, int> FeatureSingValence;
 
   void GetCornersStats(std::vector<std::pair<int, int>> &CornNum) {
     std::map<int, int> CornerNumsMap;
@@ -2289,7 +2290,22 @@ public:
     }
   }
 
-  bool MatchSingularity(int IndexPatch) const {
+  // bool MatchSingularity(int IndexPatch) const {
+  //   assert(IndexPatch >= 0);
+  //   assert(IndexPatch < PData.SubPatchVertToOriginal.size());
+
+  //   int TargetValence = -1;
+  //   for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();
+  //        i++) {
+  //     int IndexVOr = PData.SubPatchVertToOriginal[IndexPatch][i];
+  //     if (SingValence.count(IndexVOr) == 0)
+  //       continue;
+  //     if (TargetValence != -1)
+  //       return false; // multiple singularities
+  //     TargetValence = SingValence.at(IndexVOr);
+  //   }
+
+    bool MatchSingularity(int IndexPatch) const {
     assert(IndexPatch >= 0);
     assert(IndexPatch < PData.SubPatchVertToOriginal.size());
 
@@ -2303,6 +2319,7 @@ public:
         return false; // multiple singularities
       TargetValence = SingValence.at(IndexVOr);
     }
+
     // std::cout<<"Target Val 0 "<<TargetValence<<std::endl;
 
     // CHECK , NEED A BETTER VALENCE CALCULATION
@@ -2323,7 +2340,26 @@ public:
       TargetValence = 4;
     }
 
+    bool has_feature_sing=false;
+    for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();i++) {
+      int IndexVOr = PData.SubPatchVertToOriginal[IndexPatch][i];
+      if (FeatureSingValence.count(IndexVOr) == 0)
+        continue;
+      has_feature_sing=true;
+      break;
+    }
+    //in case has singular feature do not consider if it not regular is ok anyway
+    if (has_feature_sing && TargetValence==4)return true;
     return (NumSides(IndexPatch) == TargetValence);
+  }
+
+  void SetFeatureSingularities(const std::vector<int> &FeatureSingIndex,
+                               const std::vector<int> &FeatureSingValue) 
+  {
+    FeatureSingValence.clear();
+    assert(FeatureSingIndex.size() == FeatureSingValue.size());
+    for (size_t i = 0; i < FeatureSingIndex.size(); i++)
+      FeatureSingValence[FeatureSingIndex[i]] = FeatureSingValue[i];
   }
 
   void SetSingularities(const std::vector<int> &SingIndex,

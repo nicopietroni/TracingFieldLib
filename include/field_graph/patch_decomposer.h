@@ -1,6 +1,7 @@
 #ifndef PATCH_DECOMPOSER
 #define PATCH_DECOMPOSER
 
+#include "patch_basic.h"
 #include <iostream>
 #include <ostream>
 #include <sys/_types/_size_t.h>
@@ -8,13 +9,15 @@
 #include <vector>
 // #include "../point3.h"
 // #include "graph.h"
+#include "../surface_cluster/face_cluster.h"
 #include "basic_decomposition_conditions.h"
 #include "connectivity.h"
 #include "patch_managing.h"
 #include "path_sampling.h"
 #include "segment2.h"
 #include "tangent_space_smooth.h"
-// #include "mesh_functions.h"
+// #include "../geodesic.h"
+//  #include "mesh_functions.h"
 
 namespace Geo {
 
@@ -23,6 +26,7 @@ template <class ScalarType> class PatchDecomposer {
   Geo::CrossPathSampling<ScalarType> &PathSampl;
   std::vector<Geo::PatchCondition<ScalarType> *> PConditions;
   std::set<int> UnsolvedPatches;
+  // std::set<int> UnsolvedMandatoryP;
   std::vector<std::vector<int>> SmoothKernel;
   std::vector<std::vector<int>> VFAdj;
   std::vector<Field::CrossF<ScalarType>> &VertCurv;
@@ -75,7 +79,12 @@ template <class ScalarType> class PatchDecomposer {
 
     std::set<int>::iterator Ite;
     std::vector<int> to_mark_vert;
-    for (Ite = UnsolvedPatches.begin(); Ite != UnsolvedPatches.end(); Ite++) {
+    std::set<int> PatchToConsider = UnsolvedPatches;
+
+    // if (UnsolvedMandatoryP.size() > 0)
+    //   PatchToConsider = UnsolvedMandatoryP;
+
+    for (Ite = PatchToConsider.begin(); Ite != PatchToConsider.end(); Ite++) {
       int IndexPatch = (*Ite);
       assert(IndexPatch < PatchMan.NumPatches());
       for (int i = 0;
@@ -97,9 +106,18 @@ template <class ScalarType> class PatchDecomposer {
   void GetUnsolvedMesh(std::vector<Geo::Point3<ScalarType>> &CopiedMeshesVert,
                        std::vector<std::vector<int>> &CopiedMeshesElem,
                        std::vector<int> &OriginalVert,
-                       std::vector<int> &OriginalElem) {
-    std::vector<int> ToCopyPatch(UnsolvedPatches.begin(),
-                                 UnsolvedPatches.end());
+                       std::vector<int> &OriginalElem)
+  //,
+  // bool OnlyMandatory = false)
+  {
+    std::vector<int> ToCopyPatch;
+    // if (!OnlyMandatory)
+    ToCopyPatch =
+        std::vector<int>(UnsolvedPatches.begin(), UnsolvedPatches.end());
+    // else
+    //   ToCopyPatch = std::vector<int>(UnsolvedMandatoryP.begin(),
+    //                                  UnsolvedMandatoryP.end());
+
     PatchMan.getMeshOfPatches(ToCopyPatch, CopiedMeshesVert, CopiedMeshesElem,
                               OriginalVert, OriginalElem);
   }
@@ -471,7 +489,9 @@ public:
     }
   }
 
-  void GetBorderUnsolved(std::vector<int> &BorderUnsolved) {
+  void GetBorderUnsolved(std::vector<int> &BorderUnsolved)
+  //                        bool OnlyMandatory = false)
+  {
     BorderUnsolved.clear();
 
     // get the non solved subpatches
@@ -480,7 +500,7 @@ public:
     std::vector<int> OriginalVert, OriginalElem;
 
     GetUnsolvedMesh(CopiedMeshesVert, CopiedMeshesElem, OriginalVert,
-                    OriginalElem);
+                    OriginalElem); //, OnlyMandatory);
 
     // get BORDER VERTICES
     std::vector<std::vector<int>> NextF;
@@ -505,6 +525,8 @@ public:
     // remap unsolved one
     std::set<int>::iterator IteUnsolved;
     std::set<int> UnsolvedPatchesNew;
+    // std::set<int> UnsolvedMandatoryPatchesNew;
+
     for (IteUnsolved = UnsolvedPatches.begin();
          IteUnsolved != UnsolvedPatches.end(); IteUnsolved++) {
       int IndexPatch = (*IteUnsolved);
@@ -512,7 +534,17 @@ public:
       int newIndex = PatchIdxRemap[(*IteUnsolved)];
       UnsolvedPatchesNew.insert(newIndex);
     }
+    // for (IteUnsolved = UnsolvedMandatoryP.begin();
+    //      IteUnsolved != UnsolvedMandatoryP.end(); IteUnsolved++) {
+    //   int IndexPatch = (*IteUnsolved);
+    //   assert(PatchIdxRemap.count(IndexPatch) > 0);
+    //   int newIndex = PatchIdxRemap[(*IteUnsolved)];
+    //   UnsolvedMandatoryPatchesNew.insert(newIndex);
+    // }
+
     UnsolvedPatches = UnsolvedPatchesNew;
+    // UnsolvedMandatoryP = UnsolvedMandatoryPatchesNew;
+
     for (size_t i = 0; i < PConditions.size(); i++)
       (*PConditions[i]).UpdatePatchIndex(PatchIdxRemap);
   }
@@ -549,7 +581,7 @@ public:
     return false;
   }
 
-  void RetraceOnUnsolved() {
+  void RetraceOnUnsolved(std::vector<bool> *force_sample=NULL) {
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
@@ -561,21 +593,33 @@ public:
     // mark the patches that are not solved
     // the first one says that useful path must pass on it
     // the second says that it sample on them only
-    MarkUnsolvedPatches(true, true);
+    if (add_only_where_needed)
+      MarkUnsolvedPatches(true, true);
+    else
+    {
+      std::fill(PathSampl.must_pass_on.begin(), PathSampl.must_pass_on.end(),true);
+      std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(), true);
+    }
 
     // allows paths to pass on the one that must solve only
     PathSampl.allow_path_on = PathSampl.must_pass_on;
 
     InitSamplingSpace(true);
-    InitForceSamplingSpace(false);
+    if (force_sample==NULL)
+      InitForceSamplingSpace(false);
+    else
+      PathSampl.force_sample=(*force_sample);
+
+    // bool doing_mandatory = (UnsolvedMandatoryP.size() > 0);
+    // if (!doing_mandatory) {
     InitArrivalPoint(true);
 
     /// this one stops to previously found borders, useful for
     /// recursive call
-    if (end_border) {
-      //  // get the non solved subpatches
+    if (end_border && add_only_where_needed) {
+      // get the non solved subpatches
       std::vector<int> BorderUnsolved;
-      GetBorderUnsolved(BorderUnsolved);
+      GetBorderUnsolved(BorderUnsolved); //, false);
       // set artificially to exit so it stops to borders
       PathSampl.SetBorderCanPassToExit(BorderUnsolved);
     }
@@ -588,15 +632,16 @@ public:
 
     // sample the candidate
     PathSampl.SampleCandidates(to_init_distance);
-
+   
     // if not initialized at this point will be
     to_init_distance = false;
 
     // restore the node type for borders that have been changed to exit
     // for the recursive call
-    if (end_border) {
+    if (end_border && add_only_where_needed) // || doing_mandatory) {
       PathSampl.RestoreNodeType();
-    }
+    // }
+
     auto t1 = std::chrono::high_resolution_clock::now();
     auto elapsed0 =
         std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
@@ -1151,8 +1196,8 @@ public:
     if (PathSampl.SelectedPaths[Path_To_remove].size() == 0)
       return false;
 
-    // SAVING STATUS
-    #ifdef SAVE_STATUS
+// SAVING STATUS
+#ifdef SAVE_STATUS
     auto timesave_0 = std::chrono::high_resolution_clock::now();
     for (size_t i = 0; i < PConditions.size(); i++)
       PConditions[i]->SaveStatus();
@@ -1162,9 +1207,9 @@ public:
     time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
                        timesave_1 - timesave_0))
                       .count();
-    //END SAVING STATUS
-    #endif
-    
+// END SAVING STATUS
+#endif
+
     PathSampl.SelectedPaths[Path_To_remove].clear();
 
     // Get the current time point before the first instruction
@@ -1235,8 +1280,8 @@ public:
     if (!is_removable) {
       PathSampl.SelectedPaths[Path_To_remove] = TestPath;
 
-      // // RESTORING STATUS
-      #ifdef SAVE_STATUS
+// // RESTORING STATUS
+#ifdef SAVE_STATUS
       auto timesave_0 = std::chrono::high_resolution_clock::now();
       for (size_t i = 0; i < PConditions.size(); i++)
         PConditions[i]->RestoreStatus();
@@ -1245,8 +1290,8 @@ public:
       time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
                          timesave_1 - timesave_0))
                         .count();
-      // END RESTORING STATUS
-      #else
+// END RESTORING STATUS
+#else
       auto timesave_0 = std::chrono::high_resolution_clock::now();
       std::vector<int> UpdatedPatches;
       PatchMan.Update(UpdatedPatches);
@@ -1259,7 +1304,7 @@ public:
       time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
                          timesave_1 - timesave_0))
                         .count();
-      #endif
+#endif
     }
 
     // Get the current time point before the first instruction
@@ -1377,7 +1422,7 @@ public:
     InitSamplingSpace(false);
     InitForceSamplingSpace(false);
     InitArrivalPoint(false);
-
+    
     // //NEW cannot pass from concave or spike can only depart or arrive
     // std::vector<int> ConcaveV;
     // std::vector<int> SpikeV;
@@ -1407,6 +1452,7 @@ public:
         FaceCurv(_FaceCurv) {
     add_only_where_needed = true;
     stop_when_solved = true;
+
     allow_darts = false;
     allow_concave = false;
     current_rem_cand = -1;
@@ -1437,6 +1483,18 @@ public:
 
   //    std::set<int> TestedRemovedPath;
   //    std::map<int,std::vector<int> > TestedRemovedPathNeigh;
+
+  void SetSpikeSpikeConfiguration() {
+    start_internal = false;
+    start_border = false;
+    start_concave = false;
+    start_spike = true;
+
+    end_border = false;
+    end_concave = false;
+    end_spike = true;
+  }
+
 
   void SetFeatureFeatureConfiguration() {
     start_internal = false;
@@ -1484,6 +1542,14 @@ public:
       AddNext(all_solved, added_sample);
       added_once |= added_sample;
     } while ((!all_solved) && (added_sample));
+
+    if (!stop_when_solved) {
+      //std::cout<<"DEDE ****"<<std::endl;
+      do {
+        AddNext(all_solved, added_sample);
+        added_once |= added_sample;
+      } while (added_sample);
+    }
 
     CompactData();
 
@@ -1541,19 +1607,58 @@ public:
     // PathSampl.MergeCollinearPath();
   }
 
+  // bool SolveSpikeSpike() 
+  // {
+  //   bool has_added = false;
+
+  //   PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioLen;
+  //   // first do feature to feature
+  //   SetSpikeSpikeConfiguration();
+
+  //   has_added = false;
+  //   // then trace in the one unsolved
+  //   RetraceOnUnsolved();
+
+  //   AddAllPaths();
+  // }
+
   bool SolveAllFeatures() {
+    
+
     bool has_added = false;
+
+    // SetSpikeSpikeConfiguration();
+
+    // // then trace in the one unsolved
+    // RetraceOnUnsolved();
+
+    // has_added |=AddAllPaths();
+
+    std::vector<bool> force_sample_swap;
+  
     // first do feature to feature
     SetFeatureFeatureConfiguration();
 
     // then trace in the one unsolved
     RetraceOnUnsolved();
 
+    //std::vector<bool> force_sample_swap;
+     //save the forced sample to continue sampling
+     //even if concave or spike ar solved at first round
+    if (!add_only_where_needed)
+      force_sample_swap=PathSampl.force_sample;
+    
     has_added |= AddAllPaths();
 
     // set features to all possible arrival points
     SetFeatureAllConfiguration();
-    RetraceOnUnsolved();
+
+    //reuse old force to sample all features also the one solved
+    //in the first round
+    if (!add_only_where_needed)
+      RetraceOnUnsolved(&force_sample_swap);
+    else
+      RetraceOnUnsolved();
 
     has_added |= AddAllPaths();
     // bool has_added = AddAllPaths();
@@ -1561,6 +1666,54 @@ public:
 
     return has_added;
   }
+
+  // bool SolveAllFeatures() {
+  //   bool has_added = false;
+
+  //    // first do feature to feature
+  //   SetSpikeSpikeConfiguration();
+
+  //   // then trace in the one unsolved
+  //   RetraceOnUnsolved();
+
+  //   std::vector<bool> force_sample_swap;
+  //    //save the forced sample to continue sampling
+  //    //even if concave or spike ar solved at first round
+  //   if (!add_only_where_needed)
+  //     force_sample_swap=PathSampl.force_sample;
+  
+  //   has_added |= AddAllPaths();
+
+  //   // first do feature to feature
+  //   SetFeatureFeatureConfiguration();
+
+  //   // then trace in the one unsolved
+  //   RetraceOnUnsolved();
+
+  //   //std::vector<bool> force_sample_swap;
+  //    //save the forced sample to continue sampling
+  //    //even if concave or spike ar solved at first round
+  //   if (!add_only_where_needed)
+  //     force_sample_swap=PathSampl.force_sample;
+    
+  //   has_added |= AddAllPaths();
+
+  //   // set features to all possible arrival points
+  //   SetFeatureAllConfiguration();
+
+  //   //reuse old force to sample all features also the one solved
+  //   //in the first round
+  //   if (!add_only_where_needed)
+  //     RetraceOnUnsolved(&force_sample_swap);
+  //   else
+  //     RetraceOnUnsolved();
+
+  //   has_added |= AddAllPaths();
+  //   // bool has_added = AddAllPaths();
+  //   SetBaseConfiguration();
+
+  //   return has_added;
+  // }
 
   bool SolveAllMesh() {
     SetBaseConfiguration();
@@ -1584,16 +1737,177 @@ public:
 
   double TimeSampling, TimeAdd, TimeRemove;
 
+  // void GetMandatoryPatch(std::set<int> &MandatoryP) {
+  //   MandatoryP.clear();
+  //   for (size_t j = 0; j < PatchMan.NumPatches(); j++) {
+  //     for (size_t i = 0; i < PConditions.size(); i++) {
+  //       if (PatchMan.isEmpty(j))
+  //         continue;
+  //       if (!PConditions[i]->Mandatory())
+  //         continue;
+  //       if (PConditions[i]->IsCorrect(PatchMan, j))
+  //         continue;
+  //       MandatoryP.insert(j);
+  //     }
+  //     std::vector<int> SelectCorn;
+  //     PatchMan.CornersOfType(j, Geo::CTypeSpike, SelectCorn);
+  //     if (SelectCorn.size() > 0)
+  //       MandatoryP.insert(j);
+  //     PatchMan.CornersOfType(j, Geo::CTypeConcave, SelectCorn);
+  //     if (SelectCorn.size() > 0)
+  //       MandatoryP.insert(j);
+  //   }
+  // }
+  //  for (size_t j = 0; j < PatchMan.NumPatches(); j++) {
+  //       if (PatchMan.isEmpty(j))
+  //         continue;
+  //       bool has_satisfied = PConditions[i]->IsCorrect(PatchMan, j);
+  //       if (!has_satisfied)
+  //         NonSatisfied++;
+  //     }
+  //     std::cout << "Unsatistied Condition " << PConditions[i]->Name().c_str()
+  //               << " " << NonSatisfied << std::endl;
+
+  bool ForceSolveSpikeConcave(int IndexP) // bool Do_features,
+  {
+    std::vector<int> ToStartV;
+    std::vector<int> ConcaveV;
+
+    PatchMan.GetPatchGlobalVertOfType(IndexP, Geo::CTypeConcave, ConcaveV);
+
+    std::vector<int> SpikeV;
+    PatchMan.GetPatchGlobalVertOfType(IndexP, Geo::CTypeSpike, SpikeV);
+
+    ToStartV = ConcaveV;
+    ToStartV.insert(ToStartV.end(), SpikeV.begin(), SpikeV.end());
+    // std::cout << "Found " << ToStartV.size() << " Starting Vertices"
+    //           << std::endl;
+
+    // sample on vertices that are within this set
+    PathSampl.sample_on = std::vector<bool>(PatchMan.VertPos.size(), false);
+
+    // constrain to add the sample from this set
+    PathSampl.force_sample = std::vector<bool>(PatchMan.VertPos.size(), false);
+    for (size_t i = 0; i < ToStartV.size(); i++)
+      PathSampl.force_sample[ToStartV[i]] = true;
+
+    // limit the path to pass only on those ones
+    PathSampl.allow_path_on = std::vector<bool>(PatchMan.VertPos.size(), false);
+
+    int sizeV = PatchMan.PData.SubPatchVertToOriginal[IndexP].size();
+    for (size_t i = 0; i < sizeV; i++) {
+      int CurrV = PatchMan.PData.SubPatchVertToOriginal[IndexP][i];
+      PathSampl.allow_path_on[CurrV] = true;
+    }
+
+    // limit the path to arrive only on those ones
+    PathSampl.must_pass_on = PathSampl.allow_path_on;
+
+    // get all boundary vertices and set as possible arrive
+    std::vector<int> BorderV;
+    getBorderVert(PatchMan.PData.SubPatchFaces[IndexP], BorderV);
+    PatchMan.MapToOriginal(IndexP, BorderV);
+    PathSampl.allow_arrive_to =
+        std::vector<bool>(PatchMan.VertPos.size(), false);
+    for (size_t i = 0; i < BorderV.size(); i++)
+      PathSampl.allow_arrive_to[BorderV[i]] = true;
+
+    // then set the arrival as exit (except the one that are forced to sample )
+    std::vector<std::pair<int, NType>> SwapNodeType;
+
+    // set as exit node
+    std::vector<int> SetAsExit;
+    // std::cout << "BorderV " << BorderV.size() << std::endl;
+    for (size_t i = 0; i < BorderV.size(); i++) {
+      if (PathSampl.force_sample[BorderV[i]])
+        continue;
+      std::vector<int> IndexN;
+      Field::CrossFieldGraph::NodesOfElem(BorderV[i], IndexN);
+      for (size_t j = 0; j < IndexN.size(); j++)
+        SetAsExit.push_back(IndexN[j]);
+    }
+    // std::cout << "Setting as exit " << SetAsExit.size() << std::endl;
+    PathSampl.SetNodesToExit(SetAsExit);
+
+    PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioLen;
+
+    // sample the candidate
+    PathSampl.SampleCandidates(false);
+    bool has_added = AddAllPaths();
+    PathSampl.RestoreNodeType();
+    return has_added;
+  }
+
+  void ForceSolveSpikeConcave() {
+    std::cout << "*** DOING FORCE SPIKE/CONCAVE PASS ***" << std::endl;
+    bool has_added_path = false;
+    do {
+      has_added_path = false;
+      for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
+        if (PatchMan.isEmpty(i))
+          continue;
+        std::vector<int> SpikeCorn, ConcaveCorn;
+        PatchMan.CornersOfType(i, Geo::CTypeSpike, SpikeCorn);
+        PatchMan.CornersOfType(i, Geo::CTypeConcave, ConcaveCorn);
+        if ((SpikeCorn.size() == 0) && (ConcaveCorn.size() == 0))
+          continue;
+
+        has_added_path |= ForceSolveSpikeConcave(i);
+      }
+    } while (has_added_path);
+  }
+
+  bool ForceSolveTopology(int IndexP) {
+    std::vector<Geo::Point3<ScalarType>> PatchVertPos =
+        PatchMan.PData.SubPatchVertPos[IndexP];
+    std::vector<std::vector<int>> PatchFaces =
+        PatchMan.PData.SubPatchFaces[IndexP];
+
+    // split into patch with Voronoi
+    std::vector<std::vector<int>> ClusterFaces;
+    Geo::FindVoronoiClusters<ScalarType>(PatchVertPos, PatchFaces,
+                                         ClusterFaces);
+
+    // then convert border into paths
+    // then add the path
+    return true;
+  }
+
+  void ForceSolveTopology() {
+    std::cout << "*** DOING FORCE TOPOLOGY PASS ***" << std::endl;
+    bool has_added_path = false;
+    do {
+      has_added_path = false;
+      for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
+        if (PatchMan.isEmpty(i))
+          continue;
+        std::vector<int> SpikeCorn, ConcaveCorn;
+        int NumB = PatchMan.NumBorders(i);
+        int GenusP = PatchMan.Genus(i);
+        bool must_spl = (NumB != 1) || ((NumB == 1) && (GenusP != 0));
+        if (must_spl)
+          has_added_path |= ForceSolveTopology(i);
+      }
+    } while (has_added_path);
+  }
+
   void BatchDecompose(bool Do_remove, bool Do_split_remove) {
     bool has_added = false;
 
     PathSampl.dynamicUpdates = dynamic_updates;
+
+    PathSampl.Candidates.clear();
+    PathSampl.SampledPaths_Status.clear();
+    PathSampl.Init();
+    // Init();
+    //PathSampl.Init();
 
     TimeSampling = 0;
     TimeAdd = 0;
     TimeRemove = 0;
 
     do {
+
       // this firs step solve all the features (concave, spikes)
       has_added = false;
       has_added |= SolveAllFeatures();
@@ -1629,6 +1943,8 @@ public:
     auto elapsed =
         std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     TimeRemove += elapsed.count() * 1e-6;
+
+    // PatchMan.InitVisualCornersEdges();
 
     std::cout << "<<< Decompose TIMINGS (sec) >>> " << std::endl;
     std::cout << "* Sampling: " << TimeSampling << std::endl;
@@ -1765,6 +2081,12 @@ public:
       std::cout << "Unsatistied Condition " << PConditions[i]->Name().c_str()
                 << " " << NonSatisfied << std::endl;
     }
+
+    // std::set<int> MandatoryP;
+    // GetMandatoryPatch(MandatoryP);
+    // if (MandatoryP.size() > 0)
+    //   std::cout << "Unsatistied MANDATAORY Condition " << MandatoryP.size()
+    //             << std::endl;
   }
 
   void SaveSubMeshes(const std::string PathSave) {

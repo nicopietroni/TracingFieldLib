@@ -145,7 +145,6 @@ public:
       // for (size_t i=0;i<TGraph.N[CurrN].size();i++)
       for (size_t i = 0; i < TGraph.NeighSize(CurrN); i++) {
         // check if the link is enabled
-        // if (!TGraph.EnabledA[CurrN][i])continue;
         if (!TGraph.ActiveLink(CurrN, i))
           continue;
         if (SParam.onlyDirect && (!TGraph.DirectLink(CurrN, i)))
