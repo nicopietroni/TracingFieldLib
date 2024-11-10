@@ -27,6 +27,7 @@
 #include "IO/io_features.h"
 #include "IO/io_field.h"
 #include "tangent_space_smooth.h"
+#include <GL_functions/GLDrawOutline.h>
 #include <chrono>
 #include <connectivity.h>
 #include <cross_field_functions.h>
@@ -38,6 +39,7 @@
 #include <field_graph/mesh_preprocess.h>
 #include <field_graph/patch_decomposer.h>
 #include <field_graph/patch_managing.h>
+#include <field_graph/patch_optimize.h>
 #include <field_graph/path_functions.h>
 #include <field_graph/path_sampling.h>
 #include <field_graph/t_junction.h>
@@ -195,6 +197,15 @@ std::vector<std::pair<int, int>> Features;
 std::vector<int> ModSameBVert;
 std::vector<Geo::Point3<ScalarType>> ModSameBOrigPos;
 
+std::vector<Geo::TJunction> TJunctions;
+
+ScalarType ThickOutline=8;
+ScalarType ThickBorders=8;
+ScalarType ThickPrimaryP=8;
+ScalarType ThickSecondaryP=5;
+ScalarType ThickTertiaryP=2;
+
+std::vector<int> MaxPathRank;
 
 void RestoreOriginalPosOnSplitBorders() {
   assert(ModSameBVert.size() == ModSameBOrigPos.size());
@@ -357,8 +368,6 @@ void SampleTracing() {
 //     }
 // }
 
-std::vector<Geo::TJunction> TJunctions;
-
 void SmoothPaths() {
   Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
   std::vector<std::vector<int>> VertPaths;
@@ -366,30 +375,71 @@ void SmoothPaths() {
 
   Geo::PathFunctions<ScalarType>::FindTJunctions(VertPaths, TJunctions);
 
-  for (size_t i = 0; i < VertPaths.size(); i++) {
-    if (VertPaths[i].size() == 0)
-      continue;
-    for (int j = 0; j < (int)VertPaths[i].size() - 1; j++) {
-      int IndexV0 = VertPaths[i][j];
-      int IndexV1 = VertPaths[i][j + 1];
-      std::pair<int, int> key(std::min(IndexV0, IndexV1),
-                              std::max(IndexV0, IndexV1));
-      UVP.FeatureLines.push_back(key);
-    }
-  }
-  UVP.Steps = smooth_steps;
-  UVP.TJunctions = TJunctions;
-  Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos, Connectivity, UVP);
+  // Geo::PatchOptimize<ScalarType>::TwoStepSmooth(VertPos, Connectivity,
+  //                                               VertPaths);
+  Geo::PatchOptimize<ScalarType>::SmoothPaths(VertPos, Connectivity,
+                                                VertPaths);
 
-  //    //update cross F poistion
-  //    for (size_t i=0;i<VertCurv.size();i++)
-  //        VertCurv[i].Pos=VertPos[i];
+  ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
+
+  // update cross F poistion
+  for (size_t i = 0; i < VertCurv.size(); i++)
+    VertCurv[i].Pos = VertPos[i];
 
   AdaptFieldToMesh(VertPos, Connectivity, VertCurv, FaceCurv);
 
   PatchM.UpdateSubPatchPos();
   PatchM.InitVisualCornersEdges();
 }
+
+// void SmoothSingularPaths() {
+//   Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
+//   std::vector<std::vector<int>> VertPaths;
+//   //for each path
+//   for (size_t i = 0; i < VertPaths.size(); i++) {
+//     struct UVSmoothParam {
+//     std::vector<int> Fixed;
+//     std::vector<int> SmoothOnly;
+//     std::vector<std::pair<int, int>> FeatureLines;
+//     ScalarType Damp;
+//     size_t Steps;
+//     std::vector<TJunction> TJunctions;
+
+//     UVSmoothParam() {
+//       Damp = 0.2;
+//       Steps = 5;
+//     }
+//   };
+//   }
+// std::vector<std::vector<int>> VertPaths;
+// PathSampl.GetVertexSelectedPaths(VertPaths);
+
+// Geo::PathFunctions<ScalarType>::FindTJunctions(VertPaths, TJunctions);
+
+// for (size_t i = 0; i < VertPaths.size(); i++) {
+//   if (VertPaths[i].size() == 0)
+//     continue;
+//   for (int j = 0; j < (int)VertPaths[i].size() - 1; j++) {
+//     int IndexV0 = VertPaths[i][j];
+//     int IndexV1 = VertPaths[i][j + 1];
+//     std::pair<int, int> key(std::min(IndexV0, IndexV1),
+//                             std::max(IndexV0, IndexV1));
+//     UVP.FeatureLines.push_back(key);
+//   }
+// }
+// UVP.Steps = smooth_steps;
+// UVP.TJunctions = TJunctions;
+// Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos, Connectivity, UVP);
+
+//    //update cross F poistion
+//    for (size_t i=0;i<VertCurv.size();i++)
+//        VertCurv[i].Pos=VertPos[i];
+
+//   AdaptFieldToMesh(VertPos, Connectivity, VertCurv, FaceCurv);
+
+//   PatchM.UpdateSubPatchPos();
+//   PatchM.InitVisualCornersEdges();
+// }
 
 void InitPatches() {
   // initialize patches corners
@@ -504,9 +554,10 @@ bool LoadMesh(const std::string &path) {
 bool LoadField(const std::string &path) {
   // std::cout<<"Loading Field"<<path.c_str()<<std::endl;
   has_cross_field = ReadField(VertPos, Connectivity, path, VertCurv, FaceCurv);
-  if ((VertCurv.size() == 0)||(VertCurv.size() != VertPos.size())){
-    std::cout<<"Init Vert Curv"<<std::endl;
-    SetVertCrossFromFace(VertPos, Connectivity, VertNormals, FaceCurv,VertCurv);
+  if ((VertCurv.size() == 0) || (VertCurv.size() != VertPos.size())) {
+    std::cout << "Init Vert Curv" << std::endl;
+    SetVertCrossFromFace(VertPos, Connectivity, VertNormals, FaceCurv,
+                         VertCurv);
     InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv);
   }
   if (FaceCurv.size() == 0) {
@@ -520,9 +571,8 @@ bool LoadField(const std::string &path) {
 
     Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv, minQCrossVert,
                                           maxQCrossVert);
-    GetFaceSingularities(FaceCurv, VertPos, Connectivity, 
-                         NextF, NextE,SingIndex, 
-                        SingValue);
+    GetFaceSingularities(FaceCurv, VertPos, Connectivity, NextF, NextE,
+                         SingIndex, SingValue);
 
     PatchM.SetSingularities(SingIndex, SingValue);
     PatchM.SetFeatureSingularities(FeatureSingIndex, FeatureSingValue);
@@ -736,7 +786,7 @@ void UpdateAfterRemesh() {
 
   Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv, minQCrossVert, maxQCrossVert);
 
-  // GetFaceSingularities(FaceCurv, VertPos, Connectivity, 
+  // GetFaceSingularities(FaceCurv, VertPos, Connectivity,
   //                      NextF, NextE, SingIndex, SingValue);
 
   PatchM.SetSingularities(SingIndex, SingValue);
@@ -751,44 +801,38 @@ void UpdateFeatureSing() {
   std::vector<int> NewSingIndex;
 
   std::set<int> FeatureVSet;
-  for (size_t i=0;i<Features.size();i++)
-  {
+  for (size_t i = 0; i < Features.size(); i++) {
     FeatureVSet.insert(Features[i].first);
     FeatureVSet.insert(Features[i].second);
   }
 
-  for (size_t i=0;i<SingIndex.size();i++)
-  {
-    if (FeatureVSet.count(SingIndex[i])==0)
-    {
+  for (size_t i = 0; i < SingIndex.size(); i++) {
+    if (FeatureVSet.count(SingIndex[i]) == 0) {
       NewSingIndex.push_back(SingIndex[i]);
       NewSingValue.push_back(SingValue[i]);
-    }else {
+    } else {
       FeatureSingIndex.push_back(SingIndex[i]);
       FeatureSingValue.push_back(SingValue[i]);
     }
   }
 
-  SingIndex=NewSingIndex;
-  SingValue=NewSingValue;
+  SingIndex = NewSingIndex;
+  SingValue = NewSingValue;
 }
 
 bool remove_batch = true;
 bool remove_split = false;
 
-void PreprocessMesh()
-{
+void PreprocessMesh() {
   Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(
       VertPos, Connectivity, FaceCurv, Features, SingIndex, min_sing_distance);
   MeshBox.Init(VertPos);
   UpdateAfterRemesh();
 
   std::cout << "*** SPLIT FEATURES *** " << std::endl;
-  
 
-  Geo::TracingPreprocess<ScalarType>::SplitFeatures(VertPos, Connectivity,
-                                                    VertCurv, SingIndex,
-                                                    SingValue,Features);
+  Geo::TracingPreprocess<ScalarType>::SplitFeatures(
+      VertPos, Connectivity, VertCurv, SingIndex, SingValue, Features);
   UpdateFeatureSing();
   Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
       VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
@@ -796,7 +840,7 @@ void PreprocessMesh()
 }
 
 void BatchProcessMinPatch() {
- 
+
   std::cout << "*** REFINE AND SPLIT *** " << std::endl;
   auto start = std::chrono::high_resolution_clock::now();
   PreprocessMesh();
@@ -836,7 +880,6 @@ void BatchProcessMinPatch() {
   auto elapsed4 =
       std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
 
-  
   double elapsed_seconds0 =
       elapsed0.count() * 1e-6; // Convert microseconds to seconds
   double elapsed_seconds1 =
@@ -872,7 +915,7 @@ void BatchProcessMinPatch() {
 }
 
 void BatchProcessMaxPaths() {
- 
+
   std::cout << "*** REFINE AND SPLIT *** " << std::endl;
   auto start = std::chrono::high_resolution_clock::now();
   PreprocessMesh();
@@ -892,20 +935,8 @@ void BatchProcessMaxPaths() {
   auto elapsed2 =
       std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
 
-  std::cout << "*** ADD ALL PATHS STEP 0 *** " << std::endl;
-  // remove_batch = true;
-  // PDeco.add_only_where_needed = true;
-  // PDeco.stop_when_solved = true;
-  // //PDeco.dynamic_smooth = true;
-  // PDeco.BatchDecompose(remove_batch, remove_split);
-  
-  std::cout << "*** ADD ALL PATHS STEP 1 *** " << std::endl;
-  remove_batch = false;
-  PDeco.add_only_where_needed = false;
-  PDeco.stop_when_solved = false;
-  //PDeco.dynamic_smooth = true;
-  PDeco.BatchDecompose(remove_batch, remove_split);
-  
+  PDeco.BatchMaxDecompose(MaxPathRank);
+
   auto end3 = std::chrono::high_resolution_clock::now();
   auto elapsed3 =
       std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
@@ -918,7 +949,6 @@ void BatchProcessMaxPaths() {
   auto elapsed4 =
       std::chrono::duration_cast<std::chrono::microseconds>(end4 - end3);
 
-  
   double elapsed_seconds0 =
       elapsed0.count() * 1e-6; // Convert microseconds to seconds
   double elapsed_seconds1 =
@@ -1017,9 +1047,8 @@ void SetDecomposeBar() {
   ImGui::TextColored(ImVec4(1, 0, 1, 1), "PREPROCESS");
 
   if (ImGui::Button("Split Features")) {
-    Geo::TracingPreprocess<ScalarType>::SplitFeatures(VertPos, Connectivity,
-                                                      VertCurv, SingIndex,
-                                                    SingValue,Features);
+    Geo::TracingPreprocess<ScalarType>::SplitFeatures(
+        VertPos, Connectivity, VertCurv, SingIndex, SingValue, Features);
     UpdateFeatureSing();
     Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
         VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
@@ -1141,7 +1170,7 @@ void SetDecomposeBar() {
 
   if (ImGui::Button("FEATURES")) {
     PDeco.SolveAllFeatures();
-    //PDeco.SolveSpikeSpike();
+    // PDeco.SolveSpikeSpike();
     PathColors.resize(PathSampl.SelectedPaths.size());
     Geo::ScatterColor<ScalarType>(PathColors);
     UpdateColor();
@@ -1443,7 +1472,7 @@ void SetExportBar() {
   ImGui::End();
 }
 
-int BorderSize=15;
+int BorderSize = 15;
 
 void GLDrawMesh() {
   int display_w, display_h;
@@ -1521,7 +1550,8 @@ void GLDrawMesh() {
     }
     if (showMesh) {
 
-      GLDraw::GLDrawBorders<ScalarType>(VertPos, Connectivity, NextF, BorderSize);
+      GLDraw::GLDrawBorders<ScalarType>(VertPos, Connectivity, NextF,
+                                        BorderSize);
       glLineWidth(line_thick);
       GLDraw::DrawSurfaceMesh<ScalarType>(VertPos, Connectivity, FaceNormals,
                                           VertNormals, true, wire, smoothshade,
@@ -1551,7 +1581,7 @@ void GLDrawMesh() {
 
   GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam;
   PDParam.DrawPath = true;
-  if (DrawPathMode==0) {
+  if (DrawPathMode == 0) {
     if (DrawTJunction)
       GLDraw::GLDrawTJunctions<ScalarType>(VertPos, TJunctions);
 
@@ -1567,8 +1597,31 @@ void GLDrawMesh() {
           MeshBox.Diag() * 0.005, PDParam, PathColors[CurrSelP]);
   }
 
-  if (DrawPathMode==1) {
-    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPathsRank(TGraph, VertCurv, PathSampl.SelectedPaths,2,BorderSize);
+  if (DrawPathMode == 1) {
+    std::vector<ScalarType> RankThick;
+    RankThick.push_back(ThickPrimaryP);
+    RankThick.push_back(ThickSecondaryP);
+    RankThick.push_back(ThickTertiaryP);
+    std::vector<Geo::Point3<ScalarType> > RankCol;
+    RankCol.push_back(Geo::Point3<ScalarType>(0, 0, 0));
+    RankCol.push_back(Geo::Point3<ScalarType>(0.3, 0.3, 0.3));
+    RankCol.push_back(Geo::Point3<ScalarType>(0.3, 0.3, 0.3));
+    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPathRanks( TGraph, VertCurv, PathSampl.SelectedPaths,
+                                                               MaxPathRank,RankThick,RankCol);
+
+    //std::cout<<"Num Solved: "<<PDeco.NumSolved<<"total "<<PathSampl.SelectedPaths.size()<<std::endl;
+    // GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPathsTwoRanks( TGraph, VertCurv, PathSampl.SelectedPaths,
+    //                                                               PDeco.NumSolved,ThickSecondaryP,ThickPrimaryP,
+    //                                                               Geo::Point3<ScalarType>(0.3, 0.3, 0.3),
+    //                                                               Geo::Point3<ScalarType>(0, 0, 0));
+
+
+    // GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPathsRank(
+    //     TGraph, VertCurv, PathSampl.SelectedPaths, 2, BorderSize);
+
+    GLDraw::GLDrawBorders<ScalarType>(VertPos, Connectivity, NextF, ThickBorders);
+
+    GLDraw::DrawOutline<ScalarType>(VertPos, Connectivity,ThickOutline);
   }
 
   PDParam.DrawPath = false;
@@ -1607,12 +1660,12 @@ void GLDrawMesh() {
     GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.force_sample);
   if (Draw_allow_path_on)
     GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.allow_path_on);
-  if (Draw_allow_arrive_to)
-  {
+  if (Draw_allow_arrive_to) {
     GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.allow_arrive_to);
   }
   if (DrawCandidates)
-    GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCandidates(PathSampl, MeshBox.Diag() * 0.005, curr_cand);
+    GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCandidates(
+        PathSampl, MeshBox.Diag() * 0.005, curr_cand);
 
   PDParam.lineSize = 5;
   if (DrawExitNode) {
@@ -1638,7 +1691,6 @@ void GLDrawMesh() {
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
         TGraph, VertCurv, Geo::Internal, MeshBox.Diag() * 0.01, PDParam);
   }
-  // GLDraw::DrawPoints(SidesMidP);
 
   //     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,
   //                                                                 Geo::ExitDomain,MeshBox.Diag()*0.005);
@@ -1711,7 +1763,7 @@ int main(int argc, char *argv[]) {
   // std::cout<<"Faces:"<<Connectivity.size()<<std::endl;
   // std::cout<<"VertCurv:"<<VertCurv.size()<<std::endl;
   // std::cout<<"Pos:"<<VertPos.size()<<std::endl;
-    
+
   InitGLFW_Window();
 
   InitIMGui();

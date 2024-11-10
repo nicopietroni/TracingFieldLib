@@ -9,6 +9,7 @@
 #include "GLDrawField.h"
 #include "GLDrawMesh.h"
 #include <GL/glew.h>
+#include <cassert>
 #include <sys/_types/_size_t.h>
 #include <vector>
 
@@ -140,6 +141,49 @@ public:
     }
   }
 
+  // static void DrawPathsTwoRanks(const Geo::TracingGraph<ScalarType> &TGraph,
+  //                             const std::vector<Field::CrossF<ScalarType>> &Cross,
+  //                           const std::vector<std::vector<int>> &Paths_To_Draw,
+  //                           const int IndexRank,
+  //                           const ScalarType minThick = 2, 
+  //                           const ScalarType maxThick = 5,
+  //                           const Geo::Point3<ScalarType> MinCol = Geo::Point3<ScalarType>(0.3, 0.3, 0.3),
+  //                           const Geo::Point3<ScalarType> MaxCol = Geo::Point3<ScalarType>(0, 0, 0)) 
+  // {
+
+  //   for (size_t i = 0; i < Paths_To_Draw.size(); i++) {
+  //     ScalarType CurrThick=maxThick;
+  //     Geo::Point3<ScalarType> CurrCol=MaxCol;
+  //     if (i>=IndexRank)
+  //     {
+  //        CurrThick=minThick;
+  //        CurrCol=MinCol;
+  //     }
+  //     DrawPath(TGraph,Cross,Paths_To_Draw[i],CurrThick,CurrCol);
+  //   }
+  // }
+
+  static void DrawPathRanks(const Geo::TracingGraph<ScalarType> &TGraph,
+                            const std::vector<Field::CrossF<ScalarType>> &Cross,
+                            const std::vector<std::vector<int>> &Paths_To_Draw,
+                            const std::vector<int> &Paths_Rank,
+                            const std::vector<ScalarType> &RankThick,
+                            const std::vector<Geo::Point3<ScalarType> > &RankCol) 
+  {
+    assert(Paths_Rank.size()==Paths_To_Draw.size());
+    for (size_t i = 0; i < Paths_To_Draw.size(); i++) 
+    {
+      int RankIDX=Paths_Rank[i];
+      assert(RankIDX>=0);
+      assert(RankIDX<RankThick.size());
+      assert(RankIDX<RankCol.size());
+
+      ScalarType CurrThick=RankThick[RankIDX];
+      Geo::Point3<ScalarType> CurrCol=RankCol[RankIDX];
+      DrawPath(TGraph,Cross,Paths_To_Draw[i],CurrThick,CurrCol);
+    }
+  }
+  
   static void DrawSelectedNodes(
       const Geo::TracingGraph<ScalarType> &TGraph,
       const std::vector<Field::CrossF<ScalarType>> &Cross, const int IndexSel,

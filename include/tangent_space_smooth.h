@@ -1,6 +1,8 @@
 #ifndef TANGENT_SPACE_SMOOTH
 #define TANGENT_SPACE_SMOOTH
 
+#include "Space_Query/segment_grid_3D.h"
+#include "box3.h"
 #include "connectivity.h"
 #include "cotangent.h"
 #include "field_graph/t_junction.h"
@@ -8,9 +10,11 @@
 #include "plane3.h"
 #include "point3.h"
 #include "pos3.h"
+#include "segment3.h"
 #include "triangle2.h"
 #include "triangle3.h"
 #include <cassert>
+#include <chrono>
 #include <iostream>
 #include <sys/_types/_size_t.h>
 #include <vector>
@@ -27,52 +31,16 @@ public:
     ScalarType Damp;
     size_t Steps;
     std::vector<TJunction> TJunctions;
+    bool fixBorder;
 
     UVSmoothParam() {
       Damp = 0.2;
       Steps = 5;
+      fixBorder = false;
     }
   };
 
 private:
-  //    static Geo::Point3<ScalarType > Interpolate3DPos(const
-  //    std::vector<Geo::Traingle2<ScalarType> > &TrisUV,
-  //                                                     const
-  //                                                     std::vector<Geo::Traingle3<ScalarType>
-  //                                                     > &Tris3D, const
-  //                                                     Geo::Point2<ScalarType>
-  //                                                     &To_Sample)
-  //    {
-  //        assert(TrisUV.size()>=2);
-
-  //        //try to interpolate inside
-  //        for (size_t i=0;i<TrisUV.size();i++)
-  //        {
-  //            if (!Geo::IsInside(TrisUV[i],To_Sample))continue;
-  //            ScalarType alpha,beta,gamma;
-  //            Geo::BarycentricCoords(TrisUV[i],To_Sample,alpha,beta,gamma);
-
-  //            Geo::Point3<ScalarType > Ret=Tris3D[i].P(0)*alpha+
-  //                    Tris3D[i].P(1)*beta+
-  //                    Tris3D[i].P(2)*gamma;
-  //            return Ret;
-  //        }
-
-  //        //otherwise get the closest one
-  //        int closestT=-1;
-  //        ScalarType minD=std::numeric_limits<ScalarType>::max();
-  //        for (int i=0;i<(int)TrisUV.size();i++)
-  //        {
-  //            ScalarType currD=Distance(TrisUV[i],To_Sample);
-  //            if (currD>minD)continue;
-  //            minD=currD;
-  //            closestT=i;
-  //        }
-  //        assert(closestT!=-1);
-  //        ScalarType alpha,beta,gamma;
-  //        Geo::BarycentricCoords(TrisUV[closestT],To_Sample,alpha,beta,gamma);
-
-  //    }
 
   static Geo::Point3<ScalarType>
   Interpolate3DPos(const std::vector<Geo::Traingle2<ScalarType>> &TrisUV,
@@ -127,87 +95,6 @@ private:
     }
     return minP;
   }
-
-  //    static void ParametrizeStar(std::vector<Geo::Point3<ScalarType > >
-  //    &VertPos,
-  //                                const std::vector<std::vector<int> > &Faces,
-  //                                const std::vector<std::vector<int> > &NextF,
-  //                                const std::vector<std::vector<int> > &NextE,
-  //                                const std::vector<Pos3> &StarMesh,
-  //                                std::vector<Geo::Point2<ScalarType> >
-  //                                &StarUV,
-  //                                std::vector<Geo::Traingle2<ScalarType> >
-  //                                &TrisUV,
-  //                                std::vector<Geo::Traingle3<ScalarType> >
-  //                                &Tris3D)
-  //    {
-  //        std::map<int,Geo::Point2<ScalarType> > VertUVsMap;
-
-  //        TrisUV.clear();
-  //        Tris3D.clear();
-  //        StarUV.clear();
-
-  //        int CentralV=StarMesh[0].V;
-
-  //        ScalarType AngleInterval=2.0*M_PI/(ScalarType)StarMesh.size();
-  //        ScalarType CurrAngle=0;
-
-  //        Geo::Point2<ScalarType> CentralUV(0,0);
-  //        ScalarType SumW=0;
-  //        for (size_t i=0;i<StarMesh.size();i++)
-  //        {
-  //            int VIdx0=StarMesh[i].V;
-  //            assert(VIdx0==CentralV);
-
-  //            //then get the one outside on the star
-  //            Pos3 CurrP=StarMesh[i];
-  //            CurrP.FlipV(Faces);
-
-  //            int VIdx1=CurrP.V;
-  //            assert(VIdx0!=VIdx1);
-
-  //            Geo::Point2<ScalarType> CurrUV(cos(CurrAngle),sin(CurrAngle));
-  //            CurrAngle+=AngleInterval;
-
-  //            VertUVsMap[VIdx1]=CurrUV;
-
-  //            StarUV.push_back(CurrUV);
-
-  //            ScalarType
-  //            CurrW=CotangentWeightTriFace(VertPos,Faces,NextF,NextE,StarMesh[i].F,StarMesh[i].E);
-  //            CentralUV+=(CurrUV*CurrW);
-  //            SumW+=CurrW;
-  //        }
-
-  //        CentralUV/=SumW;
-  //        assert(VertUVsMap.count(CentralV)==0);
-  //        VertUVsMap[CentralV]=CentralUV;
-
-  //        //then return the parametrization
-  //        for (size_t i=0;i<StarMesh.size();i++)
-  //        {
-  //            int IndexF=StarMesh[i].F;
-  //            assert(IndexF>=0);
-  //            assert(IndexF<Faces.size());
-  //            assert(Faces[IndexF].size()==3);
-
-  //            Geo::Point2<ScalarType> P_UV[3];
-  //            Geo::Point3<ScalarType> P_3D[3];
-
-  //            for (size_t j=0;j<Faces[IndexF].size();j++)
-  //            {
-  //                int IndexV=Faces[IndexF][j];
-  //                assert(VertUVsMap.count(IndexV)>0);
-  //                P_UV[j]=VertUVsMap[IndexV];
-  //                P_3D[j]=VertPos[IndexV];
-  //            }
-  //            Geo::Traingle2<ScalarType> T_UV(P_UV[0],P_UV[1],P_UV[2]);
-  //            Geo::Traingle3<ScalarType> T_3D(P_3D[0],P_3D[1],P_3D[2]);
-
-  //            TrisUV.push_back(T_UV);
-  //            Tris3D.push_back(T_3D);
-  //        }
-  //    }
 
   static ScalarType
   AngleRad(const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -343,14 +230,12 @@ private:
       ComputeNormals<ScalarType>(CurrVertPos, Faces, FaceNormals, VertNormals);
       for (size_t i = 0; i < FaceNormals.size(); i++) {
 
-        if (Geo::Dot(FaceNormals[i], TargetFaceN[i]) < 0) 
-        {
+        if (Geo::Dot(FaceNormals[i], TargetFaceN[i]) < 0) {
           isFolded = true;
-          //restore old position for the face
-          for (size_t j=0;j<Faces[i].size();j++)
-          {
-            int IndexV=Faces[i][j];
-            CurrVertPos[IndexV]=RestVertPos[IndexV];
+          // restore old position for the face
+          for (size_t j = 0; j < Faces[i].size(); j++) {
+            int IndexV = Faces[i][j];
+            CurrVertPos[IndexV] = RestVertPos[IndexV];
           }
           NumFold++;
         }
@@ -360,56 +245,42 @@ private:
     } while (isFolded);
   }
 
+  struct SmoothStepData {
+    std::vector<bool> Do_Smooth;
+    std::vector<std::vector<Pos3>> StarMeshes;
+    std::vector<bool> IsB;
+    std::vector<bool> IsFeature;
+    std::map<int, int> AvoidTSmooth;
+    std::set<std::pair<int, int>> FeatureSet;
+    const std::vector<Geo::Segment3<ScalarType>> *BorderSegs;
+    Geo::SegmentSpatialIndex<ScalarType> *BorderSegIndex;
+
+    SmoothStepData() {
+      BorderSegs = NULL;
+      BorderSegIndex = NULL;
+    }
+    // std::vector<std::vector<int>> BorderVertSeq;
+  };
+
   static void
   SmoothStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
              const std::vector<std::vector<int>> &Faces,
              const std::vector<Geo::Point3<ScalarType>> &TargetFaceN,
              const std::vector<std::vector<int>> &NextF,
-             const std::vector<std::vector<int>> &NextE,
-             const std::vector<std::vector<Pos3>> &StarMeshes,
-             const std::vector<bool> &IsB,
-             std::vector<std::vector<int>> BorderVertSeq, UVSmoothParam UVP,
-             bool do_features, bool do_nonfeatures) {
-    std::map<int, int> AvoidTSmooth;
-    for (size_t i = 0; i < UVP.TJunctions.size(); i++) {
-      int IndexV = UVP.TJunctions[i].V;
-      int IndexT = UVP.TJunctions[i].VT;
-      AvoidTSmooth[IndexV] = IndexT;
-    }
-
-    std::vector<bool> IsFeature(VertPos.size(), false);
-    for (size_t i = 0; i < BorderVertSeq.size(); i++)
-      for (size_t j = 0; j < BorderVertSeq[i].size(); j++)
-        IsFeature[BorderVertSeq[i][j]] = true;
-
-    for (size_t i = 0; i < UVP.FeatureLines.size(); i++) {
-      int IndexV0 = UVP.FeatureLines[i].first;
-      int IndexV1 = UVP.FeatureLines[i].second;
-      IsFeature[IndexV0] = true;
-      IsFeature[IndexV1] = true;
-    }
-
-    std::set<int> SmoothOnlySet(UVP.SmoothOnly.begin(), UVP.SmoothOnly.end());
-    std::set<int> FixedSet(UVP.Fixed.begin(), UVP.Fixed.end());
-    std::set<std::pair<int, int>> FeatureSet(UVP.FeatureLines.begin(),
-                                             UVP.FeatureLines.end());
+             const std::vector<std::vector<int>> &NextE, 
+             SmoothStepData &SData,
+             const std::vector<std::vector<int>> &BorderVertSeq,
+             bool do_features, bool do_nonfeatures, ScalarType Damp) {
+   
 
     std::vector<Geo::Point3<ScalarType>> TargetP(
         VertPos.size(), Geo::Point3<ScalarType>(0, 0, 0));
     std::vector<size_t> TargetN(VertPos.size(), 0);
 
-    std::vector<std::vector<Geo::Point3<ScalarType>>> ReprojectPolys;
-
-    if (do_features) {
-      ReprojectPolys.resize(BorderVertSeq.size());
-      for (size_t i = 0; i < BorderVertSeq.size(); i++) {
-        for (size_t j = 0; j < BorderVertSeq[i].size(); j++) {
-          Geo::Point3<ScalarType> P = VertPos[BorderVertSeq[i][j]];
-          ReprojectPolys[i].push_back(P);
-        }
-      }
-
-      // calculate target positions for border
+    // calculate target positions for border (if needed)
+    if (do_features && (SData.BorderSegIndex != NULL)) 
+    {
+      assert(SData.BorderSegs != NULL);
       for (size_t i = 0; i < BorderVertSeq.size(); i++) {
         int SizeB = BorderVertSeq[i].size();
         assert(SizeB > 2);
@@ -437,45 +308,38 @@ private:
     int num_FoldedFaces = 0;
     // int num_FoldedStars=0;
     // int num_tested=0;
-    for (size_t i = 0; i < StarMeshes.size(); i++) {
-      if (IsB[i])
+    for (size_t i = 0; i < SData.StarMeshes.size(); i++) {
+      if (SData.IsB[i])
+        continue;
+   
+      if ((!do_features) && (SData.IsFeature[i]))
+        continue;
+      if ((!do_nonfeatures) && (!SData.IsFeature[i]))
         continue;
 
-      assert(StarMeshes[i].size() >= 2);
+      if (!SData.Do_Smooth[i])
+        continue;
+      
+      assert(SData.StarMeshes[i].size() >= 2);
 
-      if ((!do_features) && (IsFeature[i]))
-        continue;
-      if ((!do_nonfeatures) && (!IsFeature[i]))
-        continue;
-      if (FixedSet.count(i) > 0)
-        continue;
-      if ((SmoothOnlySet.size() > 0) && (SmoothOnlySet.count(i) == 0))
-        continue;
+      // if (FixedSet.count(i) > 0)
+      //   continue;
+      // if ((SmoothOnlySet.size() > 0) && (SmoothOnlySet.count(i) == 0))
+      //   continue;
 
       std::vector<Geo::Traingle2<ScalarType>> TrisUV;
       std::vector<Geo::Traingle3<ScalarType>> Tris3D;
       std::vector<Geo::Point2<ScalarType>> StarUV;
-      ParametrizeStar(VertPos, Faces, NextF, NextE, StarMeshes[i], StarUV,
+      ParametrizeStar(VertPos, Faces, NextF, NextE, SData.StarMeshes[i], StarUV,
                       TrisUV, Tris3D);
 
-      // bool IsFolded=false;
-      // for (size_t t=0;t<TrisUV.size();t++)
-      // {
-      //     Geo::Point2<ScalarType> P0 = TrisUV[t].P(0);
-      //     Geo::Point2<ScalarType> P1 = TrisUV[t].P(1);
-      //     Geo::Point2<ScalarType> P2 = TrisUV[t].P(2);
-      //     ScalarType FaceArea = (Geo::Cross((P2 - P0), (P1 - P0)) / 2);
-      //     IsFolded|=(FaceArea<0);
-      // }
-      // num_tested++;
-      // if (IsFolded)num_FoldedStars++;
 
       // check the point to interpolata, might be the center
       Geo::Point2<ScalarType> CenterP(0, 0);
       int CenterNum = 0;
       // check if there are features
-      for (size_t j = 0; j < StarMeshes[i].size(); j++) {
-        Pos3 CurrPos = StarMeshes[i][j];
+      for (size_t j = 0; j < SData.StarMeshes[i].size(); j++) {
+        Pos3 CurrPos = SData.StarMeshes[i][j];
         int IndexV0 = CurrPos.V;
         assert(IndexV0 == i); // check star centered on V
         CurrPos.FlipV(Faces);
@@ -486,11 +350,11 @@ private:
         //  if ((IsFeature[i]) && FeatureSet.count(Key) == 0)
         //      continue;
         // if feature should smooth with feature edges
-        if (IsFeature[i]) {
-          if (FeatureSet.count(Key) == 0)
+        if (SData.IsFeature[i]) {
+          if (SData.FeatureSet.count(Key) == 0)
             continue;
-          if ((AvoidTSmooth.find(IndexV0) != AvoidTSmooth.end()) &&
-              (AvoidTSmooth[IndexV0] == IndexV1))
+          if ((SData.AvoidTSmooth.find(IndexV0) != SData.AvoidTSmooth.end()) &&
+              (SData.AvoidTSmooth[IndexV0] == IndexV1))
             continue;
         }
         CenterP += StarUV[j];
@@ -498,7 +362,8 @@ private:
       }
       if (CenterNum == 1) // only one feature should fix it
       {
-        FixedSet.insert(i);
+        // FixedSet.insert(i);
+        SData.Do_Smooth[i] = false;
         CenterP = Geo::Point2<ScalarType>(0, 0);
       }
       if (CenterNum > 1) {
@@ -530,32 +395,49 @@ private:
     }
 
     // reproject borders
+    ScalarType MaxD = 0;
+    if (SData.BorderSegIndex != NULL) 
+      MaxD=(*SData.BorderSegIndex).bbox.Diag();
+
     if (do_features) {
       for (size_t i = 0; i < BorderVertSeq.size(); i++) {
         for (size_t j = 0; j < BorderVertSeq[i].size(); j++) {
           int indexV = BorderVertSeq[i][j];
           Geo::Point3<ScalarType> P = VertPos[indexV];
-          TargetP[indexV] = ReprojectOnPoliline(ReprojectPolys[i], P);
+          if (SData.BorderSegIndex != NULL) 
+          {
+            assert(SData.BorderSegs != NULL);
+            // TargetP[indexV] = ReprojectOnPoliline(ReprojectPolys[i], P);
+            int IndexS;
+            Geo::Point3<ScalarType> ClosestP;
+            (*SData.BorderSegIndex).GridClosest((*SData.BorderSegs), P, MaxD, IndexS, ClosestP);
+            TargetP[indexV] = ClosestP;
+          } else {
+
+            TargetP[indexV] = P;
+          }
         }
       }
     }
 
     // update mesh position
-    std::vector<Geo::Point3<ScalarType>> RestVertPos=VertPos;
+    std::vector<Geo::Point3<ScalarType>> RestVertPos = VertPos;
     for (size_t i = 0; i < VertPos.size(); i++) {
-      if ((!do_features) && (IsFeature[i]))
+      if ((!do_features) && (SData.IsFeature[i]))
         continue;
-      if ((!do_nonfeatures) && (!IsFeature[i]))
+      if ((!do_nonfeatures) && (!SData.IsFeature[i]))
         continue;
-      if (FixedSet.count(i))
-        continue;
-      if ((SmoothOnlySet.size() > 0) && (SmoothOnlySet.count(i) == 0))
+      // if (FixedSet.count(i))
+      //   continue;
+      // if ((SmoothOnlySet.size() > 0) && (SmoothOnlySet.count(i) == 0))
+      //   continue;
+      if (!SData.Do_Smooth[i])
         continue;
 
-      VertPos[i] = VertPos[i] * UVP.Damp + TargetP[i] * (1 - UVP.Damp);
+      // VertPos[i] = VertPos[i] * UVP.Damp + TargetP[i] * (1 - UVP.Damp);
+      VertPos[i] = VertPos[i] * Damp + TargetP[i] * (1 - Damp);
     }
-
-    //UnfoldIfNeeded(RestVertPos,Faces,TargetFaceN,VertPos);
+    // UnfoldIfNeeded(RestVertPos,Faces,TargetFaceN,VertPos);
 
     // std::vector<Geo::Point3<ScalarType>> FaceNormals, VertNormals;
     // ComputeNormals<ScalarType>(VertPos, Faces, FaceNormals, VertNormals);
@@ -568,6 +450,7 @@ private:
 
   static void GetStarMeshes(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                             const std::vector<std::vector<int>> &Faces,
+                            const std::vector<bool> &ToSmooth,
                             const std::vector<std::vector<int>> &NextF,
                             const std::vector<std::vector<int>> &NextE,
                             std::vector<bool> IsBorder,
@@ -582,6 +465,8 @@ private:
         Pos3 TestPos(i, j, Faces[i][j]);
         int CenterV = TestPos.V;
 
+        if (!ToSmooth[CenterV])
+          continue;
         // check if already initialized or not
         if (StarMeshes[CenterV].size() > 0)
           continue;
@@ -600,120 +485,191 @@ private:
       }
   }
 
-public:
-  static void Smooth(std::vector<Geo::Point3<ScalarType>> &VertPos,
-                     const std::vector<std::vector<int>> &Faces,
-                     UVSmoothParam UVP = UVSmoothParam()) {
+  static void PrepareSData(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                           const std::vector<std::vector<int>> &Faces,
+                           const std::vector<std::vector<int>> &NextF,
+                           const std::vector<std::vector<int>> &NextE,
+                           const std::vector<std::vector<int>> &BorderVertSeq,
+                           const UVSmoothParam &UVP, SmoothStepData &SData) {
+    Geo::getBorderVert(Faces, NextF, VertPos.size(), SData.IsB);
 
-    // initialize constraints
-    std::set<std::pair<int, int>> AllFeatures;
+    // std::vector<bool> ToSmooth;
+    if (UVP.SmoothOnly.size() > 0) {
+      SData.Do_Smooth = std::vector<bool>(VertPos.size(), false);
+      for (size_t i = 0; i < UVP.SmoothOnly.size(); i++)
+        SData.Do_Smooth[UVP.SmoothOnly[i]] = true;
+    } else {
+      SData.Do_Smooth = std::vector<bool>(VertPos.size(), true);
+    }
+
+    for (size_t i = 0; i < UVP.Fixed.size(); i++)
+      SData.Do_Smooth[UVP.Fixed[i]] = false;
+
+    // create star meshes
+    // std::vector<std::vector<Pos3>> StarMeshes;
+    GetStarMeshes(VertPos, Faces, SData.Do_Smooth, NextF, NextE, SData.IsB,
+                  SData.StarMeshes);
+
+    for (size_t i = 0; i < UVP.TJunctions.size(); i++) {
+      int IndexV = UVP.TJunctions[i].V;
+      int IndexT = UVP.TJunctions[i].VT;
+      SData.AvoidTSmooth[IndexV] = IndexT;
+    }
+
+    SData.IsFeature = std::vector<bool>(VertPos.size(), false);
+    for (size_t i = 0; i < BorderVertSeq.size(); i++)
+      for (size_t j = 0; j < BorderVertSeq[i].size(); j++)
+        SData.IsFeature[BorderVertSeq[i][j]] = true;
+
     for (size_t i = 0; i < UVP.FeatureLines.size(); i++) {
       int IndexV0 = UVP.FeatureLines[i].first;
       int IndexV1 = UVP.FeatureLines[i].second;
-      std::pair<int, int> entry(std::min(IndexV0, IndexV1),
-                                std::max(IndexV0, IndexV1));
-      AllFeatures.insert(entry);
+      SData.IsFeature[IndexV0] = true;
+      SData.IsFeature[IndexV1] = true;
     }
 
-    // then add borders
-    std::vector<std::vector<int>> NextF, NextE;
-    Geo::getFFAdjacency(Faces, NextF, NextE);
+    SData.FeatureSet = std::set<std::pair<int, int>>(UVP.FeatureLines.begin(),
+                                                     UVP.FeatureLines.end());
+  }
 
-    for (size_t i = 0; i < NextF.size(); i++) {
-      assert(NextF[i].size() == 3); // only triangles
-      for (size_t j = 0; j < NextF[i].size(); j++) {
-        if (NextF[i][j] != -1)
-          continue;
-        int IndexV0 = Faces[i][j];
-        int IndexV1 = Faces[i][(j + 1) % NextF[i].size()];
-        std::pair<int, int> entry(std::min(IndexV0, IndexV1),
-                                  std::max(IndexV0, IndexV1));
-        AllFeatures.insert(entry);
-      }
-    }
+public:
 
-    // std::vector<std::vector<PosType> > ProjBasis;
-    // GetStarMeshes(mesh,StarMeshes,ProjBasis,OrigIndex);
+  static void Smooth(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                     const std::vector<std::vector<int>> &Faces,
+                     const std::vector<std::vector<int>> &NextF,
+                     const std::vector<std::vector<int>> &NextE,
+                     const std::vector<std::vector<int>> &BorderVertSeq,
+                     const std::vector<Geo::Point3<ScalarType>> &FaceNorm,
+                     const std::vector<Geo::Point3<ScalarType>> &VertNorm,
+                     const std::vector<Geo::Segment3<ScalarType>> &BorderSegs,
+                     Geo::SegmentSpatialIndex<ScalarType> &BorderSegIndex,
+                     UVSmoothParam UVP = UVSmoothParam()) {
 
-    std::vector<bool> IsBorder;
-    Geo::getBorderVert(Faces, NextF, VertPos.size(), IsBorder);
-    std::vector<std::vector<int>> BorderVertSeq;
-    getBorderSequncesVert(Faces, NextF, NextE, BorderVertSeq);
+    SmoothStepData SData;
 
-    // create star meshes
-    std::vector<std::vector<Pos3>> StarMeshes;
-    GetStarMeshes(VertPos, Faces, NextF, NextE, IsBorder, StarMeshes);
+    PrepareSData(VertPos, Faces, NextF, NextE, BorderVertSeq, UVP, SData);
+
+    SData.BorderSegIndex = &BorderSegIndex;
+    SData.BorderSegs = &BorderSegs;
 
     // and finally smooth
-    std::vector<Geo::Point3<ScalarType>> FaceNorm, VertNorm;
-    ComputeNormals<ScalarType>(VertPos, Faces, FaceNorm, VertNorm);
     for (size_t i = 0; i < UVP.Steps; i++) {
       // first smooth features
-      SmoothStep(VertPos, Faces, FaceNorm, NextF, NextE, StarMeshes, IsBorder,
-                 BorderVertSeq, UVP, true, true);
-      // then the rest
-      //             SmoothStep(VertPos,Faces,NextF,NextE,StarMeshes,IsBorder,BorderVertSeq,UVP,false,true);
+      SmoothStep(VertPos, Faces, FaceNorm, NextF, NextE, SData, BorderVertSeq,
+                 true, true, UVP.Damp);
     }
   }
 
-  static void
-  SmoothWithInternalBorders(std::vector<Geo::Point3<ScalarType>> &VertPos,
-                            const std::vector<std::vector<int>> &Faces,
-                            bool UseCloseDelta,
-                            UVSmoothParam UVP = UVSmoothParam()) {
-    // auto t0 = std::chrono::high_resolution_clock::now();
+  static void Smooth(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                     const std::vector<std::vector<int>> &Faces,
+                     const std::vector<std::vector<int>> &NextF,
+                     const std::vector<std::vector<int>> &NextE,
+                     const std::vector<std::vector<int>> &BorderVertSeq,
+                     const std::vector<Geo::Point3<ScalarType>> &FaceNorm,
+                     const std::vector<Geo::Point3<ScalarType>> &VertNorm,
+                     UVSmoothParam UVP = UVSmoothParam()){
+  
+  SmoothStepData SData;
 
-    std::vector<int> IndexF;
-    std::vector<int> IndexE;
-    GetInternalBorders(VertPos, Faces, IndexF, IndexE, UseCloseDelta);
+  PrepareSData(VertPos, Faces, NextF, NextE, BorderVertSeq, UVP, SData);
 
-    std::vector<Geo::Point3<ScalarType>> VertMerged = VertPos;
-    std::vector<std::vector<int>> FacesMerged = Faces;
+  SData.BorderSegIndex = NULL;
+  SData.BorderSegs = NULL;
 
-    ScalarType delta = std::numeric_limits<ScalarType>::epsilon() * 2;
-    if (UseCloseDelta)
-      MergeCloseVert(VertMerged, FacesMerged, delta);
-    else
-      RemoveDuplicatedVert(VertMerged, FacesMerged);
-
-    assert(FacesMerged.size() == Faces.size());
-
-    // auto t1 = std::chrono::high_resolution_clock::now();
-
-    std::vector<std::pair<int, int>> FeatureE;
-    for (size_t i = 0; i < IndexF.size(); i++) {
-      int CurrF = IndexF[i];
-      int CurrE = IndexE[i];
-      int IndexV0 = FacesMerged[CurrF][CurrE];
-      int IndexV1 = FacesMerged[CurrF][(CurrE + 1) % 3];
-      std::pair<int, int> KeyF(std::min(IndexV0, IndexV1),
-                               std::max(IndexV0, IndexV1));
-      FeatureE.push_back(KeyF);
-    }
-    std::sort(FeatureE.begin(), FeatureE.end());
-    FeatureE.erase(std::unique(FeatureE.begin(), FeatureE.end()),
-                   FeatureE.end());
-    // UVP.FeatureLines = FeatureE;
-    UVP.FeatureLines.insert(UVP.FeatureLines.end(), FeatureE.begin(),
-                            FeatureE.end());
-    Smooth(VertMerged, FacesMerged, UVP);
-
-    // auto t2 = std::chrono::high_resolution_clock::now();
-
-    // auto duration0 = std::chrono::duration_cast<std::chrono::milliseconds>(t1
-    // - t0); auto duration1 =
-    // std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-    // std::cout<<"Time 0 "<<duration0.count()<<std::endl;
-    // std::cout<<"Time 1 "<<duration1.count()<<std::endl;
-    // copy back values
-    for (size_t i = 0; i < Faces.size(); i++)
-      for (size_t j = 0; j < Faces[i].size(); j++) {
-        int IndexVOrig = Faces[i][j];
-        int IndexVMerged = FacesMerged[i][j];
-        Geo::Point3<ScalarType> SmoothedPos = VertMerged[IndexVMerged];
-        VertPos[IndexVOrig] = SmoothedPos;
-      }
+  // and finally smooth
+  for (size_t i = 0; i < UVP.Steps; i++) {
+    SmoothStep(VertPos, Faces, FaceNorm, NextF, NextE, SData, BorderVertSeq,
+               true, true, UVP.Damp);
   }
+}
+
+static void
+Smooth(std::vector<Geo::Point3<ScalarType>> &VertPos,
+       const std::vector<std::vector<int>> &Faces,
+       UVSmoothParam UVP = UVSmoothParam()) 
+ {
+  std::vector<std::vector<int>> NextF, NextE;
+  Geo::getFFAdjacency(Faces, NextF, NextE);
+
+  std::vector<std::vector<int>> BorderVertSeq;
+  getBorderSequncesVert(Faces, NextF, NextE, BorderVertSeq);
+
+  std::vector<Geo::Point3<ScalarType>> FaceNorm, VertNorm;
+  ComputeNormals<ScalarType>(VertPos, Faces, FaceNorm, VertNorm);
+
+  if (!UVP.fixBorder) {
+    std::vector<Geo::Segment3<ScalarType>> BorderSegs;
+    Geo::SegmentSpatialIndex<ScalarType> BorderSegIndex;
+    Geo::InitFromMeshBorder<ScalarType>(VertPos, Faces, NextF, NextE,
+                                        BorderSegs, BorderSegIndex);
+
+    Smooth(VertPos, Faces, NextF, NextE, BorderVertSeq, FaceNorm, VertNorm,
+           BorderSegs, BorderSegIndex, UVP);
+  }
+  else {
+     Smooth(VertPos, Faces, NextF, NextE,
+         BorderVertSeq, FaceNorm, VertNorm,UVP);
+  }
+}
+
+static void
+SmoothWithInternalBorders(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                          const std::vector<std::vector<int>> &Faces,
+                          bool UseCloseDelta,
+                          UVSmoothParam UVP = UVSmoothParam()) {
+  // auto t0 = std::chrono::high_resolution_clock::now();
+
+  std::vector<int> IndexF;
+  std::vector<int> IndexE;
+  GetInternalBorders(VertPos, Faces, IndexF, IndexE, UseCloseDelta);
+
+  std::vector<Geo::Point3<ScalarType>> VertMerged = VertPos;
+  std::vector<std::vector<int>> FacesMerged = Faces;
+
+  ScalarType delta = std::numeric_limits<ScalarType>::epsilon() * 2;
+  if (UseCloseDelta)
+    MergeCloseVert(VertMerged, FacesMerged, delta);
+  else
+    RemoveDuplicatedVert(VertMerged, FacesMerged);
+
+  assert(FacesMerged.size() == Faces.size());
+
+  // auto t1 = std::chrono::high_resolution_clock::now();
+
+  std::vector<std::pair<int, int>> FeatureE;
+  for (size_t i = 0; i < IndexF.size(); i++) {
+    int CurrF = IndexF[i];
+    int CurrE = IndexE[i];
+    int IndexV0 = FacesMerged[CurrF][CurrE];
+    int IndexV1 = FacesMerged[CurrF][(CurrE + 1) % 3];
+    std::pair<int, int> KeyF(std::min(IndexV0, IndexV1),
+                             std::max(IndexV0, IndexV1));
+    FeatureE.push_back(KeyF);
+  }
+  std::sort(FeatureE.begin(), FeatureE.end());
+  FeatureE.erase(std::unique(FeatureE.begin(), FeatureE.end()), FeatureE.end());
+  // UVP.FeatureLines = FeatureE;
+  UVP.FeatureLines.insert(UVP.FeatureLines.end(), FeatureE.begin(),
+                          FeatureE.end());
+  Smooth(VertMerged, FacesMerged, UVP);
+
+  // auto t2 = std::chrono::high_resolution_clock::now();
+
+  // auto duration0 = std::chrono::duration_cast<std::chrono::milliseconds>(t1
+  // - t0); auto duration1 =
+  // std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+  // std::cout<<"Time 0 "<<duration0.count()<<std::endl;
+  // std::cout<<"Time 1 "<<duration1.count()<<std::endl;
+
+  // copy back values
+  for (size_t i = 0; i < Faces.size(); i++)
+    for (size_t j = 0; j < Faces[i].size(); j++) {
+      int IndexVOrig = Faces[i][j];
+      int IndexVMerged = FacesMerged[i][j];
+      Geo::Point3<ScalarType> SmoothedPos = VertMerged[IndexVMerged];
+      VertPos[IndexVOrig] = SmoothedPos;
+    }
+}
 };
 
 } // namespace Geo

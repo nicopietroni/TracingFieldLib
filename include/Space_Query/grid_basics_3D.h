@@ -3,6 +3,7 @@
 
 #include <point3.h>
 #include <box3.h>
+#include "../segment3.h"
 
 namespace Geo{
 /*! \brief Return the best dimension of a grid for a given primitive set
@@ -100,6 +101,17 @@ Geo::Box3<ScalarType> TriangleBBox(const  typename std::vector< Geo::Point3<Scal
         MyCoordType pos=vert[IndexV];
         Ret.Add(pos);
     }
+    return Ret;
+}
+
+
+template <class ScalarType>
+Geo::Box3<ScalarType> SegmentBBox(const Geo::Segment3<ScalarType> &Seg)
+{
+    typedef Geo::Point3<ScalarType> MyCoordType;
+    Geo::Box3<ScalarType> Ret;
+    Ret.Add(Seg.P(0));
+    Ret.Add(Seg.P(1));
     return Ret;
 }
 

@@ -2,6 +2,7 @@
 #define BOX3
 
 #include "point3.h"
+//#include "segment3.h"
 
 namespace Geo{
 template <class ScalarType>

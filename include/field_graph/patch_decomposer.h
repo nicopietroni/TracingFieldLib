@@ -246,7 +246,8 @@ public:
 
   // }
 
-  void InitForceSamplingSpace(bool and_sample) {
+  void InitForceSamplingSpace() // bool and_sample) {
+  {
     // force sampling on all points only for the case
     // of tracing from concave or spike
     bool NoForce = !(start_concave || start_spike);
@@ -276,12 +277,12 @@ public:
       assert(IndexV >= 0);
       assert(IndexV < PatchMan.VertPos.size());
       assert(IndexV < PathSampl.force_sample.size());
-      if (!and_sample)
-        PathSampl.force_sample[IndexV] = true;
-      else {
-        assert(IndexV < PathSampl.sample_on.size());
-        PathSampl.force_sample[IndexV] = PathSampl.sample_on[IndexV];
-      }
+      // if (!and_sample)
+      //   PathSampl.force_sample[IndexV] = true;
+      // else {
+      assert(IndexV < PathSampl.sample_on.size());
+      PathSampl.force_sample[IndexV] = PathSampl.sample_on[IndexV];
+      //}
     }
   }
 
@@ -489,9 +490,7 @@ public:
     }
   }
 
-  void GetBorderUnsolved(std::vector<int> &BorderUnsolved)
-  //                        bool OnlyMandatory = false)
-  {
+  void GetBorderUnsolved(std::vector<int> &BorderUnsolved) {
     BorderUnsolved.clear();
 
     // get the non solved subpatches
@@ -581,7 +580,7 @@ public:
     return false;
   }
 
-  void RetraceOnUnsolved(std::vector<bool> *force_sample=NULL) {
+  void RetraceOnUnsolved() {
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
@@ -595,9 +594,9 @@ public:
     // the second says that it sample on them only
     if (add_only_where_needed)
       MarkUnsolvedPatches(true, true);
-    else
-    {
-      std::fill(PathSampl.must_pass_on.begin(), PathSampl.must_pass_on.end(),true);
+    else {
+      std::fill(PathSampl.must_pass_on.begin(), PathSampl.must_pass_on.end(),
+                true);
       std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(), true);
     }
 
@@ -605,10 +604,10 @@ public:
     PathSampl.allow_path_on = PathSampl.must_pass_on;
 
     InitSamplingSpace(true);
-    if (force_sample==NULL)
-      InitForceSamplingSpace(false);
-    else
-      PathSampl.force_sample=(*force_sample);
+    // if (force_sample==NULL)
+    //   InitForceSamplingSpace(false);
+    // else
+    //   PathSampl.force_sample=(*force_sample);
 
     // bool doing_mandatory = (UnsolvedMandatoryP.size() > 0);
     // if (!doing_mandatory) {
@@ -632,7 +631,7 @@ public:
 
     // sample the candidate
     PathSampl.SampleCandidates(to_init_distance);
-   
+
     // if not initialized at this point will be
     to_init_distance = false;
 
@@ -974,7 +973,7 @@ public:
       return;
     }
 
-    added_sample = PathSampl.AddNextPath();
+    added_sample = PathSampl.AddNextPath(add_only_where_needed);
     if (!added_sample) {
       return;
     }
@@ -1031,7 +1030,8 @@ public:
     if (add_only_where_needed)
       MarkUnsolvedPatches(true, false);
 
-    all_solved = (UnsolvedPatches.size() == 0);
+    if (stop_when_solved)
+      all_solved = (UnsolvedPatches.size() == 0);
   }
 
   int time_savSt;
@@ -1346,6 +1346,8 @@ public:
       // enable the nodes
       PathSampl.EnableGraphNodes(TestPath);
       PathSampl.EnableGraphArches(TestPath);
+      PathSampl.RemoveToConflictNodes(TestPath);
+      PathSampl.RemoveToConflictEdges(TestPath);
     }
     return is_removable;
   }
@@ -1420,9 +1422,9 @@ public:
     // PathSampl.Init();
 
     InitSamplingSpace(false);
-    InitForceSamplingSpace(false);
+    InitForceSamplingSpace(); // false);
     InitArrivalPoint(false);
-    
+
     // //NEW cannot pass from concave or spike can only depart or arrive
     // std::vector<int> ConcaveV;
     // std::vector<int> SpikeV;
@@ -1495,7 +1497,6 @@ public:
     end_spike = true;
   }
 
-
   void SetFeatureFeatureConfiguration() {
     start_internal = false;
     start_border = false;
@@ -1536,20 +1537,11 @@ public:
     bool added_sample = false;
     bool added_once = false;
     std::cout << "ADDING PATHS" << std::endl;
-    std::cout << "There are " << PathSampl.Candidates.size() << " candidates"
-              << std::endl;
+
     do {
       AddNext(all_solved, added_sample);
       added_once |= added_sample;
     } while ((!all_solved) && (added_sample));
-
-    if (!stop_when_solved) {
-      //std::cout<<"DEDE ****"<<std::endl;
-      do {
-        AddNext(all_solved, added_sample);
-        added_once |= added_sample;
-      } while (added_sample);
-    }
 
     CompactData();
 
@@ -1607,7 +1599,7 @@ public:
     // PathSampl.MergeCollinearPath();
   }
 
-  // bool SolveSpikeSpike() 
+  // bool SolveSpikeSpike()
   // {
   //   bool has_added = false;
 
@@ -1622,8 +1614,7 @@ public:
   //   AddAllPaths();
   // }
 
-  bool SolveAllFeatures() {
-    
+  bool SolveAllFeatures(bool UpdateForce = true) {
 
     bool has_added = false;
 
@@ -1634,31 +1625,34 @@ public:
 
     // has_added |=AddAllPaths();
 
-    std::vector<bool> force_sample_swap;
-  
+    // std::vector<bool> force_sample_swap;
+
     // first do feature to feature
     SetFeatureFeatureConfiguration();
+
+    if (UpdateForce)
+      InitForceSamplingSpace();
 
     // then trace in the one unsolved
     RetraceOnUnsolved();
 
-    //std::vector<bool> force_sample_swap;
-     //save the forced sample to continue sampling
-     //even if concave or spike ar solved at first round
-    if (!add_only_where_needed)
-      force_sample_swap=PathSampl.force_sample;
-    
+    // std::vector<bool> force_sample_swap;
+    // save the forced sample to continue sampling
+    // even if concave or spike ar solved at first round
+    //  if (!add_only_where_needed)
+    //    force_sample_swap=PathSampl.force_sample;
+
     has_added |= AddAllPaths();
 
     // set features to all possible arrival points
     SetFeatureAllConfiguration();
 
-    //reuse old force to sample all features also the one solved
-    //in the first round
-    if (!add_only_where_needed)
-      RetraceOnUnsolved(&force_sample_swap);
-    else
-      RetraceOnUnsolved();
+    // reuse old force to sample all features also the one solved
+    // in the first round
+    //  if (!add_only_where_needed)
+    //    RetraceOnUnsolved(&force_sample_swap);
+    //  else
+    RetraceOnUnsolved();
 
     has_added |= AddAllPaths();
     // bool has_added = AddAllPaths();
@@ -1681,7 +1675,7 @@ public:
   //    //even if concave or spike ar solved at first round
   //   if (!add_only_where_needed)
   //     force_sample_swap=PathSampl.force_sample;
-  
+
   //   has_added |= AddAllPaths();
 
   //   // first do feature to feature
@@ -1695,7 +1689,7 @@ public:
   //    //even if concave or spike ar solved at first round
   //   if (!add_only_where_needed)
   //     force_sample_swap=PathSampl.force_sample;
-    
+
   //   has_added |= AddAllPaths();
 
   //   // set features to all possible arrival points
@@ -1891,25 +1885,14 @@ public:
     } while (has_added_path);
   }
 
-  void BatchDecompose(bool Do_remove, bool Do_split_remove) {
+private:
+  void DecomposeCycle(bool Do_remove) {
+    PathSampl.InitWithSelected();
     bool has_added = false;
-
-    PathSampl.dynamicUpdates = dynamic_updates;
-
-    PathSampl.Candidates.clear();
-    PathSampl.SampledPaths_Status.clear();
-    PathSampl.Init();
-    // Init();
-    //PathSampl.Init();
-
-    TimeSampling = 0;
-    TimeAdd = 0;
-    TimeRemove = 0;
-
     do {
-
       // this firs step solve all the features (concave, spikes)
       has_added = false;
+      std::cout << "* solving all features *" << std::endl;
       has_added |= SolveAllFeatures();
 
       auto t0 = std::chrono::high_resolution_clock::now();
@@ -1922,6 +1905,7 @@ public:
       TimeRemove += elapsed.count() * 1e-6;
 
       // add the remaining to solve all the rest of the objetive function
+      std::cout << "* solving all mesh *" << std::endl;
       has_added |= SolveAllMesh();
 
       // then remove unnecessary
@@ -1933,6 +1917,25 @@ public:
       TimeRemove += elapsed.count() * 1e-6;
 
     } while (has_added);
+  }
+
+public:
+  void BatchDecompose(bool Do_remove, bool Do_split_remove) {
+    // bool has_added = false;
+
+    PathSampl.dynamicUpdates = dynamic_updates;
+
+    PathSampl.Candidates.clear();
+    PathSampl.SampledPaths_Status.clear();
+    PathSampl.Init();
+    // Init();
+    // PathSampl.Init();
+
+    TimeSampling = 0;
+    TimeAdd = 0;
+    TimeRemove = 0;
+
+    DecomposeCycle(Do_remove);
 
     // final step, split and remove if possible the unnecessary
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -1950,6 +1953,86 @@ public:
     std::cout << "* Sampling: " << TimeSampling << std::endl;
     std::cout << "* Adding: " << TimeAdd << std::endl;
     std::cout << "* Removing: " << TimeRemove << std::endl;
+  }
+
+  void BatchMaxDecompose(std::vector<int> &RankPaths,
+                         bool add_incomplete = true) {
+    // bool has_added = false;
+
+    PathSampl.dynamicUpdates = dynamic_updates;
+
+    PathSampl.Candidates.clear();
+    PathSampl.SampledPaths_Status.clear();
+    PathSampl.Init();
+
+    TimeSampling = 0;
+    TimeAdd = 0;
+    TimeRemove = 0;
+
+    bool has_added = false;
+    bool added_incomplete=false;
+    RankPaths.clear();
+
+    do {
+
+      has_added = false;
+      SetFeatureFeatureConfiguration();
+      InitForceSamplingSpace();
+      std::vector<bool> force_sample_swap = PathSampl.force_sample;
+
+      // std::cout<<"*** STEP 1 ***"<<std::endl;
+      bool has_added_feature = false;
+      // add all internals
+      do {
+        PathSampl.force_sample = force_sample_swap;
+        has_added_feature = SolveAllFeatures(false);
+        has_added |= has_added_feature;
+      } while (has_added_feature);
+      RankPaths.resize(PathSampl.SelectedPaths.size(), 0);
+
+      // previously inserted cannot be removed
+      for (size_t i = 0; i < PathSampl.SelectedPaths.size(); i++)
+        FixedPaths.insert(i);
+
+      // then add the mandatory
+      add_only_where_needed = true;
+      stop_when_solved = true;
+      // std::cout<<"*** STEP 2 ***"<<std::endl;
+      has_added |= SolveAllMesh();
+      // then remove unnecessary
+      RemovePaths();
+      PathSampl.CleanEmptySelectedPaths();
+
+      RankPaths.resize(PathSampl.SelectedPaths.size(), 1);
+
+      std::vector<int> BoundaryP;
+      for (size_t i = 0; i < PathSampl.SelectedPaths.size(); i++)
+        BoundaryP.push_back(i);
+
+      add_only_where_needed = false;
+      stop_when_solved = false;
+      // std::cout<<"*** STEP 3 ***"<<std::endl;
+      SolveAllMesh();
+      RankPaths.resize(PathSampl.SelectedPaths.size(), 2);
+
+      if (add_incomplete && (!added_incomplete)) {
+        PathSampl.SetOrthoCanPassToExit(BoundaryP);
+        SolveAllMesh();
+        PathSampl.RestoreNodeType();
+        RankPaths.resize(PathSampl.SelectedPaths.size(), 2);
+        added_incomplete=true;
+      }
+
+    } while (has_added);
+    // then add the rest of candidates
+
+    std::cout << "<<< Decompose TIMINGS (sec) >>> " << std::endl;
+    std::cout << "* Sampling: " << TimeSampling << std::endl;
+    std::cout << "* Adding: " << TimeAdd << std::endl;
+    std::cout << "* Removing: " << TimeRemove << std::endl;
+
+    add_only_where_needed = true;
+    stop_when_solved = true;
   }
 
   bool SaveFPatchesLayout(const std::string fPatchesFile) {

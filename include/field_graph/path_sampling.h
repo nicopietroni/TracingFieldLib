@@ -853,11 +853,12 @@ private:
     for (size_t i = StartN; i < TestPath.size() - 1; i++) {
       int indexCurr = i;
       int indexPred = indexCurr - 1;
-      int indexSucc = indexCurr + 1;
 
-      // if was on zero then pred <0 then take the last
+       // if was on zero then pred <0 then take the last
       if (indexPred < 0)
         indexPred = (TestPath.size() - 2);
+
+      int indexSucc = indexCurr + 1;
 
       assert(indexCurr != indexPred);
       assert(indexCurr != indexSucc);
@@ -893,8 +894,9 @@ private:
       bool HasBorder;
 
       // then see if it cross it
-      GetSortedVertStar(IndexV1, Connectivity, VF, VFIndex, NextF, NextE,
-                        VertFan, HasBorder);
+      GetSortedVertStar(IndexV1, Connectivity, 
+                  VF, VFIndex, NextF, 
+                      NextE,VertFan, HasBorder);
       assert(!HasBorder);
 
       std::vector<bool> NewPath;
@@ -917,14 +919,16 @@ private:
         if (IsNewE)
           NewPath.push_back(true);
       }
-      //   if ((NewPath.size() != 4)) {
-      //     std::cout << "WARINING Size:" << NewPath.size() << std::endl;
-      //     for (size_t k = 0; k < NewPath.size(); k++)
-      //       std::cout << NewPath[k] << " ";
-      //     std::cout << std::endl;
-      //   }
+        if ((NewPath.size() != 4)) {
+          std::cout << "WARINING Size:" << NewPath.size() << std::endl;
+          for (size_t k = 0; k < NewPath.size(); k++)
+            std::cout << NewPath[k] << " ";
+          std::cout << std::endl;
+          exit(0);
+          assert(0);
+        }
 
-      assert(NewPath.size() == 4);
+      //assert(NewPath.size() == 4);
       for (size_t k = 0; k < NewPath.size(); k++)
         if (NewPath[k] == NewPath[(k + 1) % NewPath.size()])
           return false;
@@ -974,6 +978,7 @@ private:
     ConflictNodes.insert(OppNodesPath.begin(), OppNodesPath.end());
   }
 
+
   void AddToConflictEdges(const std::vector<int> &NodesPath) {
     for (size_t i = 0; i < NodesPath.size() - 1; i++) {
       int IndexV0 = Field::CrossFieldGraph::ElemOfNode(NodesPath[i]);
@@ -983,8 +988,41 @@ private:
       ConflictEdges.insert(key);
     }
   }
-
+  
 public:
+
+  void RemoveToConflictNodes(const std::vector<int> &NodesPath) {
+    std::vector<int> OppNodesPath;
+    Field::CrossFieldGraph::OppositeNodeCrossField(NodesPath, OppNodesPath);
+    for (size_t i=0;i<NodesPath.size();i++)
+      ConflictNodes.erase(NodesPath[i]);
+
+    for (size_t i=0;i<OppNodesPath.size();i++)
+      ConflictNodes.erase(OppNodesPath[i]);
+  }
+
+  void RemoveToConflictEdges(const std::vector<int> &NodesPath) {
+    for (size_t i = 0; i < NodesPath.size() - 1; i++) {
+      int IndexV0 = Field::CrossFieldGraph::ElemOfNode(NodesPath[i]);
+      int IndexV1 = Field::CrossFieldGraph::ElemOfNode(NodesPath[i + 1]);
+      std::pair<int, int> key(std::min(IndexV0, IndexV1),
+                              std::max(IndexV0, IndexV1));
+      ConflictEdges.erase(key);
+    }
+  }
+
+  void InitWithSelected()
+  {
+    TGraph.EnableAllNodes();
+    TGraph.EnableAllArcs();
+    for (size_t i=0;i<SelectedPaths.size();i++)
+    {
+      DisableGraphNodes(SelectedPaths[i]);
+      AddToConflictEdges(SelectedPaths[i]);
+      AddToConflictNodes(SelectedPaths[i]);
+    }
+  }
+
   void EnableGraphNodes(const std::vector<int> &NodesPath) {
     std::vector<int> To_Enable = NodesPath;
     std::vector<int> OppNodesPath;
@@ -1415,7 +1453,7 @@ public:
     return false;
   }
 
-  bool AddNextPath() {
+  bool AddNextPath(bool checkMustPass) {
     if (Candidates.size() == 0)
       return false;
 
@@ -1428,7 +1466,10 @@ public:
         continue;
 
       // CHECK OF PASSING ON REQUIRED PATCHES
-      bool pass_on_must_vertices = PassOnMustVertex(IndexPath);
+      bool pass_on_must_vertices = true;
+      
+      if (checkMustPass)
+        pass_on_must_vertices=PassOnMustVertex(IndexPath);
 
       if (!pass_on_must_vertices) {
         SampledPaths_Status[IndexPath] = SP_Discarded;
@@ -1442,18 +1483,19 @@ public:
 
       if (!dynamicUpdates)
         has_conflict = ConflictWithInserted(SampledPaths[IndexPath]);
-
+      
       if (!has_conflict)
         has_conflict |= ConflictEdgeWithInsertedEdges(SampledPaths[IndexPath]);
 
       if (has_conflict) {
+        //std::cout << "has conflict" << std::endl;
         SampledPaths_Status[IndexPath] = SP_Discarded;
         continue;
       }
 
       bool cross_properly = CrossProperly(SampledPaths[IndexPath]);
       if (!cross_properly) {
-        // std::cout << "Improper CROSS" << std::endl;
+        //std::cout << "Improper CROSS" << std::endl;
         SampledPaths_Status[IndexPath] = SP_Discarded;
         continue;
       }
@@ -1493,11 +1535,11 @@ public:
         TGraph.CurrDistIndex() = 1;
         start = std::chrono::high_resolution_clock::now();
 
+        //std::cout<<"Dynamic Update"<<std::endl;
         RetraceCandidatesConflictWithSelected();
 
         end = std::chrono::high_resolution_clock::now();
-        duration =
-            std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
         // TimeTracing += duration.count() * 1e-6;
 
         TGraph.CurrDistIndex() = 0;
@@ -1592,6 +1634,31 @@ public:
     }
   }
 
+  void SetOrthoCanPassToExit(const std::vector<int> &IndexP) {
+    SwapNodeType.clear();
+
+    // set ones possible to exit
+    std::vector<int> IndexN;
+    for (size_t i=0;i<IndexP.size();i++)
+    {
+      int currPathIDX=IndexP[i];
+      assert(currPathIDX>=0);
+      assert(currPathIDX<SelectedPaths.size());
+
+      std::vector<int> OrthoN;
+      Field::CrossFieldGraph::OrthoNodesCrossField(SelectedPaths[currPathIDX],OrthoN);
+      IndexN.insert(IndexN.end(),OrthoN.begin(),OrthoN.end());
+    }
+  
+    // set as exit node
+    for (size_t i = 0; i < IndexN.size(); i++) {
+      int currN = IndexN[i];
+      std::pair<int, NType> Entry(currN, TGraph.NodeType(currN));
+      SwapNodeType.push_back(Entry);
+      TGraph.NodeType(currN) = Geo::ExitDomain;
+    }
+  }
+
   void RestoreNodeType() {
     for (size_t i = 0; i < SwapNodeType.size(); i++) {
       int IndexN = SwapNodeType[i].first;
@@ -1653,13 +1720,17 @@ public:
     WriteTiming();
   }
 
-  void Init() {
-    // allocate all data structures
+  void InitFlags() {
     must_pass_on = std::vector<bool>(VertPos.size(), true);
     sample_on = std::vector<bool>(VertPos.size(), true);
     force_sample = std::vector<bool>(VertPos.size(), false);
     allow_path_on = std::vector<bool>(VertPos.size(), true);
     allow_arrive_to = std::vector<bool>(VertPos.size(), true);
+  }
+
+  void Init() {
+    // allocate all data structures
+     InitFlags();
 
     // InitMarkVector();
 

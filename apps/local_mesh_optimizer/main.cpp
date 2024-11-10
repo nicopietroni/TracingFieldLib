@@ -376,7 +376,7 @@ void SetRenderBar() {
     std::cout << "Avg Quality: " << AvgQ << std::endl;
     std::cout << "Worst Quality: " << WorstQ << std::endl << std::endl;
 
-    // WriteOBJ("test.obj", VertPos, Connectivity);
+    WriteOBJ("test.obj", VertPos, Connectivity);
   }
 
   ImGui::End();

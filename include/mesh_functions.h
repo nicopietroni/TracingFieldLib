@@ -2,6 +2,7 @@
 #define MESH_FUNCTIONS
 
 #include "Space_Query/point_grid_3D.h"
+#include "box3.h"
 #include "connectivity.h"
 #include "plane3.h"
 #include "point2.h"
@@ -1314,21 +1315,26 @@ template <class ScalarType>
 static void MirrorMesh(std::vector<Geo::Point3<ScalarType>> &Pos3D,
                        std::vector<std::vector<int>> &Faces,
                        const Geo::Plane3<ScalarType> &SplitPl,
-                       const std::set<int> &MiddleV)
-//,bool SnapClosePlane=true)
+                       const std::set<int> &MiddleV,
+                       bool SnapClosePlane=true)
 {
   std::vector<Geo::Point3<ScalarType>> MirroredPos3D = Pos3D;
   std::vector<std::vector<int>> MirroredFaces = Faces;
   std::vector<bool> IsB;
   Geo::getBorderVert(Faces, IsB);
   // ScalarType delta = 0.0000001;
+
+  Geo::Box3<ScalarType> BBMesh;
+  BBMesh.Init(Pos3D);
+  ScalarType delta = BBMesh.Diag()*0.00000001;
   for (size_t i = 0; i < MirroredPos3D.size(); i++) {
     // no need to mirror on the place
     if (MiddleV.count(i) > 0)
       continue;
     ScalarType Dist = fabs(SplitPl.SignedDistance(MirroredPos3D[i]));
-    // if ((IsB[i])&&(Dist<delta)&&(SnapClosePlane))continue;
-    // ScalarType delta = std::numeric_limits<ScalarType>::epsilon() * 2;
+
+    if ((IsB[i])&&(Dist<delta)&&(SnapClosePlane))continue;
+    
     MirroredPos3D[i] = SplitPl.Mirror(MirroredPos3D[i]);
   }
 

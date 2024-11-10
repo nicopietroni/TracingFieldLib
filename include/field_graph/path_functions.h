@@ -7,6 +7,7 @@
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
 #include "graph_tracing.h"
+#include "point3.h"
 #include "t_junction.h"
 #include <algorithm>
 #include <cassert>
@@ -39,24 +40,20 @@ public:
     for (size_t i = 0; i < PathN.size() - 1; i++) {
       int IndexN0 = PathN[i];
       int IndexN1 = PathN[(i + 1)];
-      if (!TGraph.IsEnabled(IndexN0))
-      {
-        std::cout<<"Non Enabled Node 0"<<std::endl;
+      if (!TGraph.IsEnabled(IndexN0)) {
+        std::cout << "Non Enabled Node 0" << std::endl;
         return false;
       }
-      if (!TGraph.IsEnabled(IndexN1))
-      {
-        std::cout<<"Non Enabled Node 1"<<std::endl;
+      if (!TGraph.IsEnabled(IndexN1)) {
+        std::cout << "Non Enabled Node 1" << std::endl;
         return false;
       }
-      if (TGraph.WhichConnection(IndexN0, IndexN1) == -1)
-      {
-        std::cout<<"Non Symmetric Arc"<<std::endl;
+      if (TGraph.WhichConnection(IndexN0, IndexN1) == -1) {
+        std::cout << "Non Symmetric Arc" << std::endl;
         return false;
       }
-      if (!TGraph.ActiveArcNodes(IndexN0, IndexN1))
-      {
-        std::cout<<"Non Active Arc"<<std::endl;
+      if (!TGraph.ActiveArcNodes(IndexN0, IndexN1)) {
+        std::cout << "Non Active Arc" << std::endl;
         return false;
       }
     }
@@ -186,8 +183,8 @@ public:
       if (!connected) {
         if (UpdateArc) {
           TGraph.DectivateArc(IndexN0, IndexN1);
-          int OppN1=Field::CrossFieldGraph::OppositeNodeCrossField(IndexN1);
-          int OppN0=Field::CrossFieldGraph::OppositeNodeCrossField(IndexN0);
+          int OppN1 = Field::CrossFieldGraph::OppositeNodeCrossField(IndexN1);
+          int OppN0 = Field::CrossFieldGraph::OppositeNodeCrossField(IndexN0);
           TGraph.DectivateArc(OppN1, OppN0);
         }
         return false;
@@ -579,6 +576,28 @@ public:
       assert(V1 != -1);
       assert(VT != -1);
       TJunctions.push_back(TJunction(V, V0, V1, VT));
+    }
+  }
+
+  static void FindCorners(const std::vector<Geo::Point3<ScalarType>> &Pos,
+                          const std::vector<std::vector<int>> &PathsVert,
+                          std::vector<int> &Corners) {
+    std::vector<int> VertN(Pos.size(), 0);
+    for (size_t i = 0; i < PathsVert.size(); i++)
+      for (size_t j = 0; j < PathsVert[i].size()-1; j++) {
+
+        int V0 = PathsVert[i][j];
+        int V1 = PathsVert[i][(j + 1)];
+
+        VertN[V0]++;
+        VertN[V1]++;
+      }
+
+    for (size_t i = 0; i < VertN.size(); i++) {
+      if (VertN[i] <= 2)
+        continue;
+      Corners.push_back(i);
+      //std::cout<<"size e "<<VertN[i]<<std::endl;
     }
   }
 };
