@@ -2,6 +2,7 @@
 #define SEGMENT_2_H
 
 #include <assert.h>
+#include <iostream>
 #include "point2.h"
 
 namespace Geo{
@@ -42,6 +43,13 @@ public:
         Pos[1]=CoordType(0,0);
     }
 };
+
+template <class ScalarType>
+void  PrintCoord( const Segment2<ScalarType> &s)
+{
+    std::cout<<"S.P(0)="<<s.P(0).X<<","<<s.P(0).Y<<std::endl;
+    std::cout<<"S.P(1)="<<s.P(1).X<<","<<s.P(1).Y<<std::endl;
+}
 
 template <class ScalarType>
 Geo::Point2<ScalarType> ClosestPoint( const Segment2<ScalarType> &s,
@@ -114,6 +122,17 @@ bool Intersect(const Segment2<ScalarType> &seg0,
     lambda0=1-lambda0;
     //p_inters = p0*(1-lambda0)+p1*lambda0;
     return true;
+}
+
+template <class ScalarType>
+bool Intersect(const Segment2<ScalarType> &seg0,
+               const Segment2<ScalarType> &seg1,
+               Geo::Point2<ScalarType> &IntP)
+{
+   ScalarType lambda;
+   if (!Geo::Intersect<ScalarType>(seg0,seg1,lambda))return false;
+   IntP=seg0.P(0)*(lambda)+seg0.P(1)*(1-lambda);
+   return true;
 }
 
 template <class ScalarType>

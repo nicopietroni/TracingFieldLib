@@ -7,8 +7,6 @@
 #include <sys/_types/_size_t.h>
 #define SMOOTH_KERNEL 2
 #include <vector>
-// #include "../point3.h"
-// #include "graph.h"
 #include "../surface_cluster/face_cluster.h"
 #include "basic_decomposition_conditions.h"
 #include "connectivity.h"
@@ -16,8 +14,6 @@
 #include "path_sampling.h"
 #include "segment2.h"
 #include "tangent_space_smooth.h"
-// #include "../geodesic.h"
-//  #include "mesh_functions.h"
 
 namespace Geo {
 
@@ -26,14 +22,10 @@ template <class ScalarType> class PatchDecomposer {
   Geo::CrossPathSampling<ScalarType> &PathSampl;
   std::vector<Geo::PatchCondition<ScalarType> *> PConditions;
   std::set<int> UnsolvedPatches;
-  // std::set<int> UnsolvedMandatoryP;
   std::vector<std::vector<int>> SmoothKernel;
   std::vector<std::vector<int>> VFAdj;
   std::vector<Field::CrossF<ScalarType>> &VertCurv;
   std::vector<Field::CrossF<ScalarType>> &FaceCurv;
-
-  // Geo::CornerType StartTraceType;
-  // Geo::CornerType EndTraceType;
 
   void RemoveEmptyPatches() {
     std::vector<int> UnsolvedPatchesVect(UnsolvedPatches.begin(),
@@ -44,29 +36,6 @@ template <class ScalarType> class PatchDecomposer {
         UnsolvedPatches.erase(IndexP);
     }
   }
-
-  // void MarkUnsolvedPatches()
-  // {
-  //     PathSampl.UnMarkAll(0);
-  //     std::set<int>::iterator Ite;
-  //     std::vector<int> to_mark_vert;
-  //     for (Ite = UnsolvedPatches.begin(); Ite != UnsolvedPatches.end();
-  //     Ite++)
-  //     {
-  //         int IndexPatch = (*Ite);
-  //         assert(IndexPatch < PatchMan.NumPatches());
-  //         for (int i = 0; i <
-  //         PatchMan.PData.SubPatchVertToOriginal[IndexPatch].size(); i++)
-  //         {
-  //             int IndexV =
-  //             PatchMan.PData.SubPatchVertToOriginal[IndexPatch][i];
-  //             assert(IndexV >= 0);
-  //             to_mark_vert.push_back(IndexV);
-  //         }
-  //     }
-
-  //     PathSampl.MarkVertices(to_mark_vert, 0);
-  // }
 
   void MarkUnsolvedPatches(bool must_pass, bool sample_on) {
 
@@ -122,37 +91,6 @@ template <class ScalarType> class PatchDecomposer {
                               OriginalVert, OriginalElem);
   }
 
-  // std::vector<int> ConcaveBorderVert;
-  // std::vector<int> ConvexBorderVert;
-  // std::vector<int> DartBorderVert;
-
-  // void FindBorderUnsolvedTraceableNodes(std::vector<int> &ExitNodes)
-  // {
-  //     std::vector<int> BorderUnsolved;
-  //     GetBorderUnsolved(BorderUnsolved);
-  //     for (size_t i = 0; i < BorderUnsolved.size(); i++)
-  //     {
-  //         // get the nodes of the vertex
-  //         std::vector<int> IndexN;
-  //         Field::CrossFieldGraph::NodesOfElem(BorderUnsolved[i], IndexN);
-
-  //         for (size_t j = 0; j < IndexN.size(); j++)
-  //         {
-  //             int currN = IndexN[j];
-  //             if (ConflictNodes.count(currN) > 0)
-  //                 continue;
-  //             // if (!IsTraceable(currN))
-  //             //     continue;
-  //             int NumNeghTest = NumMarkedNeigh(IndexN[j], MarkSample);
-  //             if (NumNeghTest > 0)
-  //                 continue;
-  //             std::pair<int, NType> Entry(currN, TGraph.NodeType(currN));
-  //             SwapNodeType.push_back(Entry);
-  //             TGraph.NodeType(currN) = Geo::ExitDomain;
-  //         }
-  //     }
-  // }
-
   bool to_init_distance;
 
 public:
@@ -181,70 +119,6 @@ public:
   void AddCondition(Geo::PatchCondition<ScalarType> *PCond) {
     PConditions.push_back(PCond);
   }
-
-  // void MarkStartSamples(int IndexMark, bool only_already_marked)
-  // {
-  //     bool allStart = (start_internal && start_border &&
-  //                      start_concave && start_spike);
-
-  //     if (allStart)
-  //         return; // nothing to mark, all good
-
-  //     std::vector<int> to_Mark;
-  //     if (start_internal)
-  //     {
-  //         std::vector<int> currSel;
-  //         PatchMan.GetAllGlobalVertOfType(CTypeNone, currSel);
-  //         to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
-  //     }
-  //     if (start_border)
-  //     {
-  //         std::vector<int> currSel;
-  //         PatchMan.GetAllGlobalVertOfType(CTypeFlat, currSel);
-  //         to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
-  //     }
-  //     if (start_concave)
-  //     {
-  //         std::vector<int> currSel;
-  //         PatchMan.GetAllGlobalVertOfType(CTypeConcave, currSel);
-  //         to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
-  //     }
-  //     if (start_spike)
-  //     {
-  //         std::vector<int> currSel;
-  //         PatchMan.GetAllGlobalVertOfType(CTypeSpike, currSel);
-  //         to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
-  //     }
-
-  //     std::set<int> IndexMarkedVSet;
-  //     if (only_already_marked)
-  //     {
-  //         std::vector<int> IndexMarkedV;
-  //         PathSampl.GetMarkedVert(IndexMark, IndexMarkedV);
-  //         IndexMarkedVSet.insert(IndexMarkedV.begin(),
-  //                                IndexMarkedV.end());
-  //     }
-
-  //     PathSampl.UnMarkAll(IndexMark);
-  //     //std::cout<<"There are "<<to_Mark.size()<<" to mark"<<std::endl;
-
-  //     for (size_t i = 0; i < to_Mark.size(); i++)
-  //     {
-  //         int IndexV = to_Mark[i];
-  //         assert(IndexV>=0);
-  //         assert(IndexV<PatchMan.VertPos.size());
-  //         assert(IndexV<PathSampl.VertTMark[IndexMark].size());
-  //         if (only_already_marked && (IndexMarkedVSet.count(IndexV) == 0))
-  //             continue;
-  //         PathSampl.MarkVertex(IndexV, IndexMark);
-  //     }
-
-  //     std::vector<int> IndexMarkedVtest;
-  //     PathSampl.GetMarkedVert(IndexMark, IndexMarkedVtest);
-  //     //std::cout<<"Marked "<<IndexMarkedVtest.size()<<"
-  //     vertices"<<std::endl;
-
-  // }
 
   void InitForceSamplingSpace() // bool and_sample) {
   {
@@ -437,39 +311,6 @@ public:
     return true;
   }
 
-  // void InitBorderVertType()
-  // {
-  //     ConvexBorderVert.clear();
-  //     ConcaveBorderVert.clear();
-  //     DartBorderVert.clear();
-  //     //for each patch
-  //     for (size_t i = 0; i < PatchMan.PData.PatchCorners.size(); i++)
-  //     //for each border
-  //     for (size_t j = 0; j < PatchMan.PData.PatchCorners[i].size(); j++)
-  //     //for each corner
-  //     for (size_t k = 0; k < PatchMan.PData.PatchCorners[i][j].size(); k++)
-  //     {
-  //         assert(k<PatchMan.PData.TypeOfCorner[i][j].size());
-  //         CornerType CType=PatchMan.PData.TypeOfCorner[i][j][k];
-  //         int
-  //         IndexC=PatchMan.MapToOriginal(i,PatchMan.PData.PatchCorners[i][j][k]);
-  //         switch(CType) {
-  //         case CTypeConvex:
-  //             ConvexBorderVert.push_back(IndexC);
-  //         break;
-  //         case CTypeConcave:
-  //             ConcaveBorderVert.push_back(IndexC);
-  //         break;
-  //         default:
-  //             assert(CType==CTypeSpike);
-  //             DartBorderVert.push_back(IndexC);
-  //         }
-  //     }
-  //     std::cout<<"Num Convex:"<<ConvexBorderVert.size()<<std::endl;
-  //     std::cout<<"Num Concave:"<<ConcaveBorderVert.size()<<std::endl;
-  //     std::cout<<"Num Dart:"<<DartBorderVert.size()<<std::endl;
-  // }
-
   void Init() {
     PathSampl.Init();
     to_init_distance = true;
@@ -547,31 +388,6 @@ public:
     for (size_t i = 0; i < PConditions.size(); i++)
       (*PConditions[i]).UpdatePatchIndex(PatchIdxRemap);
   }
-
-  // void RetraceOnUnsolved()
-  // {
-  //     CompactData();
-
-  //     // remove the space around singularities
-  //     PathSampl.InitSingularityNodes(false);
-
-  //     MarkUnsolvedPatches();
-
-  //     PathSampl.sample_only_on[0] = true;
-  //     PathSampl.limit_path_to[1] = true;
-
-  //     // get the non solved subpatches
-  //     std::vector<int> BorderUnsolved;
-  //     GetBorderUnsolved(BorderUnsolved);
-
-  //     // mark the ones on border
-  //     PathSampl.UnMarkAll(1);
-  //     PathSampl.MarkVertices(BorderUnsolved, 1);
-  //     PathSampl.SampleCandidates(false);
-
-  //     PathSampl.limit_path_to[0] = false;
-  //     PathSampl.sample_only_on[1] = false;
-  // }
 
   bool UseLenPriority() {
     // if only start from particular ones
@@ -662,11 +478,8 @@ public:
         PConditions[i]->GetPerFaceScalar(PatchMan, pi, FaceVPatch);
         if (FaceVPatch.size() == 0)
           continue;
-        //                std::cout<<"Size 0 "<<FaceVPatch.size()<<std::endl;
-        //                std::cout<<"Size 1
-        //                "<<PatchMan.SubPatchFacesToOriginal[i].size()<<std::endl;
-        //                std::cout<<"Size 2
-        //                "<<PatchMan.SubPatchFaces[i].size()<<std::endl;
+        
+
         assert(FaceVPatch.size() ==
                PatchMan.PData.SubPatchFacesToOriginal[pi].size());
         assert(FaceVPatch.size() == PatchMan.PData.SubPatchFaces[pi].size());
@@ -777,189 +590,6 @@ public:
     PatchMan.InitVisualCornersEdges();
   }
 
-  //    void AddNext(bool &all_solved,
-  //                 bool &added_sample)
-  //    {
-  //        all_solved=false;
-  //        added_sample=false;
-  //        if (add_only_where_needed)
-  //            PathSampl.check_pass_on[0]=true;
-
-  //        if ((UnsolvedPatches.size()==0)&&(stop_when_solved))
-  //        {
-  //            all_solved=true;
-  //            added_sample=false;
-  //            return;
-  //        }
-
-  //        added_sample=PathSampl.AddNextPath();
-  //        if (!added_sample){return;}
-
-  //        //verify local conditions
-  //        std::vector<int> ToAdd,ToRemove;
-  //        //std::set<int> ToUpdPatches;
-  //        PatchMan.FindAddRemovePaths(ToAdd,ToRemove);
-
-  //        if (dynamic_smooth)
-  //        {
-  //            std::vector<int> PathsIDX=ToAdd;
-  //            PathsIDX.insert(PathsIDX.end(),ToRemove.begin(),ToRemove.end());
-
-  //            std::set<int> TouchedPatches;
-  //            PatchMan.GetTouchedPatchesFromPathIndex(PathsIDX,TouchedPatches);
-  //            SmoothAround(PathsIDX,TouchedPatches);
-  //        }
-
-  //        std::vector<int> UpdatedPatches;
-  //        PatchMan.Update(ToAdd,ToRemove,UpdatedPatches);
-
-  //        for (size_t i=0;i<UpdatedPatches.size();i++)
-  //        {
-  //            int TestPatch=UpdatedPatches[i];
-  //            assert(TestPatch<PatchMan.NumPatches());
-  //            if (PatchMan.isEmpty(TestPatch))continue;
-
-  //            UpdateCondition(TestPatch);
-  //        }
-
-  //        //            if (SatisfyConditions(TestPatch))
-  //        //                UnsolvedPatches.erase(TestPatch);
-  //        //            else
-  //        //                UnsolvedPatches.insert(TestPatch);
-  //        //
-
-  //        for (size_t i=0;i<PConditions.size();i++)
-  //        {
-  //            PConditions[i]->UpdateGlobalData(PatchMan);
-  //        }
-
-  //        //        for (size_t i=0;i<UpdatedPatches.size();i++)
-  //        //        {
-  //        //            int TestPatch=UpdatedPatches[i];
-
-  //        //            if (SatisfyConditions(TestPatch))
-  //        //                UnsolvedPatches.erase(TestPatch);
-  //        //            else
-  //        //                UnsolvedPatches.insert(TestPatch);
-  //        //        }
-
-  //        for (size_t i=0;i<PatchMan.NumPatches();i++)
-  //        {
-  //            if (PatchMan.isEmpty(i))continue;
-  //            if (SatisfyConditions(i))
-  //                UnsolvedPatches.erase(i);
-  //            else
-  //                UnsolvedPatches.insert(i);
-  //        }
-
-  //        RemoveEmptyPatches();
-
-  //        if (add_only_where_needed)
-  //            MarkUnsolvedPatches();
-
-  //        all_solved=(UnsolvedPatches.size()==0);
-  //    }
-
-  // void AddNext(bool &all_solved,
-  //              bool &added_sample)
-  // {
-  //     all_solved = false;
-  //     added_sample = false;
-  //     if (add_only_where_needed)
-  //         PathSampl.check_pass_on[0] = true;
-
-  //     if ((UnsolvedPatches.size() == 0) && (stop_when_solved))
-  //     {
-  //         all_solved = true;
-  //         added_sample = false;
-  //         return;
-  //     }
-
-  //     added_sample = PathSampl.AddNextPath();
-  //     if (!added_sample)
-  //     {
-  //         return;
-  //     }
-
-  //     // verify local conditions
-  //     std::vector<int> ToAdd, ToRemove;
-  //     // std::set<int> ToUpdPatches;
-  //     PatchMan.FindAddRemovePaths(ToAdd, ToRemove);
-
-  //     if (dynamic_smooth)
-  //     {
-  //         std::vector<int> PathsIDX = ToAdd;
-  //         PathsIDX.insert(PathsIDX.end(), ToRemove.begin(), ToRemove.end());
-
-  //         std::set<int> TouchedPatches;
-  //         PatchMan.GetTouchedPatchesFromPathIndex(PathsIDX, TouchedPatches);
-  //         SmoothAround(PathsIDX, TouchedPatches);
-  //     }
-
-  //     std::vector<int> UpdatedPatches;
-  //     PatchMan.Update(ToAdd, ToRemove, UpdatedPatches);
-
-  //     for (size_t i = 0; i < UpdatedPatches.size(); i++)
-  //     {
-  //         int TestPatch = UpdatedPatches[i];
-  //         assert(TestPatch < PatchMan.NumPatches());
-  //         if (PatchMan.isEmpty(TestPatch))
-  //             continue;
-
-  //         UpdateCondition(TestPatch);
-  //     }
-
-  //     UnsolvedPatches.clear();
-  //     for (size_t i = 0; i < PatchMan.NumPatches(); i++)
-  //     {
-  //         if (PatchMan.isEmpty(i))
-  //             continue;
-
-  //         if (!SatisfyConditions(i))
-  //             UnsolvedPatches.insert(i);
-  //     }
-
-  //     for (size_t i = 0; i < PConditions.size(); i++)
-  //     {
-  //         PConditions[i]->UpdateGlobalData(PatchMan);
-  //     }
-
-  //     //        for (size_t i=0;i<UpdatedPatches.size();i++)
-  //     //        {
-  //     //            int TestPatch=UpdatedPatches[i];
-
-  //     //            if (SatisfyConditions(TestPatch))
-  //     //                UnsolvedPatches.erase(TestPatch);
-  //     //            else
-  //     //                UnsolvedPatches.insert(TestPatch);
-  //     //        }
-
-  //     for (size_t i = 0; i < PatchMan.NumPatches(); i++)
-  //     {
-  //         if (PatchMan.isEmpty(i))
-  //             continue;
-
-  //         if (!SatisfyConditionsAfterGlobalUpdate(i))
-  //             UnsolvedPatches.insert(i);
-  //     }
-
-  //     //        for (size_t i=0;i<PatchMan.NumPatches();i++)
-  //     //        {
-  //     //            if (PatchMan.isEmpty(i))continue;
-  //     //            if (SatisfyConditions(i))
-  //     //                UnsolvedPatches.erase(i);
-  //     //            else
-  //     //                UnsolvedPatches.insert(i);
-  //     //        }
-
-  //     RemoveEmptyPatches();
-
-  //     if (add_only_where_needed)
-  //         MarkUnsolvedPatches();
-
-  //     all_solved = (UnsolvedPatches.size() == 0);
-  // }
-
   void AddNext(bool &all_solved, bool &added_sample) {
     all_solved = false;
     added_sample = false;
@@ -1040,129 +670,6 @@ public:
   int time_rem2;
   int time_rem3;
   int time_rem4;
-
-  //    bool RemoveIfPossible(int &Path_To_remove)
-  //    {
-
-  //        assert(Path_To_remove>=0);
-  //        assert(Path_To_remove<PathSampl.SelectedPaths.size());
-
-  //        if (UnsolvedPatches.size()>0)
-  //        {
-  //            //check if passing from unsolved patch then can't do it
-  //            std::set<int> PatchIdx;
-  //            PatchMan.AddTouchedPatchesToSet(PathSampl.SelectedPaths[Path_To_remove],PatchIdx);
-  //            std::set<int> intersectionIdx;
-  //            std::set_intersection(PatchIdx.begin(), PatchIdx.end(),
-  //                                  UnsolvedPatches.begin(),
-  //                                  UnsolvedPatches.end(),
-  //                                  std::inserter(intersectionIdx,
-  //                                  intersectionIdx.begin()));
-
-  //            // Check if the intersection is empty
-  //            if (!intersectionIdx.empty())return false;
-  //        }
-
-  //        std::vector<int> TestPath=PathSampl.SelectedPaths[Path_To_remove];
-
-  //        if (PathSampl.SelectedPaths[Path_To_remove].size()==0)return false;
-  //        PathSampl.SelectedPaths[Path_To_remove].clear();
-
-  //        // Get the current time point before the first instruction
-  //        auto time0 = std::chrono::high_resolution_clock::now();
-
-  //        std::vector<int> UpdatedPatches;
-  //        PatchMan.Update(UpdatedPatches);
-  //        std::cout<<"Updating:"<<UpdatedPatches.size()<<std::endl<<std::endl;
-  //        bool is_removable=true;
-
-  //        // Get the current time point before the first instruction
-  //        auto time1 = std::chrono::high_resolution_clock::now();
-
-  //        //LOCAL UPDATE
-  //        for (size_t i=0;i<UpdatedPatches.size();i++)
-  //        {
-  //            int TestPatch=UpdatedPatches[i];
-
-  //            if (PatchMan.isEmpty(TestPatch))continue;
-
-  //            UpdateCondition(TestPatch);
-
-  //        }
-
-  //        //check correctness locally
-  //        bool IsOkLocally=true;
-  //        for (size_t i=0;i<UpdatedPatches.size();i++)
-  //        {
-  //            if (PatchMan.isEmpty(UpdatedPatches[i]))continue;
-
-  //            IsOkLocally&=SatisfyConditions(UpdatedPatches[i]);
-  //            if (!IsOkLocally)break;
-  //        }
-
-  //        // Get the current time point before the first instruction
-  //        auto time2 = std::chrono::high_resolution_clock::now();
-
-  //        //GLOBAL UPDATE
-  //        for (size_t i=0;i<PConditions.size();i++)
-  //        {
-  //            PConditions[i]->UpdateGlobalData(PatchMan);
-  //        }
-
-  //        // Get the current time point before the first instruction
-  //        auto time3 = std::chrono::high_resolution_clock::now();
-
-  //        //CHECK LOCAL CONDITIONS
-  //        for (size_t i=0;i<UpdatedPatches.size();i++)
-  //        {
-  //            int TestPatch=UpdatedPatches[i];
-  //            if (SatisfyConditions(TestPatch))
-  //                continue;
-  //            else
-  //            {
-  //                is_removable=false;
-  //                break;
-  //            }
-  //        }
-
-  //        // Get the current time point before the first instruction
-  //        auto time4 = std::chrono::high_resolution_clock::now();
-
-  //        if (!is_removable)
-  //        {
-  //            PathSampl.SelectedPaths[Path_To_remove]=TestPath;
-  //            std::vector<int> UpdatedPatches;
-  //            PatchMan.Update(UpdatedPatches);
-  //            std::cout<<"Updating
-  //            Rollback:"<<UpdatedPatches.size()<<std::endl<<std::endl; for
-  //            (size_t i=0;i<UpdatedPatches.size();i++)
-  //                UpdateCondition(UpdatedPatches[i]);
-
-  //        }
-  //        // Get the current time point before the first instruction
-  //        auto time5 = std::chrono::high_resolution_clock::now();
-
-  //        time_rem0+=(std::chrono::duration_cast<std::chrono::milliseconds>(time1
-  //        - time0)).count();
-  //        time_rem1+=(std::chrono::duration_cast<std::chrono::milliseconds>(time2
-  //        - time1)).count();
-  //        time_rem2+=(std::chrono::duration_cast<std::chrono::milliseconds>(time3
-  //        - time2)).count();
-  //        time_rem3+=(std::chrono::duration_cast<std::chrono::milliseconds>(time4
-  //        - time3)).count();
-  //        time_rem4+=(std::chrono::duration_cast<std::chrono::milliseconds>(time5
-  //        - time4)).count();
-
-  //        // Print the duration in microseconds
-  //        std::cout << "Time 0: " << time_rem0 << " milli microseconds" <<
-  //        std::endl; std::cout << "Time 1: " << time_rem1 << " milli
-  //        microseconds" << std::endl; std::cout << "Time 2: " << time_rem2 <<
-  //        " milli microseconds" << std::endl; std::cout << "Time 3: " <<
-  //        time_rem3 << " milli microseconds" << std::endl; std::cout << "Time
-  //        4: " << time_rem4 << " milli microseconds" << std::endl;
-
-  //        return is_removable;
-  //    }
 
   bool RemoveIfPossible(int &Path_To_remove, bool debug_msg = false) {
     if (debug_msg)
@@ -1369,22 +876,6 @@ public:
 
   int current_rem_cand;
 
-  //    bool RemoveNextIfPossible()
-  //    {
-  //        if
-  //        ((current_rem_cand<0)||(current_rem_cand>PathSampl.SelectedPaths.size()))
-  //            current_rem_cand=PathSampl.SelectedPaths.size()-1;
-
-  //        bool has_removed=false;
-  //        int Path_To_remove=PathSampl.SelectedPaths.size()-1;
-  //        do{
-  //            has_removed|=RemoveIfPossible(Path_To_remove);
-  //            if (has_removed)return true;
-  //            Path_To_remove--;
-  //        }while ((!has_removed)&&(Path_To_remove>=0));
-  //        return false;
-  //    }
-
   bool RemoveNextIfPossible() {
     if (current_rem_cand > PathSampl.SelectedPaths.size())
       current_rem_cand = PathSampl.SelectedPaths.size() - 1;
@@ -1409,17 +900,7 @@ public:
   }
 
   void SampleInitialCandidates() {
-    //  PathSampl.sample_only_on[0] = true;
-    // PathSampl.limit_path_to[1] = true;
-
-    // // get the non solved subpatches
-    // std::vector<int> BorderUnsolved;
-    // GetBorderUnsolved(BorderUnsolved);
-
-    // // mark the ones on border
-    // PathSampl.UnMarkAll(1);
-
-    // PathSampl.Init();
+   
 
     InitSamplingSpace(false);
     InitForceSamplingSpace(); // false);
@@ -1599,21 +1080,6 @@ public:
     // PathSampl.MergeCollinearPath();
   }
 
-  // bool SolveSpikeSpike()
-  // {
-  //   bool has_added = false;
-
-  //   PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioLen;
-  //   // first do feature to feature
-  //   SetSpikeSpikeConfiguration();
-
-  //   has_added = false;
-  //   // then trace in the one unsolved
-  //   RetraceOnUnsolved();
-
-  //   AddAllPaths();
-  // }
-
   bool SolveAllFeatures(bool UpdateForce = true) {
 
     bool has_added = false;
@@ -1636,78 +1102,19 @@ public:
     // then trace in the one unsolved
     RetraceOnUnsolved();
 
-    // std::vector<bool> force_sample_swap;
-    // save the forced sample to continue sampling
-    // even if concave or spike ar solved at first round
-    //  if (!add_only_where_needed)
-    //    force_sample_swap=PathSampl.force_sample;
 
     has_added |= AddAllPaths();
 
     // set features to all possible arrival points
     SetFeatureAllConfiguration();
 
-    // reuse old force to sample all features also the one solved
-    // in the first round
-    //  if (!add_only_where_needed)
-    //    RetraceOnUnsolved(&force_sample_swap);
-    //  else
     RetraceOnUnsolved();
 
     has_added |= AddAllPaths();
-    // bool has_added = AddAllPaths();
     SetBaseConfiguration();
 
     return has_added;
   }
-
-  // bool SolveAllFeatures() {
-  //   bool has_added = false;
-
-  //    // first do feature to feature
-  //   SetSpikeSpikeConfiguration();
-
-  //   // then trace in the one unsolved
-  //   RetraceOnUnsolved();
-
-  //   std::vector<bool> force_sample_swap;
-  //    //save the forced sample to continue sampling
-  //    //even if concave or spike ar solved at first round
-  //   if (!add_only_where_needed)
-  //     force_sample_swap=PathSampl.force_sample;
-
-  //   has_added |= AddAllPaths();
-
-  //   // first do feature to feature
-  //   SetFeatureFeatureConfiguration();
-
-  //   // then trace in the one unsolved
-  //   RetraceOnUnsolved();
-
-  //   //std::vector<bool> force_sample_swap;
-  //    //save the forced sample to continue sampling
-  //    //even if concave or spike ar solved at first round
-  //   if (!add_only_where_needed)
-  //     force_sample_swap=PathSampl.force_sample;
-
-  //   has_added |= AddAllPaths();
-
-  //   // set features to all possible arrival points
-  //   SetFeatureAllConfiguration();
-
-  //   //reuse old force to sample all features also the one solved
-  //   //in the first round
-  //   if (!add_only_where_needed)
-  //     RetraceOnUnsolved(&force_sample_swap);
-  //   else
-  //     RetraceOnUnsolved();
-
-  //   has_added |= AddAllPaths();
-  //   // bool has_added = AddAllPaths();
-  //   SetBaseConfiguration();
-
-  //   return has_added;
-  // }
 
   bool SolveAllMesh() {
     SetBaseConfiguration();
@@ -1730,37 +1137,6 @@ public:
   }
 
   double TimeSampling, TimeAdd, TimeRemove;
-
-  // void GetMandatoryPatch(std::set<int> &MandatoryP) {
-  //   MandatoryP.clear();
-  //   for (size_t j = 0; j < PatchMan.NumPatches(); j++) {
-  //     for (size_t i = 0; i < PConditions.size(); i++) {
-  //       if (PatchMan.isEmpty(j))
-  //         continue;
-  //       if (!PConditions[i]->Mandatory())
-  //         continue;
-  //       if (PConditions[i]->IsCorrect(PatchMan, j))
-  //         continue;
-  //       MandatoryP.insert(j);
-  //     }
-  //     std::vector<int> SelectCorn;
-  //     PatchMan.CornersOfType(j, Geo::CTypeSpike, SelectCorn);
-  //     if (SelectCorn.size() > 0)
-  //       MandatoryP.insert(j);
-  //     PatchMan.CornersOfType(j, Geo::CTypeConcave, SelectCorn);
-  //     if (SelectCorn.size() > 0)
-  //       MandatoryP.insert(j);
-  //   }
-  // }
-  //  for (size_t j = 0; j < PatchMan.NumPatches(); j++) {
-  //       if (PatchMan.isEmpty(j))
-  //         continue;
-  //       bool has_satisfied = PConditions[i]->IsCorrect(PatchMan, j);
-  //       if (!has_satisfied)
-  //         NonSatisfied++;
-  //     }
-  //     std::cout << "Unsatistied Condition " << PConditions[i]->Name().c_str()
-  //               << " " << NonSatisfied << std::endl;
 
   bool ForceSolveSpikeConcave(int IndexP) // bool Do_features,
   {
