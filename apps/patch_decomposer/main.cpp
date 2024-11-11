@@ -164,6 +164,7 @@ bool single_boundary_cond = true;
 bool disk_like_cond = true;
 bool single_sing_cond = false;
 bool match_sing_cond = true;
+bool cc_ability_cond=false;
 bool use_uv = false;
 bool isometric_uv = false;
 bool conformal_uv = false;
@@ -171,12 +172,13 @@ ScalarType max_uvDist = 0.05;
 
 int MinSides = 3;
 int MaxSides = 6;
-ScalarType CCability = 0;
+ScalarType CCability = 1;
 
 bool old_single_boundary_cond = single_boundary_cond;
 bool old_disk_like_cond = disk_like_cond;
 bool old_single_sing_cond = single_sing_cond;
 bool old_match_sing_cond = match_sing_cond;
+bool old_cc_ability_cond = cc_ability_cond;
 bool old_isometric_uv = isometric_uv;
 bool old_conformal_uv = conformal_uv;
 ScalarType old_max_uvDist = max_uvDist;
@@ -270,6 +272,7 @@ bool UpdateConditions() {
   has_changed |= old_disk_like_cond != disk_like_cond;
   has_changed |= old_single_sing_cond != single_sing_cond;
   has_changed |= old_match_sing_cond != match_sing_cond;
+  has_changed |= old_cc_ability_cond != cc_ability_cond;
 
   has_changed |= old_MinSides != MinSides;
   has_changed |= old_MaxSides != MaxSides;
@@ -282,6 +285,8 @@ bool UpdateConditions() {
   old_disk_like_cond = disk_like_cond;
   old_single_sing_cond = single_sing_cond;
   old_match_sing_cond = match_sing_cond;
+  old_cc_ability_cond=cc_ability_cond;
+
   old_MinSides = MinSides;
   old_MaxSides = MaxSides;
   old_CCability = CCability;
@@ -306,9 +311,11 @@ void InitConditions() {
   if ((MinSides > 0) || (MaxSides > 0)) {
     PDeco.AddCondition(new Geo::NumSidesCondition<ScalarType>());
   }
-  if (CCability >= 1) {
-    ScalarType AvVAl = AvgEdgeLen(VertPos, Connectivity) * CCability;
-    PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(AvVAl));
+  //if (CCability >= 1) {
+  if (cc_ability_cond)
+  {
+    //ScalarType AvVAl = AvgEdgeLen(VertPos, Connectivity) * CCability;
+    PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(CCability));
   }
   if (isometric_uv) {
     Geo::UVCondition<ScalarType>::UVType uv_type =
@@ -1112,8 +1119,13 @@ void SetDecomposeBar() {
 
   ImGui::TextColored(ImVec4(0, 0, 1, 1), "shape");
   ImGui::SetNextItemWidth(100);
+
+  ImGui::Checkbox("CCAbility", &cc_ability_cond);
+
   float CCAbilityf = CCability;
-  ImGui::InputFloat("CC Ability", &CCAbilityf);
+  ImGui::InputFloat("CC Tolerance", &CCAbilityf);
+  CCAbilityf=std::min(CCAbilityf,1.f);
+  CCAbilityf=std::max(CCAbilityf,0.f);
   CCability = (ScalarType)CCAbilityf;
 
   ImGui::TextColored(ImVec4(0, 0, 1, 1), "UV");

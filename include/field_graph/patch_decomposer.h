@@ -1358,7 +1358,9 @@ public:
 
       // std::cout<<"*** STEP 1 ***"<<std::endl;
       bool has_added_feature = false;
-      // add all internals
+      // add all features
+      add_only_where_needed = false;
+      stop_when_solved = false;
       do {
         PathSampl.force_sample = force_sample_swap;
         has_added_feature = SolveAllFeatures(false);

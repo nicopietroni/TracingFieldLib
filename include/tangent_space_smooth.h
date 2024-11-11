@@ -549,8 +549,8 @@ private:
       }
     }
 
-    assert((*SData.BorderSegIndex) != NULL);
-    assert((*SData.BorderSegs) != NULL);
+    assert(SData.BorderSegIndex != NULL);
+    assert(SData.BorderSegs != NULL);
     ScalarType MaxD = (*SData.BorderSegIndex).bbox.Diag();
 
     for (size_t i = 0; i < BorderTargetP.size(); i++) {
