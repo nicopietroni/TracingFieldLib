@@ -12,6 +12,7 @@
 #include <UV_param.h>
 #include <UV_utils.h>
 #include <chrono>
+#include <iostream>
 #include <mesh_manifold.h>
 #include <point3.h>
 #include <vector>
@@ -1360,14 +1361,18 @@ public:
     }
     std::cout << "MADE CONSISTENT" << std::endl;
     if (DualFaces.size() > 0) {
+      std::vector<std::vector<int>> NextF,NextE;
+      getFFAdjacency(DualFaces,NextF,NextE);
+      SplitNonManifoldBorderV<ScalarType>(DualVertPos,DualFaces,NextF,NextE);
       bool edge_manf = EdgeManifold<ScalarType>(DualVertPos, DualFaces);
       bool vert_manf = VertManifold<ScalarType>(DualVertPos, DualFaces);
       if ((!edge_manf) || (!vert_manf)) {
+        std::cout<<"WARNING DUAL MESH NON MANIFOLD"<<std::endl;
         WriteOBJ("non_manif.obj", DualVertPos, DualFaces);
-        exit(0);
+        //exit(0);
       }
-      assert(edge_manf);
-      assert(vert_manf);
+      // assert(edge_manf);
+      // assert(vert_manf);
     }
     auto t2 = std::chrono::high_resolution_clock::now();
 

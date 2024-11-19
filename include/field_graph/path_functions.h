@@ -7,6 +7,7 @@
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
 #include "graph_tracing.h"
+#include "path_sampling.h"
 #include "point3.h"
 #include "t_junction.h"
 #include <algorithm>
@@ -37,17 +38,27 @@ public:
 
   static bool IsConnected(const TracingGraph<ScalarType> &TGraph,
                           const std::vector<int> &PathN) {
+
+    assert(PathN.size() >= 2);
+    int startIDX = 0;
+    int endIDX = PathN.size();
+    if (!PathFunctions<ScalarType>::IsLoop(PathN)) {
+      startIDX++;
+      endIDX--;
+    }
+    // the first and the last can be
+    // non enabled but still used to trace
+    for (size_t i = startIDX; i < endIDX; i++) {
+      if (!TGraph.IsEnabled(PathN[i])) {
+        std::cout << "Non Enabled Node" << std::endl;
+        return false;
+      }
+    }
+
     for (size_t i = 0; i < PathN.size() - 1; i++) {
       int IndexN0 = PathN[i];
       int IndexN1 = PathN[(i + 1)];
-      if (!TGraph.IsEnabled(IndexN0)) {
-        std::cout << "Non Enabled Node 0" << std::endl;
-        return false;
-      }
-      if (!TGraph.IsEnabled(IndexN1)) {
-        std::cout << "Non Enabled Node 1" << std::endl;
-        return false;
-      }
+
       if (TGraph.WhichConnection(IndexN0, IndexN1) == -1) {
         std::cout << "Non Symmetric Arc" << std::endl;
         return false;
@@ -161,6 +172,7 @@ public:
                                    bool UpdateArc = true) {
     assert(IsProperPath(PathN));
     std::vector<int> NewPath;
+    bool IsLoop = PathFunctions<ScalarType>::IsLoop(PathN);
     for (size_t i = 0; i < PathN.size() - 1; i++) {
       int IndexN0 = PathN[i];
       int IndexN1 = PathN[(i + 1)];
@@ -172,8 +184,17 @@ public:
         continue;
 
       std::vector<int> DirectPath;
-      assert(TGraph.IsEnabled(IndexN0));
-      assert(TGraph.IsEnabled(IndexN1));
+      // first and last can be disabled if it is not a loop
+      if (IsLoop) {
+        assert(TGraph.IsEnabled(IndexN0));
+        assert(TGraph.IsEnabled(IndexN1));
+      } else {
+        if ((i != 0) && (i != (PathN.size() - 1))) {
+          assert(TGraph.IsEnabled(IndexN0));
+          assert(TGraph.IsEnabled(IndexN1));
+        }
+      }
+
       assert(TGraph.WhichConnection(IndexN0, IndexN1) != -1);
       assert(TGraph.ActiveArcNodes(IndexN0, IndexN1));
       // assert(TGraph.WhichConnection(IndexN1,IndexN0)!=-1);
@@ -233,6 +254,16 @@ public:
       assert(OppN >= 0);
       assert(OppN < (int)TGraph.NumNodes());
 
+      OppPathN.push_back(OppN);
+    }
+  }
+
+  static void OppositeNodesCross(const std::vector<int> &PathN,
+                                 std::vector<int> &OppPathN) {
+    OppPathN.clear();
+    for (size_t i = 0; i < PathN.size(); i++) {
+      int IndexN = PathN[i];
+      int OppN = Field::CrossFieldGraph::OppositeNodeCrossField(IndexN);
       OppPathN.push_back(OppN);
     }
   }
@@ -406,7 +437,6 @@ public:
 
     int E0 = Elems[0];
     int E1 = Elems[1];
-
     int NodeIdx0, NodeIdx1;
     bool found = BestConnectionNodePair(Tgraph, E0, E1, NodeIdx0, NodeIdx1);
     if (!found) {
@@ -423,6 +453,44 @@ public:
         return true;
       Nodes.push_back(NodeIdx1);
     }
+    return true;
+  }
+
+  // should work generic but to be tested
+  static bool ReconstructPathsFromElem(const TracingGraph<ScalarType> &Tgraph,
+                                       const std::vector<int> &Elems,
+                                       std::vector<std::vector<int>> &Nodes) {
+    if (Elems.size() < 2)
+      return false;
+
+    Nodes.clear();
+
+    std::vector<std::pair<int, int>> NodesE;
+    for (size_t i = 0; i < Elems.size() - 1; i++) {
+      // get the first direction Node
+      int E0 = Elems[i];
+      int E1 = Elems[i + 1];
+
+      int NodeIdx0, NodeIdx1;
+      bool found = BestConnectionNodePair(Tgraph, E0, E1, NodeIdx0, NodeIdx1);
+      if (!found) {
+        return false;
+      }
+      NodesE.push_back(std::pair<int, int>(NodeIdx0, NodeIdx1));
+    }
+
+    Nodes.resize(1);
+    for (size_t i = 0; i < NodesE.size() - 1; i++) {
+      Nodes.back().push_back(NodesE[i].first);
+      int N0 = NodesE[i].second;
+      int N1 = NodesE[(i + 1)].first;
+      if (N0 != N1) {
+        Nodes.back().push_back(N0);
+        Nodes.resize(Nodes.size() + 1);
+      }
+    }
+    Nodes.back().push_back(NodesE.back().first);
+    Nodes.back().push_back(NodesE.back().second);
     return true;
   }
 
@@ -500,6 +568,7 @@ public:
                              std::vector<TJunction> &TJunctions) {
     std::vector<int> EdgePathIdx;
     std::vector<std::vector<int>> Edges;
+
     FindEdgeM(Paths, EdgePathIdx, Edges);
 
     std::vector<std::vector<int>> Kernel;
@@ -584,7 +653,7 @@ public:
                           std::vector<int> &Corners) {
     std::vector<int> VertN(Pos.size(), 0);
     for (size_t i = 0; i < PathsVert.size(); i++)
-      for (size_t j = 0; j < PathsVert[i].size()-1; j++) {
+      for (size_t j = 0; j < PathsVert[i].size() - 1; j++) {
 
         int V0 = PathsVert[i][j];
         int V1 = PathsVert[i][(j + 1)];
@@ -597,8 +666,124 @@ public:
       if (VertN[i] <= 2)
         continue;
       Corners.push_back(i);
-      //std::cout<<"size e "<<VertN[i]<<std::endl;
+      // std::cout<<"size e "<<VertN[i]<<std::endl;
     }
+  }
+
+  static bool JoinIfPossible(std::vector<int> &PathN0,
+                             std::vector<int> &PathN1) {
+    if (PathN0.size() == 0)
+      return false;
+    if (PathN1.size() == 0)
+      return false;
+
+    assert(PathN0.size() >= 2);
+    assert(PathN1.size() >= 2);
+
+    if (IsLoop(PathN0))
+      return false;
+    if (IsLoop(PathN1))
+      return false;
+
+    std::pair<int, int> Extr0;
+    std::pair<int, int> ExtrDir0;
+    Extr0.first = Field::CrossFieldGraph::ElemOfNode(PathN0[0]);
+    ExtrDir0.first = Field::CrossFieldGraph::DirOfNode(PathN0[0]) % 2;
+    Extr0.second = Field::CrossFieldGraph::ElemOfNode(PathN0.back());
+    ExtrDir0.second = Field::CrossFieldGraph::DirOfNode(PathN0.back()) % 2;
+    assert(Extr0.first != Extr0.second);
+
+    std::pair<int, int> Extr1;
+    std::pair<int, int> ExtrDir1;
+    Extr1.first = Field::CrossFieldGraph::ElemOfNode(PathN1[0]);
+    ExtrDir1.first = Field::CrossFieldGraph::DirOfNode(PathN1[0]) % 2;
+    Extr1.second = Field::CrossFieldGraph::ElemOfNode(PathN1.back());
+    ExtrDir1.second = Field::CrossFieldGraph::DirOfNode(PathN1.back()) % 2;
+    assert(Extr1.first != Extr1.second);
+
+    // this is a loop
+    if ((Extr0.first == Extr1.second) && (Extr0.second == Extr1.first) &&
+        (ExtrDir0.first == ExtrDir1.second) &&
+        (ExtrDir0.second == ExtrDir1.first)) {
+      // remove the last one on the first
+      // that might be duplicated after merge
+      PathN0.pop_back();
+      PathN0.insert(PathN0.end(), PathN1.begin(), PathN1.end());
+      PathN1.clear();
+      return true;
+    }
+
+    // again a loop
+    if ((Extr0.first == Extr1.first) && (Extr0.second == Extr1.second) &&
+        (ExtrDir0.first == ExtrDir1.first) &&
+        (ExtrDir0.second == ExtrDir1.second)) {
+      std::vector<int> OppN1;
+      OppositeNodesCross(PathN1, OppN1);
+      std::reverse(OppN1.begin(), OppN1.end());
+      PathN0.pop_back();
+      PathN0.insert(PathN0.end(), OppN1.begin(), OppN1.end());
+      OppN1.clear();
+      return true;
+    }
+
+    // join contiguous paths Path1 after Path0
+    if ((Extr0.second == Extr1.first) && (ExtrDir0.second == ExtrDir1.first)) {
+      PathN0.pop_back();
+      PathN0.insert(PathN0.end(), PathN1.begin(), PathN1.end());
+      PathN1.clear();
+      return true;
+    }
+
+    // join contiguous paths Path0 after Path1
+    if ((Extr0.first == Extr1.second) && (ExtrDir0.first == ExtrDir1.second)) {
+      PathN1.pop_back();
+      PathN1.insert(PathN1.end(), PathN0.begin(), PathN0.end());
+      PathN0.clear();
+      return true;
+    }
+
+    // join contiguous paths Path0 after Path1
+    if ((Extr0.first == Extr1.first) && (ExtrDir0.first == ExtrDir1.first)) {
+      std::vector<int> OppN0;
+      OppositeNodesCross(PathN0, OppN0);
+      std::reverse(OppN0.begin(), OppN0.end());
+      PathN0 = OppN0;
+      PathN0.pop_back();
+      PathN0.insert(PathN0.end(), PathN1.begin(), PathN1.end());
+      PathN1.clear();
+      return true;
+    }
+
+    // join contiguous paths Path0 after Path1
+    if ((Extr0.second == Extr1.second) &&
+        (ExtrDir0.second == ExtrDir1.second)) {
+      std::vector<int> OppN1;
+      OppositeNodesCross(PathN1, OppN1);
+      std::reverse(OppN1.begin(), OppN1.end());
+      PathN0.pop_back();
+      PathN0.insert(PathN0.end(), PathN1.begin(), PathN1.end());
+      PathN1.clear();
+      return true;
+    }
+    return false;
+  }
+
+  static ScalarType
+  CrossEuclideanLenght(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                       const std::vector<int> &PathN) {
+    ScalarType CurrL = 0;
+    for (size_t i = 0; i < PathN.size() - 1; i++) {
+      int IndexV0 = Field::CrossFieldGraph::ElemOfNode(PathN[i]);
+      int IndexV1 = Field::CrossFieldGraph::ElemOfNode(PathN[i + 1]);
+      assert(IndexV0 >= 0);
+      assert(IndexV0 < VertPos.size());
+      assert(IndexV1 >= 0);
+      assert(IndexV1 < VertPos.size());
+      Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
+      Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
+      CurrL += (P0 - P1).Norm();
+    }
+    return CurrL;
   }
 };
 

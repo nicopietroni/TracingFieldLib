@@ -1080,9 +1080,9 @@ template <class ScalarType> class TragingGraphFunctions {
           // TGraph.NodeType(IndexN0) =TangentDomain;
           TGraph.NodeType(IndexN0) = TangentExitDomain;
           // TGraph.NodeType(IndexN0) =ExitDomain;
-          TGraph.NodeType(IndexN1) = Internal;
+          TGraph.NodeType(IndexN1) = DartOrthoDomain;//Internal;
           TGraph.NodeType(IndexN2) = Internal;
-          TGraph.NodeType(IndexN3) = Internal;
+          TGraph.NodeType(IndexN3) = DartOrthoDomain;//Internal;
         }
         continue;
       }

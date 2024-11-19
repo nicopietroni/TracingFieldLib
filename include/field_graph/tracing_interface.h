@@ -7,6 +7,8 @@
 #include <iostream>
 #include <list>
 #include <set>
+#include <sys/_types/_size_t.h>
+#include <vector>
 // #include "../cross_field.h"
 #include "graph_tracing.h"
 
@@ -23,7 +25,7 @@ template <class ScalarType> class GraphTracing {
     TGraph.DeSelectAll(0);
 
     assert(allow_loops || allow_exit_domains);
-    
+
     // set destination borders if needed
     if (ArrivalNodes != NULL) {
       for (size_t i = 0; i < (*ArrivalNodes).size(); i++)
@@ -34,7 +36,7 @@ template <class ScalarType> class GraphTracing {
         TGraph.SelectNoteType(Geo::TangentExitDomain, 0);
       }
     }
-   
+
     // set destination loops if needed
     if (allow_loops)
       TGraph.Select(StartN, 0);
@@ -45,7 +47,7 @@ template <class ScalarType> class GraphTracing {
     SParam.onlyDirect = false;
     SParam.stopAtPrevDist = false;
     SParam.onlyVisible = only_visible;
-    //SParam.uniformW=true;
+    // SParam.uniformW=true;
     ScalarType PathL;
     std::vector<int> SourceNodes;
     SourceNodes.push_back(StartN);
@@ -59,7 +61,8 @@ template <class ScalarType> class GraphTracing {
                                    const int &indexN) {
     int OppN = Geo::PathFunctions<ScalarType>::OppositeNode(TGraph, indexN);
     return ((TGraph.NodeType(OppN) == Geo::ExitDomain) ||
-            (TGraph.NodeType(OppN) == Geo::TangentExitDomain));
+            (TGraph.NodeType(OppN) == Geo::TangentExitDomain) ||
+            (TGraph.NodeType(OppN) == Geo::DartOrthoDomain));
   }
 
   static bool IsOppositeTangent(const Geo::TracingGraph<ScalarType> &TGraph,
@@ -69,79 +72,115 @@ template <class ScalarType> class GraphTracing {
             (TGraph.NodeType(OppN) == Geo::TangentExitDomain));
   }
 
+  
 public:
   enum TraceStatus { TraceSuccess, TraceIncomplete, TraceNotDirect };
 
-  static TraceStatus
-  TraceLoopOrBorderBorderFrom(Geo::TracingGraph<ScalarType> &TGraph,
-                              const int &StartN, std::vector<int> &PathN,
-                              bool make_direct = true,
-                              std::vector<int> *ArrivalNodes = NULL,
-                              bool only_visible = true, bool simplify = true) {
+  static TraceStatus TraceLoopOrBorderBorderFrom(
+      Geo::TracingGraph<ScalarType> &TGraph, const int &StartN,
+      std::vector<int> &PathN, bool make_direct = true,
+      std::vector<int> *ArrivalNodes = NULL, bool only_visible = true,
+      bool simplify = true, bool enable_when_need = true) {
+
+    //save the disabled to restore afterwards
+    std::vector<int> DisabledSwap;
+    if (enable_when_need) {
+      if (ArrivalNodes != NULL) {
+        for (size_t i = 0; i < (*ArrivalNodes).size(); i++) {
+          int OppArr=PathFunctions<ScalarType>::OppositeNode(TGraph, (*ArrivalNodes)[i]);
+          assert(TGraph.IsEnabled(OppArr));
+          if (!TGraph.IsEnabled((*ArrivalNodes)[i])) {
+            DisabledSwap.push_back((*ArrivalNodes)[i]);
+            TGraph.EnableNode((*ArrivalNodes)[i]);
+          }
+        }
+      }
+      if (!TGraph.IsEnabled(StartN)) {
+        DisabledSwap.push_back(StartN);
+        TGraph.EnableNode(StartN);
+      }
+    }
 
     bool IsBorder = IsOppositeExitDomain(TGraph, StartN);
     IsBorder |= IsOppositeTangent(TGraph, StartN);
     assert(TGraph.IsEnabled(StartN));
     // std::cout<<"A"<<std::endl;
 
-    //auto t0 = std::chrono::high_resolution_clock::now();
+    // auto t0 = std::chrono::high_resolution_clock::now();
+    
     bool has_traced = CompleteTraceFrom(TGraph, StartN, PathN, true, true,
                                         ArrivalNodes, only_visible);
+    
     // std::cout<<"B"<<std::endl;
     if (!has_traced)
+    {
+      if (enable_when_need) TGraph.DisableNodes(DisabledSwap);
       return TraceIncomplete;
+    }
     bool IsLoop = Geo::PathFunctions<ScalarType>::IsLoop(PathN);
 
     bool has_to_complete = !(IsBorder || IsLoop);
 
-    //std::cout<<"TEST 0"<<std::endl;
-    //assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathN));
-    //std::cout<<"TEST 0 done"<<std::endl;
+    // std::cout<<"TEST 0"<<std::endl;
+    // assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathN));
+    // std::cout<<"TEST 0 done"<<std::endl;
 
     if (has_to_complete) {
       // std::cout<<"Completing"<<std::endl;
       int StartOpp = PathFunctions<ScalarType>::OppositeNode(TGraph, StartN);
-
+      if (!TGraph.IsEnabled(StartOpp)){
+        TGraph.DisableNodes(DisabledSwap);
+        return TraceIncomplete;
+      }
       assert(TGraph.IsEnabled(StartOpp));
       std::vector<int> PathNOpp;
 
       // std::cout<<"C"<<std::endl;
-      //std::cout<<"TEST 1"<<std::endl;
+      // std::cout<<"TEST 1"<<std::endl;
       has_traced = CompleteTraceFrom(TGraph, StartOpp, PathNOpp, false, true,
                                      ArrivalNodes, only_visible);
-      //std::cout<<"TEST 1 done"<<std::endl;
+      // std::cout<<"TEST 1 done"<<std::endl;
 
       // std::cout<<"D"<<std::endl;
 
       if (!has_traced)
+      {
+        if (enable_when_need) TGraph.DisableNodes(DisabledSwap);
         return TraceIncomplete;
+      }
 
       // revert the path
-      //std::cout<<"TEST 1.2"<<std::endl;
-      //assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathNOpp));
-      //std::cout<<"TEST 1.2 done"<<std::endl;
+      // std::cout<<"TEST 1.2"<<std::endl;
+      // assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathNOpp));
+      // std::cout<<"TEST 1.2 done"<<std::endl;
       PathFunctions<ScalarType>::ReversePath(TGraph, PathNOpp);
 
       assert(PathNOpp.back() == PathN[0]);
 
-      //std::cout<<"TEST 1.5"<<std::endl;
-      //assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathNOpp));
-      //std::cout<<"TEST 1.5 done"<<std::endl;
-      // remove the last one
+      // std::cout<<"TEST 1.5"<<std::endl;
+      // assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathNOpp));
+      // std::cout<<"TEST 1.5 done"<<std::endl;
+      //  remove the last one
       PathNOpp.pop_back();
       // then append
       PathNOpp.insert(PathNOpp.end(), PathN.begin(), PathN.end());
       PathN = PathNOpp;
     }
-
-    //auto t1 = std::chrono::high_resolution_clock::now();
-    // std::cout<<"TEST 2"<<std::endl;
-    assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathN));
-    //std::cout<<"TEST 2 done"<<std::endl;
+    
+    // auto t1 = std::chrono::high_resolution_clock::now();
+    //  std::cout<<"TEST 2"<<std::endl;
+    assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph, PathN));
+    // std::cout<<"TEST 2 done"<<std::endl;
 
     if (make_direct) {
+      //std::cout<<"TEST CASCINA De0"<<std::endl;
+      assert(TGraph.EnabledN[PathN[0]]);
+      assert(TGraph.EnabledN[PathN.back()]);
       bool has_direct = Geo::PathFunctions<ScalarType>::MakeDirectConnection(TGraph, PathN);
+      //std::cout<<"TEST CASCINA De1"<<std::endl;
+
       if (!has_direct) {
+        if (enable_when_need) TGraph.DisableNodes(DisabledSwap);
         return TraceNotDirect;
       }
     }
@@ -184,23 +223,24 @@ public:
       bool IsTagentOpp_1 = IsOppositeTangent(TGraph, PathN.back());
       assert(IsExit_1 || IsExitOpp_1 || IsTagent_1 || IsTagentOpp_1);
     }
-    //std::reverse(PathN.begin(),PathN.end());
+    // std::reverse(PathN.begin(),PathN.end());
+    if (enable_when_need) TGraph.DisableNodes(DisabledSwap);
     return TraceSuccess;
   }
-  
-  static TraceStatus
-  TraceDirectLoopOrBorderBorderFrom(Geo::TracingGraph<ScalarType> &TGraph,
-                                    const int &StartN, std::vector<int> &PathN,
-                                    std::vector<int> *ArrivalNodes = NULL,
-                                    bool only_visible = true, bool simplify = true) 
-  {
-          TraceStatus Curr_Status=TraceIncomplete;
-          do {
-              Curr_Status=TraceLoopOrBorderBorderFrom(TGraph,StartN,PathN,
-                                                      true,ArrivalNodes,
-                                                      only_visible,simplify);
-          }while (Curr_Status==TraceNotDirect);
-          return Curr_Status;
+
+  static TraceStatus TraceDirectLoopOrBorderBorderFrom(
+      Geo::TracingGraph<ScalarType> &TGraph, const int &StartN,
+      std::vector<int> &PathN, std::vector<int> *ArrivalNodes = NULL,
+      bool only_visible = true, bool simplify = true, bool force_direct = true,
+      bool enable_when_need = true) {
+    TraceStatus Curr_Status = TraceIncomplete;
+    do {
+      Curr_Status =TraceLoopOrBorderBorderFrom(TGraph, StartN, PathN, 
+                                              true, ArrivalNodes,
+                                              only_visible, simplify, 
+                                              enable_when_need);
+    } while ((force_direct) && (Curr_Status == TraceNotDirect));
+    return Curr_Status;
   }
 };
 

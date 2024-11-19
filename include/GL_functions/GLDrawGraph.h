@@ -1,6 +1,7 @@
 #ifndef GL_DRAW_GRAPH
 #define GL_DRAW_GRAPH
 
+//#include "../field_graph/path_functions.h"
 #include "../field_graph/graph.h"
 #include "../field_graph/graph_cross_field.h"
 #include "../field_graph/graph_frame_field.h"
@@ -12,6 +13,7 @@
 #include <cassert>
 #include <sys/_types/_size_t.h>
 #include <vector>
+
 
 namespace GLGraphDraw {
 
@@ -112,9 +114,17 @@ public:
                         const std::vector<std::vector<int>> &Paths_To_Draw,
                         const ScalarType scaleVal,
                         const PathDrawParam &PDParam = PathDrawParam(),
-                        const std::vector<Geo::Point3<ScalarType>> &PathColors =
-                            std::vector<Geo::Point3<ScalarType>>()) {
+                        const std::vector<Geo::Point3<ScalarType>> &PathColors = std::vector<Geo::Point3<ScalarType>>(),
+                        bool DrawLoops=true,bool DrawPolyL=true) {
     for (size_t i = 0; i < Paths_To_Draw.size(); i++) {
+      // if ((!DrawLoops) && (Geo::PathFunctions<ScalarType>::IsLoop(Paths_To_Draw[i]))) 
+      //   continue;
+      // if ((!DrawPolyL) && (!Geo::PathFunctions<ScalarType>::IsLoop(Paths_To_Draw[i])))
+      //   continue;
+      if ((!DrawLoops) && (Paths_To_Draw[i][0] == Paths_To_Draw[i].back()))continue;
+      if ((!DrawPolyL) && (Paths_To_Draw[i][0] != Paths_To_Draw[i].back()))continue;
+      
+
       if (PathColors.size() == Paths_To_Draw.size())
         DrawNodes(TGraph, Cross, Paths_To_Draw[i], scaleVal, PDParam,
                   PathColors[i]);

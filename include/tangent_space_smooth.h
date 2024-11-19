@@ -272,7 +272,7 @@ private:
         Geo::Segment2<ScalarType> S1=OppRadial[j];
         Geo::Point2<ScalarType> IntP;
         bool Inters=Geo::Intersect(S0,S1,IntP);
-        assert(Inters);
+        //assert(Inters);
         if (Inters)
         {
           AvgPos+=IntP;
@@ -282,6 +282,14 @@ private:
     if (Num>0)
     {
       AvgPos/=Num;
+      return true;
+    }
+    else {
+      std::cout<<"WARNING UV SEGS"<<std::endl;
+      AvgPos = Geo::Point2<ScalarType>(0, 0);
+      for (size_t i = 0; i < FeaturePos.size(); i++)
+        AvgPos += FeaturePos[i];
+      AvgPos = AvgPos / FeaturePos.size();
       return true;
     }
     return false;

@@ -94,6 +94,10 @@ inline bool ReadFeatures(const std::string &filename,
   while (infile >> first >> second) {
     Features.emplace_back(first, second);
   }
+  
+  std::sort(Features.begin(), Features.end());
+  auto last = std::unique(Features.begin(), Features.end());
+  Features.erase(last, Features.end());
 
   if (!infile.eof()) {
     // An error occurred before reaching the end of the file

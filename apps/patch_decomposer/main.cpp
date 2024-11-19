@@ -3,6 +3,7 @@
 #include "imgui_impl_opengl2.h"
 #include <GL/glew.h>
 #include <UI/orbitball.h>
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <iostream>
@@ -80,6 +81,9 @@ bool DrawInternalNode = false;
 bool DrawCorners = false;
 bool DrawDualCorners = false;
 bool DrawTJunction = false;
+
+bool DrawLoops = true;
+bool DrawPolyL = true;
 
 bool DrawSides = false;
 
@@ -164,7 +168,7 @@ bool single_boundary_cond = true;
 bool disk_like_cond = true;
 bool single_sing_cond = false;
 bool match_sing_cond = true;
-bool cc_ability_cond=false;
+bool cc_ability_cond=true;
 bool use_uv = false;
 bool isometric_uv = false;
 bool conformal_uv = false;
@@ -317,6 +321,7 @@ void InitConditions() {
     //ScalarType AvVAl = AvgEdgeLen(VertPos, Connectivity) * CCability;
     PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(CCability));
   }
+
   if (isometric_uv) {
     Geo::UVCondition<ScalarType>::UVType uv_type =
         Geo::UVCondition<ScalarType>::UVArap;
@@ -346,6 +351,9 @@ void InitConditions() {
 void SampleTracing() {
   // PathN.clear();
   // PathSampl.Init();
+  if ((PDeco.start_spike)||(PDeco.start_concave))
+     PathSampl.force_direct = true;
+  
   PDeco.SampleInitialCandidates();
 }
 
@@ -379,13 +387,13 @@ void SmoothPaths() {
   Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
   std::vector<std::vector<int>> VertPaths;
   PathSampl.GetVertexSelectedPaths(VertPaths);
-
   Geo::PathFunctions<ScalarType>::FindTJunctions(VertPaths, TJunctions);
 
   // Geo::PatchOptimize<ScalarType>::TwoStepSmooth(VertPos, Connectivity,
   //                                               VertPaths);
+
   Geo::PatchOptimize<ScalarType>::SmoothPaths(VertPos, Connectivity,
-                                                VertPaths);
+                                              VertPaths,Features);
 
   ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
 
@@ -451,17 +459,26 @@ void SmoothPaths() {
 void InitPatches() {
   // initialize patches corners
   // and all remaining data
+
+  PatchM.CheckConsistentData();
   PatchM.Init();
+
+  PatchM.CheckConsistentData();
 
   // then initialize the stopping conditions
   InitConditions();
+  PatchM.CheckConsistentData();
+
   // PDeco.InitBorderVertType();
 
   // initialise the decomposer
   PDeco.Init();
+  PatchM.CheckConsistentData();
 
   // then check all patches and saved the unsolved ones
+  PatchM.CheckConsistentData();
   PDeco.UpdateAllUnsolvedPatches();
+  
 }
 
 // void TestTrace()
@@ -735,9 +752,10 @@ void SetRenderBar() {
   if (ImGui::RadioButton("No Draw", DrawPathMode == 2)) {
     DrawPathMode = 2;
   }
-
   ImGui::InputInt("Curr Path", &CurrSelP);
   CurrSelP = std::min(CurrSelP, (int)PathSampl.SelectedPaths.size() - 1);
+  ImGui::Checkbox("Draw Loops",&DrawLoops);
+  ImGui::Checkbox("Draw PolyL",&DrawPolyL);
 
   // ImGui::Separator();
   // ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
@@ -828,7 +846,6 @@ void UpdateFeatureSing() {
 }
 
 bool remove_batch = true;
-bool remove_split = false;
 
 void PreprocessMesh() {
   Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(
@@ -868,13 +885,13 @@ void BatchProcessMinPatch() {
       std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
 
   std::cout << "*** ADD ALL PATHS *** " << std::endl;
-  // PDeco.dynamic_smooth=true;
+  //PDeco.dynamic_smooth=true;
 
   remove_batch = true;
   PDeco.add_only_where_needed = true;
   PDeco.stop_when_solved = true;
   PDeco.dynamic_smooth = false;
-  PDeco.BatchDecompose(remove_batch, remove_split);
+  PDeco.BatchDecompose(remove_batch);
   auto end3 = std::chrono::high_resolution_clock::now();
   auto elapsed3 =
       std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
@@ -906,7 +923,8 @@ void BatchProcessMinPatch() {
   double total_elapsed_seconds5 =
       total_elapsed.count() * 1e-6; // Convert microseconds to seconds
 
-  std::cout << "*** TIMINGS (sec) *** " << std::endl;
+  std::cout<< std::endl<< std::endl;
+  std::cout << "*** FINAL TIMINGS (sec) *** " << std::endl;
   std::cout << "* Remeshing time: " << elapsed_seconds0 << std::endl;
   std::cout << "* Init Graph Elapsed time: " << elapsed_seconds1 << std::endl;
   std::cout << "* Init Patches: " << elapsed_seconds2 << std::endl;
@@ -990,6 +1008,8 @@ void BatchProcessMaxPaths() {
   // PDeco.WriteStats();
 }
 
+int PrioIdx=0;
+
 void SetDecomposeBar() {
 
   ImGui::Begin(
@@ -1001,6 +1021,15 @@ void SetDecomposeBar() {
 
   ImGui::SetNextItemWidth(100);
   ImGui::InputInt("Density", &PathSampl.NumSamples);
+  ImGui::SameLine();
+  ImGui::Checkbox("Split", &PDeco.split_removal);
+
+  ImGui::SetNextItemWidth(120);
+  ImGui::Checkbox("Dynamic Updata", &PDeco.dynamic_updates);
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(120);
+  ImGui::Checkbox("Dynamic Smooth", &PDeco.dynamic_smooth);
+  
 
   if (ImGui::Button("MINIMAL PATCH")) {
     // remove_batch = true;
@@ -1011,10 +1040,9 @@ void SetDecomposeBar() {
     PathColors.resize(PathSampl.SelectedPaths.size());
     Geo::ScatterColor<ScalarType>(PathColors);
     UpdateColor();
-    ImGui::SameLine();
-    ImGui::Checkbox("Split", &remove_split);
   }
-
+  
+  
   if (ImGui::Button("MAX PATHS")) {
     // PDeco.add_only_where_needed = false;
     // PDeco.stop_when_solved = false;
@@ -1026,28 +1054,54 @@ void SetDecomposeBar() {
     UpdateColor();
   }
 
+  // if (ImGui::Button("Add Features as paths")) {
+  //    std::cout<<"INIT GRAPH"<<std::endl;
+  //    InitGraph();
+  //    InitPatches();
+  //    std::cout<<"DONE!"<<std::endl;
+  //    //InitPatches();
+  //    PDeco.AddFeaturesAsPaths(Features);
+  //    PathColors.resize(PathSampl.SelectedPaths.size());
+  //    Geo::ScatterColor<ScalarType>(PathColors);
+  //    UpdateColor();
+  // }
+
+  if (ImGui::Button("Add Features as paths")) {
+    std::vector<std::pair<int, int>> RemainingF;
+    Geo::TracingPreprocess<ScalarType>::SplitCornerFeatures(VertPos, Connectivity, 
+                                                            VertCurv,FaceCurv,
+                                                            Features,RemainingF,
+                                                            SingIndex, SingValue, 
+                                                            FeatureSingIndex,
+                                                            FeatureSingValue);
+
+     Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
+        VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
+
+    UpdateAfterRemesh();
+  }
   // ImGui::SameLine();
   // ImGui::Checkbox("Remove", &remove_batch);
   // ImGui::SameLine();
   // ImGui::Checkbox("Split", &remove_split);
 
-  if (ImGui::Button("Solve Remaining Spike/Concave")) {
-    PDeco.ForceSolveSpikeConcave();
-    PathColors.resize(PathSampl.SelectedPaths.size());
-    Geo::ScatterColor<ScalarType>(PathColors);
-    UpdateColor();
-    PatchM.WriteStats();
-    PDeco.WriteStats();
-  }
+  // if (ImGui::Button("Solve Remaining Spike/Concave")) {
+  //   PDeco.ForceSolveSpikeConcave();
+  //   PathColors.resize(PathSampl.SelectedPaths.size());
+  //   Geo::ScatterColor<ScalarType>(PathColors);
+  //   UpdateColor();
+  //   PatchM.WriteStats();
+  //   PDeco.WriteStats();
+  // }
 
-  if (ImGui::Button("Solve Remaining Topology")) {
-    PDeco.ForceSolveTopology();
-    PathColors.resize(PathSampl.SelectedPaths.size());
-    Geo::ScatterColor<ScalarType>(PathColors);
-    UpdateColor();
-    PatchM.WriteStats();
-    PDeco.WriteStats();
-  }
+  // if (ImGui::Button("Solve Remaining Topology")) {
+  //   PDeco.ForceSolveTopology();
+  //   PathColors.resize(PathSampl.SelectedPaths.size());
+  //   Geo::ScatterColor<ScalarType>(PathColors);
+  //   UpdateColor();
+  //   PatchM.WriteStats();
+  //   PDeco.WriteStats();
+  // }
 
   ImGui::Separator();
 
@@ -1088,8 +1142,12 @@ void SetDecomposeBar() {
   ImGui::InputInt("Diffuse", &diffuse_step);
   ImGui::SetNextItemWidth(150);
   if (ImGui::Button("Init Graph")) {
+
+    std::cout<<"INIT GRAPH"<<std::endl;
     InitGraph();
+    std::cout<<"INIT PATCHES"<<std::endl;
     InitPatches();
+
     has_graph = true;
     showCross = false;
   }
@@ -1251,6 +1309,22 @@ void SetDecomposeBar() {
     // ImGui::Checkbox("##foo8", &PDeco.end_internal);
 
     ImGui::EndTable();
+
+    // ImGui::Begin("Priority Type");
+    // // Radio buttons with labels
+    // if (ImGui::RadioButton("Distribution", PrioIdx == 0))
+    // {
+    //   PrioIdx=0;
+    //   PDeco.SetDistPrioType();
+    // }
+    // if (ImGui::RadioButton("Lenght", PrioIdx == 1))
+    // {
+    //   PDeco.SetLengthPrioType();
+    //   PrioIdx=1;
+    // }
+    // ImGui::End();
+
+    //ImGui::SameLine();
     if (ImGui::Button("Sample Candidates")) {
       SampleTracing();
     }
@@ -1296,18 +1370,19 @@ void SetDecomposeBar() {
       UpdateColor();
     }
 
-    ImGui::SetNextItemWidth(120);
-    ImGui::Checkbox("Dynamic Upd", &PathSampl.dynamicUpdates);
-    ImGui::SameLine();
+    // ImGui::SetNextItemWidth(120);
+    // ImGui::Checkbox("Dynamic Upd", &PathSampl.dynamicUpdates);
     ImGui::SetNextItemWidth(120);
     ImGui::Checkbox("Only Needed", &PDeco.add_only_where_needed);
     ImGui::SetNextItemWidth(120);
     ImGui::Checkbox("Stop Solved", &PDeco.stop_when_solved);
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(120);
-    ImGui::Checkbox("Dynamic Smth", &PDeco.dynamic_smooth);
+    // ImGui::SetNextItemWidth(120);
+    // ImGui::Checkbox("Dynamic Smth", &PDeco.dynamic_smooth);
     ImGui::SetNextItemWidth(120);
     ImGui::Checkbox("Only Visible", &PathSampl.only_visible);
+    
+    
   }
 
   ImGui::End();
@@ -1599,10 +1674,11 @@ void GLDrawMesh() {
 
     // PDParam.lineSize=10;
     // PDParam.pointSize=20;
+    //std::vector<std::vector<int>> Loops;
     if (CurrSelP == -1)
       GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(
           TGraph, VertCurv, PathSampl.SelectedPaths, MeshBox.Diag() * 0.005,
-          PDParam, PathColors);
+          PDParam, PathColors,DrawLoops,DrawPolyL);
     else
       GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
           TGraph, VertCurv, PathSampl.SelectedPaths[CurrSelP],

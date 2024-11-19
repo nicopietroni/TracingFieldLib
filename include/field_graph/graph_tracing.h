@@ -156,11 +156,16 @@ public:
         size_t NextN = TGraph.NodeLink(CurrN, i);
         if (!TGraph.EnabledN[NextN])
           continue;
-
-        // then get the next weight
-        ScalarType NextStep=1;
-        if (!SParam.uniformW)
-          NextStep=TGraph.WeightLink(CurrN, i);//CurrWeight+TGraph.W[CurrN][i];
+        
+        ScalarType NextStep=TGraph.WeightLink(CurrN, i);
+        //other
+        if (SParam.uniformW)
+        {
+          //uniform plus a small value to disambuguate when have the same 
+          //number of arcs
+          ScalarType delta=TGraph.AverageWeigth()*0.001;
+          NextStep=1+(delta*NextStep);
+        }
         if(NextStep<=0)
         {
           std::cout<<"W:"<<NextStep<<std::endl;

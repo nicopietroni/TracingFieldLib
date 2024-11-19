@@ -1,6 +1,9 @@
 #ifndef BASIC_DECOMPOSITION_CONDITION
 #define BASIC_DECOMPOSITION_CONDITION
 
+#include <cassert>
+#include <iostream>
+#include <string>
 #include <vector>
 #include "patch_managing.h"
 #include "catmull_clarkability.h"
@@ -216,11 +219,17 @@ public:
                    const int &IndexPatch)const override
     {
         assert(IndexPatch<PatchM.PData.SideLenghts.size());
-
         //if there is more than one hole return false
         //if (PatchM.PData.SideLenghts[IndexPatch].size()>1)return false;
         if (PatchM.NumBorders(IndexPatch)!=1)return false;
-        return (IsCatmullClarkable(PatchM.PData.SideLenghts[IndexPatch][0],SideThr,true));
+        // std::cout<<"##DEDE 0:"<<PatchM.NumBorders(IndexPatch)<<std::endl;
+        // std::cout<<"##DEDE 1:"<<PatchM.NumSides(IndexPatch)<<std::endl;
+        // std::cout<<"##DEDE 2:"<<PatchM.NumCorners(IndexPatch)<<std::endl;
+        // std::cout<<"##DEDE 3:"<<PatchM.PData.SideLenghts[IndexPatch].size()<<std::endl;
+        // PatchM.WriteMesh(IndexPatch,std::string("testCC.obj"));
+        bool IsCC=IsCatmullClarkable(PatchM.PData.SideLenghts[IndexPatch][0],SideThr,true);
+        return (IsCC);
+        
     }
 
     std::string Name()const override

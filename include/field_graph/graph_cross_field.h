@@ -2,6 +2,7 @@
 #define CROSS_FIELD_GRAPH
 
 #include "../cross_field.h"
+#include "point3.h"
 #include <cstddef>
 #include <vector>
 namespace Field {

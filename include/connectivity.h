@@ -126,6 +126,16 @@ int FindMaxVertIdx(const std::vector<std::vector<int>> &connections) {
   return NumV;
 }
 
+int FindMaxVertIdx(const std::vector<std::pair<int, int>> &Edges) {
+  int NumV = 0;
+  for (size_t i = 0; i < Edges.size(); i++)
+  {
+   NumV = std::max(NumV, Edges[i].first);
+   NumV = std::max(NumV, Edges[i].second);
+  }
+  return NumV;
+}
+
 void FindVertexStar(const std::vector<std::vector<int>> &connections,
                     std::vector<std::vector<int>> &Kernel,
                     const int extend_step = 0) {
@@ -664,6 +674,21 @@ void getVFAdjacency(const std::vector<std::vector<int>> &Faces,
       VFIndex[indexV].push_back(j);
     }
   }
+}
+
+void getVVAdjacency(const std::vector<std::pair<int, int>> &Edges,
+                    std::vector<std::vector<int>> &VVAdj) {
+  int NumV = FindMaxVertIdx(Edges);
+
+  VVAdj.clear();
+  VVAdj.resize(NumV + 1);
+
+  for (size_t i = 0; i < Edges.size(); i++) {
+      int indexV0 = Edges[i].first;
+      int indexV1 = Edges[i].second;
+      VVAdj[indexV0].push_back(indexV1);
+      VVAdj[indexV1].push_back(indexV0);
+    }
 }
 
 void getVVStar(const std::vector<std::vector<int>> &Faces,

@@ -1,6 +1,7 @@
 #ifndef MESH_FUNCTIONS
 #define MESH_FUNCTIONS
 
+#include "IO/io_obj.h"
 #include "Space_Query/point_grid_3D.h"
 #include "box3.h"
 #include "connectivity.h"
@@ -9,7 +10,7 @@
 #include "point3.h"
 #include "segment2.h"
 #include "smooth_mesh.h"
-//#include "surface_cluster/cluster_operations.h"
+// #include "surface_cluster/cluster_operations.h"
 #include <cassert>
 #include <cstddef>
 #include <fstream>
@@ -126,7 +127,7 @@ void RemoveUnfererencedVert(std::vector<Geo::Point3<ScalarType>> &VertPos,
 
 template <class ScalarType>
 void RemoveDuplicatedVert(std::vector<Geo::Point3<ScalarType>> &VertPos,
-                          std::vector<std::vector<int>> &Faces) {
+                          std::vector<std::vector<int>> &Elems) {
   std::map<Geo::Point3<ScalarType>, int> PosIdxMap;
   std::vector<Geo::Point3<ScalarType>> NewVertPos;
   for (size_t i = 0; i < VertPos.size(); i++) {
@@ -136,13 +137,13 @@ void RemoveDuplicatedVert(std::vector<Geo::Point3<ScalarType>> &VertPos,
     PosIdxMap[VertPos[i]] = NewVertPos.size() - 1;
   }
 
-  for (size_t i = 0; i < Faces.size(); i++)
-    for (size_t j = 0; j < 3; j++) {
-      int IndexV = Faces[i][j];
+  for (size_t i = 0; i < Elems.size(); i++)
+    for (size_t j = 0; j < Elems[i].size(); j++) {
+      int IndexV = Elems[i][j];
       Geo::Point3<ScalarType> Pos = VertPos[IndexV];
       assert(PosIdxMap.count(Pos) > 0);
       int NewIdx = PosIdxMap[Pos];
-      Faces[i][j] = NewIdx;
+      Elems[i][j] = NewIdx;
     }
   VertPos = NewVertPos;
 }
@@ -1084,6 +1085,72 @@ InterpolateUVTriMesh(const std::vector<Geo::Point2<ScalarType>> &PosUV,
 }
 
 template <class ScalarType>
+bool SplitNonManifoldBorderV(std::vector<Geo::Point3<ScalarType>> &Pos,
+                             std::vector<std::vector<int>> &Faces,
+                             const std::vector<std::vector<int>> &NextF,
+                             const std::vector<std::vector<int>> &NextE) {
+
+  std::unordered_map<int, std::vector<std::vector<Pos3>>> VertFacesFun;
+  assert(Faces.size() == NextF.size());
+  for (size_t i = 0; i < NextF.size(); i++) {
+    assert(Faces[i].size() == NextF[i].size());
+    for (size_t j = 0; j < NextF[i].size(); j++) {
+      if (NextF[i][j] != -1)
+        continue;
+
+      int IndexV = Faces[i][j];
+      assert(IndexV >= 0);
+      assert(IndexV < Pos.size());
+
+      Pos3 StartPos(i, j, IndexV);
+      bool HasB;
+      std::vector<Pos3> PosFan;
+      GetSortedFacesFaceFun(StartPos, Faces, NextF, NextE, PosFan, HasB);
+      assert(HasB);
+      VertFacesFun[IndexV].push_back(PosFan);
+    }
+  }
+  //WriteOBJ("testManifBefore.obj",Pos,Faces);
+  bool splitted=false;
+  typename std::unordered_map<int, std::vector<std::vector<Pos3>>>::iterator
+      ite_map;
+  for (ite_map = VertFacesFun.begin(); ite_map != VertFacesFun.end();
+       ite_map++) {
+    // one fun is ok
+    assert((*ite_map).second.size() > 0);
+    if ((*ite_map).second.size() <= 1)
+      continue;
+    //std::cout<<"** SPLIT NON MANIF VERT **"<<std::endl;
+    // otherwise allocate a new vertex
+    int IndexV = (*ite_map).first;
+    assert(IndexV >= 0);
+    assert(IndexV < Pos.size());
+    // duplicate the vertex
+    for (size_t j = 1; j < (*ite_map).second.size(); j++) {
+      Pos.push_back(Pos[IndexV]);
+      splitted=true;
+      // change each reference
+      for (size_t k = 0; k < (*ite_map).second[j].size(); k++) {
+        Pos3 CurrPos = (*ite_map).second[j][k];
+        int CurrF = CurrPos.F;
+        assert(CurrF >= 0);
+        assert(CurrF < Faces.size());
+        int LocalIDX = Geo::WhichVert(Faces[CurrF], IndexV);
+        assert(LocalIDX >= 0);
+        assert(LocalIDX < Faces[CurrF].size());
+        Faces[CurrF][LocalIDX] = Pos.size()-1;
+      }
+    }
+  }
+  return splitted;
+  // if (splitted)
+  // {
+  //   WriteOBJ("testManif.obj",Pos,Faces);
+  //   exit(0);
+  // }
+}
+
+template <class ScalarType>
 void SplitMeshFromEdges(std::vector<Geo::Point3<ScalarType>> &Pos,
                         std::vector<std::vector<int>> &Faces,
                         const std::vector<std::vector<int>> &NextF,
@@ -1192,7 +1259,8 @@ void SplitMeshFromEdges(std::vector<Geo::Point3<ScalarType>> &Pos,
                         const std::vector<std::pair<int, int>> &SplitEdges,
                         std::vector<std::pair<int, int>> &Features) {
 
-  std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> FeaturesSet;
+  std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
+      FeaturesSet;
   for (size_t i = 0; i < Features.size(); i++) {
     int IndexV0 = Features[i].first;
     int IndexV1 = Features[i].second;
@@ -1251,27 +1319,30 @@ void SplitMeshFromEdges(std::vector<Geo::Point3<ScalarType>> &Pos,
 
 template <class ScalarType>
 void SplitMeshFromPartitions(std::vector<Geo::Point3<ScalarType>> &Pos,
-                            std::vector<std::vector<int>> &Faces,
-                            std::vector<int> &OldVindex,
-                            const std::vector<int> &FaceCluster) 
-{
+                             std::vector<std::vector<int>> &Faces,
+                             std::vector<int> &OldVindex,
+                             const std::vector<int> &FaceCluster) {
   std::vector<std::pair<int, int>> SplitEdges;
   std::vector<std::vector<int>> NextF, NextE;
   Geo::getFFAdjacency(Faces, NextF, NextE);
-  assert(FaceCluster.size()==Faces.size());
-  for (size_t i=0;i<Faces.size();i++)
-  for (size_t j=0;j<Faces[i].size();j++)
-  {
-    int FOpp=NextF[i][j];
-    if (FOpp==-1)continue;;
-    if (FOpp<i)continue;//only once for border
-    if (FaceCluster[i]==FaceCluster[FOpp])continue;
-    int IndexV0=Faces[i][j];
-    int IndexV1=Faces[i][(j+1)%Faces[i].size()];
-    std::pair<int, int> KeyE(std::min(IndexV0,IndexV1),std::max(IndexV0,IndexV1));
-    SplitEdges.push_back(KeyE);
-  }
-  SplitMeshFromEdges(Pos,Faces,SplitEdges,OldVindex);
+  assert(FaceCluster.size() == Faces.size());
+  for (size_t i = 0; i < Faces.size(); i++)
+    for (size_t j = 0; j < Faces[i].size(); j++) {
+      int FOpp = NextF[i][j];
+      if (FOpp == -1)
+        continue;
+      ;
+      if (FOpp < i)
+        continue; // only once for border
+      if (FaceCluster[i] == FaceCluster[FOpp])
+        continue;
+      int IndexV0 = Faces[i][j];
+      int IndexV1 = Faces[i][(j + 1) % Faces[i].size()];
+      std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
+                               std::max(IndexV0, IndexV1));
+      SplitEdges.push_back(KeyE);
+    }
+  SplitMeshFromEdges(Pos, Faces, SplitEdges, OldVindex);
   // std::vector<Geo::Point3<ScalarType>> NewPos;
   // std::vector<std::vector<int>> NewFaces;
   // OriginalFaces.clear();
@@ -1316,8 +1387,7 @@ static void MirrorMesh(std::vector<Geo::Point3<ScalarType>> &Pos3D,
                        std::vector<std::vector<int>> &Faces,
                        const Geo::Plane3<ScalarType> &SplitPl,
                        const std::set<int> &MiddleV,
-                       bool SnapClosePlane=true)
-{
+                       bool SnapClosePlane = true) {
   std::vector<Geo::Point3<ScalarType>> MirroredPos3D = Pos3D;
   std::vector<std::vector<int>> MirroredFaces = Faces;
   std::vector<bool> IsB;
@@ -1326,15 +1396,16 @@ static void MirrorMesh(std::vector<Geo::Point3<ScalarType>> &Pos3D,
 
   Geo::Box3<ScalarType> BBMesh;
   BBMesh.Init(Pos3D);
-  ScalarType delta = BBMesh.Diag()*0.00000001;
+  ScalarType delta = BBMesh.Diag() * 0.00000001;
   for (size_t i = 0; i < MirroredPos3D.size(); i++) {
     // no need to mirror on the place
     if (MiddleV.count(i) > 0)
       continue;
     ScalarType Dist = fabs(SplitPl.SignedDistance(MirroredPos3D[i]));
 
-    if ((IsB[i])&&(Dist<delta)&&(SnapClosePlane))continue;
-    
+    if ((IsB[i]) && (Dist < delta) && (SnapClosePlane))
+      continue;
+
     MirroredPos3D[i] = SplitPl.Mirror(MirroredPos3D[i]);
   }
 

@@ -1,6 +1,7 @@
 #ifndef CATMULL_CLARKABILITY
 #define CATMULL_CLARKABILITY
 
+#include <algorithm>
 #include <vector>
 #include <iostream>
 
