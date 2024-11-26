@@ -1,10 +1,13 @@
 #ifndef PATCH_DECOMPOSER
 #define PATCH_DECOMPOSER
 
+#include "graph.h"
+#include "graph_cross_field.h"
 #include "patch_basic.h"
 #include <cassert>
 #include <iostream>
 #include <ostream>
+#include <set>
 #include <sys/_types/_size_t.h>
 #define SMOOTH_KERNEL 2
 #include "../edge_mesh_functions.h"
@@ -24,6 +27,8 @@ template <class ScalarType> class PatchDecomposer {
   Geo::CrossPathSampling<ScalarType> &PathSampl;
   std::vector<Geo::PatchCondition<ScalarType> *> PConditions;
   std::set<int> UnsolvedPatches;
+  std::set<int> VertSplitForFeatures;
+  
   std::vector<std::vector<int>> SmoothKernel;
   std::vector<std::vector<int>> VFAdj;
   std::vector<Field::CrossF<ScalarType>> &VertCurv;
@@ -39,41 +44,142 @@ template <class ScalarType> class PatchDecomposer {
     }
   }
 
-  void MarkUnsolvedPatches(bool must_pass, bool sample_on) {
+  // void AssUnsolvedPatchesToSampleOn(bool use_unsolved)//
+  // {
+  // //bool must_pass, bool sample_on) {
+  //   // if (must_pass)
+  //   //   std::fill(PathSampl.must_pass_on.begin(),
+  //   PathSampl.must_pass_on.end(),
+  //   //             true);
+  //     // std::fill(PathSampl.must_pass_on.begin(),
+  //     PathSampl.must_pass_on.end(),
+  //     //           false);
 
-    if (must_pass)
-      std::fill(PathSampl.must_pass_on.begin(), PathSampl.must_pass_on.end(),
-                false);
+  //   // if (sample_on)
+  //   //   std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(),
+  //   false);
 
-    if (sample_on)
-      std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(), false);
+  //   std::set<int>::iterator Ite;
+  //   std::vector<int> to_mark_vert;
+  //   std::set<int> PatchToConsider = UnsolvedPatches;
 
+  //   // if (UnsolvedMandatoryP.size() > 0)
+  //   //   PatchToConsider = UnsolvedMandatoryP;
+
+  //   PathSampl.must_cross_e.clear();
+
+  //   for (Ite = PatchToConsider.begin(); Ite != PatchToConsider.end(); Ite++)
+  //   {
+  //     int IndexPatch = (*Ite);
+  //     assert(IndexPatch < PatchMan.NumPatches());
+  //     for (int i = 0;i <
+  //     PatchMan.PData.SubPatchVertToOriginal[IndexPatch].size(); i++) {
+  //       int IndexV = PatchMan.PData.SubPatchVertToOriginal[IndexPatch][i];
+  //       assert(IndexV >= 0);
+  //       //assert(IndexV < PathSampl.must_pass_on.size());
+  //       assert(IndexV < PathSampl.sample_on.size());
+  //       // if (must_pass)
+  //       //   PathSampl.must_pass_on[IndexV] = true;
+  //       if (sample_on)
+  //         PathSampl.sample_on[IndexV] = true;
+  //     }
+
+  //     for (int i = 0;
+  //          i < PatchMan.PData.SubPatchFacesToOriginal[IndexPatch].size();
+  //          i++) {
+  //       int IndexVF = PatchMan.PData.SubPatchFacesToOriginal[IndexPatch][i];
+  //       assert(IndexVF >= 0);
+  //       assert(IndexVF < PatchMan.Faces.size());
+  //       int IndexV0 = PatchMan.Faces[IndexVF][0];
+  //       int IndexV1 = PatchMan.Faces[IndexVF][1];
+  //       int IndexV2 = PatchMan.Faces[IndexVF][2];
+  //       std::pair<int, int> KeyE0(std::min(IndexV0, IndexV1),
+  //                                 std::max(IndexV0, IndexV1));
+  //       std::pair<int, int> KeyE1(std::min(IndexV1, IndexV2),
+  //                                 std::max(IndexV1, IndexV2));
+  //       std::pair<int, int> KeyE2(std::min(IndexV2, IndexV0),
+  //                                 std::max(IndexV2, IndexV0));
+  //       PathSampl.must_cross_e.insert(KeyE0);
+  //       PathSampl.must_cross_e.insert(KeyE1);
+  //       PathSampl.must_cross_e.insert(KeyE2);
+  //     }
+  //   }
+
+  //   // PathSampl.MarkVertices(to_mark_vert, 0);
+  // }
+public:
+  void InitMustPassEdges() {
+    PathSampl.must_cross_e.clear();
+
+    for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
+      // for each patch
+      if (UnsolvedPatches.count(i) == 0)
+        continue;
+
+      for (int j = 0; j < PatchMan.PData.SubPatchFacesToOriginal[i].size();
+           j++) {
+        int IndexVF = PatchMan.PData.SubPatchFacesToOriginal[i][j];
+        assert(IndexVF >= 0);
+        assert(IndexVF < PatchMan.Faces.size());
+        int IndexV0 = PatchMan.Faces[IndexVF][0];
+        int IndexV1 = PatchMan.Faces[IndexVF][1];
+        int IndexV2 = PatchMan.Faces[IndexVF][2];
+        std::pair<int, int> KeyE0(std::min(IndexV0, IndexV1),
+                                  std::max(IndexV0, IndexV1));
+        std::pair<int, int> KeyE1(std::min(IndexV1, IndexV2),
+                                  std::max(IndexV1, IndexV2));
+        std::pair<int, int> KeyE2(std::min(IndexV2, IndexV0),
+                                  std::max(IndexV2, IndexV0));
+        PathSampl.must_cross_e.insert(KeyE0);
+        PathSampl.must_cross_e.insert(KeyE1);
+        PathSampl.must_cross_e.insert(KeyE2);
+      }
+    }
+  }
+
+  void InitSampling(bool only_unsolved) //
+  {
     std::set<int>::iterator Ite;
     std::vector<int> to_mark_vert;
     std::set<int> PatchToConsider = UnsolvedPatches;
 
-    // if (UnsolvedMandatoryP.size() > 0)
-    //   PatchToConsider = UnsolvedMandatoryP;
+    std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(), false);
+    std::fill(PathSampl.force_sample.begin(), PathSampl.force_sample.end(),
+              false);
 
-    for (Ite = PatchToConsider.begin(); Ite != PatchToConsider.end(); Ite++) {
-      int IndexPatch = (*Ite);
-      assert(IndexPatch < PatchMan.NumPatches());
-      for (int i = 0;
-           i < PatchMan.PData.SubPatchVertToOriginal[IndexPatch].size(); i++) {
-        int IndexV = PatchMan.PData.SubPatchVertToOriginal[IndexPatch][i];
+    for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
+      // for each patch check if is
+      if (only_unsolved && (UnsolvedPatches.count(i) == 0))
+        continue;
+
+      // set the sampling space
+      for (int j = 0; j < PatchMan.PData.SubPatchVertToOriginal[i].size();
+           j++) {
+        int IndexV = PatchMan.PData.SubPatchVertToOriginal[i][j];
         assert(IndexV >= 0);
-        assert(IndexV < PathSampl.must_pass_on.size());
         assert(IndexV < PathSampl.sample_on.size());
-        if (must_pass)
-          PathSampl.must_pass_on[IndexV] = true;
-        if (sample_on)
+
+        if (start_internal)
           PathSampl.sample_on[IndexV] = true;
       }
-    }
 
-    // PathSampl.MarkVertices(to_mark_vert, 0);
+      if (start_concave) {
+        std::vector<int> currSel;
+        PatchMan.GetPatchGlobalVertOfType(i, CTypeConcave, currSel);
+        for (size_t j = 0; j < currSel.size(); j++)
+          PathSampl.force_sample[currSel[j]] = true;
+      }
+
+      if (start_spike) {
+        std::vector<int> currSel;
+        PatchMan.GetPatchGlobalVertOfType(i, CTypeSpike, currSel);
+        for (size_t j = 0; j < currSel.size(); j++)
+          PathSampl.force_sample[currSel[j]] = true;
+      }
+    }
   }
 
+private:
   void GetUnsolvedMesh(std::vector<Geo::Point3<ScalarType>> &CopiedMeshesVert,
                        std::vector<std::vector<int>> &CopiedMeshesElem,
                        std::vector<int> &OriginalVert,
@@ -105,12 +211,13 @@ public:
   bool split_removal;
 
   bool start_internal;
-  bool start_border;
+  bool start_orginal_border;
   bool start_concave;
   bool start_spike;
 
   // bool end_internal;
-  bool end_border;
+  bool end_original_border;
+  bool end_patch_border;
   bool end_concave;
   bool end_spike;
 
@@ -126,10 +233,10 @@ public:
   {
     // force sampling on all points only for the case
     // of tracing from concave or spike
-    bool NoForce = !(start_concave || start_spike);
-    if (NoForce)
-      std::fill(PathSampl.force_sample.begin(), PathSampl.force_sample.end(),
-                false);
+    // bool NoForce = !(start_concave || start_spike);
+    // if (NoForce)
+    //   std::fill(PathSampl.force_sample.begin(),
+    //   PathSampl.force_sample.end(),false);
 
     std::vector<int> to_Mark;
     if (start_concave) {
@@ -154,10 +261,10 @@ public:
       assert(IndexV < PatchMan.VertPos.size());
       assert(IndexV < PathSampl.force_sample.size());
       // if (!and_sample)
-      //   PathSampl.force_sample[IndexV] = true;
+      PathSampl.force_sample[IndexV] = true;
       // else {
-      assert(IndexV < PathSampl.sample_on.size());
-      PathSampl.force_sample[IndexV] = PathSampl.sample_on[IndexV];
+      // assert(IndexV < PathSampl.sample_on.size());
+      // PathSampl.force_sample[IndexV] = PathSampl.sample_on[IndexV];
       //}
     }
   }
@@ -167,7 +274,7 @@ public:
   // the sample set must AND (intersect) with previous one
   void InitSamplingSpace(bool use_previous) {
     bool allStart =
-        (start_internal && start_border && start_concave && start_spike);
+        (start_internal && start_orginal_border && start_concave && start_spike);
 
     if (allStart) {
       if (use_previous)
@@ -181,10 +288,15 @@ public:
       PatchMan.GetAllGlobalVertOfType(CTypeNone, currSel);
       to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
     }
-    if (start_border) {
+    if (start_orginal_border) {
       std::vector<int> currSel;
       PatchMan.GetAllGlobalVertOfType(CTypeFlat, currSel);
-      to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
+      //remove the one that have been inserted
+      for (size_t i=0;i<currSel.size();i++)
+      {
+        if (VertSplitForFeatures.count(currSel[i]))continue;
+        to_Mark.push_back(currSel[i]);
+      }
     }
     if (start_concave) {
       std::vector<int> currSel;
@@ -222,14 +334,14 @@ public:
 
   // this one
   void InitArrivalPoint(bool and_allow_pass) {
-    bool allArrival = (end_border && end_concave && end_spike);
+    bool allArrival = (end_original_border && end_patch_border && end_concave && end_spike);
 
     if (allArrival) {
-      if (and_allow_pass)
-        PathSampl.allow_arrive_to = PathSampl.allow_path_on;
-      else
-        std::fill(PathSampl.allow_arrive_to.begin(),
-                  PathSampl.allow_arrive_to.end(), true);
+      // if (and_allow_pass)
+      //   PathSampl.allow_arrive_to = PathSampl.allow_path_on;
+      // else
+      std::fill(PathSampl.allow_arrive_to.begin(),
+                PathSampl.allow_arrive_to.end(), true);
       return;
     }
 
@@ -244,10 +356,15 @@ public:
       PatchMan.GetAllGlobalVertOfType(CTypeSpike, currSel);
       to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
     }
-    if (end_border) {
+    if (end_original_border) {
       std::vector<int> currSel;
       PatchMan.GetAllGlobalVertOfType(CTypeFlat, currSel);
-      to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
+      for (size_t i=0;i<currSel.size();i++)
+      {
+        if (VertSplitForFeatures.count(currSel[i]))continue;
+        to_Mark.push_back(currSel[i]);
+      }
+      //to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
     }
 
     std::fill(PathSampl.allow_arrive_to.begin(),
@@ -258,12 +375,12 @@ public:
       assert(IndexV >= 0);
       assert(IndexV < PatchMan.VertPos.size());
       assert(IndexV < PathSampl.allow_arrive_to.size());
-      if (!and_allow_pass)
-        PathSampl.allow_arrive_to[IndexV] = true;
-      else {
-        assert(IndexV < PathSampl.allow_arrive_to.size());
-        PathSampl.allow_arrive_to[IndexV] = PathSampl.allow_path_on[IndexV];
-      }
+      // if (!and_allow_pass)
+      PathSampl.allow_arrive_to[IndexV] = true;
+      // else {
+      //   assert(IndexV < PathSampl.allow_arrive_to.size());
+      //   PathSampl.allow_arrive_to[IndexV] = PathSampl.allow_path_on[IndexV];
+      // }
     }
   }
 
@@ -372,17 +489,16 @@ public:
     for (IteUnsolved = UnsolvedPatches.begin();
          IteUnsolved != UnsolvedPatches.end(); IteUnsolved++) {
       int IndexPatch = (*IteUnsolved);
-      if (PatchMan.PData.PatchOriginalFaces[IndexPatch].size() == 0)continue;
+      if (PatchMan.PData.PatchOriginalFaces[IndexPatch].size() == 0)
+        continue;
       UnsolvedPatchesNew.insert(IndexPatch);
     }
     UnsolvedPatches = UnsolvedPatchesNew;
-     
-      
+
     PathSampl.CleanEmptySelectedPaths();
     std::map<int, int> PatchIdxRemap;
     PatchMan.CompactEmptyPatches(PatchIdxRemap);
 
-    
     UnsolvedPatchesNew.clear();
     // std::set<int> UnsolvedMandatoryPatchesNew;
 
@@ -403,7 +519,7 @@ public:
 
   bool IsSolvingFeatures() {
     // if only start from particular ones
-    if ((start_concave || start_spike) && (!start_internal) && (!start_border))
+    if ((start_concave || start_spike) && (!start_internal) && (!start_orginal_border))
       return true;
     return false;
   }
@@ -418,10 +534,13 @@ public:
   //   PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioDist;
   // }
 
-  void RetraceOnUnsolved() {
+  void RetraceCandidates() {
 
-    
     CompactData();
+
+    // InitForceSamplingSpace();
+
+    // std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(), false);
 
     // remove the space around singularities
     PathSampl.InitSingularityNodes(false);
@@ -429,21 +548,24 @@ public:
     // mark the patches that are not solved
     // the first one says that useful path must pass on it
     // the second says that it sample on them only
-    if (add_only_where_needed)
-      MarkUnsolvedPatches(true, true);
-    else {
-      std::fill(PathSampl.must_pass_on.begin(), PathSampl.must_pass_on.end(),true);
-      std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(), true);
-    }
+    // if (add_only_where_needed)
+    //  MarkUnsolvedPatches(true, true);
+    // else {
+    //   std::fill(PathSampl.must_pass_on.begin(), PathSampl.must_pass_on.end(),
+    //             true);
+    //   std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(),
+    //   true);
+    // }
 
     // allows paths to pass on the one that must solve only
-    PathSampl.allow_path_on = PathSampl.must_pass_on;
+    // PathSampl.allow_path_on = PathSampl.must_pass_on;
 
-    InitSamplingSpace(true);
-    // if (force_sample==NULL)
-    //   InitForceSamplingSpace(false);
-    // else
-    //   PathSampl.force_sample=(*force_sample);
+    // AssUnsolvedPatchesToSampleOn();
+    // InitSamplingSpace(true);
+    //  if (force_sample==NULL)
+    //    InitForceSamplingSpace(false);
+    //  else
+    //    PathSampl.force_sample=(*force_sample);
 
     // bool doing_mandatory = (UnsolvedMandatoryP.size() > 0);
     // if (!doing_mandatory) {
@@ -451,7 +573,7 @@ public:
 
     /// this one stops to previously found borders, useful for
     /// recursive call
-    if (end_border && add_only_where_needed) {
+    if (end_patch_border && add_only_where_needed) {
       // get the non solved subpatches
       std::vector<int> BorderUnsolved;
       GetBorderUnsolved(BorderUnsolved); //, false);
@@ -465,12 +587,36 @@ public:
     else
       PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioDist;
 
-    
     auto t0 = std::chrono::high_resolution_clock::now();
     // sample the candidate
+    // PathSampl.Graph().EnableAllArcs();
+    // PathSampl.Graph().EnableAllNodes();
+    // PathSampl.Graph().PrintData();
+
+    // std::vector<int> ForcedSamplVert;
+    // PathSampl.GetForcedSampleVert(ForcedSamplVert);
+    // std::cout<<"FORCING "<<ForcedSamplVert.size()<<std::endl;
+    // if (!start_concave)
+    // {
+    //   std::cout<<"TEST NAVACCHIO 0"<<std::endl;
+    //   PathSampl.sample_on=std::vector<bool>(PathSampl.sample_on.size(),
+    //   false);
+    //   PathSampl.force_sample=std::vector<bool>(PathSampl.force_sample.size(),
+    //   false);
+    // }
+
     PathSampl.SampleCandidates(to_init_distance);
+    // if (!start_concave)
+    // {
+    //   exit(0);
+    //   // std::cout<<"TEST NAVACCHIO 1"<<std::endl;
+    //   //  PathSampl.sample_on=std::vector<bool>(PathSampl.sample_on.size(),
+    //   false);
+    // }
+
     auto t1 = std::chrono::high_resolution_clock::now();
-    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    auto elapsed1 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     TimeTracing += elapsed1.count() * 1e-6;
 
     // if not initialized at this point will be
@@ -478,7 +624,7 @@ public:
 
     // restore the node type for borders that have been changed to exit
     // for the recursive call
-    if (end_border && add_only_where_needed) // || doing_mandatory) {
+    if (end_patch_border && add_only_where_needed) // || doing_mandatory) {
       PathSampl.RestoreNodeType();
     // }
 
@@ -624,54 +770,52 @@ public:
     if ((UnsolvedPatches.size() == 0) && (stop_when_solved)) {
       all_solved = true;
       added_sample = false;
-      std::cout<<"All Solved!"<<std::endl;
+      std::cout << "All Solved!" << std::endl;
       return;
     }
 
-    double timeReTrace,TimeUpdDist,TimeConflict;
+    double timeReTrace, TimeUpdDist, TimeConflict;
 
-    //check in case start on spike or concave that
-    //if the vertex is no more concave or spike remove the candidate
-    //if (start_spike && end_spike)
+    // check in case start on spike or concave that
+    // if the vertex is no more concave or spike remove the candidate
+    // if (start_spike && end_spike)
 
     // GetAllGlobalVertOfType(const CornerType CType,
     //                           std::vector<int> &SelectedVert)
 
-    //see if already solved that features 
-    //in such a case no need to keep adding
-    bool checkMustStartEnd=IsSolvingFeatures() && add_only_where_needed;
-    if (checkMustStartEnd)
-    {
+    // see if already solved that features
+    // in such a case no need to keep adding
+    bool checkMustStartEnd = IsSolvingFeatures() && add_only_where_needed;
+    if (checkMustStartEnd) {
       PathSampl.MustStartEnd.clear();
-      std::vector<int> SelectedVertConcave,SelectedSpike;
+      std::vector<int> SelectedVertConcave, SelectedSpike;
 
       if (start_concave || end_concave)
-       PatchMan.GetAllGlobalVertOfType(CTypeConcave,SelectedVertConcave);
+        PatchMan.GetAllGlobalVertOfType(CTypeConcave, SelectedVertConcave);
 
       if (start_spike || end_spike)
-       PatchMan.GetAllGlobalVertOfType(CTypeSpike,SelectedSpike);
+        PatchMan.GetAllGlobalVertOfType(CTypeSpike, SelectedSpike);
 
-      PathSampl.MustStartEnd=SelectedVertConcave;
+      PathSampl.MustStartEnd = SelectedVertConcave;
       PathSampl.MustStartEnd.insert(PathSampl.MustStartEnd.end(),
-                                    SelectedSpike.begin(),
-                                    SelectedSpike.end());
+                                    SelectedSpike.begin(), SelectedSpike.end());
     }
 
-    added_sample = PathSampl.AddNextPath(add_only_where_needed,checkMustStartEnd,
-                                          timeReTrace,TimeUpdDist,TimeConflict);
-    
+    added_sample =
+        PathSampl.AddNextPath(add_only_where_needed, checkMustStartEnd,
+                              timeReTrace, TimeUpdDist, TimeConflict);
+
     // auto t1 = std::chrono::high_resolution_clock::now();
     // auto elapsed0 =
     //     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     TimeTracing += timeReTrace;
-    TimeUpdateDistances+=TimeUpdDist;
-    TimeCheckConflicts+=TimeConflict;
+    TimeUpdateDistances += TimeUpdDist;
+    TimeCheckConflicts += TimeConflict;
 
     if (!added_sample) {
-       return;
+      return;
     }
 
-    
     // verify local conditions
     std::vector<int> ToAdd, ToRemove;
     // std::set<int> ToUpdPatches;
@@ -686,10 +830,11 @@ public:
       SmoothAround(PathsIDX, TouchedPatches);
     }
 
-   
-    auto t0= std::chrono::high_resolution_clock::now();
+    auto t0 = std::chrono::high_resolution_clock::now();
     std::vector<int> UpdatedPatches;
+
     PatchMan.Update(ToAdd, ToRemove, UpdatedPatches);
+
     auto t1 = std::chrono::high_resolution_clock::now();
     auto elapsed0 =
         std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
@@ -713,11 +858,10 @@ public:
         UnsolvedPatches.insert(i);
     }
 
-   
     for (size_t i = 0; i < PConditions.size(); i++) {
       PConditions[i]->UpdateGlobalData(PatchMan);
     }
-   
+
     for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
       if (PatchMan.isEmpty(i))
         continue;
@@ -737,12 +881,12 @@ public:
 
     RemoveEmptyPatches();
 
-    if (add_only_where_needed)
-      MarkUnsolvedPatches(true, false);
+    // if (add_only_where_needed)
+    //   MarkUnsolvedPatches(true, false);
 
     if (stop_when_solved)
       all_solved = (UnsolvedPatches.size() == 0);
-    
+
     // auto t2 = std::chrono::high_resolution_clock::now();
     // auto elapsed1 =
     //     std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
@@ -989,39 +1133,36 @@ public:
     return false;
   }
 
-  void SampleInitialCandidates() {
+  // void SampleInitialCandidates() {
 
-    InitSamplingSpace(false);
-    InitForceSamplingSpace(); // false);
-    InitArrivalPoint(false);
+  //   InitSamplingSpace(false);
+  //   InitForceSamplingSpace(); // false);
+  //   InitArrivalPoint(false);
 
-    // //NEW cannot pass from concave or spike can only depart or arrive
-    // std::vector<int> ConcaveV;
-    // std::vector<int> SpikeV;
-    // PatchMan.GetAllGlobalVertOfType(CTypeConcave,ConcaveV);
-    // PatchMan.GetAllGlobalVertOfType(CTypeSpike,SpikeV);
-    // for (size_t i=0;i<ConcaveV.size();i++)
-    //   PathSampl.allow_path_on[ConcaveV[i]]=false;
-    //  for (size_t i=0;i<SpikeV.size();i++)
-    //   PathSampl.allow_path_on[SpikeV[i]]=false;
+  //   // //NEW cannot pass from concave or spike can only depart or arrive
+  //   // std::vector<int> ConcaveV;
+  //   // std::vector<int> SpikeV;
+  //   // PatchMan.GetAllGlobalVertOfType(CTypeConcave,ConcaveV);
+  //   // PatchMan.GetAllGlobalVertOfType(CTypeSpike,SpikeV);
+  //   // for (size_t i=0;i<ConcaveV.size();i++)
+  //   //   PathSampl.allow_path_on[ConcaveV[i]]=false;
+  //   //  for (size_t i=0;i<SpikeV.size();i++)
+  //   //   PathSampl.allow_path_on[SpikeV[i]]=false;
 
-    // MarkStartSamples(0,false);
-    //  PathSampl.sample_only_on[0] = true;
+  //   // MarkStartSamples(0,false);
+  //   //  PathSampl.sample_only_on[0] = true;
 
-    if (IsSolvingFeatures())
-    {
-      PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioLen;
-      std::cout<<"Using Lenght"<<std::endl;
-    }
-    else
-    {
-      PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioDist;
-      std::cout<<"Using Dist"<<std::endl;
-    }
-    PathSampl.SampleCandidates(true);
-    to_init_distance = false;
-    // PathSampl.sample_only_on[0] = false;
-  }
+  //   if (IsSolvingFeatures()) {
+  //     PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioLen;
+  //     std::cout << "Using Lenght" << std::endl;
+  //   } else {
+  //     PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioDist;
+  //     std::cout << "Using Dist" << std::endl;
+  //   }
+  //   PathSampl.SampleCandidates(true);
+  //   to_init_distance = false;
+  //   // PathSampl.sample_only_on[0] = false;
+  // }
 
   PatchDecomposer(PatchManaging<ScalarType> &_PatchMan,
                   Geo::CrossPathSampling<ScalarType> &_PathSampl,
@@ -1048,16 +1189,18 @@ public:
     // StartTraceType=Geo::CTNone;
     // EndTraceType=Geo::CTNone;
     start_internal = true;
-    start_border = true;
+    start_orginal_border = true;
     start_concave = true;
     start_spike = true;
 
     // end_internal = true;
-    end_border = true;
+    end_original_border =true;
+    end_patch_border = false;
     end_concave = true;
     end_spike = true;
 
     to_init_distance = true;
+    first_ite = true;
   }
 
   //    std::set<int> TestedRemovedPath;
@@ -1065,46 +1208,62 @@ public:
 
   void SetSpikeSpikeConfiguration() {
     start_internal = false;
-    start_border = false;
+    start_orginal_border = false;
     start_concave = false;
     start_spike = true;
 
-    end_border = false;
+    end_original_border=false;
+    end_patch_border = false;
     end_concave = false;
     end_spike = true;
   }
 
   void SetFeatureFeatureConfiguration() {
     start_internal = false;
-    start_border = false;
+    start_orginal_border = false;
     start_concave = true;
     start_spike = true;
 
-    end_border = false;
+    end_original_border=false;
+    end_patch_border = false;
     end_concave = true;
     end_spike = true;
   }
 
   void SetFeatureAllConfiguration() {
     start_internal = false;
-    start_border = false;
+    start_orginal_border = false;
     start_concave = true;
     start_spike = true;
 
-    end_border = true;
+    end_original_border=true;
+    end_patch_border = true;
     end_concave = true;
     end_spike = true;
   }
 
-  void SetBaseConfiguration() {
+  void SetBaseContinuumConfiguration() {
     start_internal = true;
-    start_border = true;
-    start_concave = true;
-    start_spike = true;
+    start_orginal_border = true;
+    start_concave = false;
+    start_spike = false;
 
-    end_border = true;
-    end_concave = true;
-    end_spike = true;
+    end_original_border=true;
+    end_patch_border = false;
+    end_concave = false;
+    end_spike = false;
+  }
+
+  void SetBaseSplitConfiguration() {
+    start_internal = true;
+    start_orginal_border = true;
+    start_concave = false;
+    start_spike = false;
+
+    end_original_border=true;
+    end_patch_border = true;
+    end_concave = false;
+    end_spike = false;
   }
 
   bool AddAllPaths() {
@@ -1117,6 +1276,8 @@ public:
 
     do {
       AddNext(all_solved, added_sample);
+      // update dart if needed
+      UpdateOrthoDartNodeTypeIfNeeded();
       added_once |= added_sample;
     } while ((!all_solved) && (added_sample));
 
@@ -1133,22 +1294,18 @@ public:
   void RemovePaths() {
     current_rem_cand = PathSampl.SelectedPaths.size() - 1;
     std::cout << "REMOVING PATHS" << std::endl;
+    int NumPath0 = PathSampl.SelectedPaths.size();
     while (RemoveNextIfPossible()) {
+      // update dart if needed
+      // UpdateOrthoDartNodeTypeIfNeeded();
     };
 
-    // std::cout << "Time Save/Restore St: " << time_savSt << " milli
-    // microseconds"
-    //           << std::endl;
-    // std::cout << "Time 0: " << time_rem0 << " milli microseconds" <<
-    // std::endl; std::cout << "Time 1: " << time_rem1 << " milli microseconds"
-    // << std::endl; std::cout << "Time 2: " << time_rem2 << " milli
-    // microseconds" << std::endl; std::cout << "Time 3: " << time_rem3 << "
-    // milli microseconds" << std::endl; std::cout << "Time 4: " << time_rem4 <<
-    // " milli microseconds" << std::endl;
-
-    // PatchMan.PData.PrintSize();
-
     CompactData();
+
+    int NumPath1 = PathSampl.SelectedPaths.size();
+    // distance should be reinitialized with remaining
+    if (NumPath0 != NumPath1)
+      PathSampl.InitializeDistance();
   }
 
   void RemoveSplitted(bool mergeCollinear = true) {
@@ -1180,7 +1337,10 @@ public:
     // PathSampl.MergeCollinearPath();
   }
 
-  bool SolveAllFeatures(bool UpdateForce = true) {
+  bool SolveAllFeatures() // bool UpdateForce = true) {
+  {
+    // std::cout<<"STEP 0"<<std::endl;
+    // PathSampl.Graph().PrintData();
 
     bool has_added = false;
 
@@ -1195,32 +1355,74 @@ public:
     PathSampl.force_direct = true;
     // first do feature to feature
     SetFeatureFeatureConfiguration();
+    InitSampling(add_only_where_needed);
+    if (add_only_where_needed)
+      InitMustPassEdges();
 
-    if (UpdateForce)
-      InitForceSamplingSpace();
+    // if (UpdateForce)
+    //  std::cout<<"STEP 0.1"<<std::endl;
+    //  PathSampl.Graph().PrintData();
 
-    // then trace in the one unsolved
-    RetraceOnUnsolved();
+    // then trace in the one unsolved, only the first time then use borders
+    // if (first_ite)
+    std::cout << "**TRACING first feature step **" << std::endl;
+    RetraceCandidates();
+
+    // std::cout<<"STEP 1"<<std::endl;
+    // PathSampl.Graph().PrintData();
 
     has_added |= AddAllPaths();
+
+    // std::cout<<"STEP 2"<<std::endl;
+    // PathSampl.Graph().PrintData();
 
     // set features to all possible arrival points
     SetFeatureAllConfiguration();
+    InitSampling(add_only_where_needed);
+    if (add_only_where_needed)
+      InitMustPassEdges();
+    // if (!end_border)
+    // {
+    // std::cout<<"STEP 3"<<std::endl;
+    // PathSampl.Graph().PrintData();
 
-    RetraceOnUnsolved();
+    std::cout << "**TRACING second feature step **" << std::endl;
+    RetraceCandidates();
 
+    // std::cout<<"STEP 4"<<std::endl;
+    // PathSampl.Graph().PrintData();
     has_added |= AddAllPaths();
-    SetBaseConfiguration();
 
+    // std::cout<<"STEP 5"<<std::endl;
+    // PathSampl.Graph().PrintData();
+    //}
     PathSampl.force_direct = false;
     return has_added;
   }
 
   bool SolveAllMesh() {
+    // UnsolvedPatches.clear();
     PathSampl.force_direct = false;
-    SetBaseConfiguration();
-    RetraceOnUnsolved();
-    bool has_added = AddAllPaths();
+    bool has_added = false;
+
+    if (first_ite) {
+      SetBaseContinuumConfiguration();
+      InitSampling(add_only_where_needed);
+      if (add_only_where_needed)
+        InitMustPassEdges();
+
+      RetraceCandidates();
+      has_added |= AddAllPaths();
+      first_ite=false;
+    }
+
+    SetBaseSplitConfiguration();
+    InitSampling(add_only_where_needed);
+    if (add_only_where_needed)
+      InitMustPassEdges();
+
+    RetraceCandidates();
+    has_added |= AddAllPaths();
     return has_added;
   }
 
@@ -1237,15 +1439,16 @@ public:
     }
   }
 
-  double TimeTracing, TimeUpdateConditions, 
-        TimeUpdateUpdatePatches,
-         TimeUpdateDistances, TimeCheckConflicts,
-         TimeRemovePaths;
+  double TimeTracing, TimeUpdateConditions, TimeUpdateUpdatePatches,
+      TimeUpdateDistances, TimeCheckConflicts, TimeRemovePaths;
 
   bool ForceSolveSpikeConcave(int IndexP) // bool Do_features,
   {
     std::vector<int> ToStartV;
     std::vector<int> ConcaveV;
+
+    if (PathSampl.avoidSingularities)
+      PathSampl.EnableSingularities();
 
     PatchMan.GetPatchGlobalVertOfType(IndexP, Geo::CTypeConcave, ConcaveV);
 
@@ -1266,16 +1469,17 @@ public:
       PathSampl.force_sample[ToStartV[i]] = true;
 
     // limit the path to pass only on those ones
-    PathSampl.allow_path_on = std::vector<bool>(PatchMan.VertPos.size(), false);
+    // PathSampl.allow_path_on = std::vector<bool>(PatchMan.VertPos.size(),
+    // false);
 
-    int sizeV = PatchMan.PData.SubPatchVertToOriginal[IndexP].size();
-    for (size_t i = 0; i < sizeV; i++) {
-      int CurrV = PatchMan.PData.SubPatchVertToOriginal[IndexP][i];
-      PathSampl.allow_path_on[CurrV] = true;
-    }
+    // int sizeV = PatchMan.PData.SubPatchVertToOriginal[IndexP].size();
+    // for (size_t i = 0; i < sizeV; i++) {
+    //   int CurrV = PatchMan.PData.SubPatchVertToOriginal[IndexP][i];
+    //   PathSampl.allow_path_on[CurrV] = true;
+    // }
 
-    // limit the path to arrive only on those ones
-    PathSampl.must_pass_on = PathSampl.allow_path_on;
+    // // limit the path to arrive only on those ones
+    // PathSampl.must_pass_on = PathSampl.allow_path_on;
 
     // get all boundary vertices and set as possible arrive
     std::vector<int> BorderV;
@@ -1304,9 +1508,12 @@ public:
     PathSampl.SetNodesToExit(SetAsExit);
 
     PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioLen;
-
+    PathSampl.only_visible = false;
     // sample the candidate
     PathSampl.SampleCandidates(false);
+    if (PathSampl.avoidSingularities)
+      PathSampl.DisableSingularities();
+    PathSampl.only_visible = true;
     bool has_added = AddAllPaths();
     PathSampl.RestoreNodeType();
     return has_added;
@@ -1366,43 +1573,144 @@ public:
   }
 
 private:
+  bool first_ite;
 
   void DecomposeCycle(bool Do_remove) {
     PathSampl.InitWithSelected();
     bool has_added = false;
+    first_ite = true;
     do {
       // this firs step solve all the features (concave, spikes)
       has_added = false;
       std::cout << "* solving all features *" << std::endl;
-      
-      has_added |= SolveAllFeatures();
+      bool has_added_f = SolveAllFeatures();
+
+      if (has_added_f)
+        std::cout << "Added Features" << std::endl;
+
+      has_added |= has_added_f;
 
       auto t0 = std::chrono::high_resolution_clock::now();
       // remove unnecessary
-      if (has_added && Do_remove)
+      if (has_added_f && Do_remove)
         RemovePaths();
+
       auto t1 = std::chrono::high_resolution_clock::now();
       auto elapsed =
           std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
       TimeRemovePaths += elapsed.count() * 1e-6;
 
       // add the remaining to solve all the rest of the objetive function
-      std::cout << "* solving all mesh *" << std::endl;
-      has_added |= SolveAllMesh();
+      bool has_added_m = SolveAllMesh();
+      // if (has_added_m)
+      //   std::cout << "Added Mesh" << std::endl;
+      has_added |= has_added_m;
 
       // then remove unnecessary
       t0 = std::chrono::high_resolution_clock::now();
-      if (has_added && Do_remove)
+      if (has_added_m && Do_remove)
         RemovePaths();
       t1 = std::chrono::high_resolution_clock::now();
       elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
       TimeRemovePaths += elapsed.count() * 1e-6;
 
+      // first_ite = false;
     } while (has_added);
   }
 
+  void UpdateGraphSingleLineSpike(
+      Geo::TracingGraph<ScalarType> &TGraph,
+      const std::vector<Field::CrossF<ScalarType>> &VertCurv,
+      const std::vector<std::pair<int, int>> &Features) {
+    // update the spike vertices with only one neigh
+    std::map<int, std::vector<int>> AdjList;
+    for (size_t i = 0; i < Features.size(); i++) {
+      int IndexV0 = Features[i].first;
+      int IndexV1 = Features[i].second;
+      AdjList[IndexV0].push_back(IndexV1);
+      AdjList[IndexV1].push_back(IndexV0);
+    }
+
+    std::vector<int> SelectedVert;
+    PatchMan.GetAllGlobalVertOfType(Geo::CTypeSpike, SelectedVert);
+
+    for (size_t i = 0; i < SelectedVert.size(); i++) {
+      int IndexV = SelectedVert[i];
+      // opened spike
+      if (AdjList[IndexV].size() == 0)
+        continue;
+      // assert(AdjList[IndexV].size() > 0);
+      // std::cout<<"size "<<AdjList[IndexV].size()<<std::endl;
+      // std::cout<<"TestN "<<IndexV<<std::endl;
+      // // std::cout<<"N0 "<<AdjList[IndexV][0]<<std::endl;
+      // // std::cout<<"N1 "<<AdjList[IndexV][1]<<std::endl;
+      // exit(0);
+      if (AdjList[IndexV].size() != 1)
+        continue;
+      // std::cout<<"DEEDEDE"<<std::endl;
+      int IndexV0 = AdjList[IndexV][0];
+      Geo::Point3<ScalarType> DirSpike =
+          PatchMan.VertPos[IndexV] - PatchMan.VertPos[IndexV0];
+      DirSpike.Normalize();
+      // get the direction
+      assert(IndexV < VertCurv.size());
+      int DirIdx = VertCurv[IndexV].BestDirectionI(DirSpike);
+      int NodeIdx = Field::CrossFieldGraph::NodeOfElemDir(IndexV, DirIdx);
+      int OppNodeIdx = Field::CrossFieldGraph::OppositeNodeCrossField(NodeIdx);
+      std::vector<int> OrthoN;
+      Field::CrossFieldGraph::OrthoNodesCrossField(NodeIdx, OrthoN);
+
+      // std::cout<<"Node 0 "<<NodeIdx<<std::endl;
+      // std::cout<<"Node 1 "<<OppNodeIdx<<std::endl;
+      // std::cout<<"Node 2 "<<OrthoN[0]<<std::endl;
+      // std::cout<<"Node 3 "<<OrthoN[1]<<std::endl;
+      assert(NodeIdx >= 0);
+      assert(NodeIdx < TGraph.NumNodes());
+      TGraph.NodeType(NodeIdx) = Geo::Internal;
+      assert(OppNodeIdx >= 0);
+      assert(OppNodeIdx < TGraph.NumNodes());
+      TGraph.NodeType(OppNodeIdx) = Geo::ExitDomain;
+      assert(OrthoN[0] >= 0);
+      assert(OrthoN[0] < TGraph.NumNodes());
+      TGraph.NodeType(OrthoN[0]) = Geo::DartOrthoDomain;
+      assert(OrthoN[1] >= 0);
+      assert(OrthoN[1] < TGraph.NumNodes());
+      TGraph.NodeType(OrthoN[1]) = Geo::DartOrthoDomain;
+    }
+  }
+
+  void UpdateOrthoDartNodeTypeIfNeeded() {
+    std::vector<int> DartIdxNode;
+    PathSampl.Graph().GetNodeType(Geo::DartOrthoDomain, DartIdxNode);
+    if (DartIdxNode.size() == 0)
+      return;
+
+    // then get all spike nodes
+    std::vector<int> SpikeVert;
+    PatchMan.GetAllGlobalVertOfType(CTypeSpike, SpikeVert);
+
+    std::set<int> SpikeVertSet(SpikeVert.begin(), SpikeVert.end());
+
+    for (size_t i = 0; i < DartIdxNode.size(); i++) {
+      int IndexN = DartIdxNode[i];
+      int IndexV = Field::CrossFieldGraph::ElemOfNode(IndexN);
+      // then no more spike change the type of node
+      if (SpikeVertSet.count(IndexV) == 0)
+        PathSampl.Graph().NodeType(IndexN) = Geo::Internal;
+    }
+  }
+
 public:
-  void AddFeaturesAsPaths(const std::vector<std::pair<int, int>> &Features) {
+  void
+  AddFeaturesAsPaths(Geo::TracingGraph<ScalarType> &TGraph,
+                     const std::vector<Field::CrossF<ScalarType>> &VertCurv,
+                     const std::vector<std::pair<int, int>> &Features,
+                     const std::vector<int> &NewBorder) 
+  {
+    VertSplitForFeatures=std::set<int>(NewBorder.begin(),NewBorder.end());
+
+    if (Features.size() == 0)
+      return;
     std::vector<Geo::Point3<ScalarType>> EdgeVertPos;
     std::vector<std::pair<int, int>> Edges;
     Geo::EdgeMeshFunctions<ScalarType>::ExtractFromFeatures(
@@ -1441,6 +1749,23 @@ public:
 
     PatchMan.Update(ToAdd, ToRemove, UpdatedPatches);
 
+    // update the spike vertices with only one neigh
+    std::map<int, std::vector<int>> AdjList;
+    for (size_t i = 0; i < UpdatedPatches.size(); i++) {
+      int TestPatch = UpdatedPatches[i];
+      std::vector<int> CornerVert;
+      std::vector<CornerType> CurrType;
+      PatchMan.GetAllCorners(TestPatch, CornerVert, CurrType);
+      for (size_t j = 0; j < CurrType.size(); j++) {
+        if (CurrType[j] != Geo::CTypeSpike)
+          continue;
+        int IndexV = CornerVert[j];
+        if (AdjList[IndexV].size() != 1)
+          continue;
+        int IndexV0 = AdjList[IndexV][0];
+      }
+    }
+
     // then update conditions
     for (size_t i = 0; i < UpdatedPatches.size(); i++) {
       int TestPatch = UpdatedPatches[i];
@@ -1474,9 +1799,10 @@ public:
 
     RemoveEmptyPatches();
 
-    if (add_only_where_needed)
-      MarkUnsolvedPatches(true, false);
+    // if (add_only_where_needed)
+    //   MarkUnsolvedPatches(true, false);
 
+    UpdateGraphSingleLineSpike(TGraph, VertCurv, Features);
     // if (stop_when_solved)
     //   all_solved = (UnsolvedPatches.size() == 0);
   }
@@ -1489,15 +1815,16 @@ public:
     PathSampl.Candidates.clear();
     PathSampl.SampledPaths_Status.clear();
     PathSampl.Init();
+
     // Init();
     // PathSampl.Init();
 
-    TimeTracing=0;
-    TimeUpdateConditions=0;
-    TimeUpdateDistances=0;
-    TimeUpdateUpdatePatches=0;
-    TimeCheckConflicts=0;
-    TimeRemovePaths=0;
+    TimeTracing = 0;
+    TimeUpdateConditions = 0;
+    TimeUpdateDistances = 0;
+    TimeUpdateUpdatePatches = 0;
+    TimeCheckConflicts = 0;
+    TimeRemovePaths = 0;
 
     DecomposeCycle(Do_remove);
 
@@ -1532,12 +1859,12 @@ public:
     PathSampl.SampledPaths_Status.clear();
     PathSampl.Init();
 
-    TimeTracing=0;
-    TimeUpdateConditions=0;
-    TimeUpdateUpdatePatches=0;
-    TimeUpdateDistances=0;
-    TimeCheckConflicts=0;
-    TimeRemovePaths=0;
+    TimeTracing = 0;
+    TimeUpdateConditions = 0;
+    TimeUpdateUpdatePatches = 0;
+    TimeUpdateDistances = 0;
+    TimeCheckConflicts = 0;
+    TimeRemovePaths = 0;
 
     bool has_added = false;
     bool added_incomplete = false;
@@ -1557,7 +1884,7 @@ public:
       stop_when_solved = false;
       do {
         PathSampl.force_sample = force_sample_swap;
-        has_added_feature = SolveAllFeatures(false);
+        has_added_feature = SolveAllFeatures();
         has_added |= has_added_feature;
       } while (has_added_feature);
       RankPaths.resize(PathSampl.SelectedPaths.size(), 0);
@@ -1581,9 +1908,9 @@ public:
       for (size_t i = 0; i < PathSampl.SelectedPaths.size(); i++)
         BoundaryP.push_back(i);
 
+      std::cout << "*** STEP 3 ***" << std::endl;
       add_only_where_needed = false;
       stop_when_solved = false;
-      // std::cout<<"*** STEP 3 ***"<<std::endl;
       SolveAllMesh();
       RankPaths.resize(PathSampl.SelectedPaths.size(), 2);
 
@@ -1598,7 +1925,7 @@ public:
     } while (has_added);
     // then add the rest of candidates
 
-     std::cout << "<<< Decompose TIMINGS (sec) >>> " << std::endl;
+    std::cout << "<<< Decompose TIMINGS (sec) >>> " << std::endl;
     std::cout << "* Tracing: " << TimeTracing << std::endl;
     std::cout << "* Updating Conditions: " << TimeUpdateConditions << std::endl;
     std::cout << "* Updating Patches: " << TimeUpdateUpdatePatches << std::endl;

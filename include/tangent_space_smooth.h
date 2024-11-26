@@ -18,6 +18,7 @@
 #include <cassert>
 #include <chrono>
 #include <iostream>
+#include <set>
 #include <sys/_types/_size_t.h>
 #include <vector>
 
@@ -847,6 +848,10 @@ public:
                             bool UseCloseDelta,
                             UVSmoothParam UVP = UVSmoothParam()) {
     // auto t0 = std::chrono::high_resolution_clock::now();
+    UVSmoothParam UVP1=UVP;
+    std::set<Geo::Point3<ScalarType>> FixedPos;
+    for (size_t i=0;i<UVP.Fixed.size();i++)
+      FixedPos.insert(VertPos[UVP.Fixed[i]]);
 
     std::vector<int> IndexF;
     std::vector<int> IndexE;
@@ -863,6 +868,11 @@ public:
 
     assert(FacesMerged.size() == Faces.size());
 
+    //remap the fixed ones
+    UVP1.Fixed.clear();
+    for (size_t i=0;i<VertMerged.size();i++)
+    if (FixedPos.count(VertMerged[i]))
+      UVP1.Fixed.push_back(i);
     // auto t1 = std::chrono::high_resolution_clock::now();
 
     std::vector<std::pair<int, int>> FeatureE;
@@ -879,9 +889,9 @@ public:
     FeatureE.erase(std::unique(FeatureE.begin(), FeatureE.end()),
                    FeatureE.end());
     // UVP.FeatureLines = FeatureE;
-    UVP.FeatureLines.insert(UVP.FeatureLines.end(), FeatureE.begin(),
+    UVP1.FeatureLines.insert(UVP.FeatureLines.end(), FeatureE.begin(),
                             FeatureE.end());
-    Smooth(VertMerged, FacesMerged, UVP);
+    Smooth(VertMerged, FacesMerged, UVP1);
 
     // auto t2 = std::chrono::high_resolution_clock::now();
 

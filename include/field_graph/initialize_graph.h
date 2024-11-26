@@ -76,7 +76,8 @@ template <class ScalarType> class TragingGraphFunctions {
                                      const int Dir0, const int Dir1,
                                      const ScalarType &drift_penalty,
                                      const ScalarType maxVisAngle,
-                                     bool &Visible, ScalarType &EdgeW) {
+                                     bool &Visible, ScalarType &EdgeW,
+                                     bool tangent_space = true) {
     assert(Dir0 >= 0);
     assert(Dir1 >= 0);
     assert(Dir0 < 4);
@@ -86,6 +87,15 @@ template <class ScalarType> class TragingGraphFunctions {
     Geo::Point3<ScalarType> P1 = F1.Pos;
     Geo::Point3<ScalarType> D0 = F0.GetDirection(Dir0);
     Geo::Point3<ScalarType> D1 = F1.GetDirection(Dir1);
+
+    Eigen::Matrix3<ScalarType> RotM;
+    RotM.setIdentity();
+    if (tangent_space) {
+      Geo::Point3<ScalarType> N0 = F0.OrthoDir();
+      Geo::Point3<ScalarType> N1 = F1.OrthoDir();
+      RotM = Geo::PointMatch<ScalarType>::BestRotationMatrix(N1, N0);
+    }
+    D1 = RotM * D1;
 
     return (GetVisibilityInfo(P0, P1, D0, D1, drift_penalty, maxVisAngle,
                               Visible, EdgeW));
@@ -1080,9 +1090,9 @@ template <class ScalarType> class TragingGraphFunctions {
           // TGraph.NodeType(IndexN0) =TangentDomain;
           TGraph.NodeType(IndexN0) = TangentExitDomain;
           // TGraph.NodeType(IndexN0) =ExitDomain;
-          TGraph.NodeType(IndexN1) = DartOrthoDomain;//Internal;
+          TGraph.NodeType(IndexN1) = DartOrthoDomain; // Internal;
           TGraph.NodeType(IndexN2) = Internal;
-          TGraph.NodeType(IndexN3) = DartOrthoDomain;//Internal;
+          TGraph.NodeType(IndexN3) = DartOrthoDomain; // Internal;
         }
         continue;
       }
@@ -1308,14 +1318,15 @@ template <class ScalarType> class TragingGraphFunctions {
     Adjacency = NewAdjacency;
   }
 
-public:
+  // static void SetJumpConnections(
 
-static void MakeSymmetricCrossFieldGraph(TracingGraph<ScalarType> &TGraph) {
-    //assert(TGraph.NumNodes() == (CrossField.size() * 4));
-    // then get the closest node
+public:
+  static void MakeSymmetricCrossFieldGraph(TracingGraph<ScalarType> &TGraph) {
+    // assert(TGraph.NumNodes() == (CrossField.size() * 4));
+    //  then get the closest node
     int AddingOp = 0;
     int CorrectOp = 0;
-    int TotalTest=0;
+    int TotalTest = 0;
     for (size_t i = 0; i < TGraph.NumNodes(); i++) {
       int IndexN0 = i;
       int IndexN0Opp = Field::CrossFieldGraph::OppositeNodeCrossField(IndexN0);
@@ -1355,9 +1366,9 @@ static void MakeSymmetricCrossFieldGraph(TracingGraph<ScalarType> &TGraph) {
         }
       }
     }
-    std::cout<<"Total Test: "<<TotalTest<<std::endl;
-    std::cout<<"Corrected Connection: "<<AddingOp<<std::endl;
-    std::cout<<"Corrected Values: "<<CorrectOp<<std::endl;
+    std::cout << "Total Test: " << TotalTest << std::endl;
+    std::cout << "Corrected Connection: " << AddingOp << std::endl;
+    std::cout << "Corrected Values: " << CorrectOp << std::endl;
   }
 
   static void InitFromVertCrossField(
@@ -1366,8 +1377,7 @@ static void MakeSymmetricCrossFieldGraph(TracingGraph<ScalarType> &TGraph) {
       const std::vector<std::vector<int>> &Faces,
       const std::vector<Field::CrossF<ScalarType>> &CrossField,
       const ScalarType &drift_penalty = 100, const ScalarType maxAngle = 45,
-      const size_t diffuse_step = 1,
-      bool symmetrize=true) {
+      const size_t diffuse_step = 1, bool symmetrize = true) {
     TGraph.Clear();
     assert(VertPos.size() == CrossField.size());
     std::vector<std::vector<int>> Adjacency;
@@ -1389,8 +1399,6 @@ static void MakeSymmetricCrossFieldGraph(TracingGraph<ScalarType> &TGraph) {
     MakeSymmetricCrossFieldGraph(TGraph);
     TGraph.SortAllNeigh();
   }
-
-  
 
   static void InitFromPolyFrameField(
       TracingGraph<ScalarType> &TGraph,

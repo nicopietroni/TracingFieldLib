@@ -20,12 +20,21 @@
 namespace Geo {
 
 enum NType {
+  //this is for example outside or a border
+  //or set up when tracing to other patch borders
   ExitDomain,
+  //this is nodes tangent to the borders
   TangentDomain,
+  //this is nodes tangent to the borders but can exit (like concave nodes)
   TangentExitDomain,
+  //this is nodes tangent to the borders but not exit (like convex nodes)
   ConvexExitDomain,
+  //nodes that are orthogonal to a dart
   DartOrthoDomain,
-  Internal
+  //internal nodes
+  Internal,
+  //nodes to jump from one side to another of a feature
+  JumpNodes
 };
 
 enum GraphType { GT_CrossField, GT_FrameField };
@@ -179,6 +188,8 @@ public:
 
   // if needed to save previous stage
   std::vector<bool> SwapEnabledN;
+
+  std::vector<std::vector<bool> > SwapEnabledA;
   // //set if can pass to a node or not (similar to emabled but on)
   // std::vector<bool> PassTrought;
 
@@ -419,7 +430,27 @@ public:
 
   void SaveEnabledNodes() { SwapEnabledN = EnabledN; }
 
+  void SaveEnabledArcs() { 
+    SwapEnabledA.resize(N.size());
+    for (size_t i = 0; i < N.size(); i++)
+    {
+     SwapEnabledA[i].resize(N[i].size(),false);
+      for (size_t j = 0; j < N[i].size(); j++)
+        SwapEnabledA[i][j]=N[i][j].Enabled;
+    }
+  }
+  
   void RestoreEnabledNodes() { EnabledN = SwapEnabledN; }
+
+  void RestoreEnabledArcs() { 
+    assert(SwapEnabledA.size()==N.size());
+    for (size_t i = 0; i < N.size(); i++)
+    {
+      assert(SwapEnabledA[i].size()==N[i].size());
+      for (size_t j = 0; j < N[i].size(); j++)
+        N[i][j].Enabled=SwapEnabledA[i][j];
+    }
+  }
 
   void EnableAllNodes() { EnabledN = std::vector<bool>(N.size(), true); }
 
@@ -561,11 +592,14 @@ public:
 
   void SetUnMarkedToDistance(const ScalarType &DefaultDist) {
     // ScalarType MaxVal=MaxDistance();
+    int nonMarkedN=0;
     for (size_t i = 0; i < NumNodes(); i++) {
       if (IsMarked(i))
         continue;
       Distance(i) = DefaultDist;
+      nonMarkedN++;
     }
+    //std::cout<<"Non Marked "<<nonMarkedN<<std::endl;
   }
 
   void Select(const size_t &IndexN, const int IndexS) {
@@ -709,6 +743,30 @@ public:
       return NextN;
     }
     return -1;
+  }
+
+  int NumDisabledNodes()const
+  {
+    int NumDis=0;
+    for (size_t i=0;i<NumNodes();i++)
+      if (!IsEnabled(i))NumDis++;
+    return NumDis;
+  }
+
+  int NumDisabledArcs()const
+  {
+    int NumDis=0;
+    for (size_t i=0;i<NumNodes();i++)
+      for (size_t j = 0; j < N[i].size(); j++) 
+      if (!ActiveLink(i, j))NumDis++;
+    return NumDis;
+  }
+
+  void PrintData() const {
+    std::cout<<"** Graph Stats **"<<std::endl;
+    std::cout<<"Number of Nodes "<<NumNodes()<<std::endl;
+    std::cout<<"Number of Disabled Nodes:"<<NumDisabledNodes()<<std::endl;
+    std::cout<<"Number of Disabled Arcs:"<<NumDisabledArcs()<<std::endl;
   }
 
   TracingGraph(GraphType _GType) {

@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 #include "patch_managing.h"
@@ -255,18 +256,25 @@ public:
                    const int &IndexPatch)const override
     {
         //if there is more than one hole return false
-        if (PatchM.SideLenghts[IndexPatch].size()>1)return false;
-
-        if (PatchM.SideLenghts[IndexPatch][0].size()==4)return true;
+        if (PatchM.PData.SideLenghts[IndexPatch].size()>1)return false;
+        
+        //patches made of 4 sides are ok
+        if (PatchM.PData.SideLenghts[IndexPatch][0].size()==4)return true;
 
         ScalarType AvgL=0;
-        for (size_t i=0;i<PatchM.SideLenghts[IndexPatch][0].size();i++)
-            AvgL+=PatchM.SideLenghts[IndexPatch][0][i];
+        ScalarType MinL=std::numeric_limits<ScalarType>::max();
+        for (size_t i=0;i<PatchM.PData.SideLenghts[IndexPatch][0].size();i++)
+        {   
+            ScalarType CurrL=PatchM.PData.SideLenghts[IndexPatch][0][i];
+            MinL=std::min(MinL,CurrL);
+            AvgL+=CurrL;
+        }
 
-        AvgL/=PatchM.SideLenghts[IndexPatch][0].size();
+        AvgL/=PatchM.PData.SideLenghts[IndexPatch][0].size();
 
-        for (size_t i=0;i<PatchM.SideLenghts[IndexPatch][0].size();i++)
-            if (fabs(PatchM.SideLenghts[IndexPatch][0][i]-AvgL)>SideThr)return false;
+        ScalarType AbsThr=MinL*SideThr;
+        for (size_t i=0;i<PatchM.PData.SideLenghts[IndexPatch][0].size();i++)
+            if (fabs(PatchM.PData.SideLenghts[IndexPatch][0][i]-AvgL)>AbsThr)return false;
 
         return true;
     }
@@ -278,6 +286,13 @@ public:
     {
         SideThr=_Thr;
     }
+
+    EqualSideCondition()
+    {
+        SideThr=1;
+    }
+
+    
 };
 
 

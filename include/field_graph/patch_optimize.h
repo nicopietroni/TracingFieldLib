@@ -10,6 +10,7 @@
 #include <chrono>
 #include <iostream>
 #include <limits>
+#include <set>
 #include <sys/_types/_size_t.h>
 #include <vector>
 
@@ -80,11 +81,12 @@ template <class ScalarType> class PatchOptimize {
 
   //     //   Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos, Connectivity,
   //     //   NextF,NextE,
-  //     //                                               BorderVertSeq,FaceNorm,
+  //     // BorderVertSeq,FaceNorm,
   //     //                                               VertNorm,
-  //     //                                               BorderSegs,BorderSegIndex,UVP);
+  //     // BorderSegs,BorderSegIndex,UVP);
 
-  //     Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos, Connectivity, NextF,
+  //     Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos, Connectivity,
+  //     NextF,
   //                                                 NextE, BorderVertSeq,
   //                                                 FaceNorm, VertNorm, UVP);
 
@@ -107,7 +109,8 @@ template <class ScalarType> class PatchOptimize {
   //                const std::vector<std::vector<int>> &NextF,
   //                const std::vector<std::vector<int>> &NextE,
   //                const std::vector<std::vector<int>> &BorderVertSeq,
-  //                //  const std::vector<Geo::Segment3<ScalarType> > &BorderSegs,
+  //                //  const std::vector<Geo::Segment3<ScalarType> >
+  //                &BorderSegs,
   //                //  Geo::SegmentSpatialIndex<ScalarType> &BorderSegIndex,
   //                const std::vector<int> &Corners,
   //                const std::vector<Geo::Point3<ScalarType>> &FaceNorm,
@@ -134,13 +137,14 @@ template <class ScalarType> class PatchOptimize {
   //     UVP.Fixed.push_back(Corners[i]);
 
   //   UVP.Steps = smooth_steps;
-  //   // Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos, Connectivity, NextF,
-  //   //                                             NextE,BorderVertSeq,FaceNorm,
-  //   //                                             VertNorm,BorderSegs,BorderSegIndex,
+  //   // Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos, Connectivity,
+  //   NextF,
+  //   // NextE,BorderVertSeq,FaceNorm,
+  //   // VertNorm,BorderSegs,BorderSegIndex,
   //   //                                             UVP);
   //   Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos, Connectivity, NextF,
-  //                                               NextE, BorderVertSeq, FaceNorm,
-  //                                               VertNorm, UVP);
+  //                                               NextE, BorderVertSeq,
+  //                                               FaceNorm, VertNorm, UVP);
   // }
 
   // static void FindReprojectionBases(
@@ -188,11 +192,10 @@ template <class ScalarType> class PatchOptimize {
   // }
 
 public:
-
   static void SmoothPaths(std::vector<Geo::Point3<ScalarType>> &VertPos,
                           const std::vector<std::vector<int>> &Connectivity,
                           const std::vector<std::vector<int>> &PathsV,
-                          const std::vector<std::pair<int,int> > &Features,
+                          const std::vector<std::pair<int, int>> &Features,
                           ScalarType Damp = 0.5, size_t Steps = 5) {
 
     typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
@@ -214,29 +217,74 @@ public:
     UVP.TJunctions = TJunctions;
     UVP.Damp = Damp;
     UVP.fixBorder = true;
-    //fix the features
-    for (size_t i=0;i<Features.size();i++)
-    {
+    // fix the features
+    for (size_t i = 0; i < Features.size(); i++) {
       UVP.Fixed.push_back(Features[i].first);
       UVP.Fixed.push_back(Features[i].second);
     }
     Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos, Connectivity, UVP);
   }
 
+  // suppose that the dual has coincident vertices along patches
+  static void
+  DualMeshSmooth(const std::vector<Geo::Point3<ScalarType>> &PrimalVertPos,
+                 const std::vector<std::vector<int>> &PrimalConnectivity,
+                 const std::vector<std::pair<int, int>> &PrimalFeatures,
+                 std::vector<Geo::Point3<ScalarType>> &DualVertPos,
+                 const std::vector<std::vector<int>> &DualConnectivity,
+                 ScalarType Damp = 0.5, size_t Steps = 5) 
+  {
+    typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
+    std::set<Geo::Point3<ScalarType> > ToFixPos;
+    for (size_t i=0;i<PrimalFeatures.size();i++)
+    {
+      int IndexV0=PrimalFeatures[i].first;
+      int IndexV1=PrimalFeatures[i].second;
+      ToFixPos.insert(PrimalVertPos[IndexV0]);
+      ToFixPos.insert(PrimalVertPos[IndexV1]);
+    }
+    std::vector<size_t> BorderV;
+    getBorderVert(PrimalConnectivity,BorderV);
+    for (size_t i=0;i<BorderV.size();i++)
+      ToFixPos.insert(PrimalVertPos[BorderV[i]]);
+    
+    // //then map the position to the dual
+    
+    for (size_t i=0;i<DualVertPos.size();i++)
+    {
+      if (ToFixPos.count(DualVertPos[i])==0)continue;
+       UVP.Fixed.push_back(i);
+    }
+    Geo::Local_Param_Smooth<ScalarType>::SmoothWithInternalBorders(DualVertPos, DualConnectivity, false, UVP);
+
+    // //first save all feature positions
+    // std::set<Geo::Point3<ScalarType> > FeaturePos;
+    // //first get all boundary edge pos
+    // for
+    //  std::cout << "SMOOTHING" << std::endl;
+    // typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam SmParam;
+    // SmParam.Steps = DualParam.SmoothSteps;
+    // if ((DualFaces.size() > 0) && (DualParam.SmoothSteps > 0))
+    //   Geo::Local_Param_Smooth<ScalarType>::SmoothWithInternalBorders(
+    //       DualVertPos, DualFaces, false, SmParam);
+  }
+
   // static void TwoStepSmooth(std::vector<Geo::Point3<ScalarType>> &VertPos,
-  //                           const std::vector<std::vector<int>> &Connectivity,
-  //                           const std::vector<std::vector<int>> &PathsV,
-  //                           ScalarType Damp = 0.5, size_t Steps = 5) {
+  //                           const std::vector<std::vector<int>>
+  //                           &Connectivity, const
+  //                           std::vector<std::vector<int>> &PathsV, ScalarType
+  //                           Damp = 0.5, size_t Steps = 5) {
   //   // do a first smooth step
   //   //  auto t0 = std::chrono::high_resolution_clock::now();
   //   //  SmoothPaths(VertPos,Connectivity,PathsV,Damp,Steps);
   //   //  auto t1 = std::chrono::high_resolution_clock::now();
-  //   //  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1
+  //   //  auto duration =
+  //   std::chrono::duration_cast<std::chrono::microseconds>(t1
   //   //  - t0); std::cout << "@@@@ Time : " << duration.count() << "
   //   //  milliseconds" << std::endl;
 
-  //   std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> ReprojMap;
-  //   FindReprojectionBases(PathsV, ReprojMap);
+  //   std::map<std::pair<int, int>, std::vector<std::pair<int, int>>>
+  //   ReprojMap; FindReprojectionBases(PathsV, ReprojMap);
 
   //   std::vector<int> Corners;
   //   Geo::PathFunctions<ScalarType>::FindCorners(VertPos, PathsV, Corners);

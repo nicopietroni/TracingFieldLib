@@ -170,6 +170,7 @@ public:
   static bool MakeDirectConnection(TracingGraph<ScalarType> &TGraph,
                                    std::vector<int> &PathN,
                                    bool UpdateArc = true) {
+    //TGraph.CurrDistIndex() = 1;
     assert(IsProperPath(PathN));
     std::vector<int> NewPath;
     bool IsLoop = PathFunctions<ScalarType>::IsLoop(PathN);

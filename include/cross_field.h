@@ -21,7 +21,7 @@ namespace Field
         assert(Dir < 4);
         OrthoD.clear();
         OrthoD.push_back((Dir + 1) % 4);
-        OrthoD.push_back((Dir + 2) % 4);
+        OrthoD.push_back((Dir + 3) % 4);
     }
 
     int OppositeCrossDir(const int Dir)
@@ -169,11 +169,21 @@ namespace Field
             return GetDirection(IndexD);
         }
 
-        int FollowDirection(const Field::CrossF<ScalarType> &F1, int Dir) const
+        int FollowDirection(const Field::CrossF<ScalarType> &F1, int Dir,
+                            bool tangent_space=true) const
         {
             assert(Dir >= 0);
             assert(Dir < 4);
+            Eigen::Matrix3<ScalarType> RotM;
+            RotM.setIdentity();
+            if (tangent_space)
+            {
+                Geo::Point3<ScalarType> N0=OrthoDir();
+                Geo::Point3<ScalarType> N1=F1.OrthoDir();
+                RotM=Geo::PointMatch<ScalarType>::BestRotationMatrix(N1,N0);
+            }
             Geo::Point3<ScalarType> TargetD = F1.GetDirection(Dir);
+            TargetD=RotM*TargetD;
             int BestD = BestDirectionI(TargetD);
             assert(BestD >= 0);
             assert(BestD < 4);

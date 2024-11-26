@@ -196,6 +196,7 @@ void SetVertCrossFromFace(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                           std::vector<Field::CrossF<ScalarType>> &VertCurv,
                           bool weightByQuality = true)
 {
+    assert(FaceCurv.size()==Faces.size());
     VertCurv.resize(VertPos.size());
     for (size_t i = 0; i < VertPos.size(); i++)
         VertCurv[i].Pos = VertPos[i];

@@ -75,9 +75,22 @@ bool showCross = true;
 bool showSing = true;
 bool has_graph = false;
 // bool has_init_patches=false;
+
+//TangentDomain,
 bool DrawTangentNode = false;
+//ExitDomain,
 bool DrawExitNode = false;
+//Internal,
 bool DrawInternalNode = false;
+//TangentExitDomain,
+bool DrawTangentExit = false;
+//ConvexExitDomain
+bool DrawConvexExit = false;
+//DartOrthoDomain
+bool DrawDartOrthoDomain = false;
+//JumpNodes
+bool DrawJumpNodes = false;
+
 bool DrawCorners = false;
 bool DrawDualCorners = false;
 bool DrawTJunction = false;
@@ -168,7 +181,8 @@ bool single_boundary_cond = true;
 bool disk_like_cond = true;
 bool single_sing_cond = false;
 bool match_sing_cond = true;
-bool cc_ability_cond=true;
+bool cc_ability_cond = false;
+bool equal_side_cond = false;
 bool use_uv = false;
 bool isometric_uv = false;
 bool conformal_uv = false;
@@ -177,6 +191,7 @@ ScalarType max_uvDist = 0.05;
 int MinSides = 3;
 int MaxSides = 6;
 ScalarType CCability = 1;
+ScalarType EqSideThr = 1;
 
 bool old_single_boundary_cond = single_boundary_cond;
 bool old_disk_like_cond = disk_like_cond;
@@ -185,11 +200,13 @@ bool old_match_sing_cond = match_sing_cond;
 bool old_cc_ability_cond = cc_ability_cond;
 bool old_isometric_uv = isometric_uv;
 bool old_conformal_uv = conformal_uv;
+bool old_equal_side_cond = equal_side_cond;
 ScalarType old_max_uvDist = max_uvDist;
 
 int old_MinSides = MinSides;
 int old_MaxSides = MaxSides;
 ScalarType old_CCability = CCability;
+ScalarType old_EqSideThr = EqSideThr;
 
 int min_sing_distance = 1;
 
@@ -205,13 +222,16 @@ std::vector<Geo::Point3<ScalarType>> ModSameBOrigPos;
 
 std::vector<Geo::TJunction> TJunctions;
 
-ScalarType ThickOutline=8;
-ScalarType ThickBorders=8;
-ScalarType ThickPrimaryP=8;
-ScalarType ThickSecondaryP=5;
-ScalarType ThickTertiaryP=2;
+ScalarType ThickOutline = 8;
+ScalarType ThickBorders = 8;
+ScalarType ThickPrimaryP = 8;
+ScalarType ThickSecondaryP = 5;
+ScalarType ThickTertiaryP = 2;
 
 std::vector<int> MaxPathRank;
+
+std::vector<std::pair<int, int>> RemainingF;
+std::vector<int> NewBorder;
 
 void RestoreOriginalPosOnSplitBorders() {
   assert(ModSameBVert.size() == ModSameBOrigPos.size());
@@ -277,10 +297,12 @@ bool UpdateConditions() {
   has_changed |= old_single_sing_cond != single_sing_cond;
   has_changed |= old_match_sing_cond != match_sing_cond;
   has_changed |= old_cc_ability_cond != cc_ability_cond;
+  has_changed |= old_equal_side_cond != equal_side_cond;
 
   has_changed |= old_MinSides != MinSides;
   has_changed |= old_MaxSides != MaxSides;
   has_changed |= old_CCability != CCability;
+  has_changed |= old_EqSideThr != EqSideThr;
   has_changed |= isometric_uv != old_isometric_uv;
   has_changed |= conformal_uv != old_conformal_uv;
   has_changed |= max_uvDist != old_max_uvDist;
@@ -289,15 +311,16 @@ bool UpdateConditions() {
   old_disk_like_cond = disk_like_cond;
   old_single_sing_cond = single_sing_cond;
   old_match_sing_cond = match_sing_cond;
-  old_cc_ability_cond=cc_ability_cond;
+  old_cc_ability_cond = cc_ability_cond;
 
   old_MinSides = MinSides;
   old_MaxSides = MaxSides;
   old_CCability = CCability;
-
+  old_EqSideThr = EqSideThr;
   old_isometric_uv = isometric_uv;
   old_conformal_uv = conformal_uv;
   old_max_uvDist = max_uvDist;
+  old_equal_side_cond = equal_side_cond;
 
   return has_changed;
 }
@@ -315,10 +338,9 @@ void InitConditions() {
   if ((MinSides > 0) || (MaxSides > 0)) {
     PDeco.AddCondition(new Geo::NumSidesCondition<ScalarType>());
   }
-  //if (CCability >= 1) {
-  if (cc_ability_cond)
-  {
-    //ScalarType AvVAl = AvgEdgeLen(VertPos, Connectivity) * CCability;
+  // if (CCability >= 1) {
+  if (cc_ability_cond) {
+    // ScalarType AvVAl = AvgEdgeLen(VertPos, Connectivity) * CCability;
     PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(CCability));
   }
 
@@ -338,6 +360,8 @@ void InitConditions() {
     PDeco.AddCondition(
         new Geo::UVCondition<ScalarType>(uv_type, dist_type, max_uvDist));
   }
+  if (equal_side_cond)
+    PDeco.AddCondition(new Geo::EqualSideCondition<ScalarType>(EqSideThr));
 }
 
 // std::vector<int> SampledVert;
@@ -351,10 +375,15 @@ void InitConditions() {
 void SampleTracing() {
   // PathN.clear();
   // PathSampl.Init();
-  if ((PDeco.start_spike)||(PDeco.start_concave))
-     PathSampl.force_direct = true;
-  
-  PDeco.SampleInitialCandidates();
+  // if ((PDeco.start_spike) || (PDeco.start_concave))
+  //   PathSampl.force_direct = true;
+
+  //PDeco.SampleInitialCandidates();
+  PDeco.InitSampling(PDeco.add_only_where_needed);
+    if (PDeco.add_only_where_needed)
+      PDeco.InitMustPassEdges();
+
+  PDeco.RetraceCandidates();
 }
 
 // void AddAllPaths(bool upd_patches = true)
@@ -392,8 +421,8 @@ void SmoothPaths() {
   // Geo::PatchOptimize<ScalarType>::TwoStepSmooth(VertPos, Connectivity,
   //                                               VertPaths);
 
-  Geo::PatchOptimize<ScalarType>::SmoothPaths(VertPos, Connectivity,
-                                              VertPaths,Features);
+  Geo::PatchOptimize<ScalarType>::SmoothPaths(VertPos, Connectivity, VertPaths,
+                                              Features);
 
   ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
 
@@ -478,7 +507,12 @@ void InitPatches() {
   // then check all patches and saved the unsolved ones
   PatchM.CheckConsistentData();
   PDeco.UpdateAllUnsolvedPatches();
-  
+
+  std::cout << "Size Remaining:" << RemainingF.size() << std::endl;
+  PDeco.AddFeaturesAsPaths(TGraph,VertCurv,RemainingF,NewBorder);
+  PathColors.resize(PathSampl.SelectedPaths.size());
+  Geo::ScatterColor<ScalarType>(PathColors);
+  UpdateColor();
 }
 
 // void TestTrace()
@@ -754,17 +788,20 @@ void SetRenderBar() {
   }
   ImGui::InputInt("Curr Path", &CurrSelP);
   CurrSelP = std::min(CurrSelP, (int)PathSampl.SelectedPaths.size() - 1);
-  ImGui::Checkbox("Draw Loops",&DrawLoops);
-  ImGui::Checkbox("Draw PolyL",&DrawPolyL);
+  ImGui::Checkbox("Draw Loops", &DrawLoops);
+  ImGui::Checkbox("Draw PolyL", &DrawPolyL);
 
   // ImGui::Separator();
   // ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
   if (ImGui::CollapsingHeader("DRAW GRAPH")) {
     //  ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
-    // ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
     ImGui::Checkbox("Draw Exit Node", &DrawExitNode);
     ImGui::Checkbox("Draw Tangent Node", &DrawTangentNode);
     ImGui::Checkbox("Draw Internal Node", &DrawInternalNode);
+    ImGui::Checkbox("Draw Tangent Exit", &DrawTangentExit);
+    ImGui::Checkbox("Draw Convex Exit", &DrawConvexExit);
+    ImGui::Checkbox("Draw Dart Ortho", &DrawDartOrthoDomain);
+    ImGui::Checkbox("Draw Jump Nodes", &DrawJumpNodes);
   }
   // ImGui::Separator();
   if (ImGui::CollapsingHeader("DRAW SAMPLING")) {
@@ -777,6 +814,7 @@ void SetRenderBar() {
 
     ImGui::Checkbox("Draw Initial Pos", &DrawInitalPos);
     ImGui::InputInt("Cand Idx", &curr_cand);
+    curr_cand=std::min(curr_cand,PathSampl.NumCandidates()-1);
     ImGui::Checkbox("Draw Candidates", &DrawCandidates);
   }
   ImGui::Separator();
@@ -855,11 +893,15 @@ void PreprocessMesh() {
 
   std::cout << "*** SPLIT FEATURES *** " << std::endl;
 
-  Geo::TracingPreprocess<ScalarType>::SplitFeatures(
-      VertPos, Connectivity, VertCurv, SingIndex, SingValue, Features);
-  UpdateFeatureSing();
+  RemainingF.clear();
+  Geo::TracingPreprocess<ScalarType>::SplitCornerFeatures(
+      VertPos, Connectivity, VertCurv, FaceCurv, Features, RemainingF,
+      SingIndex, SingValue, FeatureSingIndex, FeatureSingValue,
+      NewBorder);
+
   Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
       VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
+
   UpdateAfterRemesh();
 }
 
@@ -885,13 +927,18 @@ void BatchProcessMinPatch() {
       std::chrono::duration_cast<std::chrono::microseconds>(end2 - end1);
 
   std::cout << "*** ADD ALL PATHS *** " << std::endl;
-  //PDeco.dynamic_smooth=true;
+  // PDeco.dynamic_smooth=true;
 
   remove_batch = true;
   PDeco.add_only_where_needed = true;
   PDeco.stop_when_solved = true;
   PDeco.dynamic_smooth = false;
   PDeco.BatchDecompose(remove_batch);
+  //SmoothPaths();
+  //PDeco.SolveAllFeatures();
+  //SmoothPaths();
+  //PDeco.SolveAllMesh();
+  SmoothPaths();
   auto end3 = std::chrono::high_resolution_clock::now();
   auto elapsed3 =
       std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
@@ -923,7 +970,7 @@ void BatchProcessMinPatch() {
   double total_elapsed_seconds5 =
       total_elapsed.count() * 1e-6; // Convert microseconds to seconds
 
-  std::cout<< std::endl<< std::endl;
+  std::cout << std::endl << std::endl;
   std::cout << "*** FINAL TIMINGS (sec) *** " << std::endl;
   std::cout << "* Remeshing time: " << elapsed_seconds0 << std::endl;
   std::cout << "* Init Graph Elapsed time: " << elapsed_seconds1 << std::endl;
@@ -1008,7 +1055,7 @@ void BatchProcessMaxPaths() {
   // PDeco.WriteStats();
 }
 
-int PrioIdx=0;
+int PrioIdx = 0;
 
 void SetDecomposeBar() {
 
@@ -1029,7 +1076,6 @@ void SetDecomposeBar() {
   ImGui::SameLine();
   ImGui::SetNextItemWidth(120);
   ImGui::Checkbox("Dynamic Smooth", &PDeco.dynamic_smooth);
-  
 
   if (ImGui::Button("MINIMAL PATCH")) {
     // remove_batch = true;
@@ -1041,8 +1087,7 @@ void SetDecomposeBar() {
     Geo::ScatterColor<ScalarType>(PathColors);
     UpdateColor();
   }
-  
-  
+
   if (ImGui::Button("MAX PATHS")) {
     // PDeco.add_only_where_needed = false;
     // PDeco.stop_when_solved = false;
@@ -1066,33 +1111,19 @@ void SetDecomposeBar() {
   //    UpdateColor();
   // }
 
-  if (ImGui::Button("Add Features as paths")) {
-    std::vector<std::pair<int, int>> RemainingF;
-    Geo::TracingPreprocess<ScalarType>::SplitCornerFeatures(VertPos, Connectivity, 
-                                                            VertCurv,FaceCurv,
-                                                            Features,RemainingF,
-                                                            SingIndex, SingValue, 
-                                                            FeatureSingIndex,
-                                                            FeatureSingValue);
-
-     Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
-        VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
-
-    UpdateAfterRemesh();
-  }
   // ImGui::SameLine();
   // ImGui::Checkbox("Remove", &remove_batch);
   // ImGui::SameLine();
   // ImGui::Checkbox("Split", &remove_split);
 
-  // if (ImGui::Button("Solve Remaining Spike/Concave")) {
-  //   PDeco.ForceSolveSpikeConcave();
-  //   PathColors.resize(PathSampl.SelectedPaths.size());
-  //   Geo::ScatterColor<ScalarType>(PathColors);
-  //   UpdateColor();
-  //   PatchM.WriteStats();
-  //   PDeco.WriteStats();
-  // }
+  if (ImGui::Button("Solve Remaining Spike/Concave")) {
+    PDeco.ForceSolveSpikeConcave();
+    PathColors.resize(PathSampl.SelectedPaths.size());
+    Geo::ScatterColor<ScalarType>(PathColors);
+    UpdateColor();
+    PatchM.WriteStats();
+    PDeco.WriteStats();
+  }
 
   // if (ImGui::Button("Solve Remaining Topology")) {
   //   PDeco.ForceSolveTopology();
@@ -1107,16 +1138,6 @@ void SetDecomposeBar() {
 
   ImGui::TextColored(ImVec4(1, 0, 1, 1), "PREPROCESS");
 
-  if (ImGui::Button("Split Features")) {
-    Geo::TracingPreprocess<ScalarType>::SplitFeatures(
-        VertPos, Connectivity, VertCurv, SingIndex, SingValue, Features);
-    UpdateFeatureSing();
-    Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
-        VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
-
-    UpdateAfterRemesh();
-  }
-
   if (ImGui::Button("Refine Sing")) {
     Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(
         VertPos, Connectivity, FaceCurv, Features, SingIndex,
@@ -1125,6 +1146,31 @@ void SetDecomposeBar() {
     UpdateAfterRemesh();
     // WriteOBJ("refined_test.obj",VertPos,Connectivity);
   }
+
+  if (ImGui::Button("Split Corners")) {
+    RemainingF.clear();
+    Geo::TracingPreprocess<ScalarType>::SplitCornerFeatures(
+        VertPos, Connectivity, VertCurv, FaceCurv, Features, RemainingF,
+        SingIndex, SingValue, FeatureSingIndex, FeatureSingValue,NewBorder);
+
+    Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
+        VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
+
+    UpdateAfterRemesh();
+  }
+
+  if (ImGui::Button("Split Features")) {
+    // Geo::TracingPreprocess<ScalarType>::SplitFeatures(
+    //     VertPos, Connectivity, VertCurv, SingIndex, SingValue, Features);
+    Geo::TracingPreprocess<ScalarType>::SplitFeatures(VertPos, Connectivity, VertCurv, FaceCurv, Features,
+                                                      SingIndex, SingValue, FeatureSingIndex, FeatureSingValue);
+    UpdateFeatureSing();
+    Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
+        VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
+
+    UpdateAfterRemesh();
+  }
+
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
   ImGui::InputInt("Sing Dist", &min_sing_distance);
@@ -1143,9 +1189,9 @@ void SetDecomposeBar() {
   ImGui::SetNextItemWidth(150);
   if (ImGui::Button("Init Graph")) {
 
-    std::cout<<"INIT GRAPH"<<std::endl;
+    std::cout << "INIT GRAPH" << std::endl;
     InitGraph();
-    std::cout<<"INIT PATCHES"<<std::endl;
+    std::cout << "INIT PATCHES" << std::endl;
     InitPatches();
 
     has_graph = true;
@@ -1182,9 +1228,17 @@ void SetDecomposeBar() {
 
   float CCAbilityf = CCability;
   ImGui::InputFloat("CC Tolerance", &CCAbilityf);
-  CCAbilityf=std::min(CCAbilityf,1.f);
-  CCAbilityf=std::max(CCAbilityf,0.f);
+  CCAbilityf = std::min(CCAbilityf, 1.f);
+  CCAbilityf = std::max(CCAbilityf, 0.f);
   CCability = (ScalarType)CCAbilityf;
+
+  ImGui::Checkbox("Equal Side", &equal_side_cond);
+
+  float EqSideThrf = EqSideThr;
+  ImGui::InputFloat("EQSide Tolerance", &EqSideThrf);
+  EqSideThrf = std::min(EqSideThrf, 1.f);
+  EqSideThrf = std::max(EqSideThrf, 0.f);
+  EqSideThr = (ScalarType)EqSideThrf;
 
   ImGui::TextColored(ImVec4(0, 0, 1, 1), "UV");
 
@@ -1244,8 +1298,8 @@ void SetDecomposeBar() {
     PathColors.resize(PathSampl.SelectedPaths.size());
     Geo::ScatterColor<ScalarType>(PathColors);
     UpdateColor();
-    ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
-    SmoothPaths();
+    // ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
+    // SmoothPaths();
   }
   ImGui::SameLine();
   if (ImGui::Button("ALL")) {
@@ -1254,7 +1308,7 @@ void SetDecomposeBar() {
     Geo::ScatterColor<ScalarType>(PathColors);
     UpdateColor();
     ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
-    SmoothPaths();
+    //SmoothPaths();
     // SampleTracing();
   }
   ImGui::SameLine();
@@ -1291,7 +1345,7 @@ void SetDecomposeBar() {
     ImGui::TableSetColumnIndex(2);
     ImGui::Checkbox("##foo2", &PDeco.start_concave);
     ImGui::TableSetColumnIndex(3);
-    ImGui::Checkbox("##foo3", &PDeco.start_border);
+    ImGui::Checkbox("##foo3", &PDeco.start_orginal_border);
     ImGui::TableSetColumnIndex(4);
     ImGui::Checkbox("##foo4", &PDeco.start_internal);
 
@@ -1304,7 +1358,7 @@ void SetDecomposeBar() {
     ImGui::TableSetColumnIndex(2);
     ImGui::Checkbox("##foo6", &PDeco.end_concave);
     ImGui::TableSetColumnIndex(3);
-    ImGui::Checkbox("##foo7", &PDeco.end_border);
+    ImGui::Checkbox("##foo7", &PDeco.end_patch_border);
     ImGui::TableSetColumnIndex(4);
     // ImGui::Checkbox("##foo8", &PDeco.end_internal);
 
@@ -1324,7 +1378,7 @@ void SetDecomposeBar() {
     // }
     // ImGui::End();
 
-    //ImGui::SameLine();
+    // ImGui::SameLine();
     if (ImGui::Button("Sample Candidates")) {
       SampleTracing();
     }
@@ -1341,8 +1395,13 @@ void SetDecomposeBar() {
     if (ImGui::Button("Add Next")) {
       bool terminated = false;
       bool solved = false;
-      PDeco.AddNext(solved, terminated);
 
+      // PathSampl.InitializeDistance();
+      // PathSampl.InitCandidates();
+      // PathSampl.UpdateCandidatePriority();
+
+      PDeco.AddNext(solved, terminated);
+      
       PathColors.resize(PathSampl.SelectedPaths.size());
       Geo::ScatterColor<ScalarType>(PathColors);
       UpdateColor();
@@ -1350,7 +1409,7 @@ void SetDecomposeBar() {
 
     ImGui::SameLine();
     if (ImGui::Button("Resample")) {
-      PDeco.RetraceOnUnsolved();
+     //SampleTracing();
     }
     ImGui::SameLine();
     if (ImGui::Button("Remove")) {
@@ -1381,8 +1440,6 @@ void SetDecomposeBar() {
     // ImGui::Checkbox("Dynamic Smth", &PDeco.dynamic_smooth);
     ImGui::SetNextItemWidth(120);
     ImGui::Checkbox("Only Visible", &PathSampl.only_visible);
-    
-    
   }
 
   ImGui::End();
@@ -1524,6 +1581,11 @@ void SetExportBar() {
     showMesh = false;
     showDual = true;
     DrawPathMode = 2;
+  }
+  if (ImGui::Button("Smooth Dual Patches")) {
+    Geo::PatchOptimize<ScalarType>::DualMeshSmooth(VertPos, Connectivity,
+                                                    Features,DualVertPos, 
+                                                    DualConnectivity);
   }
   if (ImGui::Button("Save Dual Patches")) {
     SaveDualPatches();
@@ -1672,13 +1734,13 @@ void GLDrawMesh() {
     if (DrawTJunction)
       GLDraw::GLDrawTJunctions<ScalarType>(VertPos, TJunctions);
 
-    // PDParam.lineSize=10;
-    // PDParam.pointSize=20;
-    //std::vector<std::vector<int>> Loops;
+    // PDParam.lineSize = 15;
+    // PDParam.pointSize = 20;
+    // std::vector<std::vector<int>> Loops;
     if (CurrSelP == -1)
       GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(
           TGraph, VertCurv, PathSampl.SelectedPaths, MeshBox.Diag() * 0.005,
-          PDParam, PathColors,DrawLoops,DrawPolyL);
+          PDParam, PathColors, DrawLoops, DrawPolyL);
     else
       GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
           TGraph, VertCurv, PathSampl.SelectedPaths[CurrSelP],
@@ -1690,26 +1752,31 @@ void GLDrawMesh() {
     RankThick.push_back(ThickPrimaryP);
     RankThick.push_back(ThickSecondaryP);
     RankThick.push_back(ThickTertiaryP);
-    std::vector<Geo::Point3<ScalarType> > RankCol;
+    std::vector<Geo::Point3<ScalarType>> RankCol;
     RankCol.push_back(Geo::Point3<ScalarType>(0, 0, 0));
     RankCol.push_back(Geo::Point3<ScalarType>(0.3, 0.3, 0.3));
     RankCol.push_back(Geo::Point3<ScalarType>(0.3, 0.3, 0.3));
-    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPathRanks( TGraph, VertCurv, PathSampl.SelectedPaths,
-                                                               MaxPathRank,RankThick,RankCol);
+    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPathRanks(
+        TGraph, VertCurv, PathSampl.SelectedPaths, MaxPathRank, RankThick,
+        RankCol);
 
-    //std::cout<<"Num Solved: "<<PDeco.NumSolved<<"total "<<PathSampl.SelectedPaths.size()<<std::endl;
-    // GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPathsTwoRanks( TGraph, VertCurv, PathSampl.SelectedPaths,
-    //                                                               PDeco.NumSolved,ThickSecondaryP,ThickPrimaryP,
-    //                                                               Geo::Point3<ScalarType>(0.3, 0.3, 0.3),
-    //                                                               Geo::Point3<ScalarType>(0, 0, 0));
-
+    // std::cout<<"Num Solved: "<<PDeco.NumSolved<<"total
+    // "<<PathSampl.SelectedPaths.size()<<std::endl;
+    //  GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPathsTwoRanks( TGraph,
+    //  VertCurv, PathSampl.SelectedPaths,
+    //                                                                PDeco.NumSolved,ThickSecondaryP,ThickPrimaryP,
+    //                                                                Geo::Point3<ScalarType>(0.3,
+    //                                                                0.3, 0.3),
+    //                                                                Geo::Point3<ScalarType>(0,
+    //                                                                0, 0));
 
     // GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPathsRank(
     //     TGraph, VertCurv, PathSampl.SelectedPaths, 2, BorderSize);
 
-    GLDraw::GLDrawBorders<ScalarType>(VertPos, Connectivity, NextF, ThickBorders);
+    GLDraw::GLDrawBorders<ScalarType>(VertPos, Connectivity, NextF,
+                                      ThickBorders);
 
-    GLDraw::DrawOutline<ScalarType>(VertPos, Connectivity,ThickOutline);
+    GLDraw::DrawOutline<ScalarType>(VertPos, Connectivity, ThickOutline);
   }
 
   PDParam.DrawPath = false;
@@ -1723,7 +1790,7 @@ void GLDrawMesh() {
 
   if (DrawSides)
     GLGraphDraw::GLDrawPatchData<ScalarType>::DrawSides(PatchM);
-
+  
   if (DrawInitalPos) {
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam1;
     PDParam1.ColPoint = Geo::Point3<ScalarType>(1, 0, 1);
@@ -1735,19 +1802,22 @@ void GLDrawMesh() {
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
         TGraph, VertCurv, NodesIdx, MeshBox.Diag() * 0.005, PDParam1);
 
-    std::vector<int> StartIDX;
-    PathSampl.GetStartingNodes(StartIDX);
-    GLDraw::DrawVertices(VertPos, StartIDX);
+    //std::vector<int> StartIDX;
+    // PathSampl.GetStartingNodes(StartIDX);
+    // GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
+    //       TGraph, VertCurv, StartIDX,
+    //       MeshBox.Diag() * 0.005, PDParam, PathColors[CurrSelP]);
+    //GLDraw::DrawVertices(VertPos, StartIDX);
   }
 
-  if (Draw_must_pass_on)
-    GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.must_pass_on);
+  // if (Draw_must_pass_on)
+  //   GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.must_pass_on);
   if (Draw_sample_on)
     GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.sample_on);
   if (Draw_force_sample)
     GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.force_sample);
-  if (Draw_allow_path_on)
-    GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.allow_path_on);
+  // if (Draw_allow_path_on)
+  //   GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.allow_path_on);
   if (Draw_allow_arrive_to) {
     GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.allow_arrive_to);
   }
@@ -1760,22 +1830,47 @@ void GLDrawMesh() {
     PDParam.ColLine = Geo::Point3<ScalarType>(0, 1, 0);
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
         TGraph, VertCurv, Geo::ExitDomain, MeshBox.Diag() * 0.01, PDParam);
-    PDParam.ColLine = Geo::Point3<ScalarType>(1, 1, 0);
+  }
+
+  if (DrawConvexExit)
+  {
+    PDParam.ColLine = Geo::Point3<ScalarType>(1, 0, 0);
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
         TGraph, VertCurv, Geo::ConvexExitDomain, MeshBox.Diag() * 0.01,
         PDParam);
   }
+
   if (DrawTangentNode) {
     PDParam.ColLine = Geo::Point3<ScalarType>(1, 0, 0);
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
         TGraph, VertCurv, Geo::TangentDomain, MeshBox.Diag() * 0.01, PDParam);
+  }
+
+  if (DrawTangentExit)
+  {
     PDParam.ColLine = Geo::Point3<ScalarType>(0, 1, 1);
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
         TGraph, VertCurv, Geo::TangentExitDomain, MeshBox.Diag() * 0.01,
         PDParam);
   }
+
+  if (DrawDartOrthoDomain)
+  {
+    PDParam.ColLine = Geo::Point3<ScalarType>(0, 1, 1);
+    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
+        TGraph, VertCurv, Geo::DartOrthoDomain, MeshBox.Diag() * 0.01,
+        PDParam);
+  }
+
+  if (DrawJumpNodes)
+  {
+    PDParam.ColLine = Geo::Point3<ScalarType>(1, 1, 0);
+    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
+        TGraph, VertCurv, Geo::JumpNodes, MeshBox.Diag() * 0.01, PDParam);
+  }
+
   if (DrawInternalNode) {
-    PDParam.ColLine = Geo::Point3<ScalarType>(0, 0, 1);
+    PDParam.ColLine = Geo::Point3<ScalarType>(1, 0, 1);
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
         TGraph, VertCurv, Geo::Internal, MeshBox.Diag() * 0.01, PDParam);
   }

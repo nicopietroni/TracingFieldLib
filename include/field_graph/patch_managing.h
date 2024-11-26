@@ -1088,14 +1088,6 @@ private:
         std::pair<int, int> NodesE0 = PData.PathsEdges2[key_prev];
         std::pair<int, int> NodesE1 = PData.PathsEdges2[key_next];
 
-        // add direction per each of the previously found nodes
-        // std::vector<int> DirV_prev;
-        // Field::CrossFieldGraph::DirOfNodes(NodesV_prev, DirV_prev);
-        // std::vector<int> DirV_next;
-        // Field::CrossFieldGraph::DirOfNodes(NodesV_next, DirV_next);
-        // std::vector<int> AllDirsV = DirV_prev;
-        // AllDirsV.insert(AllDirsV.end(), DirV_next.begin(), DirV_next.end());
-
         int Dir0 = Field::CrossFieldGraph::DirOfNode(NodesE0.second);
         int Dir1 = Field::CrossFieldGraph::DirOfNode(NodesE1.first);
 
@@ -1864,6 +1856,7 @@ private:
     std::copy(CornerNumsMap.begin(), CornerNumsMap.end(),
               std::back_inserter(CornNum));
   }
+
 
 public:
   // this function set for each face the patch it belongs
@@ -2755,6 +2748,8 @@ public:
     PData.OLDPathNodes = PathNodes;
 
     CheckConsistentData();
+
+    //UpdateOrthoDartNodeTypeIfNeeded();
 
     assert(PData.SideLenghts.size() == NumPatches());
     assert(PData.PatchOriginalFaces.size() == NumPatches());
