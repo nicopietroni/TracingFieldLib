@@ -4,21 +4,25 @@
 #include "../cross_field.h"
 #include "../frame_field.h"
 #include "../point3.h"
-#include "../polyhedra_mesh.h"
 #include "best_rotation.h"
 #include "connectivity.h"
 #include "graph.h"
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
 #include "patch_basic.h"
+#include "polyhedra_mesh_functions.h"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <stdio.h>
+#include <utility>
 #include <vector>
 #define MAX_ANGLE_FOR_DIRECT 90
 #define DELTA 0.00001
 namespace Geo {
+
 template <class ScalarType> class TragingGraphFunctions {
 
   inline static ScalarType DriftDistance(const ScalarType &length,
@@ -1275,7 +1279,6 @@ template <class ScalarType> class TragingGraphFunctions {
       for (size_t j = 0; j < Adjacency[i].size() - 1; j++)
         for (size_t k = (j + 1); k < Adjacency[i].size(); k++)
           if (Adjacency[i][j] == Adjacency[i][k]) {
-            std::cout << "DE1" << std::endl;
             return false;
           }
 
@@ -1426,7 +1429,7 @@ public:
     SetNodeTypeFrame(TGraph, PolyConnectivity, VertPos, FrameField);
 
     // RemoveBorderPolyField(TGraph);
-    RemoveBorderExitNeigh(TGraph, false);
+    RemoveBorderExitNeigh(TGraph); //, false);
 
     assert(TGraph.ProperNeigh());
 
@@ -1439,5 +1442,238 @@ public:
     assert(TGraph.ProperNeigh());
   }
 };
+
+template <class ScalarType> class UndirectedGraphFuctions {
+
+  static bool CanConnect(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                         const std::vector<int> &Face0,
+                         const std::vector<int> &Face1)//,
+                         //const int E0,const int E1)
+  {
+    Geo::Point3<ScalarType> NF0,NF1;
+    ComputeCoherentNormal(VertPos,Face0,Face1,NF0,NF1);
+    // Point3<ScalarType> PF0_0=VertPos[Face0[0]];
+    // Point3<ScalarType> PF0_1=VertPos[Face0[1]];
+    // Point3<ScalarType> PF0_2=VertPos[Face0[2]];
+
+    // Point3<ScalarType> PF1_0=VertPos[Face1[0]];
+    // Point3<ScalarType> PF1_1=VertPos[Face1[1]];
+    // Point3<ScalarType> PF1_2=VertPos[Face1[2]];
+
+    // //orient coherently
+    // assert(Face0.size()==3);
+    // assert(Face1.size()==3);
+
+    // int VE0_F0=Face0[E0];
+    // int VE1_F0=Face0[(E0+1)%3];
+
+    // int VE0_F1=Face1[E1];
+    // int VE1_F1=Face1[(E1+1)%3];
+    // if (VE0_F0==VE0_F1)
+    // {
+    //   assert(VE1_F0==VE1_F1);
+    //   std::swap(PF1_0,PF1_1);
+    // }
+    // else {
+    //   assert(VE0_F0==VE1_F1);
+    //   assert(VE1_F0==VE0_F1);
+    // }
+    // Point3<ScalarType> NF0=Normal(PF0_0,PF0_1,PF0_2);
+    // Point3<ScalarType> NF1=Normal(PF1_0,PF1_1,PF1_2);
+    NF0.Normalize();
+    NF1.Normalize();
+    return (Geo::AngleDeg(NF0,NF1)<90);
+  }
+
+public:
+
+  static void InitFromInternalFacesFrameField(
+      UndirectedNodeWeightedGraph<ScalarType> &Facegraph,
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &TetraInternalFaces,
+      const std::vector<std::vector<int>> &FT,
+      const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+      ScalarType MaxAngle = 60) {
+    std::vector<Point3<ScalarType>> FaceNormals;
+    Geo::ComputeFaceNormals(VertPos, TetraInternalFaces, FaceNormals);
+
+    // create three instances for each face
+    Facegraph.AllocateNodes(TetraInternalFaces.size() * 3);
+
+    // set the faces on the surface as tangent
+    std::vector<int> ExtFaces;
+    for (size_t i = 0; i < FT.size(); i++) {
+      assert(FT[i].size() > 0);
+      if (FT[i].size() > 1)
+        continue;
+
+      // otherwise is an external face
+      ExtFaces.push_back(i);
+      std::vector<int> IndexN;
+      Field::FrameFieldM3Graph::NodesOfElem(i, IndexN);
+      for (size_t j = 0; j < IndexN.size(); j++)
+        Facegraph.NodeType(IndexN[j]) = TangentDomain;
+    }
+
+    std::map<std::pair<int, int>, std::vector<Geo::Point3<ScalarType>>> ExtEdgesDir;
+    for (size_t i = 0; i < ExtFaces.size(); i++) {
+      int IndexF = ExtFaces[i];
+      assert(IndexF >= 0);
+      assert(IndexF < TetraInternalFaces.size());
+      int sizeF = TetraInternalFaces[IndexF].size();
+      Geo::Point3<ScalarType> ExitDir = FaceNormals[IndexF];
+
+      for (size_t j = 0; j < sizeF; j++) {
+        int IndexV0 = TetraInternalFaces[IndexF][j];
+        int IndexV1 = TetraInternalFaces[IndexF][(j + 1) % sizeF];
+        std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
+                                 std::max(IndexV0, IndexV1));
+        ExtEdgesDir[KeyE].push_back(ExitDir);
+      }
+    }
+
+    // then cycle over all faces
+    for (size_t i = 0; i < TetraInternalFaces.size(); i++) {
+      int IndexF = i;
+      int sizeF = TetraInternalFaces[IndexF].size();
+
+      // for each edge
+      for (size_t j = 0; j < sizeF; j++) {
+        int IndexV0 = TetraInternalFaces[IndexF][j];
+        int IndexV1 = TetraInternalFaces[IndexF][(j + 1) % sizeF];
+        std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
+                                 std::max(IndexV0, IndexV1));
+
+        // if not on the border
+        if (ExtEdgesDir.count(KeyE) == 0)
+          continue;
+
+        /// get all exit directions
+        for (size_t j = 0; j < ExtEdgesDir[KeyE].size(); j++) {
+          // get the direction
+          Geo::Point3<ScalarType> ExitDIr = ExtEdgesDir[KeyE][j];
+
+          // then get best oriented node in M3
+          assert(IndexF < FacesFrameField.size());
+          int IndexDir = FacesFrameField[IndexF].BestM3DirectionI(ExitDIr);
+
+          // get the index of node
+          int IndexN = Field::FrameFieldM3Graph::NodeOfElemDir(IndexF, IndexDir);
+          assert(IndexN >= 0);
+          assert(IndexN < Facegraph.NumNodes());
+          Facegraph.NodeType(IndexN) = TangentDomain;
+
+        }
+      }
+    }
+
+    //set the exit label
+    for (size_t i = 0; i < TetraInternalFaces.size(); i++) {
+      int IndexF = i;
+      int sizeF = TetraInternalFaces[IndexF].size();
+
+      //for each edge
+      for (size_t e = 0; e < sizeF; e++) {
+        int IndexV0 = TetraInternalFaces[IndexF][e];
+        int IndexV1 = TetraInternalFaces[IndexF][(e + 1) % sizeF];
+        std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
+                                 std::max(IndexV0, IndexV1));
+
+        // if not on the border
+        if (ExtEdgesDir.count(KeyE) == 0)
+          continue;
+
+        //for each node
+        std::vector<int> IndexN;
+        Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
+        for (size_t i=0;i<IndexN.size();i++)
+        {
+          if (Facegraph.NodeType(IndexN[i]) == TangentDomain)continue;
+          Facegraph.SetExitLabel(IndexN[i],e);
+        }
+      }
+    }
+
+    // initialize the weight of nodes and disable in case
+    // thy exceed a thresold
+    for (size_t i = 0; i < Facegraph.NumNodes(); i++) {
+      int DirIdx = Field::FrameFieldM3Graph::DirOfNode(i);
+      int ElemIdx = Field::FrameFieldM3Graph::ElemOfNode(i);
+      assert(ElemIdx >= 0);
+      assert(ElemIdx < FacesFrameField.size());
+      assert(ElemIdx < FaceNormals.size());
+      assert(DirIdx >= 0);
+      assert(DirIdx < 3);
+      Geo::Point3<ScalarType> DirFrame =
+          FacesFrameField[ElemIdx].GetDirection(DirIdx);
+      Geo::Point3<ScalarType> NormFace = FaceNormals[ElemIdx];
+
+      // invert if needed
+      if (Geo::Dot(DirFrame, NormFace) < 0)
+        DirFrame = -DirFrame;
+      
+      ScalarType CurrAngle=Geo::AngleDeg(DirFrame, NormFace);
+      assert(CurrAngle<90);
+      Facegraph.Weight(i)=CurrAngle/(ScalarType)90;
+
+      if (CurrAngle > MaxAngle)
+        Facegraph.DisableNode(i);
+
+    }
+
+    // compute the FF
+    std::vector<std::vector<std::vector<int>>> NextF, NextE;
+    Geo::getFFAdjacencyNonManifold(TetraInternalFaces, NextF, NextE);
+
+    // for each face
+    for (size_t i = 0; i < NextF.size(); i++) {
+      // for each M3 direction
+      std::vector<int> Nodes;
+      Field::FrameFieldM3Graph::NodesOfElem(i, Nodes);
+      int IndexF0=i;
+
+      for (size_t n = 0; n < Nodes.size(); n++) {
+        // for each surrounding edge
+        int IndexN0=Nodes[n];
+        assert(IndexN0>=0);
+        assert(IndexN0<Facegraph.NumNodes());
+        int IndexDir0=Field::FrameFieldM3Graph::DirOfNode(IndexN0);
+        
+        Field::FrameField<ScalarType> Frame0=FacesFrameField[i];
+
+        for (size_t e = 0; e < NextF[i].size(); e++) {
+          // for each adjacent face along that edge
+          int Label0=(int)e;
+          for (size_t f = 0; f < NextF[i][e].size(); f++) 
+          {
+            int IndexF1=NextF[i][e][f];
+            int Label1=NextE[i][e][f];
+
+            if (IndexF1==-1)continue;// no neighbours
+            Geo::Point3<ScalarType> TargetD=Frame0.GetDirection(IndexDir0);
+            Field::FrameField<ScalarType> Frame1=FacesFrameField[IndexF1];
+            int IndexDir1=Frame1.BestM3DirectionI(TargetD);
+            int IndexN1=Field::FrameFieldM3Graph::NodeOfElemDir(IndexF1,IndexDir1);
+
+             //check if they are connected
+             bool IsEnabled=CanConnect(VertPos,
+                            TetraInternalFaces[IndexF0],
+                            TetraInternalFaces[IndexF1]);//,
+                            //Label0,Label1);
+            //add the connection
+            Facegraph.AddSymmLink(IndexN0,IndexN1,Label0,Label1,IsEnabled);
+          }
+        }
+      }
+    }
+    //then make it symmetric
+    Facegraph.MakeUniqueConnection();
+
+    //print statistics
+    Facegraph.WriteStats();
+  }
+
+};
+
 } // namespace Geo
 #endif

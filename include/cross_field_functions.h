@@ -211,7 +211,7 @@ void SetVertCrossFromFace(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 
     for (size_t i = 0; i < VertFaces.size(); i++)
     {
-        std::vector<Field::CrossF<ScalarType>> FaceCross;
+        std::vector<Field::CrossF<ScalarType> > FaceCross;
         std::vector<ScalarType> W(VertFaces[i].size(), 1);
         for (size_t j = 0; j < VertFaces[i].size(); j++)
         {

@@ -205,7 +205,9 @@ bool ReadField(const std::vector<Geo::Point3<ScalarType > > &VertPos,
                std::vector<Field::FrameField<ScalarType> > &PolyhedraField)
 {
     std::vector<std::vector<Geo::Point3<ScalarType> > > VertFieldVect,PolyhedraFieldVect;
-    bool loaded=ReadField(fieldFile,VertFieldVect,PolyhedraFieldVect);
+   
+    std::vector<std::vector<ScalarType > > VertFieldK,FaceFieldK;
+    bool loaded=ReadField(fieldFile,VertFieldVect,VertFieldK,PolyhedraFieldVect,FaceFieldK);
     if (!loaded)return false;
 
     VertField.resize(VertFieldVect.size());

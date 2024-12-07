@@ -3,7 +3,7 @@
 
 #include <vector>
 #include "point3.h"
-#include "polyhedra_mesh.h"
+#include "polyhedra_mesh_functions.h"
 #include "box3.h"
 
 template <class ScalarType>

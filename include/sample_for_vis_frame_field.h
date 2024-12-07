@@ -2,7 +2,7 @@
 #define SAMPLE_FOR_VIS_FRAME_FIELD
 
 #include "point3.h"
-#include "polyhedra_mesh.h"
+#include "polyhedra_mesh_functions.h"
 #include <algorithm>
 #include <random>
 #include <vector>

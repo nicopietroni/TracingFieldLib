@@ -7,7 +7,7 @@
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
 #include "graph_tracing.h"
-#include "path_sampling.h"
+//#include "path_sampling.h"
 #include "point3.h"
 #include "t_junction.h"
 #include <algorithm>

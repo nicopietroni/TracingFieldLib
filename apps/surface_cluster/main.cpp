@@ -257,6 +257,7 @@ void InitIMGui() {
 
 // bool lineF = (SParam.NDir == 2);
 // bool crossF = (SParam.NDir == 4);
+int RelaxIte=20;
 
 void SetRenderBar() {
   ImGui::Begin("Mesh Cluster", NULL, ImGuiWindowFlags_AlwaysAutoResize);
@@ -268,6 +269,7 @@ void SetRenderBar() {
   ImGui::SliderInt("Num Cluster", &TargetCl, -1, 100);
   // ScalarType CurrL=
   ImGui::SliderInt("Error %", &EnergyPerc, -1, 100);
+  ImGui::SliderInt("Relax Ite %", &RelaxIte, 5, 100);
 
   // ImGui::Checkbox("Show Cross", &showCross);
   // ImGui::Checkbox("Show Sing", &showSing);
@@ -275,7 +277,7 @@ void SetRenderBar() {
   if (ImGui::Button("Voro Cluster")) {
     VertPos = VertPos0;
     Faces = Faces0;
-    FindVoronoiClusters(VertPos,Faces,ClusterFaces,TargetCl,(ScalarType)EnergyPerc);
+    FindVoronoiClusters(VertPos,Faces,ClusterFaces,TargetCl,(ScalarType)EnergyPerc,(ScalarType)-1,RelaxIte);
     ColorByPartition();
     UpdateCorners();
   }
@@ -283,10 +285,19 @@ void SetRenderBar() {
   if (ImGui::Button("VSA Decomposition")) {
     VertPos = VertPos0;
     Faces = Faces0;
-    FindVSAClusters(VertPos,Faces,ClusterFaces,TargetCl,(ScalarType)EnergyPerc);
+    FindVSAClusters(VertPos,Faces,ClusterFaces,TargetCl,(ScalarType)EnergyPerc,(ScalarType)-1,RelaxIte);
     ColorByPartition();
     UpdateCorners();
   }
+
+  if (ImGui::Button("Dualize")) {
+    // VertPos = VertPos0;
+    // Faces = Faces0;
+    // FindVSAClusters(VertPos,Faces,ClusterFaces,TargetCl,(ScalarType)EnergyPerc,(ScalarType)-1,RelaxIte);
+    // ColorByPartition();
+    // UpdateCorners();
+  }
+
   if (ImGui::Button("Save Patch Layout")) {
     std::string patch_path=ProjectPath+std::string(".patch");
     SaveCornerEdges(VertPos,Faces,ClusterFaces,patch_path);

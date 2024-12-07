@@ -491,6 +491,23 @@ void LongestEdge(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 
 template <class ScalarType>
 ScalarType AvgEdgeLen(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                      const std::vector<std::vector<int>> &Faces,
+                      const int &IndexF) {
+  ScalarType EdgeSum = 0;
+  int Num = 0;
+  assert(IndexF >= 0);
+  assert(IndexF < Faces.size());
+  for (size_t j = 0; j < Faces[IndexF].size(); j++) {
+    ScalarType CurrELenght = EdgeLenght(VertPos, Faces, IndexF, j);
+    // should consider also border but become slow
+    EdgeSum += CurrELenght;
+    Num++;
+  }
+  return EdgeSum / Num;
+}
+
+template <class ScalarType>
+ScalarType AvgEdgeLen(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                       const std::vector<std::vector<int>> &Faces) {
   ScalarType EdgeSum = 0;
   int Num = 0;
@@ -1110,8 +1127,8 @@ bool SplitNonManifoldBorderV(std::vector<Geo::Point3<ScalarType>> &Pos,
       VertFacesFun[IndexV].push_back(PosFan);
     }
   }
-  //WriteOBJ("testManifBefore.obj",Pos,Faces);
-  bool splitted=false;
+  // WriteOBJ("testManifBefore.obj",Pos,Faces);
+  bool splitted = false;
   typename std::unordered_map<int, std::vector<std::vector<Pos3>>>::iterator
       ite_map;
   for (ite_map = VertFacesFun.begin(); ite_map != VertFacesFun.end();
@@ -1120,15 +1137,15 @@ bool SplitNonManifoldBorderV(std::vector<Geo::Point3<ScalarType>> &Pos,
     assert((*ite_map).second.size() > 0);
     if ((*ite_map).second.size() <= 1)
       continue;
-    //std::cout<<"** SPLIT NON MANIF VERT **"<<std::endl;
-    // otherwise allocate a new vertex
+    // std::cout<<"** SPLIT NON MANIF VERT **"<<std::endl;
+    //  otherwise allocate a new vertex
     int IndexV = (*ite_map).first;
     assert(IndexV >= 0);
     assert(IndexV < Pos.size());
     // duplicate the vertex
     for (size_t j = 1; j < (*ite_map).second.size(); j++) {
       Pos.push_back(Pos[IndexV]);
-      splitted=true;
+      splitted = true;
       // change each reference
       for (size_t k = 0; k < (*ite_map).second[j].size(); k++) {
         Pos3 CurrPos = (*ite_map).second[j][k];
@@ -1138,7 +1155,7 @@ bool SplitNonManifoldBorderV(std::vector<Geo::Point3<ScalarType>> &Pos,
         int LocalIDX = Geo::WhichVert(Faces[CurrF], IndexV);
         assert(LocalIDX >= 0);
         assert(LocalIDX < Faces[CurrF].size());
-        Faces[CurrF][LocalIDX] = Pos.size()-1;
+        Faces[CurrF][LocalIDX] = Pos.size() - 1;
       }
     }
   }

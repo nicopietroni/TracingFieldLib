@@ -1,6 +1,7 @@
 #ifndef GL_DRAW_MESH
 #define GL_DRAW_MESH
 
+#include <cassert>
 #include <sys/_types/_size_t.h>
 #include <vector>
 #include "GLDrawBase.h"
@@ -37,6 +38,22 @@ namespace GLDraw
     //     glDepthRange(0.0,1.0);
     //     glPopAttrib();
     // }
+
+    template <class ScalarType>
+    void DrawNormal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                    const std::vector<std::vector<int>> &Faces,
+                    int IndexF,
+                    Geo::Point3<ScalarType> Col = Geo::Point3<ScalarType>(0, 0, 0),
+                    int size = 20)
+    {
+        assert(IndexF>=0);
+        assert(IndexF<Faces.size());
+        Geo::Point3<ScalarType> NormF=Geo::Normal(VertPos,Faces,IndexF);
+        Geo::Point3<ScalarType> Bary=ComputeFaceBarycenter<ScalarType>(VertPos,Faces,IndexF);
+        ScalarType AvgL=AvgEdgeLen(VertPos,Faces,IndexF);
+        Geo::Segment3<ScalarType> SegNorm(Bary,Bary+NormF*AvgL*0.3);
+        GLDraw::GLDrawSegment<ScalarType>(SegNorm.P(0),SegNorm.P(1),size,0,Col);
+    }
 
     template <class ScalarType>
     void DrawPoints(const std::vector<Geo::Point3<ScalarType>> &Samples,
@@ -246,6 +263,30 @@ namespace GLDraw
             for (size_t j = 0; j < Connectivity[i].size(); j++)
             {
                 int IndexV = Connectivity[i][j];
+                assert(IndexV >= 0);
+                assert(IndexV < (int)VertPos.size());
+                CoordType Pos = VertPos[IndexV];
+                glVertex(Pos);
+            }
+            glEnd();
+        }
+    }
+
+    template <class CoordType>
+    void DrawSurfaceWire(const std::vector<CoordType> &VertPos,
+                         const std::vector<std::vector<int>> &Connectivity,
+                         const std::vector<int> &ToDraw)
+    {
+        // glColor(Geo::Point3<float>(0,0,0));
+        // glLineWidth(1.f);
+        glDisable(GL_LIGHTING);
+        for (size_t i = 0; i < ToDraw.size(); i++)
+        {
+            int IndexF=ToDraw[i];
+            glBegin(GL_LINE_LOOP);
+            for (size_t j = 0; j < Connectivity[IndexF].size(); j++)
+            {
+                int IndexV = Connectivity[IndexF][j];
                 assert(IndexV >= 0);
                 assert(IndexV < (int)VertPos.size());
                 CoordType Pos = VertPos[IndexV];

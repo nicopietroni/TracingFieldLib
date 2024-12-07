@@ -12,7 +12,9 @@
 #include <limits>
 #include <set>
 #include <sys/_types/_size_t.h>
+#include <utility>
 #include <vector>
+#include "../Space_Query/segment_grid_3D.h"
 
 namespace Geo {
 template <class ScalarType> class PatchOptimize {
@@ -248,13 +250,65 @@ public:
     for (size_t i=0;i<BorderV.size();i++)
       ToFixPos.insert(PrimalVertPos[BorderV[i]]);
     
-    // //then map the position to the dual
-    
+    //then map the position to the dual  
     for (size_t i=0;i<DualVertPos.size();i++)
     {
       if (ToFixPos.count(DualVertPos[i])==0)continue;
        UVP.Fixed.push_back(i);
     }
+
+    //fix the vertices on features (might result different from split)
+    std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > BorderEPos;
+    std::vector<std::pair<int,int> > BorderIdx;
+    getBorderEdges(DualConnectivity,BorderIdx);
+    for (size_t i=0;i<BorderIdx.size();i++)
+    {
+      Geo::Point3<ScalarType> P0=DualVertPos[BorderIdx[i].first];
+      Geo::Point3<ScalarType> P1=DualVertPos[BorderIdx[i].second];
+      std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > Key(std::min(P0,P1),std::max(P0,P1));
+      BorderEPos.insert(Key);
+    }
+
+    std::vector<std::pair<int,int> > MissingFeatureE;
+    for (size_t i=0;i<PrimalFeatures.size();i++)
+    {
+      Geo::Point3<ScalarType> P0=PrimalVertPos[PrimalFeatures[i].first];
+      Geo::Point3<ScalarType> P1=PrimalVertPos[PrimalFeatures[i].second];
+      std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > Key(std::min(P0,P1),std::max(P0,P1));
+      if (BorderEPos.count(Key)>0)continue;
+      MissingFeatureE.push_back(PrimalFeatures[i]);
+    }
+
+    //then fix the one close to the middle of missing
+    std::vector<Geo::Point3<ScalarType>> MissingP;
+    for (size_t i=0;i<MissingFeatureE.size();i++)
+    {
+      Geo::Point3<ScalarType> P0=PrimalVertPos[MissingFeatureE[i].first];
+      Geo::Point3<ScalarType> P1=PrimalVertPos[MissingFeatureE[i].second];
+      Geo::Point3<ScalarType> Avg=(P0+P1)/2;
+      MissingP.push_back(Avg);
+    }
+
+    //find the closer one
+    getBorderVert(DualConnectivity,BorderV);
+    for (size_t i=0;i<MissingP.size();i++)
+    {
+      Geo::Point3<ScalarType> P0=MissingP[i];
+      ScalarType MinD=std::numeric_limits<ScalarType>::max();
+      int MinV=-1;
+      for (size_t i=0;i<BorderV.size();i++)
+      {
+        int IndexV=BorderV[i];
+        Geo::Point3<ScalarType> P1=DualVertPos[IndexV];
+        ScalarType CurrD=(P0-P1).Norm();
+        if (CurrD>MinD)continue;
+        MinD=CurrD;
+        MinV=IndexV;
+      }
+      if (MinV!=-1)
+      UVP.Fixed.push_back(MinV);
+    }
+    
     Geo::Local_Param_Smooth<ScalarType>::SmoothWithInternalBorders(DualVertPos, DualConnectivity, false, UVP);
 
     // //first save all feature positions

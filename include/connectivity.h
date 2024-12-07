@@ -7,10 +7,39 @@
 #include <cstddef>
 #include <iostream>
 #include <set>
+#include <utility>
 #include <vector>
 // #include "mesh_functions.h"
 
 namespace Geo {
+
+void SharedE(const std::vector<int> &Face0,
+             const std::vector<int> &Face1,
+             int &IndexE0,int &IndexE1) 
+{
+  IndexE0=-1;
+  IndexE1=-1;
+  for (size_t i = 0; i < Face0.size(); i++)
+  {
+    int IndexF0_V0=Face0[i];
+    int IndexF0_V1=Face0[(i+1)%Face0.size()];
+    std::pair<int,int> E0(std::min(IndexF0_V0,IndexF0_V1),
+                          std::max(IndexF0_V0,IndexF0_V1));
+    for (size_t j = 0; j < Face1.size(); j++)
+    {
+      int IndexF1_V0=Face1[j];
+      int IndexF1_V1=Face1[(j+1)%Face1.size()];
+      std::pair<int,int> E1(std::min(IndexF1_V0,IndexF1_V1),
+                            std::max(IndexF1_V0,IndexF1_V1));
+      if (E1==E0)
+      {
+        IndexE0=i;
+        IndexE1=j;
+        return;
+      }
+    }
+  }
+}
 
 int WhichVert(const std::vector<int> &Face, const int &VertIndex) {
   for (size_t i = 0; i < Face.size(); i++)

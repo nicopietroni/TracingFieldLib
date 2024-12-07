@@ -4,7 +4,7 @@
 #include <vector>
 #include <map>
 #include <iostream>
-#include "polyhedra_mesh.h"
+#include "polyhedra_mesh_functions.h"
 
 class Pos4{
 

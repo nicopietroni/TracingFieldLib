@@ -1,17 +1,64 @@
 #ifndef COMPUTE_NORMAL
 #define COMPUTE_NORMAL
 
+#include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <iostream>
 #include <iterator>
 #include <vector>
 #include <stdio.h>
 #include <iostream>
+#include "connectivity.h"
 #include "point3.h"
 #include "triangle3.h"
 #include <assert.h>
 
 namespace  Geo{
+
+template <class ScalarType>
+static bool ComputeCoherentNormal(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                   const std::vector<int> &Face0,
+                                   const std::vector<int> &Face1,
+                                   Geo::Point3<ScalarType> &NormFace0,
+                                   Geo::Point3<ScalarType> &NormFace1)
+{
+    Point3<ScalarType> PF0_0=VertPos[Face0[0]];
+    Point3<ScalarType> PF0_1=VertPos[Face0[1]];
+    Point3<ScalarType> PF0_2=VertPos[Face0[2]];
+
+    Point3<ScalarType> PF1_0=VertPos[Face1[0]];
+    Point3<ScalarType> PF1_1=VertPos[Face1[1]];
+    Point3<ScalarType> PF1_2=VertPos[Face1[2]];
+
+    //orient coherently
+    assert(Face0.size()==3);
+    assert(Face1.size()==3);
+    int E0,E1;
+    Geo::SharedE(Face0,Face1,E0,E1);
+    // std::cout<<"E0:"<<Face0[E0]<<","<<Face0[(E0+1)%3]<<std::endl;
+    // std::cout<<"E1:"<<Face1[E1]<<","<<Face1[(E1+1)%3]<<std::endl;
+    if (E0==-1)return false;
+    assert(E1!=-1);
+    
+    int VE0_F0=Face0[E0];
+    int VE1_F0=Face0[(E0+1)%3];
+
+    int VE0_F1=Face1[E1];
+    int VE1_F1=Face1[(E1+1)%3];
+    if (VE0_F0==VE0_F1)
+    {
+      assert(VE1_F0==VE1_F1);
+      std::swap(PF1_0,PF1_1);
+    }
+    else {
+      assert(VE0_F0==VE1_F1);
+      assert(VE1_F0==VE0_F1);
+    }
+    NormFace0=Normal(PF0_0,PF0_1,PF0_2);
+    NormFace1=Normal(PF1_0,PF1_1,PF1_2);
+    return true;
+}
 
 template <class ScalarType>
 Point3<ScalarType> Normal(const Point3<ScalarType> &P0,
@@ -129,6 +176,17 @@ void ComputeNormals(const std::vector<Point3<ScalarType> > &Vert,
         if (VertNormals[i]==Point3<ScalarType>(0,0,0))continue;
         VertNormals[i].Normalize();
     }
+}
+
+template <class ScalarType>
+void ComputeFaceNormals(const std::vector<Point3<ScalarType> > &Vert,
+                        const std::vector<std::vector<int> > &Faces,
+                        std::vector<Point3<ScalarType> > &FaceNormals)
+{
+    FaceNormals.clear();
+    FaceNormals.resize(Faces.size());
+    for (size_t i=0;i<Faces.size();i++)
+        FaceNormals[i]=Normal(Vert,Faces,i);
 }
 
 

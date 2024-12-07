@@ -9,62 +9,62 @@
 #include <fstream>
 #include <iostream>
 #include "eigen_interface.h"
-#include "polyhedra_mesh.h"
-#include "best_rotation.h"
+//#include "polyhedra_mesh.h"
+//#include "best_rotation.h"
 
 //#include <cinolib/geometry/vec_mat.h>
 
 namespace Field{
 
 
-void OrthoFrameDirs(const int Dir,std::vector<int> &OrthoD)
-{
-    assert(Dir>=0);
-    assert(Dir<6);
-    OrthoD.clear();
-    OrthoD.push_back((Dir+1)%6);
-    OrthoD.push_back((Dir+2)%6);
-    OrthoD.push_back((Dir+4)%6);
-    OrthoD.push_back((Dir+5)%6);
-    //OrthoD.push_back((Dir+3)%6);
-    //return ((Dir+3)%6);
-}
+// void OrthoFrameDirs(const int Dir,std::vector<int> &OrthoD)
+// {
+//     assert(Dir>=0);
+//     assert(Dir<6);
+//     OrthoD.clear();
+//     OrthoD.push_back((Dir+1)%6);
+//     OrthoD.push_back((Dir+2)%6);
+//     OrthoD.push_back((Dir+4)%6);
+//     OrthoD.push_back((Dir+5)%6);
+//     //OrthoD.push_back((Dir+3)%6);
+//     //return ((Dir+3)%6);
+// }
 
-int OppositeFrameDir(const int Dir)
-{
-    assert(Dir>=0);
-    assert(Dir<6);
-    return ((Dir+3)%6);
-}
+// int OppositeFrameDir(const int Dir)
+// {
+//     assert(Dir>=0);
+//     assert(Dir<6);
+//     return ((Dir+3)%6);
+// }
 
 
-enum RelationType{NodeCollinear,NodeOpposite,NodeOrthogonal};
+// enum RelationType{NodeCollinear,NodeOpposite,NodeOrthogonal};
 
-RelationType FrameRelationDir(const int Dir0,
-                              const int Dir1)
-{
-    assert(Dir0>=0);
-    assert(Dir1>=0);
-    if (Dir0==Dir1)return NodeCollinear;
-    if (Dir1==(OppositeFrameDir(Dir0)))return NodeOpposite;
-    return NodeOrthogonal;
-}
+// RelationType FrameRelationDir(const int Dir0,
+//                               const int Dir1)
+// {
+//     assert(Dir0>=0);
+//     assert(Dir1>=0);
+//     if (Dir0==Dir1)return NodeCollinear;
+//     if (Dir1==(OppositeFrameDir(Dir0)))return NodeOpposite;
+//     return NodeOrthogonal;
+// }
 
-template <class ScalarType>
-void OrthoNormalizeFrome(Geo::Point3<ScalarType> &D0,
-                         Geo::Point3<ScalarType> &D1,
-                         Geo::Point3<ScalarType> &D2)
-{
-    Eigen::Matrix3<ScalarType> M=EigenInterface<ScalarType>::FramesToEigen(D0,D1,D2);
-    M.transposeInPlace();
-    Eigen::JacobiSVD<Eigen::Matrix3d> svd;
-    svd.compute(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
-    Eigen::Matrix3d U=(svd.matrixV() * svd.matrixU().transpose());
-    //U.transposeInPlace();
-    EigenInterface<ScalarType>::EigenToFrames(U,D0,D1,D2);
-    //ForceCorrect();
-    //PrintField();
-}
+// template <class ScalarType>
+// void OrthoNormalizeFrome(Geo::Point3<ScalarType> &D0,
+//                          Geo::Point3<ScalarType> &D1,
+//                          Geo::Point3<ScalarType> &D2)
+// {
+//     Eigen::Matrix3<ScalarType> M=EigenInterface<ScalarType>::FramesToEigen(D0,D1,D2);
+//     M.transposeInPlace();
+//     Eigen::JacobiSVD<Eigen::Matrix3d> svd;
+//     svd.compute(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
+//     Eigen::Matrix3d U=(svd.matrixV() * svd.matrixU().transpose());
+//     //U.transposeInPlace();
+//     EigenInterface<ScalarType>::EigenToFrames(U,D0,D1,D2);
+//     //ForceCorrect();
+//     //PrintField();
+// }
 
 template <class ScalarType>
 class FrameField
@@ -130,6 +130,24 @@ public:
         {
             Geo::Point3<ScalarType> Dir=GetDirection(i);
             ScalarType TestDotV=Geo::Dot<ScalarType>(Dir,TargetD);
+
+            if (TestDotV<DotV)continue;
+
+            DotV=TestDotV;
+            Index=i;
+        }
+        assert(Index>=0);
+        return Index;
+    }
+
+    int BestM3DirectionI(const Geo::Point3<ScalarType> &TargetD)const
+    {
+        ScalarType DotV=-1;
+        int Index=-1;
+        for (size_t i=0;i<3;i++)
+        {
+            Geo::Point3<ScalarType> Dir=GetDirection(i);
+            ScalarType TestDotV=fabs(Geo::Dot<ScalarType>(Dir,TargetD));
 
             if (TestDotV<DotV)continue;
 
@@ -263,20 +281,6 @@ public:
         //            ScalarType DotTest=Dot(F1.D[2],GetDirection(i));
         //            std::cout<<"Test Index "<<i<<": "<<DotTest<<" angle: "<<acos(DotTest)* (180.0/M_PI)<<std::endl;
         //        }
-    }
-
-    void OrthoNormalize()
-    {
-        //        Eigen::Matrix3<ScalarType> M=EigenInterface<ScalarType>::FramesToEigen(D[0],D[1],D[2]);
-        //        M.transposeInPlace();
-        //        Eigen::JacobiSVD<Eigen::Matrix3d> svd;
-        //        svd.compute(M, Eigen::ComputeFullU | Eigen::ComputeFullV);
-        //        Eigen::Matrix3d U=(svd.matrixV() * svd.matrixU().transpose());
-        //        //U.transposeInPlace();
-        //        EigenInterface<ScalarType>::EigenToFrames(U,D[0],D[1],D[2]);
-        //        //ForceCorrect();
-        //        //PrintField();
-        OrthoNormalizeFrome(D[0],D[1],D[2]);
     }
 
     void RotateToMatch(const int indexDir,
@@ -413,412 +417,412 @@ public:
 
 };
 
-//template < typename ScalarType >
-//Field::FrameField<ScalarType> InterpolateFrame(const std::vector<Field::FrameField<ScalarType> > &Frames,
-//                                               const std::vector<ScalarType> &W)
-//{
-//   assert(Frames.size()>0);
-
-//   if (Frames.size()==1)
-//        return(Frames[0]);
-
-//   Field::FrameField<ScalarType> RefFrame=Frames[0];
-//   if (!RefFrame.IsProper())
-//   {
-//       RefFrame.PrintField();
-//       assert(0);
-//   }
-
-//   Field::FrameField<ScalarType> RetFrame;
-
-//   RetFrame.Q=0;
-//   RetFrame.Pos=Point3<ScalarType>(0,0,0);
-//   ScalarType TotQ=0;
-//   for (size_t i=0;i<Frames.size();i++)
-//   {
-//       if (!Frames[i].IsProper())
-//       {
-//           Frames[i].PrintField();
-//           assert(0);
-//       }
-
-//       Point3<ScalarType> D0=Frames[i].D[0];
-//       Point3<ScalarType> D1=Frames[i].D[1];
-//       Point3<ScalarType> D2=Frames[i].D[2];
-
-//       int DirI0=RefFrame.BestDirectionI(D0);
-//       int DirI1=RefFrame.BestDirectionI(D1);
-//       int DirI2=RefFrame.BestDirectionI(D2);
-
-////       assert(DirI0!=DirI1);
-////       assert(DirI1!=DirI2);
-////       assert(DirI0!=DirI2);
-
-//       if (DirI0>=3)
-//       {
-//         DirI0-=3;
-//         D0=-D0;
-//       }
-//       if (DirI1>=3)
-//       {
-//         DirI1-=3;
-//         D1=-D1;
-//       }
-//       if (DirI2>=3)
-//       {
-//         DirI2-=3;
-//         D2=-D2;
-//       }
-
-//       if ((DirI0==DirI1)||(DirI1==DirI2)||(DirI2==DirI0))
-//       {
-//           //Frames[i].PrintField();
-//           //RefFrame.PrintField();
-//           RefFrame.PrintPairing(Frames[i]);
-//           //assert(0);
-//       }
-////       assert(DirI0!=DirI1);
-////       assert(DirI1!=DirI2);
-////       assert(DirI0!=DirI2);
-
-////       if (DirI0==DirI1)std::cout<<"de"<<std::endl;
-////       if (DirI1==DirI2)std::cout<<"de"<<std::endl;
-////       if (DirI0==DirI2)std::cout<<"de"<<std::endl;
-
-//       assert(DirI0>=0);
-//       assert(DirI0<3);
-//       assert(DirI1>=0);
-//       assert(DirI1<3);
-//       assert(DirI2>=0);
-//       assert(DirI2<3);
-
-//       RetFrame.D[DirI0]+=D0*Frames[i].Q;
-//       RetFrame.D[DirI1]+=D1*Frames[i].Q;
-//       RetFrame.D[DirI2]+=D2*Frames[i].Q;
-
-//       RetFrame.Q+=Frames[i].Q;
-//       RetFrame.Pos=Frames[i].Pos*Frames[i].Q;
-//       TotQ+=Frames[i].Q;
-//   }
-
-//   RetFrame.Pos/=TotQ;
-//   RetFrame.Q/=Frames.size();
-
-//   //then normalize
-//   RetFrame.D[0].Normalize();
-//   RetFrame.D[1].Normalize();
-//   RetFrame.D[2].Normalize();
-
-//   RetFrame.OrthoNormalize();
-//   //find the closest rotation
-//   return RetFrame;
-//}
-
-template < typename ScalarType >
-RelationType FrameRelationDir(const Field::FrameField<ScalarType> &Frame0,const int Dir0,
-                              const Field::FrameField<ScalarType> &Frame1,const int Dir1)
-{
-    const int Dir1Transf=Frame0.FollowDirection(Frame1,Dir1);
-    return FrameRelationDir(Dir0,Dir1Transf);
-}
-
-template < typename ScalarType >
-Field::FrameField<ScalarType> InterpolateFrame(const Field::FrameField<ScalarType> &ReFFrame,
-                                               const std::vector<Field::FrameField<ScalarType> > &Frames,
-                                               const std::vector<ScalarType> &W)
-{
-    assert(Frames.size()>0);
-
-    if (Frames.size()==1)
-        return(Frames[0]);
-
-    Field::FrameField<ScalarType> RefFrame=Frames[0];
-    if (!RefFrame.IsProper())
-    {
-        RefFrame.PrintField();
-        assert(0);
-    }
-
-    Field::FrameField<ScalarType> RetFrame;
-    RetFrame.Q=0;
-    RetFrame.Pos=Geo::Point3<ScalarType>(0,0,0);
-    ScalarType TotQ=0;
-
-    for (size_t i=0;i<Frames.size();i++)
-    {
-        if (!Frames[i].IsProper())
-        {
-            Frames[i].PrintField();
-            assert(0);
-        }
-
-        int bestD0,bestD1,bestD2;
-        RefFrame.GetBestPairing(Frames[i],bestD0,bestD1,bestD2);
-
-        assert(bestD0!=bestD1);
-        assert(bestD1!=bestD2);
-        assert(bestD0!=bestD2);
-
-        Geo::Point3<ScalarType> D0=Frames[i].GetDirection(bestD0);
-        Geo::Point3<ScalarType> D1=Frames[i].GetDirection(bestD1);
-        Geo::Point3<ScalarType> D2=Frames[i].GetDirection(bestD2);
-
-        RetFrame.D[0]+=D0*Frames[i].Q;
-        RetFrame.D[1]+=D1*Frames[i].Q;
-        RetFrame.D[2]+=D2*Frames[i].Q;
-
-        RetFrame.Q+=Frames[i].Q;
-        RetFrame.Pos=Frames[i].Pos*Frames[i].Q;
-        TotQ+=Frames[i].Q;
-    }
-
-    RetFrame.Pos/=TotQ;
-    RetFrame.Q/=Frames.size();
-
-    //then normalize
-    RetFrame.D[0].Normalize();
-    RetFrame.D[1].Normalize();
-    RetFrame.D[2].Normalize();
-
-    RetFrame.OrthoNormalize();
-    //find the closest rotation
-    return RetFrame;
-}
-
-
-template <class ScalarType>
-bool IsProperTetraFrameField(const std::vector<Field::FrameField<ScalarType> > &TetraFrames)
-{
-    for (size_t i=0;i<TetraFrames.size();i++)
-        if (!TetraFrames[i].IsProper())
-        {
-            Geo::Point3<ScalarType> D0=TetraFrames[i].D[0];
-            Geo::Point3<ScalarType> D1=TetraFrames[i].D[1];
-            Geo::Point3<ScalarType> D2=TetraFrames[i].D[2];
-
-            std::cout<<"Norm D0:"<<D0.Norm()<<std::endl;
-            std::cout<<"Norm D1:"<<D1.Norm()<<std::endl;
-            std::cout<<"Norm D2:"<<D2.Norm()<<std::endl;
-
-            std::cout<<"Dot D0 D1:"<<fabs(Dot(D0,D1))<<std::endl;
-            std::cout<<"Dot D1 D2:"<<fabs(Dot(D1,D2))<<std::endl;
-            std::cout<<"Dot D0 D2:"<<fabs(Dot(D0,D2))<<std::endl;
-            return false;
-        }
-    return true;
-}
-
-template <class ScalarType>
-void PrintNonProperFrame(const std::vector<Field::FrameField<ScalarType> > &TetraFrames)
-{
-    for (size_t i=0;i<TetraFrames.size();i++)
-        if (!TetraFrames[i].IsProper())
-            TetraFrames[i].PrintField();
-}
-
-template <class ScalarType>
-bool IsProperTetraFrameField(const std::vector<Field::FrameField<ScalarType> > &TetraFrames,
-                             const std::vector<std::vector<int> > &Tetra)
-{
-    if (TetraFrames.size()!=Tetra.size())return false;
-    return (IsProperTetraFrameField(TetraFrames));
-}
-
-
-
-//template <class ScalarType>
-//bool LoadFrameFields(const std::string &fieldFile,
-//                     const std::vector<Geo::Point3<ScalarType> > &Centers,
-//                     std::vector<FrameField<ScalarType> > &FieldDir)
-//{
-//    std::ifstream fin(fieldFile.c_str());
-//    if(!fin) return false;
-
-//    std::string str;
-
-//    int Num=Centers.size();
-//    FieldDir.resize(Num);
-
-//    for (size_t i=0;i<Num;i++)
-//    {
-//        for (size_t d=0;d<3;d++)
-//        {
-//            ScalarType XDir,YDir,ZDir;
-//            fin>>XDir;
-//            fin>>YDir;
-//            fin>>ZDir;
-//            FieldDir[i].D[d]=Geo::Point3<ScalarType>(XDir,YDir,ZDir);
-//            FieldDir[i].Pos=Centers[i];
-//            //should be normalized
-//            assert(fabs(FieldDir[i].D[d].Norm()-1)<0.0001);
-//        }
-//        FieldDir[i].ForceCorrect();
-//    }
-//    fin.close();
-//    return true;
-//}
-
-template <class ScalarType>
-Geo::Point3<ScalarType> BestFlip(const Geo::Point3<ScalarType> &DTest,
-                                const Geo::Point3<ScalarType> &DTarget)
-{
-    if (Dot(DTest,DTarget)>=0)
-        return DTest;
-    return -DTest;
-}
-
-
-
-//orthonormalize a set of constraints
-template <class ScalarType>
-bool MakeConstraintsCoherentForFrame(std::vector<Geo::Point3<ScalarType> > &Constraints)
-{
-    ScalarType eps=0.0000001;
-    ScalarType IntAvg=30;
-
-    if (Constraints.size()==1)return true;
-
-    std::vector<Geo::Point3<ScalarType> > SumConstraint;
-    SumConstraint.push_back(Constraints[0]);
-
-    bool coherent=true;
-    for (size_t i=1;i<Constraints.size();i++)
-    {
-        bool found=false;
-
-        Geo::Point3<ScalarType> D1=Constraints[i];
-
-        //first check if already exist a feasible direction
-        for (size_t j=0;j<SumConstraint.size();j++)
-        {
-            Geo::Point3<ScalarType> D0=SumConstraint[j];
-            D1=BestFlip(D1,D0);
-
-            ScalarType Angle=AngleDeg(D0,D1);
-
-            //in such case is an orthogonal direction, all good!
-            if (fabs(Angle-90)<eps)
-            {
-                SumConstraint.push_back(D1);
-                found=true;
-            }
-
-            //same direction
-            if (fabs(Angle)<eps)found=true;
-
-            if (found)break;
-        }
-
-        //then in such case chek if can average
-        if (!found)
-        {
-            coherent=false;
-            for (size_t j=0;j<SumConstraint.size();j++)
-            {
-                //get the minimal angle
-                Geo::Point3<ScalarType> D0=SumConstraint[j];
-                Geo::Point3<ScalarType> D1=Constraints[i];
-                D1=BestFlip(D1,D0);
-
-                ScalarType Angle=AngleDeg(D0,D1);
-
-                //then sum up
-                if (fabs(Angle)<IntAvg)
-                {
-                    SumConstraint[j]+=D1;
-                    found=true;
-                    break;
-                }
-            }
-
-            if (!found)
-                SumConstraint.push_back(D1);
-        }
-    }
-    if (!coherent)
-    {
-        //normalize
-        for (size_t i=0;i<SumConstraint.size();i++)
-            SumConstraint[i].Normalize();
-
-        //reduce to 3, can't be more than 3
-        if (SumConstraint.size()>3)
-            SumConstraint.resize(3);
-
-        //if two make force them orthogonal
-        if (SumConstraint.size()==2)
-        {
-            ScalarType dotVal=Dot(SumConstraint[0],SumConstraint[1]);
-            SumConstraint[1]=SumConstraint[1]-SumConstraint[0]*dotVal;
-        }
-        if (SumConstraint.size()==3)
-            Field::OrthoNormalizeFrome<ScalarType>(SumConstraint[0],SumConstraint[1],SumConstraint[2]);
-    }else
-    {
-        assert(SumConstraint.size()<=3);
-    }
-    Constraints=SumConstraint;
-    return coherent;
-}
-
-//set the constraints considering multiple boundaries and sharp features
-template <class ScalarType>
-void  GetBoundaryConstraints(const std::vector<std::vector<int> > &Tetra,
-                             const std::vector<Geo::Point3<ScalarType> > &TetraPos,
-                             const std::vector<std::vector<int> > &NextT,
-                             const std::vector<std::vector<int> > &NextF,
-                             std::vector<std::vector<Geo::Point3<ScalarType> > > &TetraConstr)
-{
-    assert(NextT.size()==Tetra.size());
-    assert(NextF.size()==Tetra.size());
-
-    //shoudl be already allocated
-    assert(TetraConstr.size()==Tetra.size());
-
-    for (size_t i=0;i<NextT.size();i++)
-    {
-        assert(NextT[i].size()==4);
-        Tetra::Tetra3<ScalarType> T3=Tetra::GetTetra(Tetra,TetraPos,i);
-
-        for (size_t j=0;j<NextT[i].size();j++)
-        {
-            if (NextT[i][j]!=-1)continue;
-            Geo::Point3<ScalarType> FNorm=T3.NormalF(j);
-            TetraConstr[i].push_back(FNorm);
-        }
-    }
-}
-
-////set the constraints considering multiple boundaries and sharp features
-//template <class ScalarType>
-//void  GetBoundaryFixConstraints(const std::vector<std::vector<int> > &Tetra,
-//                                const std::vector<Point3<ScalarType> > &TetraPos,
-//                                const std::vector<std::vector<int> > &NextT,
-//                                const std::vector<std::vector<int> > &NextF,
-//                                std::vector<std::vector<Point3<ScalarType> > > &TetraConstr)
-//{
-//    assert(NextT.size()==Tetra.size());
-//    assert(NextF.size()==Tetra.size());
-
-//    //shoudl be already allocated
-//    assert(TetraConstr.size()==Tetra.size());
-
-//    for (size_t i=0;i<NextT.size();i++)
-//    {
-//        assert(NextT[i].size()==4);
-//        Tetra::Tetra3<ScalarType> T3=Tetra::GetTetra(Tetra,TetraPos,i);
-//        bool has_bound=false;
-//        for (size_t j=0;j<NextT[i].size();j++)
-//        {
-//            if (NextT[i][j]!=-1)continue;
-//            has_bound=true;
-//        }
-//        if (has_bound)
-//        {
-//            TetraConstr.push_back()
-//        }
-//    }
-//}
+// //template < typename ScalarType >
+// //Field::FrameField<ScalarType> InterpolateFrame(const std::vector<Field::FrameField<ScalarType> > &Frames,
+// //                                               const std::vector<ScalarType> &W)
+// //{
+// //   assert(Frames.size()>0);
+
+// //   if (Frames.size()==1)
+// //        return(Frames[0]);
+
+// //   Field::FrameField<ScalarType> RefFrame=Frames[0];
+// //   if (!RefFrame.IsProper())
+// //   {
+// //       RefFrame.PrintField();
+// //       assert(0);
+// //   }
+
+// //   Field::FrameField<ScalarType> RetFrame;
+
+// //   RetFrame.Q=0;
+// //   RetFrame.Pos=Point3<ScalarType>(0,0,0);
+// //   ScalarType TotQ=0;
+// //   for (size_t i=0;i<Frames.size();i++)
+// //   {
+// //       if (!Frames[i].IsProper())
+// //       {
+// //           Frames[i].PrintField();
+// //           assert(0);
+// //       }
+
+// //       Point3<ScalarType> D0=Frames[i].D[0];
+// //       Point3<ScalarType> D1=Frames[i].D[1];
+// //       Point3<ScalarType> D2=Frames[i].D[2];
+
+// //       int DirI0=RefFrame.BestDirectionI(D0);
+// //       int DirI1=RefFrame.BestDirectionI(D1);
+// //       int DirI2=RefFrame.BestDirectionI(D2);
+
+// ////       assert(DirI0!=DirI1);
+// ////       assert(DirI1!=DirI2);
+// ////       assert(DirI0!=DirI2);
+
+// //       if (DirI0>=3)
+// //       {
+// //         DirI0-=3;
+// //         D0=-D0;
+// //       }
+// //       if (DirI1>=3)
+// //       {
+// //         DirI1-=3;
+// //         D1=-D1;
+// //       }
+// //       if (DirI2>=3)
+// //       {
+// //         DirI2-=3;
+// //         D2=-D2;
+// //       }
+
+// //       if ((DirI0==DirI1)||(DirI1==DirI2)||(DirI2==DirI0))
+// //       {
+// //           //Frames[i].PrintField();
+// //           //RefFrame.PrintField();
+// //           RefFrame.PrintPairing(Frames[i]);
+// //           //assert(0);
+// //       }
+// ////       assert(DirI0!=DirI1);
+// ////       assert(DirI1!=DirI2);
+// ////       assert(DirI0!=DirI2);
+
+// ////       if (DirI0==DirI1)std::cout<<"de"<<std::endl;
+// ////       if (DirI1==DirI2)std::cout<<"de"<<std::endl;
+// ////       if (DirI0==DirI2)std::cout<<"de"<<std::endl;
+
+// //       assert(DirI0>=0);
+// //       assert(DirI0<3);
+// //       assert(DirI1>=0);
+// //       assert(DirI1<3);
+// //       assert(DirI2>=0);
+// //       assert(DirI2<3);
+
+// //       RetFrame.D[DirI0]+=D0*Frames[i].Q;
+// //       RetFrame.D[DirI1]+=D1*Frames[i].Q;
+// //       RetFrame.D[DirI2]+=D2*Frames[i].Q;
+
+// //       RetFrame.Q+=Frames[i].Q;
+// //       RetFrame.Pos=Frames[i].Pos*Frames[i].Q;
+// //       TotQ+=Frames[i].Q;
+// //   }
+
+// //   RetFrame.Pos/=TotQ;
+// //   RetFrame.Q/=Frames.size();
+
+// //   //then normalize
+// //   RetFrame.D[0].Normalize();
+// //   RetFrame.D[1].Normalize();
+// //   RetFrame.D[2].Normalize();
+
+// //   RetFrame.OrthoNormalize();
+// //   //find the closest rotation
+// //   return RetFrame;
+// //}
+
+// template < typename ScalarType >
+// RelationType FrameRelationDir(const Field::FrameField<ScalarType> &Frame0,const int Dir0,
+//                               const Field::FrameField<ScalarType> &Frame1,const int Dir1)
+// {
+//     const int Dir1Transf=Frame0.FollowDirection(Frame1,Dir1);
+//     return FrameRelationDir(Dir0,Dir1Transf);
+// }
+
+// template < typename ScalarType >
+// Field::FrameField<ScalarType> InterpolateFrame(const Field::FrameField<ScalarType> &ReFFrame,
+//                                                const std::vector<Field::FrameField<ScalarType> > &Frames,
+//                                                const std::vector<ScalarType> &W)
+// {
+//     assert(Frames.size()>0);
+
+//     if (Frames.size()==1)
+//         return(Frames[0]);
+
+//     Field::FrameField<ScalarType> RefFrame=Frames[0];
+//     if (!RefFrame.IsProper())
+//     {
+//         RefFrame.PrintField();
+//         assert(0);
+//     }
+
+//     Field::FrameField<ScalarType> RetFrame;
+//     RetFrame.Q=0;
+//     RetFrame.Pos=Geo::Point3<ScalarType>(0,0,0);
+//     ScalarType TotQ=0;
+
+//     for (size_t i=0;i<Frames.size();i++)
+//     {
+//         if (!Frames[i].IsProper())
+//         {
+//             Frames[i].PrintField();
+//             assert(0);
+//         }
+
+//         int bestD0,bestD1,bestD2;
+//         RefFrame.GetBestPairing(Frames[i],bestD0,bestD1,bestD2);
+
+//         assert(bestD0!=bestD1);
+//         assert(bestD1!=bestD2);
+//         assert(bestD0!=bestD2);
+
+//         Geo::Point3<ScalarType> D0=Frames[i].GetDirection(bestD0);
+//         Geo::Point3<ScalarType> D1=Frames[i].GetDirection(bestD1);
+//         Geo::Point3<ScalarType> D2=Frames[i].GetDirection(bestD2);
+
+//         RetFrame.D[0]+=D0*Frames[i].Q;
+//         RetFrame.D[1]+=D1*Frames[i].Q;
+//         RetFrame.D[2]+=D2*Frames[i].Q;
+
+//         RetFrame.Q+=Frames[i].Q;
+//         RetFrame.Pos=Frames[i].Pos*Frames[i].Q;
+//         TotQ+=Frames[i].Q;
+//     }
+
+//     RetFrame.Pos/=TotQ;
+//     RetFrame.Q/=Frames.size();
+
+//     //then normalize
+//     RetFrame.D[0].Normalize();
+//     RetFrame.D[1].Normalize();
+//     RetFrame.D[2].Normalize();
+
+//     RetFrame.OrthoNormalize();
+//     //find the closest rotation
+//     return RetFrame;
+// }
+
+
+// template <class ScalarType>
+// bool IsProperTetraFrameField(const std::vector<Field::FrameField<ScalarType> > &TetraFrames)
+// {
+//     for (size_t i=0;i<TetraFrames.size();i++)
+//         if (!TetraFrames[i].IsProper())
+//         {
+//             Geo::Point3<ScalarType> D0=TetraFrames[i].D[0];
+//             Geo::Point3<ScalarType> D1=TetraFrames[i].D[1];
+//             Geo::Point3<ScalarType> D2=TetraFrames[i].D[2];
+
+//             std::cout<<"Norm D0:"<<D0.Norm()<<std::endl;
+//             std::cout<<"Norm D1:"<<D1.Norm()<<std::endl;
+//             std::cout<<"Norm D2:"<<D2.Norm()<<std::endl;
+
+//             std::cout<<"Dot D0 D1:"<<fabs(Dot(D0,D1))<<std::endl;
+//             std::cout<<"Dot D1 D2:"<<fabs(Dot(D1,D2))<<std::endl;
+//             std::cout<<"Dot D0 D2:"<<fabs(Dot(D0,D2))<<std::endl;
+//             return false;
+//         }
+//     return true;
+// }
+
+// template <class ScalarType>
+// void PrintNonProperFrame(const std::vector<Field::FrameField<ScalarType> > &TetraFrames)
+// {
+//     for (size_t i=0;i<TetraFrames.size();i++)
+//         if (!TetraFrames[i].IsProper())
+//             TetraFrames[i].PrintField();
+// }
+
+// template <class ScalarType>
+// bool IsProperTetraFrameField(const std::vector<Field::FrameField<ScalarType> > &TetraFrames,
+//                              const std::vector<std::vector<int> > &Tetra)
+// {
+//     if (TetraFrames.size()!=Tetra.size())return false;
+//     return (IsProperTetraFrameField(TetraFrames));
+// }
+
+
+
+// //template <class ScalarType>
+// //bool LoadFrameFields(const std::string &fieldFile,
+// //                     const std::vector<Geo::Point3<ScalarType> > &Centers,
+// //                     std::vector<FrameField<ScalarType> > &FieldDir)
+// //{
+// //    std::ifstream fin(fieldFile.c_str());
+// //    if(!fin) return false;
+
+// //    std::string str;
+
+// //    int Num=Centers.size();
+// //    FieldDir.resize(Num);
+
+// //    for (size_t i=0;i<Num;i++)
+// //    {
+// //        for (size_t d=0;d<3;d++)
+// //        {
+// //            ScalarType XDir,YDir,ZDir;
+// //            fin>>XDir;
+// //            fin>>YDir;
+// //            fin>>ZDir;
+// //            FieldDir[i].D[d]=Geo::Point3<ScalarType>(XDir,YDir,ZDir);
+// //            FieldDir[i].Pos=Centers[i];
+// //            //should be normalized
+// //            assert(fabs(FieldDir[i].D[d].Norm()-1)<0.0001);
+// //        }
+// //        FieldDir[i].ForceCorrect();
+// //    }
+// //    fin.close();
+// //    return true;
+// //}
+
+// template <class ScalarType>
+// Geo::Point3<ScalarType> BestFlip(const Geo::Point3<ScalarType> &DTest,
+//                                 const Geo::Point3<ScalarType> &DTarget)
+// {
+//     if (Dot(DTest,DTarget)>=0)
+//         return DTest;
+//     return -DTest;
+// }
+
+
+
+// //orthonormalize a set of constraints
+// template <class ScalarType>
+// bool MakeConstraintsCoherentForFrame(std::vector<Geo::Point3<ScalarType> > &Constraints)
+// {
+//     ScalarType eps=0.0000001;
+//     ScalarType IntAvg=30;
+
+//     if (Constraints.size()==1)return true;
+
+//     std::vector<Geo::Point3<ScalarType> > SumConstraint;
+//     SumConstraint.push_back(Constraints[0]);
+
+//     bool coherent=true;
+//     for (size_t i=1;i<Constraints.size();i++)
+//     {
+//         bool found=false;
+
+//         Geo::Point3<ScalarType> D1=Constraints[i];
+
+//         //first check if already exist a feasible direction
+//         for (size_t j=0;j<SumConstraint.size();j++)
+//         {
+//             Geo::Point3<ScalarType> D0=SumConstraint[j];
+//             D1=BestFlip(D1,D0);
+
+//             ScalarType Angle=AngleDeg(D0,D1);
+
+//             //in such case is an orthogonal direction, all good!
+//             if (fabs(Angle-90)<eps)
+//             {
+//                 SumConstraint.push_back(D1);
+//                 found=true;
+//             }
+
+//             //same direction
+//             if (fabs(Angle)<eps)found=true;
+
+//             if (found)break;
+//         }
+
+//         //then in such case chek if can average
+//         if (!found)
+//         {
+//             coherent=false;
+//             for (size_t j=0;j<SumConstraint.size();j++)
+//             {
+//                 //get the minimal angle
+//                 Geo::Point3<ScalarType> D0=SumConstraint[j];
+//                 Geo::Point3<ScalarType> D1=Constraints[i];
+//                 D1=BestFlip(D1,D0);
+
+//                 ScalarType Angle=AngleDeg(D0,D1);
+
+//                 //then sum up
+//                 if (fabs(Angle)<IntAvg)
+//                 {
+//                     SumConstraint[j]+=D1;
+//                     found=true;
+//                     break;
+//                 }
+//             }
+
+//             if (!found)
+//                 SumConstraint.push_back(D1);
+//         }
+//     }
+//     if (!coherent)
+//     {
+//         //normalize
+//         for (size_t i=0;i<SumConstraint.size();i++)
+//             SumConstraint[i].Normalize();
+
+//         //reduce to 3, can't be more than 3
+//         if (SumConstraint.size()>3)
+//             SumConstraint.resize(3);
+
+//         //if two make force them orthogonal
+//         if (SumConstraint.size()==2)
+//         {
+//             ScalarType dotVal=Dot(SumConstraint[0],SumConstraint[1]);
+//             SumConstraint[1]=SumConstraint[1]-SumConstraint[0]*dotVal;
+//         }
+//         if (SumConstraint.size()==3)
+//             Field::OrthoNormalizeFrome<ScalarType>(SumConstraint[0],SumConstraint[1],SumConstraint[2]);
+//     }else
+//     {
+//         assert(SumConstraint.size()<=3);
+//     }
+//     Constraints=SumConstraint;
+//     return coherent;
+// }
+
+// //set the constraints considering multiple boundaries and sharp features
+// template <class ScalarType>
+// void  GetBoundaryConstraints(const std::vector<std::vector<int> > &Tetra,
+//                              const std::vector<Geo::Point3<ScalarType> > &TetraPos,
+//                              const std::vector<std::vector<int> > &NextT,
+//                              const std::vector<std::vector<int> > &NextF,
+//                              std::vector<std::vector<Geo::Point3<ScalarType> > > &TetraConstr)
+// {
+//     assert(NextT.size()==Tetra.size());
+//     assert(NextF.size()==Tetra.size());
+
+//     //shoudl be already allocated
+//     assert(TetraConstr.size()==Tetra.size());
+
+//     for (size_t i=0;i<NextT.size();i++)
+//     {
+//         assert(NextT[i].size()==4);
+//         Tetra::Tetra3<ScalarType> T3=Tetra::GetTetra(Tetra,TetraPos,i);
+
+//         for (size_t j=0;j<NextT[i].size();j++)
+//         {
+//             if (NextT[i][j]!=-1)continue;
+//             Geo::Point3<ScalarType> FNorm=T3.NormalF(j);
+//             TetraConstr[i].push_back(FNorm);
+//         }
+//     }
+// }
+
+// ////set the constraints considering multiple boundaries and sharp features
+// //template <class ScalarType>
+// //void  GetBoundaryFixConstraints(const std::vector<std::vector<int> > &Tetra,
+// //                                const std::vector<Point3<ScalarType> > &TetraPos,
+// //                                const std::vector<std::vector<int> > &NextT,
+// //                                const std::vector<std::vector<int> > &NextF,
+// //                                std::vector<std::vector<Point3<ScalarType> > > &TetraConstr)
+// //{
+// //    assert(NextT.size()==Tetra.size());
+// //    assert(NextF.size()==Tetra.size());
+
+// //    //shoudl be already allocated
+// //    assert(TetraConstr.size()==Tetra.size());
+
+// //    for (size_t i=0;i<NextT.size();i++)
+// //    {
+// //        assert(NextT[i].size()==4);
+// //        Tetra::Tetra3<ScalarType> T3=Tetra::GetTetra(Tetra,TetraPos,i);
+// //        bool has_bound=false;
+// //        for (size_t j=0;j<NextT[i].size();j++)
+// //        {
+// //            if (NextT[i][j]!=-1)continue;
+// //            has_bound=true;
+// //        }
+// //        if (has_bound)
+// //        {
+// //            TetraConstr.push_back()
+// //        }
+// //    }
+// //}
 
 };
 

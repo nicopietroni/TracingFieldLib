@@ -58,6 +58,7 @@ void FindClusters(std::vector<Geo::Point3<ScalarType>> &VertPos,
 
   // optimize from centroids
   std::cout << "2-CENTROID RELAX STEP" << std::endl;
+  std::cout<<"performing "<<CParam.DiffStep<<" steps"<<std::endl;
   CLRelax.InitClusters(ClusterFaces, FacesCluster);
   for (size_t i = 0; i < CParam.DiffStep; i++) {
     std::vector<int> CentroidF;
@@ -110,6 +111,7 @@ void FindVoronoiClusters(std::vector<Geo::Point3<ScalarType>> &VertPos,
   CParam.DiffStep = RelaxIte;
   CParam.SmoothStep = SmoothIte;
   CParam.final_merge = false;
+
   Geo::ClusterEndCondition<ScalarType> CLEndCond;
 
   ScalarType MaxE = VoroClust.TotalEnergy(VertPos, Faces);
