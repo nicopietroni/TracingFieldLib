@@ -1,14 +1,17 @@
 #ifndef SMOOTH_FRAME_FIELD
 #define SMOOTH_FRAME_FIELD
 
+#include <cassert>
 #include <cmath>
+#include <cstddef>
+#include <iostream>
 #include <vector>
 #include <stdio.h>
 #include "point3.h"
 #include "smoothing_graph.h"
 #include "pos4.h"
 #include "frame_field.h"
-#include "frame_field_utils.h"
+#include "frame_field_functions.h"
 
 
 template <class ScalarType>
@@ -987,6 +990,7 @@ static void GetHardConstraints(const std::vector<Geo::Point3<ScalarType> > &Tetr
     IndexF.clear();
     FixedDirs.clear();
 
+    //for each tetra set of contraints
     std::vector<std::vector<Geo::Point3<ScalarType> > > TetraConstr(Tetra.size());
 
     std::vector<std::vector<int> > NextPoly,NextPolyF;
@@ -995,10 +999,11 @@ static void GetHardConstraints(const std::vector<Geo::Point3<ScalarType> > &Tetr
 //    if (SParam.TopIntevalFix>0)
 //        AddHighQualityConstraint(TetraFrames,SParam.TopIntevalFix,TetraConstr);
 
-    //collect all constraints
+    //if only align then get the constraints along normal
     if ((SParam.align_borders)&&(!SParam.fix_borders))
-        Field::GetBoundaryConstraints(Tetra,TetraVertPos,NextPoly,NextPolyF,TetraConstr);
-
+        GetBoundaryConstraints(Tetra,TetraVertPos,NextPoly,NextPolyF,TetraConstr);
+    
+    //if fix the boundary then fix all on the boundary
     if (SParam.fix_borders)
     {
         for (size_t i=0;i<NextPoly.size();i++)
@@ -1038,7 +1043,7 @@ static void GetHardConstraints(const std::vector<Geo::Point3<ScalarType> > &Tetr
     {
         if (TetraConstr[i].size()>1)
         {
-            bool coherent=Field::MakeConstraintsCoherentForFrame<ScalarType>(TetraConstr[i]);
+            bool coherent=MakeConstraintsCoherentForFrame<ScalarType>(TetraConstr[i]);
             if (!coherent)NonCoherent++;
         }
     }
@@ -1068,8 +1073,8 @@ void SmoothFrameIterative(const std::vector<Geo::Point3<ScalarType> > &TetraVert
     std::vector<size_t> IndexF;
     typename std::vector<std::vector<Geo::Point3<ScalarType> > > FixedDirs;
     GetHardConstraints<ScalarType>(TetraVertPos,Tetra,TetraFrames,SParam,IndexF,FixedDirs);
-    assert(IndexF.size()==FixedDirs.size());
 
+    assert(IndexF.size()==FixedDirs.size());
     std::vector<std::vector<size_t> > FixedTetraDirs;
     //then set the constraints
     for (size_t i=0;i<IndexF.size();i++)
@@ -1086,8 +1091,15 @@ void SmoothFrameIterative(const std::vector<Geo::Point3<ScalarType> > &TetraVert
         TetraFrames[currFIndex].ConstrainToDirection(FixedDirs[i],FixedIndexDirs);
         FixedTetraDirs.push_back(FixedIndexDirs);
     }
-
-    GLobalSmoothFrameWithGraph<ScalarType>(TetraVertPos,Tetra,IndexF,FixedTetraDirs,TetraFrames,SParam.weightByQuality,0.5,SParam.iterations);
+    for (size_t i=0;i<TetraFrames.size();i++)
+    {
+        assert(TetraFrames[i].IsProper());
+    }
+    
+    GLobalSmoothFrameWithGraph<ScalarType>(TetraVertPos,Tetra,IndexF,
+                                            FixedTetraDirs,TetraFrames,
+                                            SParam.weightByQuality,
+                                            0.5,SParam.iterations);
 }
 
 #endif

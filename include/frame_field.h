@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iostream>
 #include "eigen_interface.h"
+#include "best_rotation.h"
 //#include "polyhedra_mesh.h"
 //#include "best_rotation.h"
 
@@ -287,6 +288,7 @@ public:
                        const Geo::Point3<ScalarType>  &TargetdDir)
     {
         ScalarType eps=0.0000001;
+        assert(IsProper());
 
         assert(indexDir>=0);
         assert(indexDir<3);
@@ -295,7 +297,9 @@ public:
         assert(fabs(TargetdDir.Norm()-1)<eps);
         if (Dot(CurrDir,TargetdDir)<0)
             CurrDir=-CurrDir;
-
+        
+        // std::cout<<"Curr Dir:"<<CurrDir.X<<","<<CurrDir.Y<<","<<CurrDir.Z<<std::endl;
+        // std::cout<<"Target Dir:"<<TargetdDir.X<<","<<TargetdDir.Y<<","<<TargetdDir.Z<<std::endl<<std::endl;
         Eigen::Matrix3<ScalarType> rotM=Geo::PointMatch<ScalarType>::BestRotationMatrix(CurrDir,TargetdDir);
 
         //then set directions
@@ -306,8 +310,10 @@ public:
         Eigen::Vector3<ScalarType> Dir2E=EigenInterface<ScalarType>::ToEigen(Dir2);
         Dir1E=rotM*Dir1E;
         Dir2E=rotM*Dir2E;
+       
         D[(indexDir+1)%3]=EigenInterface<ScalarType>::ToPoint3(Dir1E);
         D[(indexDir+2)%3]=EigenInterface<ScalarType>::ToPoint3(Dir2E);
+        ForceCorrect();
         assert(IsProper());
     }
 

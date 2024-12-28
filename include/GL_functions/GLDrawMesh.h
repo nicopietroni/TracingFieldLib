@@ -9,6 +9,7 @@
 #include "../point3.h"
 #include "connectivity.h"
 #include "field_graph/t_junction.h"
+#include "normal.h"
 
 namespace GLDraw
 {
@@ -502,6 +503,18 @@ namespace GLDraw
         GLDrawEdges<ScalarType>(Pos, BorderE, LineWidth, colorLine);
     }
 
+    // template <class ScalarType>
+    // void GLDrawBorders(const std::vector<Geo::Point3<ScalarType>> &Pos,
+    //                    const std::vector<std::vector<int>> &Connectivity,
+    //                    const std::vector<std::vector<std::vector<int>>> &NextF,
+    //                    const ScalarType LineWidth,
+    //                    const Geo::Point3<ScalarType> colorLine = Geo::Point3<ScalarType>(0, 0, 0))
+    // {
+    //     std::vector<std::pair<int, int>> BorderE;
+    //     Geo::getBorderEdges(Connectivity, NextF, BorderE);
+    //     GLDrawEdges<ScalarType>(Pos, BorderE, LineWidth, colorLine);
+    // }
+
     template <class ScalarType>
     void GLDrawBorders(const std::vector<Geo::Point2<ScalarType>> &Pos,
                        const std::vector<std::vector<int>> &Connectivity,
@@ -513,7 +526,7 @@ namespace GLDraw
         Geo::getBorderEdges(Connectivity, NextF, BorderE);
         GLDrawEdges<ScalarType>(Pos, BorderE, LineWidth, colorLine);
     }
-
+    
     template <class ScalarType>
     void DrawSurfaceMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                          const std::vector<std::vector<int>> &Connectivity,

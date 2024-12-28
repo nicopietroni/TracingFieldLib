@@ -10,8 +10,8 @@
 // #include "pos4.h"
 #include "cross_field.h"
 #include "frame_field.h"
+#include "polyhedra_connectivity.h"
 #include "polyhedra_mesh_functions.h"
-#include <polyhedra_mesh_functions.h>
 #include <set>
 
 namespace Field {
@@ -500,6 +500,7 @@ InterpolateFrame(const Field::FrameField<ScalarType> &ReFFrame,
                  const std::vector<Field::FrameField<ScalarType>> &Frames,
                  const std::vector<ScalarType> &W) {
   assert(Frames.size() > 0);
+  assert(W.size() == Frames.size());
 
   if (Frames.size() == 1)
     return (Frames[0]);
@@ -513,7 +514,8 @@ InterpolateFrame(const Field::FrameField<ScalarType> &ReFFrame,
   Field::FrameField<ScalarType> RetFrame;
   RetFrame.Q = 0;
   RetFrame.Pos = Geo::Point3<ScalarType>(0, 0, 0);
-  ScalarType TotQ = 0;
+  // ScalarType TotQ = 0;
+  ScalarType TotW = 0;
 
   for (size_t i = 0; i < Frames.size(); i++) {
     if (!Frames[i].IsProper()) {
@@ -532,17 +534,20 @@ InterpolateFrame(const Field::FrameField<ScalarType> &ReFFrame,
     Geo::Point3<ScalarType> D1 = Frames[i].GetDirection(bestD1);
     Geo::Point3<ScalarType> D2 = Frames[i].GetDirection(bestD2);
 
-    RetFrame.D[0] += D0 * Frames[i].Q;
-    RetFrame.D[1] += D1 * Frames[i].Q;
-    RetFrame.D[2] += D2 * Frames[i].Q;
+    RetFrame.D[0] += D0 * W[i]; // Frames[i].Q;
+    RetFrame.D[1] += D1 * W[i]; // Frames[i].Q;
+    RetFrame.D[2] += D2 * W[i]; // Frames[i].Q;
 
-    RetFrame.Q += Frames[i].Q;
-    RetFrame.Pos = Frames[i].Pos * Frames[i].Q;
-    TotQ += Frames[i].Q;
+    RetFrame.Q += Frames[i].Q * W[i];
+    RetFrame.Pos = Frames[i].Pos * W[i]; //* Frames[i].Q;
+    // TotQ += Frames[i].Q;
+    TotW += W[i];
   }
 
-  RetFrame.Pos /= TotQ;
-  RetFrame.Q /= Frames.size();
+  // RetFrame.Pos /= TotQ;
+  // RetFrame.Q /= Frames.size();
+  RetFrame.Pos /= TotW;
+  RetFrame.Q /= TotW; // Frames.size();
 
   // then normalize
   RetFrame.D[0].Normalize();
@@ -550,8 +555,8 @@ InterpolateFrame(const Field::FrameField<ScalarType> &ReFFrame,
   RetFrame.D[2].Normalize();
 
   OrthoNormalize(RetFrame);
-  //RetFrame.OrthoNormalize();
-  // find the closest rotation
+  // RetFrame.OrthoNormalize();
+  //  find the closest rotation
   return RetFrame;
 }
 
@@ -597,91 +602,188 @@ Geo::Point3<ScalarType> BestFlip(const Geo::Point3<ScalarType> &DTest,
   return -DTest;
 }
 
+// // orthonormalize a set of constraints
+// template <class ScalarType>
+// bool MakeConstraintsCoherentForFrame(std::vector<Geo::Point3<ScalarType>>
+// &Constraints)
+// {
+//   ScalarType eps = 0.0000001;
+//   ScalarType IntAvg = 30;
+
+//   if (Constraints.size() == 1)
+//     return true;
+
+//   std::vector<Geo::Point3<ScalarType>> SumConstraint;
+//   SumConstraint.push_back(Constraints[0]);
+
+//   bool coherent = true;
+//   for (size_t i = 1; i < Constraints.size(); i++) {
+//     bool found = false;
+
+//     Geo::Point3<ScalarType> D1 = Constraints[i];
+
+//     // first check if already exist a feasible direction
+//     for (size_t j = 0; j < SumConstraint.size(); j++) {
+//       Geo::Point3<ScalarType> D0 = SumConstraint[j];
+//       D1 = BestFlip(D1, D0);
+
+//       ScalarType Angle = AngleDeg(D0, D1);
+
+//       // in such case is an orthogonal direction, all good!
+//       if (fabs(Angle - 90) < eps) {
+//         SumConstraint.push_back(D1);
+//         found = true;
+//       }
+
+//       // same direction
+//       if (fabs(Angle) < eps)
+//         found = true;
+
+//       if (found)
+//         break;
+//     }
+
+//     // then in such case chek if can average
+//     if (!found) {
+//       coherent = false;
+//       for (size_t j = 0; j < SumConstraint.size(); j++) {
+//         // get the minimal angle
+//         Geo::Point3<ScalarType> D0 = SumConstraint[j];
+//         Geo::Point3<ScalarType> D1 = Constraints[i];
+//         D1 = BestFlip(D1, D0);
+
+//         ScalarType Angle = AngleDeg(D0, D1);
+
+//         // then sum up
+//         if (fabs(Angle) < IntAvg) {
+//           SumConstraint[j] += D1;
+//           found = true;
+//           break;
+//         }
+//       }
+
+//       if (!found)
+//         SumConstraint.push_back(D1);
+//     }
+//   }
+//   if (!coherent) {
+//     // normalize
+//     for (size_t i = 0; i < SumConstraint.size(); i++)
+//       SumConstraint[i].Normalize();
+
+//     // reduce to 3, can't be more than 3
+//     if (SumConstraint.size() > 3)
+//       SumConstraint.resize(3);
+
+//     // if two make force them orthogonal
+//     if (SumConstraint.size() == 2) {
+//       ScalarType dotVal = Dot(SumConstraint[0], SumConstraint[1]);
+//       SumConstraint[1] = SumConstraint[1] - SumConstraint[0] * dotVal;
+//     }
+//     if (SumConstraint.size() == 3)
+//       Field::OrthoNormalizeFrome<ScalarType>(SumConstraint[0],
+//       SumConstraint[1],
+//                                              SumConstraint[2]);
+//   } else {
+//     assert(SumConstraint.size() <= 3);
+//   }
+//   Constraints = SumConstraint;
+//   return coherent;
+// }
+
 // orthonormalize a set of constraints
 template <class ScalarType>
 bool MakeConstraintsCoherentForFrame(
     std::vector<Geo::Point3<ScalarType>> &Constraints) {
-  ScalarType eps = 0.0000001;
+  ScalarType eps = 0.1;
   ScalarType IntAvg = 30;
 
   if (Constraints.size() == 1)
     return true;
 
-  std::vector<Geo::Point3<ScalarType>> SumConstraint;
-  SumConstraint.push_back(Constraints[0]);
+  std::vector<Geo::Point3<ScalarType>> SelectedConstraint;
+  // add the first one
+  SelectedConstraint.push_back(Constraints[0]);
 
-  bool coherent = true;
-  for (size_t i = 1; i < Constraints.size(); i++) {
-    bool found = false;
+  // bool coherent = true;
 
-    Geo::Point3<ScalarType> D1 = Constraints[i];
+  std::vector<Geo::Point3<ScalarType>> To_Aggregate;
 
+  // find the first set of coherent
+  for (size_t i = 0; i < SelectedConstraint.size(); i++) {
+
+    Geo::Point3<ScalarType> D0 = Constraints[i];
     // first check if already exist a feasible direction
-    for (size_t j = 0; j < SumConstraint.size(); j++) {
-      Geo::Point3<ScalarType> D0 = SumConstraint[j];
+    for (size_t j = 0; j < SelectedConstraint.size(); j++) {
+      Geo::Point3<ScalarType> D1 = SelectedConstraint[j];
       D1 = BestFlip(D1, D0);
 
       ScalarType Angle = AngleDeg(D0, D1);
 
-      // in such case is an orthogonal direction, all good!
-      if (fabs(Angle - 90) < eps) {
-        SumConstraint.push_back(D1);
-        found = true;
-      }
-
       // same direction
       if (fabs(Angle) < eps)
-        found = true;
-
-      if (found)
         break;
-    }
 
-    // then in such case chek if can average
-    if (!found) {
-      coherent = false;
-      for (size_t j = 0; j < SumConstraint.size(); j++) {
-        // get the minimal angle
-        Geo::Point3<ScalarType> D0 = SumConstraint[j];
-        Geo::Point3<ScalarType> D1 = Constraints[i];
-        D1 = BestFlip(D1, D0);
-
-        ScalarType Angle = AngleDeg(D0, D1);
-
-        // then sum up
-        if (fabs(Angle) < IntAvg) {
-          SumConstraint[j] += D1;
-          found = true;
-          break;
-        }
+      // orthogonal
+      if (fabs(Angle - 90) < eps) {
+        SelectedConstraint.push_back(D1);
+        break;
       }
-
-      if (!found)
-        SumConstraint.push_back(D1);
+      // otherwise add the ones to be aggregate
+      To_Aggregate.push_back(D1);
     }
   }
-  if (!coherent) {
-    // normalize
-    for (size_t i = 0; i < SumConstraint.size(); i++)
-      SumConstraint[i].Normalize();
 
-    // reduce to 3, can't be more than 3
-    if (SumConstraint.size() > 3)
-      SumConstraint.resize(3);
+  assert(SelectedConstraint.size() < 3);
+  std::vector<int> AvgIdx;
+  for (size_t i = 0; i < To_Aggregate.size(); i++) {
+    ScalarType BestAngle = 90;
+    int BestIDx = -1;
+    Geo::Point3<ScalarType> DistTest = To_Aggregate[i];
+    // then average to the closest one
+    for (size_t j = 0; j < SelectedConstraint.size(); j++) {
+      // get the minimal angle
+      Geo::Point3<ScalarType> DTarg = SelectedConstraint[j];
 
-    // if two make force them orthogonal
-    if (SumConstraint.size() == 2) {
-      ScalarType dotVal = Dot(SumConstraint[0], SumConstraint[1]);
-      SumConstraint[1] = SumConstraint[1] - SumConstraint[0] * dotVal;
+      DTarg = BestFlip(DistTest, DTarg);
+      ScalarType Angle = AngleDeg(DistTest, DTarg);
+
+      // then sum up
+      if (fabs(Angle) < BestAngle) {
+        BestAngle = fabs(Angle);
+        BestIDx = j;
+      }
     }
-    if (SumConstraint.size() == 3)
-      Field::OrthoNormalizeFrome<ScalarType>(SumConstraint[0], SumConstraint[1],
-                                             SumConstraint[2]);
-  } else {
-    assert(SumConstraint.size() <= 3);
+    assert(BestIDx != -1);
+    AvgIdx.push_back(BestIDx);
   }
-  Constraints = SumConstraint;
-  return coherent;
+
+  // then average
+  assert(AvgIdx.size() == To_Aggregate.size());
+  for (size_t i = 0; i < To_Aggregate.size(); i++) {
+    int Index = AvgIdx[i];
+    assert(Index >= 0);
+    assert(Index < SelectedConstraint.size());
+    SelectedConstraint[Index] +=
+        BestFlip(To_Aggregate[i], SelectedConstraint[Index]);
+  }
+
+  assert(SelectedConstraint.size() <= 3);
+  // normalize
+  for (size_t i = 0; i < SelectedConstraint.size(); i++)
+    SelectedConstraint[i].Normalize();
+
+  // if two make force them orthogonal
+  if (SelectedConstraint.size() == 2) {
+    ScalarType dotVal = Dot(SelectedConstraint[0], SelectedConstraint[1]);
+    SelectedConstraint[1] =
+        SelectedConstraint[1] - SelectedConstraint[0] * dotVal;
+  }
+  if (SelectedConstraint.size() == 3)
+    Field::OrthoNormalizeFrome<ScalarType>(
+        SelectedConstraint[0], SelectedConstraint[1], SelectedConstraint[2]);
+  Constraints = SelectedConstraint;
+  return (To_Aggregate.size() == 0);
 }
 
 // set the constraints considering multiple boundaries and sharp features
@@ -741,16 +843,49 @@ void InterpolateFrameFromAdj(
 }
 
 template <class ScalarType>
-void InitFrameFieldPosFromFaceBary(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                                   const std::vector<std::vector<int>> &Faces,
-                                   std::vector<Field::FrameField<ScalarType>> &FacesFrameField)
-{
-    assert(Faces.size()==FacesFrameField.size());
-    std::vector<Geo::Point3<ScalarType>> BaryF;
-    ComputeFaceBarycenters(VertPos,Faces,BaryF);
+void InitFrameFieldPosFromFaceBary(
+    const std::vector<Geo::Point3<ScalarType>> &VertPos,
+    const std::vector<std::vector<int>> &Elem,
+    std::vector<Field::FrameField<ScalarType>> &FacesFrameField) {
+  assert(Elem.size() == FacesFrameField.size());
+  std::vector<Geo::Point3<ScalarType>> BaryF;
+  ComputeFaceBarycenters(VertPos, Elem, BaryF);
 
-    for (size_t i=0;i<Faces.size();i++)
-        FacesFrameField[i].Pos=BaryF[i];
+  for (size_t i = 0; i < Elem.size(); i++)
+    FacesFrameField[i].Pos = BaryF[i];
+}
+
+template <class ScalarType>
+void InterpolateVertFrameFromElem(
+    const std::vector<Geo::Point3<ScalarType>> &VertPos,
+    const std::vector<std::vector<int>> &Elem,
+    const std::vector<Field::FrameField<ScalarType>> &PerElemFrame,
+    std::vector<Field::FrameField<ScalarType>> &PerVertFrame) {
+  std::vector<std::vector<std::pair<int, int>>> VPAdjacency;
+  Tetra::GetVPAdjacency(VertPos.size(), Elem, VPAdjacency);
+
+  std::vector<std::vector<int>> AdjEl(VertPos.size());
+  for (size_t i = 0; i < VPAdjacency.size(); i++)
+    for (size_t j = 0; j < VPAdjacency[i].size(); j++)
+      AdjEl[i].push_back(VPAdjacency[i][j].first);
+
+  InterpolateFrameFromAdj(AdjEl, PerElemFrame, PerVertFrame);
+  for (size_t i = 0; i < VertPos.size(); i++)
+    PerVertFrame[i].Pos = VertPos[i];
+}
+
+template <class ScalarType>
+void InterpolateElemFrameFromVert(
+    const std::vector<Geo::Point3<ScalarType>> &VertPos,
+    const std::vector<std::vector<int>> &Elem,
+    const std::vector<Field::FrameField<ScalarType>> &PerVertFrame,
+    std::vector<Field::FrameField<ScalarType>> &PerElemFrame) {
+  InterpolateFrameFromAdj(Elem, PerVertFrame, PerElemFrame);
+  std::vector<Geo::Point3<ScalarType>> BaryEl;
+  ComputeFaceBarycenters(VertPos, Elem, BaryEl);
+
+  for (size_t i = 0; i < Elem.size(); i++)
+    PerElemFrame[i].Pos = BaryEl[i];
 }
 
 // std::vector<std::vector<int>> FT,FTIndex;

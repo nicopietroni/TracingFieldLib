@@ -6,8 +6,9 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include "connectivity.h"
 #include "point3.h"
-#include "polyhedra_mesh.h"
+#include "polyhedra_mesh_functions.h"
 #include "pos4.h"
 #include <limits>
 
@@ -117,6 +118,17 @@ void CotangentWeightTriMesh(const std::vector<Geo::Point3<ScalarType> > &VertPos
 }
 
 
+template <class ScalarType>
+void CotangentWeightTriMesh(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                            const std::vector<std::vector<int> > &Faces,
+                            std::vector<std::vector<ScalarType> > &CotWeight,
+                            bool check_angle=true)
+{
+    std::vector<std::vector<int> > NextF,NextE;
+    Geo::getFFAdjacency(Faces, NextF,NextE);
+    CotangentWeightTriMesh(VertPos,Faces,NextF,NextE,CotWeight,check_angle);
+}
+
 ///* As a reference for the tetmesh version of cotangent weights, see:
 // * Gradient field based inhomogeneous volumetric mesh deformation for maxillofacial surgery simulation
 // * Sheng-hui Liao, Ruo-feng Tong, Jin-xiang Dong, Fu-dong Zhu
@@ -182,6 +194,7 @@ ScalarType CotangentWeightTetraFan(const std::vector<Geo::Point3<ScalarType> > &
     //wgt /= 6.0;
     return wgt;
 }
+
 
 template <class ScalarType>
 void CotangentWeightTetraMesh(const std::vector<Geo::Point3<ScalarType> > &VertPos,

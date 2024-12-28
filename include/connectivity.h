@@ -3,6 +3,7 @@
 
 // #include "point3.h"
 #include <Eigen/Sparse>
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <iostream>
@@ -13,28 +14,23 @@
 
 namespace Geo {
 
-void SharedE(const std::vector<int> &Face0,
-             const std::vector<int> &Face1,
-             int &IndexE0,int &IndexE1) 
-{
-  IndexE0=-1;
-  IndexE1=-1;
-  for (size_t i = 0; i < Face0.size(); i++)
-  {
-    int IndexF0_V0=Face0[i];
-    int IndexF0_V1=Face0[(i+1)%Face0.size()];
-    std::pair<int,int> E0(std::min(IndexF0_V0,IndexF0_V1),
-                          std::max(IndexF0_V0,IndexF0_V1));
-    for (size_t j = 0; j < Face1.size(); j++)
-    {
-      int IndexF1_V0=Face1[j];
-      int IndexF1_V1=Face1[(j+1)%Face1.size()];
-      std::pair<int,int> E1(std::min(IndexF1_V0,IndexF1_V1),
-                            std::max(IndexF1_V0,IndexF1_V1));
-      if (E1==E0)
-      {
-        IndexE0=i;
-        IndexE1=j;
+void SharedE(const std::vector<int> &Face0, const std::vector<int> &Face1,
+             int &IndexE0, int &IndexE1) {
+  IndexE0 = -1;
+  IndexE1 = -1;
+  for (size_t i = 0; i < Face0.size(); i++) {
+    int IndexF0_V0 = Face0[i];
+    int IndexF0_V1 = Face0[(i + 1) % Face0.size()];
+    std::pair<int, int> E0(std::min(IndexF0_V0, IndexF0_V1),
+                           std::max(IndexF0_V0, IndexF0_V1));
+    for (size_t j = 0; j < Face1.size(); j++) {
+      int IndexF1_V0 = Face1[j];
+      int IndexF1_V1 = Face1[(j + 1) % Face1.size()];
+      std::pair<int, int> E1(std::min(IndexF1_V0, IndexF1_V1),
+                             std::max(IndexF1_V0, IndexF1_V1));
+      if (E1 == E0) {
+        IndexE0 = i;
+        IndexE1 = j;
         return;
       }
     }
@@ -157,10 +153,9 @@ int FindMaxVertIdx(const std::vector<std::vector<int>> &connections) {
 
 int FindMaxVertIdx(const std::vector<std::pair<int, int>> &Edges) {
   int NumV = 0;
-  for (size_t i = 0; i < Edges.size(); i++)
-  {
-   NumV = std::max(NumV, Edges[i].first);
-   NumV = std::max(NumV, Edges[i].second);
+  for (size_t i = 0; i < Edges.size(); i++) {
+    NumV = std::max(NumV, Edges[i].first);
+    NumV = std::max(NumV, Edges[i].second);
   }
   return NumV;
 }
@@ -713,11 +708,11 @@ void getVVAdjacency(const std::vector<std::pair<int, int>> &Edges,
   VVAdj.resize(NumV + 1);
 
   for (size_t i = 0; i < Edges.size(); i++) {
-      int indexV0 = Edges[i].first;
-      int indexV1 = Edges[i].second;
-      VVAdj[indexV0].push_back(indexV1);
-      VVAdj[indexV1].push_back(indexV0);
-    }
+    int indexV0 = Edges[i].first;
+    int indexV1 = Edges[i].second;
+    VVAdj[indexV0].push_back(indexV1);
+    VVAdj[indexV1].push_back(indexV0);
+  }
 }
 
 void getVVStar(const std::vector<std::vector<int>> &Faces,
@@ -932,6 +927,31 @@ void getBorderEdges(const std::vector<std::vector<int>> &Faces,
       std::unique(BorderE.begin(), BorderE.end());
   BorderE.erase(last, BorderE.end());
 }
+
+// void getBorderEdges(const std::vector<std::vector<int>> &Faces,
+//                     const std::vector<std::vector<std::vector<int>>> &NextF,
+//                     std::vector<std::pair<int, int>> &BorderE) {
+//   BorderE.clear();
+//   for (size_t i = 0; i < NextF.size(); i++)
+//     for (size_t j = 0; j < NextF[i].size(); j++) {
+//       std::cout<<"size "<<NextF[i][j].size()<<std::endl;
+//       if (NextF[i][j].size() > 0)
+//         continue;
+      
+//       int numV = Faces[i].size();
+//       int IndexV0 = Faces[i][j];
+//       int IndexV1 = Faces[i][(j + 1) % numV];
+//       std::pair<int, int> EdgeKey(std::min(IndexV0, IndexV1),
+//                                   std::max(IndexV0, IndexV1));
+//       BorderE.push_back(EdgeKey);
+//     }
+
+//   std::sort(BorderE.begin(), BorderE.end());
+//   std::vector<std::pair<int, int>>::iterator last =
+//       std::unique(BorderE.begin(), BorderE.end());
+//   BorderE.erase(last, BorderE.end());
+//   //std::cout<<"Num Bord"<<BorderE.size()<<std::endl;
+// }
 
 void getBorderEdges(const std::vector<std::vector<int>> &Faces,
                     const std::vector<std::vector<int>> &NextF,

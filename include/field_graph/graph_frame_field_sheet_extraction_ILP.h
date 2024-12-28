@@ -15,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#define SOFT_SEED_CONST 10000
+
 template <class ScalarType> class SheetExtractorILP {
 
   Geo::UndirectedNodeWeightedGraph<ScalarType> &Graph;
@@ -122,13 +124,6 @@ template <class ScalarType> class SheetExtractorILP {
   }
 
   void InitSingleLabelF_Constr() {
-
-    // //get border edges
-    // std::vector<int> BorderF,BorderE;
-    // Geo::getBorderEdges(InternalFaces,BorderF,BorderE);
-    // std::set<std::pair<int, int> > BorderESet;
-    // for (size_t i=0;i<BorderF.size();i++)
-    //     BorderESet.push_back(std::pair<int, int>(BorderF[i],BorderE[i]));
 
     EdgeLabel_Constr.clear();
     EdgeLabel_ExitConstr.clear();
@@ -371,14 +366,15 @@ template <class ScalarType> class SheetExtractorILP {
   //       CONSTRAINT (Lowerbound):"<<violated_lower<<std::endl;
   //   }
 
-  bool SolveGurobi(const std::vector<int> &SeedNodes,
+  bool SolveGurobi(const std::vector<int> &HardConstrNodes,
+                   const std::vector<int> &SoftConstrNodes,
                    std::vector<int> &ChosenF) {
     ChosenF.clear();
     ScalarType DeltaMin = 0.00000001;
     try {
       // Create Gurobi environment
       GRBEnv env = GRBEnv(true);
-      env.set("OutputFlag", "0"); // Set to 1 for detailed Gurobi output
+      //env.set("OutputFlag", "0"); // Set to 1 for detailed Gurobi output
       env.start();
 
       // Create Gurobi model
@@ -400,6 +396,24 @@ template <class ScalarType> class SheetExtractorILP {
         ScalarType CurrW = Graph.Weight(IndexN);
         objective += Vars[i] * (DeltaMin + CurrW);
       }
+
+      //ADD SOFT CONSTRAINTS
+      for (int i = 0; i < SoftConstrNodes.size(); ++i) {
+        int IndexN = SoftConstrNodes[i];
+         if (!IsVariable(IndexN))
+          continue;
+        int IndexVar = NodeToVar[IndexN];
+        assert(IndexVar >= 0);
+        assert(IndexVar <Vars.size());
+        objective += -SOFT_SEED_CONST* Vars[IndexVar];
+        //GRBConstr AddedC = model.addConstr(Vars[IndexVarTest] == 1,
+        // assert(IndexN >= 0);
+        // assert(IndexN < Graph.NumNodes());
+        // ScalarType CurrW = Graph.Weight(IndexN);
+        // objective += Vars[i] * (DeltaMin + CurrW);
+      }
+
+      
       model.setObjective(objective, GRB_MINIMIZE);
 
       // ADD SINGLE NODE FOR A FACE CONSTRAINT
@@ -438,6 +452,21 @@ template <class ScalarType> class SheetExtractorILP {
                         "LowerBound" + std::to_string(i));
       }
 
+      // ADD EXIT LABEL CONSTR
+      for (size_t i = 0; i < EdgeLabel_ExitConstr.size(); i++) {
+        if (EdgeLabel_ExitConstr.size() <= 1)
+          continue;
+        GRBLinExpr upper_bound;
+
+        for (size_t j = 0; j < EdgeLabel_ExitConstr[i].size(); j++) {
+          int IndexVar = EdgeLabel_ExitConstr[i][j];
+          assert(IndexVar < Vars.size());
+          assert(IndexVar >= 0);
+          upper_bound += Vars[IndexVar];
+        }
+        model.addConstr(upper_bound <= 1, "ExitB " + std::to_string(i));
+      }
+
       // ADD INCOMPATIBLE NODE CONSTRAINT
       for (size_t i = 0; i < IncompatibleNodePairs_Constr.size(); i++) {
         int IndexVar0 = IncompatibleNodePairs_Constr[i].first;
@@ -458,44 +487,50 @@ template <class ScalarType> class SheetExtractorILP {
         model.addConstr(twice_constr <= 4, "Twice" + std::to_string(i));
       }
 
-      //   // ADD INITIAL SEED NODES
-      //   for (size_t i = 0; i < SeedNodes.size(); i++) {
-      //     if (!IsVariable(SeedNodes[i]))
-      //       continue;
-      //     int IndexVarTest = NodeToVar[SeedNodes[i]];
-      //     assert(IndexVarTest >= 0);
-      //     GRBConstr AddedC = model.addConstr(Vars[IndexVarTest] == 1,
-      //                                        "Initial Seed" +
-      //                                        std::to_string(i));
-      //   }
+      // ADD HARD CONSTRAINTS
+      for (size_t i = 0; i < HardConstrNodes.size(); i++) {
+        if (!IsVariable(HardConstrNodes[i]))
+          continue;
+        int IndexVarTest = NodeToVar[HardConstrNodes[i]];
+        assert(IndexVarTest >= 0);
+        GRBConstr AddedC = model.addConstr(Vars[IndexVarTest] == 1,
+                                           "Hard Constr" + std::to_string(i));
+      }
 
-      int IndexVarTest = NodeToVar[377];
-      assert(IndexVarTest >= 0);
-      GRBConstr AddedC0 = model.addConstr(Vars[IndexVarTest] == 1,
-                                          "Initial Seed" + std::to_string(1));
-      IndexVarTest = NodeToVar[50001];
-      assert(IndexVarTest >= 0);
-      GRBConstr AddedC1 = model.addConstr(Vars[IndexVarTest] == 1,
-                                          "Initial Seed" + std::to_string(2));
-     
-     IndexVarTest = NodeToVar[99803];
-       GRBConstr AddedC2 = model.addConstr(Vars[IndexVarTest] == 1,
-                                          "Initial Seed" + std::to_string(3));
+      // int IndexVarTest = NodeToVar[377];
+      // assert(IndexVarTest >= 0);
+      // GRBConstr AddedC0 = model.addConstr(Vars[IndexVarTest] == 1,
+      //                                     "Initial Seed" +
+      //                                     std::to_string(1));
+      // IndexVarTest = NodeToVar[50001];
+      // assert(IndexVarTest >= 0);
+      // GRBConstr AddedC1 = model.addConstr(Vars[IndexVarTest] == 1,
+      //                                     "Initial Seed" +
+      //                                     std::to_string(2));
 
-        
+      // IndexVarTest = NodeToVar[99803];
+      // GRBConstr AddedC2 = model.addConstr(Vars[IndexVarTest] == 1,
+      //                                     "Initial Seed" +
+      //                                     std::to_string(3));
+
+      // IndexVarTest = NodeToVar[99793];
+      // GRBConstr AddedC3 = model.addConstr(Vars[IndexVarTest] == 1,
+      //                                     "Initial Seed" +
+      //                                     std::to_string(4));
+
       // Record the first timestamp
-      //model.presolve();
+      // model.presolve();
       auto start = std::chrono::high_resolution_clock::now();
-      
-    //   model.set(GRB_DoubleParam_Heuristics, 0.5);
-    //   model.set(GRB_DoubleParam_MIPGap, 0.9); // 1% gap
-    //   model.set(GRB_DoubleParam_MIPGapAbs, 10); // Absolute gap
-    //    // Set time limit to 300 seconds (5 minutes)
-    // //model.set(GRB_DoubleParam_TimeLimit, 3.0);
-    //   model.set(GRB_IntParam_MIPFocus, 1);
-    //   model.set(GRB_IntParam_Threads, 8); // Use 4 threads
-    //   model.set(GRB_IntParam_Cuts, 2); // Moderate cut aggressiveness
-    //   model.set(GRB_IntParam_NodeMethod, 2);
+
+      //model.set(GRB_DoubleParam_Heuristics, 0.5);
+      model.set(GRB_DoubleParam_MIPGap, 0.05); // 1% gap
+      //   model.set(GRB_DoubleParam_MIPGapAbs, 10); // Absolute gap
+      //    // Set time limit to 300 seconds (5 minutes)
+      // //model.set(GRB_DoubleParam_TimeLimit, 3.0);
+      //   model.set(GRB_IntParam_MIPFocus, 1);
+      //   model.set(GRB_IntParam_Threads, 8); // Use 4 threads
+      //   model.set(GRB_IntParam_Cuts, 2); // Moderate cut aggressiveness
+      //   model.set(GRB_IntParam_NodeMethod, 2);
       model.optimize();
       auto end = std::chrono::high_resolution_clock::now();
       // Calculate the duration
@@ -504,7 +539,7 @@ template <class ScalarType> class SheetExtractorILP {
       // Output the duration
       std::cout << "Time elapsed: " << duration.count() << " seconds\n";
       // COLLECT THE RESULT
-      
+
       if (model.get(GRB_IntAttr_Status) == GRB_OPTIMAL) {
         std::cout << "Optimal solution found:\n";
 
@@ -532,7 +567,6 @@ template <class ScalarType> class SheetExtractorILP {
         std::cout << "No optimal solution found.\n";
         return false;
       }
-
     }
 
     catch (GRBException &e) {
@@ -540,36 +574,115 @@ template <class ScalarType> class SheetExtractorILP {
     } catch (const std::exception &e) {
       std::cerr << "Standard exception: " << e.what() << "\n";
     }
+    return false;
   }
 
-  //  void InitBorderLabelN()
-  //  {
-  //     BorderLabelN.clear();
-  //     std::vector<std::vector<std::vector<int>>> NextF, NextE;
-  //     Geo::getFFAdjacencyNonManifold(InternalFaces, NextF, NextE);
-  //     for (size_t i=0;i<Graph.NumNodes();i++)
-  //     {
-  //         int IndexN=i;
-  //         int IndexF = Field::FrameFieldM3Graph::ElemOfNode(IndexN);
-  //         assert(IndexF>=0);
-  //         assert(IndexF<NextF.size());
-  //         assert(NextF[IndexF].size()==3);
-  //         BorderLabelN.push_back(std::vector<bool>(3,false));
-  //         for (size_t e=0;e<NextF[IndexF].size();e++)
-  //             BorderLabelN.back()[e]=(NextF[IndexF][e]==-1);
-  //     }
-  //  }
-
 public:
-  // std::vector<std::vector<int>> ViolatedC;
+  struct ExtractParam {
+    std::vector<int> HardNodes;
+    std::vector<int> SoftNodes;
+    bool SingleFConstr;
+    bool SingleLabelCostr;
+    bool IncompatibleNPairConstr;
+    bool TwiceEdgeConstr;
+
+    ExtractParam() {
+      SingleFConstr = true;
+      SingleLabelCostr = true;
+      IncompatibleNPairConstr = true;
+      TwiceEdgeConstr = true;
+    }
+  };
+
   std::vector<bool> Solution;
   std::vector<std::vector<bool>> BorderLabelN;
-  // std::vector<int> ChosenF;
 
-  bool FindSurfaceSheet(std::vector<int> &SeedNodes, std::vector<int> &ChosenF,
-                        bool SingleFConstr = true, bool ExitLabelConstr = true,
-                        bool IncompatibleNPairConstr = true,
-                        bool TwiceEdgeConstr = true) {
+  void ExtractSurfacesFormSolution(
+      const std::vector<Geo::Point3<ScalarType>> &OriginalVertPos,
+      std::vector<std::vector<Geo::Point3<ScalarType>>> &FoilVertices,
+      std::vector<std::vector<std::vector<int>>> &FoilFaces,
+      std::vector<std::vector<int>> &OriginalFaceIdx,
+      std::vector<std::vector<int>> &OriginalVertIdx) {
+    FoilFaces.clear();
+    FoilVertices.clear();
+    OriginalFaceIdx.clear();
+    OriginalVertIdx.clear();
+
+    // get the selected nodes
+    std::set<int> SelectedNodes;
+    for (size_t i = 0; i < Solution.size(); i++) {
+      if (!Solution[i])
+        continue;
+      int IndexN = VarToNode[i];
+      SelectedNodes.insert(IndexN);
+    }
+
+    // split into parts
+    std::set<int> VisitedNodes;
+    std::vector<std::vector<int>> Groups;
+    for (size_t i = 0; i < Graph.NumNodes(); i++) {
+      // if not selected
+      if (SelectedNodes.count(i) == 0)
+        continue;
+
+      // if already visited
+      if (VisitedNodes.count(i) > 0)
+        continue;
+
+      // then create a new group
+      Groups.resize(Groups.size() + 1);
+
+      // then get connected components
+      std::vector<int> ExplStack;
+      ExplStack.push_back(i);
+      do {
+        int CurrN = ExplStack.back();
+        ExplStack.pop_back();
+        int CurrF = Field::FrameFieldM3Graph::ElemOfNode(CurrN);
+        // push current node
+        Groups.back().push_back(CurrF);
+        VisitedNodes.insert(CurrN);
+
+        // explore neighbours
+        for (size_t j = 0; j < Graph.NumNeigh(CurrN); j++) {
+          // if not enabled link
+          if (!Graph.IsEnabledL(CurrN, j))
+            continue;
+          int NeighNode = Graph.NeighNode(CurrN, j);
+
+          // if not active
+          if (SelectedNodes.count(NeighNode) == 0)
+            continue;
+
+          // if already explored
+          if (VisitedNodes.count(NeighNode) > 0)
+            continue;
+
+          // otherwise push in the stack
+          ExplStack.push_back(NeighNode);
+        }
+
+      } while (!ExplStack.empty());
+    }
+
+    // transform groups into faces
+    for (size_t i = 0; i < Groups.size(); i++) {
+      FoilFaces.resize(FoilFaces.size() + 1);
+      FoilVertices.resize(FoilVertices.size() + 1);
+      OriginalFaceIdx.resize(OriginalFaceIdx.size() + 1);
+      OriginalVertIdx.resize(OriginalVertIdx.size() + 1);
+
+      std::sort(Groups[i].begin(), Groups[i].end());
+      Groups[i].erase(std::unique(Groups[i].begin(), Groups[i].end()),
+                      Groups[i].end());
+
+      CopySubMesh<ScalarType>(OriginalVertPos, InternalFaces, Groups[i],
+                              FoilVertices.back(), FoilFaces.back(),
+                              OriginalVertIdx.back(), OriginalFaceIdx.back());
+    }
+  }
+
+  bool FindSurfaceSheet(const ExtractParam &ExtrP, std::vector<int> &ChosenF) {
 
     SingleF_Constr.clear();
     EdgeLabel_Constr.clear();
@@ -581,31 +694,31 @@ public:
 
     std::cout << "Num Variables: " << VarToNode.size() << std::endl;
 
-    if (SingleFConstr) {
+    if (ExtrP.SingleFConstr) {
       InitSingleF_Constr();
       std::cout << "Initialized " << SingleF_Constr.size()
                 << " single face constraint" << std::endl;
     }
 
-    if (ExitLabelConstr) {
+    if (ExtrP.SingleLabelCostr) {
       InitSingleLabelF_Constr();
       std::cout << "Initialized " << EdgeLabel_Constr.size()
                 << " face label constraint" << std::endl;
     }
 
-    if (IncompatibleNPairConstr) {
+    if (ExtrP.IncompatibleNPairConstr) {
       InitIncompatibleNodePairs_Constr();
       std::cout << "Initialized " << IncompatibleNodePairs_Constr.size()
                 << " Incompatible faces constraint" << std::endl;
     }
 
-    if (TwiceEdgeConstr) {
+    if (ExtrP.TwiceEdgeConstr) {
       InitTwiceEdge_Constr();
       std::cout << "Initialized " << TwiceEdge_Constr.size()
                 << " twice edge constraint" << std::endl;
     }
 
-    bool solved = SolveGurobi(SeedNodes, ChosenF);
+    bool solved = SolveGurobi(ExtrP.HardNodes,ExtrP.SoftNodes, ChosenF);
     return solved;
   }
 

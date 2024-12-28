@@ -20,7 +20,8 @@
 #include <set>
 #include <string>
 #include <vector>
-
+#include <queue>
+#include <map>
 // #include <igl/is_vertex_manifold.h>
 // #include <igl/is_edge_manifold.h>
 // //#include "eigen_interface.h"
@@ -1731,6 +1732,59 @@ int DesambiguateSamePosVertices(
       Pos3D[i] = OldPos[i];
   }
   return Moved;
+}
+
+// Coherently orient the triangle mesh
+void OrientCoherently(std::vector<std::vector<int>> &faces) {
+  std::map<std::pair<int, int>, int> edgeToFace;
+  std::vector<bool> visited(faces.size(), false);
+
+  // Populate edge-to-face map
+  for (int i = 0; i < faces.size(); ++i) {
+    const auto &face = faces[i];
+    for (int j = 0; j < faces[i].size(); ++j) {
+      int v1 = face[j];
+      int v2 = face[(j + 1) % faces[i].size()];
+      edgeToFace[{v1, v2}] = i;
+    }
+  }
+
+  // BFS to propagate orientation
+  std::queue<int> toVisit;
+  toVisit.push(0);
+  visited[0] = true;
+
+  while (!toVisit.empty()) {
+    int currentFace = toVisit.front();
+    toVisit.pop();
+
+    const auto &face = faces[currentFace];
+    for (int j = 0; j < faces[currentFace].size(); ++j) {
+      int v1 = face[j];
+      int v2 = face[(j + 1) % faces[currentFace].size()];
+
+      auto it = edgeToFace.find({v2, v1});
+      if (it != edgeToFace.end()) {
+        int neighborFace = it->second;
+
+        if (!visited[neighborFace]) {
+          visited[neighborFace] = true;
+
+          // Ensure consistent orientation
+          auto &neighbor = faces[neighborFace];
+          if (neighbor[0] == v2 && neighbor[1] == v1) {
+            std::swap(neighbor[1], neighbor[2]);
+          } else if (neighbor[1] == v2 && neighbor[2] == v1) {
+            std::swap(neighbor[0], neighbor[2]);
+          } else if (neighbor[2] == v2 && neighbor[0] == v1) {
+            std::swap(neighbor[0], neighbor[1]);
+          }
+
+          toVisit.push(neighborFace);
+        }
+      }
+    }
+  }
 }
 
 #endif

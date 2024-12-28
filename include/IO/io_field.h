@@ -321,33 +321,34 @@ bool WriteField(const std::string &fieldFile,
                 const std::vector<Field::FrameField<ScalarType> > &VertField,
                 const std::vector<Field::FrameField<ScalarType> > &PolyhedraField)
 {
-    ScalarType minDelta=0.00000001;
-    std::vector<std::vector<Geo::Point3<ScalarType> > > VertFieldVect,PolyhedraFieldVect;
-    VertFieldVect.resize(VertField.size());
+//     ScalarType minDelta=0.00000001;
+//     std::vector<std::vector<Geo::Point3<ScalarType> > > VertFieldVect,PolyhedraFieldVect;
+//     VertFieldVect.resize(VertField.size());
 
-    for (size_t i=0;i<VertField.size();i++)
-    {
-        Geo::Point3<ScalarType> D0=VertField[i].D[0];
-        Geo::Point3<ScalarType> D1=VertField[i].D[1];
-        Geo::Point3<ScalarType> D2=VertField[i].D[2];
+//     for (size_t i=0;i<VertField.size();i++)
+//     {
+//         Geo::Point3<ScalarType> D0=VertField[i].D[0];
+//         Geo::Point3<ScalarType> D1=VertField[i].D[1];
+//         Geo::Point3<ScalarType> D2=VertField[i].D[2];
 
-        VertFieldVect[i].push_back(D0);
-        VertFieldVect[i].push_back(D1);
-        VertFieldVect[i].push_back(D2);
-    }
+//         VertFieldVect[i].push_back(D0);
+//         VertFieldVect[i].push_back(D1);
+//         VertFieldVect[i].push_back(D2);
+//     }
 
-    PolyhedraFieldVect.resize(PolyhedraField.size());
-    for (size_t i=0;i<PolyhedraField.size();i++)
-    {
-        Geo::Point3<ScalarType> D0=PolyhedraField[i].D[0];
-        Geo::Point3<ScalarType> D1=PolyhedraField[i].D[1];
-        Geo::Point3<ScalarType> D2=PolyhedraField[i].D[2];
+//     PolyhedraFieldVect.resize(PolyhedraField.size());
+//     for (size_t i=0;i<PolyhedraField.size();i++)
+//     {
+//         Geo::Point3<ScalarType> D0=PolyhedraField[i].D[0];
+//         Geo::Point3<ScalarType> D1=PolyhedraField[i].D[1];
+//         Geo::Point3<ScalarType> D2=PolyhedraField[i].D[2];
 
-        PolyhedraFieldVect[i].push_back(D0);
-        PolyhedraFieldVect[i].push_back(D1);
-        PolyhedraFieldVect[i].push_back(D2);
-    }
-   return(WriteField(fieldFile,VertFieldVect,PolyhedraFieldVect));
+//         PolyhedraFieldVect[i].push_back(D0);
+//         PolyhedraFieldVect[i].push_back(D1);
+//         PolyhedraFieldVect[i].push_back(D2);
+//     }
+//    return(WriteField(fieldFile,VertFieldVect,PolyhedraFieldVect));
+return true;
 }
 
 
@@ -365,6 +366,7 @@ bool LoadFrameFieldTxt(const std::string &fieldFile,
     FieldDir.resize(Num);
 
     for (int i=0;i<Num;i++)
+    //for (int i=0;i<10;i++)
     {
         for (size_t d=0;d<3;d++)
         {
@@ -373,8 +375,11 @@ bool LoadFrameFieldTxt(const std::string &fieldFile,
             fin>>YDir;
             fin>>ZDir;
             FieldDir[i].D[d]=Geo::Point3<ScalarType>(XDir,YDir,ZDir);
+            FieldDir[i].D[d].Normalize();
             FieldDir[i].Pos=Centers[i];
             //should be normalized
+            //std::cout<<"Dir "<<d<<" "<<XDir<<","<<YDir<<","<<ZDir<<std::endl;
+            // std::cout<<"Norm "<<FieldDir[i].D[d].Norm()<<std::endl;
             assert(fabs(FieldDir[i].D[d].Norm()-1)<0.0001);
         }
         FieldDir[i].ForceCorrect();
@@ -382,4 +387,36 @@ bool LoadFrameFieldTxt(const std::string &fieldFile,
     fin.close();
     return true;
 }
+
+// template <class ScalarType>
+// bool LoadFrameFieldTxtSingleLine(const std::string &fieldFile,
+//                                  const std::vector<Geo::Point3<ScalarType> > &Centers,
+//                                  std::vector<Field::FrameField<ScalarType> > &FieldDir)
+// {
+//     std::ifstream fin(fieldFile.c_str());
+//     if(!fin) return false;
+
+//     std::string str;
+
+//     int Num=Centers.size();
+//     FieldDir.resize(Num);
+
+//     for (int i=0;i<Num;i++)
+//     {
+//         for (size_t d=0;d<3;d++)
+//         {
+//             ScalarType XDir,YDir,ZDir;
+//             fin>>XDir;
+//             fin>>YDir;
+//             fin>>ZDir;
+//             FieldDir[i].D[d]=Geo::Point3<ScalarType>(XDir,YDir,ZDir);
+//             FieldDir[i].Pos=Centers[i];
+//             //should be normalized
+//             assert(fabs(FieldDir[i].D[d].Norm()-1)<0.0001);
+//         }
+//         FieldDir[i].ForceCorrect();
+//     }
+//     fin.close();
+//     return true;
+// }
 #endif
