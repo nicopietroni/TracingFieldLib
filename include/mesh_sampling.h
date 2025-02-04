@@ -3,6 +3,7 @@
 
 // #include "point3.h"
 // #include "polyhedra_mesh.h"
+#include "box3.h"
 #include "connectivity.h"
 #include "point2.h"
 #include "point3.h"
@@ -11,6 +12,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <iostream>
+#include <limits>
 #include <pos3.h>
 #include <random>
 #include <set>
@@ -48,7 +51,6 @@ static void GetRandomSeq(size_t MaxIndex, std::vector<int> &Sequence,
   std::shuffle(Sequence.begin(), Sequence.end(), lcg);
 #endif
 }
-
 
 namespace Geo {
 
@@ -103,7 +105,6 @@ template <class ScalarType> class MeshSampling {
   }
 
 public:
-
   static void
   SampleVert(const std::vector<std::vector<int>> &Connectivity,
              const int NumVert, const int &RadiusStar,
@@ -206,11 +207,10 @@ public:
       }
     }
   }
-  
+
   static void
   SampleRadius3D(const std::vector<Geo::Point3<ScalarType>> &Samples,
-                 const ScalarType &RadiusStar, 
-                 std::vector<int> &Selected,
+                 const ScalarType &RadiusStar, std::vector<int> &Selected,
                  int RandSeed = 0) {
     Geo::PointSpatialIndex<ScalarType> PointIdx;
     PointIdx.Init(Samples);
@@ -238,6 +238,84 @@ public:
           Valid[CurrV1] = false;
       }
     }
+  }
+
+  static void LLoydRalaxSampleseRadius3D(
+      const std::vector<Geo::Point3<ScalarType>> &Samples,
+      const ScalarType &RadiusStar, 
+      std::vector<int> &SelectedSeeds,
+      int numStep) {
+
+    Geo::PointSpatialIndex<ScalarType> PointGrid;
+    PointGrid.Init(Samples);
+    Geo::Box3<ScalarType> BBox;
+    BBox.Init(Samples);
+    
+    for (size_t s = 0; s < numStep; s++) {
+      // update clusters
+      std::vector<std::vector<int>> Clusters;
+      Clusters.resize(SelectedSeeds.size());
+      for (size_t i = 0; i < Samples.size(); i++) {
+        ScalarType minD = std::numeric_limits<ScalarType>::max();
+        int minIdx = -1;
+        for (size_t j = 0; j < SelectedSeeds.size(); j++) {
+          int IndexV = SelectedSeeds[j];
+          assert(IndexV >= 0);
+          assert(IndexV < Samples.size());
+          Geo::Point3<ScalarType> TestPos = Samples[IndexV];
+          ScalarType TestD = (TestPos - Samples[i]).Norm();
+          if (TestD > minD)
+            continue;
+          minD = TestD;
+          minIdx = j;
+        }
+        assert(minIdx >= 0);
+        assert(minIdx < Clusters.size());
+        Clusters[minIdx].push_back(i);
+      }
+
+      // then update centroids
+      std::vector<Geo::Point3<ScalarType>> ClusterCentroid;
+      for (size_t i = 0; i < Clusters.size(); i++) {
+        Geo::Point3<ScalarType> AvgPos(0, 0, 0);
+        for (size_t j = 0; j < Clusters[i].size(); j++) {
+          int IndexS = Clusters[i][j];
+          assert(IndexS >= 0);
+          assert(IndexS < Samples.size());
+          AvgPos += Samples[IndexS];
+        }
+        assert(Clusters[i].size()>0);
+        AvgPos /= Clusters[i].size();
+        ClusterCentroid.push_back(AvgPos);
+      }
+
+      //then update new seeds
+      SelectedSeeds.clear();
+      for (size_t i=0;i<ClusterCentroid.size();i++)
+      {
+        int closestP;
+        bool found=PointGrid.GridClosest(Samples,
+                                        ClusterCentroid[i],
+                                        BBox.Diag(),
+                                        closestP);
+        assert(found);
+        SelectedSeeds.push_back(closestP);
+      }
+      std::sort(SelectedSeeds.begin(), SelectedSeeds.end());
+      SelectedSeeds.erase(std::unique(SelectedSeeds.begin(), SelectedSeeds.end()), SelectedSeeds.end());
+
+    }
+  }
+
+  static void
+  SampleVoronoiRadius3D(const std::vector<Geo::Point3<ScalarType>> &Samples,
+                        const ScalarType &RadiusStar,
+                        std::vector<int> &Selected, 
+                        int RelaxStep,
+                        int RandSeed = 0) 
+  {
+    SampleRadius3D(Samples,RadiusStar,Selected,RandSeed);
+    LLoydRalaxSampleseRadius3D(Samples,RadiusStar,Selected,RelaxStep);
   }
 
   static void SampleBordersRegularly(const std::vector<std::vector<int>> &Faces,
@@ -305,8 +383,6 @@ public:
     RadiusStar = std::max(RadiusStar, 1);
     return RadiusStar;
   }
-
-  
 };
 
 // template <class ScalarType> class TetraMeshSampling {
@@ -328,14 +404,16 @@ public:
 // //   static void PruneEdges(const int NumVert,
 // //                         const std::vector<std::vector<int>> &Tetra,
 // //                         const int &RadiusStar,
-// //                         //const std::vector<std::pair<int,int> &ConstraintsE,
+// //                         //const std::vector<std::pair<int,int>
+// &ConstraintsE,
 // //                         std::vector<std::pair<int,int> > &To_prune)
 // //   {
 // //       // initialize the kernel
 // //       std::vector<std::vector<int>> KernelVert;
 // //       Geo::FindVertexStar(Tetra, KernelVert, RadiusStar - 1);
 
-// //       //std::set<int> ConstraintsSet(Constraints.begin(), Constraints.end());
+// //       //std::set<int> ConstraintsSet(Constraints.begin(),
+// Constraints.end());
 
 // //       std::vector<std::pair<int,int>> Selected;
 // //       std::vector<bool> Valid(NumVert, true);
@@ -345,7 +423,7 @@ public:
 // //         std::pair<int,int> EdgeVertx=To_prune[i];
 // //         int IndexV0=EdgeVertx.first;
 // //         int IndexV1=EdgeVertx.second;
-     
+
 // //           // other one non valid, go on
 // //           if (!Valid[IndexV0])
 // //               continue;
@@ -372,7 +450,7 @@ public:
 // //   }
 
 // public:
-  
+
 //   void SampleVertices(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 //                       const std::vector<std::vector<int>> &Tetra,
 //                       std::vector<std::pair<int,int>> &SampledE)
@@ -380,7 +458,7 @@ public:
 //     //then randomize
 //     std::vector<int> VertIdx;
 //     GetRandomSeq(VertPos.size(),VertIdx);
-    
+
 //   }
 
 // //   void SampleEdges(const std::vector<Geo::Point3<ScalarType>> &VertPos,

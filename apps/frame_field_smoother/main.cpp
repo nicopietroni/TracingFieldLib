@@ -4,8 +4,12 @@
 #include "imgui_impl_opengl2.h"
 #include <GL/glew.h>
 #include <UI/orbitball.h>
+#include <cassert>
+#include <cstddef>
 #include <iostream>
 #include <stdio.h>
+#include <utility>
+#include <vector>
 #ifdef __APPLE__
 #define GL_SILENCE_DEPRECATION
 #endif
@@ -24,8 +28,9 @@
 #include <frame_field_singularities.h>
 #include <polyhedra_mesh_functions.h>
 #include <sample_for_vis_frame_field.h>
-#include <smooth_cross_field.h>
+#include "../include/smooth_cross_field.h"
 #include <smooth_frame_field.h>
+#include <mesh_features.h>
 
 GLFWwindow *window;
 std::string PathMesh;
@@ -103,8 +108,8 @@ std::vector<std::vector<int>> NextF, NextE;
 int Nring = 3;
 
 int anglePercThr = 5;
-SmoothParam<UsedScalarType> SParam;
-int GlobSmoothI = (int)SParam.GlobalSmoothVal;
+SmoothParam<UsedScalarType> SParamCross;
+int GlobSmoothI = (int)SParamCross.GlobalSmoothVal;
 
 // SmoothFrameParam<UsedScalarType> SParamFrame;
 
@@ -140,6 +145,8 @@ SmoothFrameParam<UsedScalarType> SParamFrame;
 UsedScalarType initial_feature_angle = 45;
 UsedScalarType old_initial_feature_angle = 0;
 
+std::vector<std::pair<int, int>> VertPairFeatures;
+std::vector<int> CornersIdx;
 
 void LoadMesh(const std::string &path) {
 
@@ -189,14 +196,14 @@ void InitSurfField() {
   has_cross_field = true;
 }
 
-void PropagateCrossFromFix() {
-  if (!has_cross_field)
-    return;
-  PropagateCrossFromFixed(SurfVertPos, SurfExtFace, SurfFaceNormals, FaceCurv,
-                          SParam);
-  GetFaceSingularities(FaceCurv, VertPos, SurfExtFace, NextF, NextE, SingIndex,
-                       SingValue);
-}
+// void PropagateCrossFromFix() {
+//   if (!has_cross_field)
+//     return;
+//   PropagateCrossFromFixed(SurfVertPos, SurfExtFace, SurfFaceNormals, FaceCurv,
+//                           SParam);
+//   GetFaceSingularities(FaceCurv, VertPos, SurfExtFace, NextF, NextE, SingIndex,
+//                        SingValue);
+// }
 
 void UpdateCrossFieldFromFrame() {
   CrossFieldFromFrame(FrameField, ExtPoly, SurfExtFace, SurfFaceNormals,
@@ -205,23 +212,26 @@ void UpdateCrossFieldFromFrame() {
                                        SurfVertNormals, FaceCurv, VertCurv);
   GetFaceSingularities(FaceCurv, VertPos, SurfExtFace, NextF, NextE, SingIndex,
                        SingValue);
+  Field::CrossF<UsedScalarType>::getMinMaxQ(VertCurv, minQCrossVert,
+                                             maxQCrossVert);
+
   has_cross_field = true;
 }
 
-void SmoothCrossIte() {
-  if (!has_cross_field)
-    return;
-  SmoothCrossIterative(SurfVertPos, SurfExtFace, SurfFaceNormals, FaceCurv,
-                       SParam); //,VertCurv);
-  GetFaceSingularities(FaceCurv, VertPos, SurfExtFace, NextF, NextE, SingIndex,
-                       SingValue);
-}
+// void SmoothCrossIte() {
+//   if (!has_cross_field)
+//     return;
+//   SmoothCrossIterative(SurfVertPos, SurfExtFace, SurfFaceNormals, FaceCurv,
+//                        SParam); //,VertCurv);
+//   GetFaceSingularities(FaceCurv, VertPos, SurfExtFace, NextF, NextE, SingIndex,
+//                        SingValue);
+// }
 
 void SmoothCrossGlobal() {
   if (!has_cross_field)
     return;
   SmoothGlobalPolyvector(SurfVertPos, SurfExtFace, SurfFaceNormals, FaceCurv,
-                         SParam);
+                         SParamCross);
   GetFaceSingularities(FaceCurv, VertPos, SurfExtFace, NextF, NextE, SingIndex,
                        SingValue);
 }
@@ -294,13 +304,92 @@ void PropagateFrameFromBorder() {
                                 PolyConnectivity, FrameField, SParamFrame);
 
   has_frame_field = true;
-  UpdateFrameFieldVisualization();
+  //UpdateFrameFieldVisualization();
+}
+
+// void UpdateFixedTetra()
+// {
+//   SParamFrame.FixedFrame.clear();
+//   std::set<std::pair<Geo::Point3<UsedScalarType>,
+//                      Geo::Point3<UsedScalarType>> > FeaturePosSet;
+//                     //  GLDraw::GLDrawEdges<UsedScalarType>(SurfVertPos, SParamCross.Features, 15,
+//                     //                   Geo::Point3<UsedScalarType>(1, 0, 1));
+//   for (size_t i=0;i<SParamCross.Features.size();i++)
+//   {
+//     int IndexV0=SParamCross.Features[i].first;
+//     int IndexV1=SParamCross.Features[i].second;
+//     assert(IndexV0>=0);
+//     assert(IndexV0<SurfVertPos.size());
+//     assert(IndexV1>=0);
+//     assert(IndexV1<SurfVertPos.size());
+//     Geo::Point3<UsedScalarType> PVert0=SurfVertPos[IndexV0];
+//     Geo::Point3<UsedScalarType> PVert1=SurfVertPos[IndexV1];
+//     std::pair<Geo::Point3<UsedScalarType>, 
+//     Geo::Point3<UsedScalarType> > Key(std::min(PVert0,PVert1),std::max(PVert0,PVert1));
+//     FeaturePosSet.insert(Key);
+//   }
+
+//   for (size_t i=0;i<PolyConnectivity.size();i++)
+//   for (size_t j=0;j<PolyConnectivity[i].size();j++)
+//   {
+//     int sizePoly=PolyConnectivity[i].size();
+//     int IndexV0=PolyConnectivity[i][j];
+//     int IndexV1=PolyConnectivity[i][(j+1)%sizePoly];
+//     Geo::Point3<UsedScalarType> P0=VertPos[IndexV0];
+//     Geo::Point3<UsedScalarType> P1=VertPos[IndexV1];
+//     std::pair<Geo::Point3<UsedScalarType>, 
+//     Geo::Point3<UsedScalarType> > Key(std::min(P0,P1),std::max(P0,P1));
+//     if (FeaturePosSet.count(Key)==0)continue;
+//     SParamFrame.FixedFrame.push_back(i);
+//   }
+//   std::sort(SParamFrame.FixedFrame.begin(), SParamFrame.FixedFrame.end());
+//   SParamFrame.FixedFrame.resize(std::unique(SParamFrame.FixedFrame.begin(), SParamFrame.FixedFrame.end()) - SParamFrame.FixedFrame.begin());
+//   //std::cout<<"Fixed "<<SParamFrame.FixedFrame.size()<<std::endl;
+// }
+
+void UpdateFixedTetra()
+{
+  SParamFrame.FixedFrame.clear();
+  std::set<Geo::Point3<UsedScalarType> > FeaturePosSet;
+  for (size_t i=0;i<SParamCross.Features.size();i++)
+  {
+    int IndexV0=SParamCross.Features[i].first;
+    int IndexV1=SParamCross.Features[i].second;
+    assert(IndexV0>=0);
+    assert(IndexV0<SurfVertPos.size());
+    assert(IndexV1>=0);
+    assert(IndexV1<SurfVertPos.size());
+    Geo::Point3<UsedScalarType> PVert0=SurfVertPos[IndexV0];
+    Geo::Point3<UsedScalarType> PVert1=SurfVertPos[IndexV1];
+    FeaturePosSet.insert(PVert0);
+    FeaturePosSet.insert(PVert1);
+  }
+
+  for (size_t i=0;i<PolyConnectivity.size();i++)
+  for (size_t j=0;j<PolyConnectivity[i].size();j++)
+  {
+    int sizePoly=PolyConnectivity[i].size();
+    int IndexV0=PolyConnectivity[i][j];
+    int IndexV1=PolyConnectivity[i][(j+1)%sizePoly];
+    Geo::Point3<UsedScalarType> P0=VertPos[IndexV0];
+    Geo::Point3<UsedScalarType> P1=VertPos[IndexV1];
+    if (FeaturePosSet.count(P0)>0)
+    SParamFrame.FixedFrame.push_back(i);
+    if (FeaturePosSet.count(P1)>0)
+    SParamFrame.FixedFrame.push_back(i);
+  }
+  std::sort(SParamFrame.FixedFrame.begin(), SParamFrame.FixedFrame.end());
+  SParamFrame.FixedFrame.resize(std::unique(SParamFrame.FixedFrame.begin(), SParamFrame.FixedFrame.end()) - SParamFrame.FixedFrame.begin());
+  //std::cout<<"Fixed "<<SParamFrame.FixedFrame.size()<<std::endl;
 }
 
 void SmoothFrameIterative() {
   if (!has_frame_field)
     return;
   // int t0=clock();
+  //SParamFrame.
+  UpdateFixedTetra();
+
   SmoothFrameIterative(VertPos, PolyConnectivity,
                        FrameField,SParamFrame); //,VertCurv);
   // int t1=clock();
@@ -309,12 +398,12 @@ void SmoothFrameIterative() {
   UpdateCrossFieldFromFrame();
 }
 
-void BatchProcess() {
-  InitSurfField();
-  SmoothCrossGlobal();
-  PropagateFrameFromBorder();
-  SmoothFrameIterative();
-}
+// void BatchProcess() {
+//   InitSurfField();
+//   SmoothCrossGlobal();
+//   PropagateFrameFromBorder();
+//   SmoothFrameIterative();
+// }
 
 void LoadField(const std::string &path) {
   has_frame_field = true;
@@ -491,6 +580,38 @@ void InitIMGui() {
   ImGui_ImplOpenGL2_Init();
 }
 
+void MapFeaturesOnTetraM(std::vector<std::pair<int,int> > &SurfFeatureTetraM)
+{
+  SurfFeatureTetraM.clear();
+
+  std::map<Geo::Point3<UsedScalarType>,int> PosIdx;
+  for (size_t i=0;i<VertPos.size();i++) 
+    PosIdx[VertPos[i]]=i;
+
+  for (size_t i=0;i<SParamCross.Features.size();i++)
+  {
+    int IndexV0=SParamCross.Features[i].first;
+    int IndexV1=SParamCross.Features[i].second;
+    assert(IndexV0>=0);
+    assert(IndexV1>=0);
+    assert(IndexV0<SurfVertPos.size());
+    assert(IndexV1<SurfVertPos.size());
+    assert(IndexV0!=IndexV1);
+    Geo::Point3<UsedScalarType> P0=SurfVertPos[IndexV0];
+    Geo::Point3<UsedScalarType> P1=SurfVertPos[IndexV1];
+
+    //map on tetra mesh
+    assert(PosIdx.count(P0)>0);
+    assert(PosIdx.count(P1)>0);
+    IndexV0=PosIdx[P0];
+    IndexV1=PosIdx[P1];
+
+    SurfFeatureTetraM.push_back(std::pair<int,int>(std::min(IndexV0,IndexV1),
+                                                   std::max(IndexV0,IndexV1)));
+  
+  }
+}
+
 void SetRenderBar() {
   ImGui::Begin(
       "Field Computation", NULL,
@@ -527,7 +648,14 @@ void SetRenderBar() {
     ImGui::SliderInt("Inital features", &valueA0, 0, 180);
     initial_feature_angle = valueA0;
     if (old_initial_feature_angle != initial_feature_angle) {
-      //UpdateFeatureCorners();
+      
+      Geo::FeatureCorners(SurfVertPos, SurfExtFace, 
+                          initial_feature_angle, 
+                          SParamCross.Features,
+                          CornersIdx);
+
+      //std::cout<<"There are "<<VertPairFeatures.size()<<" features"<<std::endl;
+      
       old_initial_feature_angle = initial_feature_angle;
     }
 
@@ -536,65 +664,68 @@ void SetRenderBar() {
                    5); //, "%2d",ImGuiSliderFlags_AlwaysClamp);
   ImGui::PopItemWidth();
 
-  ImGui::SameLine();
-  if (ImGui::Button("Init Curvature")) {
-    InitSurfField();
-  }
+  // ImGui::SameLine();
+  // if (ImGui::Button("Init Curvature")) {
+  //   InitSurfField();
+  // }
 
   // ImGui::InputDouble("Hard Curvature", &SParam.TopIntevalFix, 0, 0.005);
   //&SParam.TopIntevalFix
-  if (has_cross_field) {
+  
     ImGui::PushItemWidth(100);
     ImGui::SliderInt("% Fixed", &anglePercThr, 0,
                      10); //, "%2d",ImGuiSliderFlags_AlwaysClamp);
-    SParam.TopIntevalFix = (UsedScalarType)1 / (UsedScalarType)anglePercThr;
+    SParamCross.TopIntevalFix = (UsedScalarType)1 / (UsedScalarType)anglePercThr;
     ImGui::PopItemWidth();
 
-    ImGui::SameLine();
+    //ImGui::SameLine();
 
-    if (ImGui::Button("Propagate Fix")) {
-      PropagateCrossFromFix();
-    }
+    // if (ImGui::Button("Propagate Fix")) {
+    //   PropagateCrossFromFix();
+    // }
     // ImGui::SameLine();
     // ImGui::SameLine();
     //ImGui::Checkbox("Align Border", &SParam.align_borders);
 
     //    TwAddButton(bar,"Propagate
     //    Fix",PropagateCrossFromFix,0,"label='Propagate From Fix'");
-    ImGui::PushItemWidth(100);
-    ImGui::SliderInt("Smooth Ite", &SParam.iterations, 10,
-                     100); //, "%2d",ImGuiSliderFlags_AlwaysClamp);
-    ImGui::PopItemWidth();
+    // ImGui::PushItemWidth(100);
+    // ImGui::SliderInt("Smooth Ite", &SParam.iterations, 10,
+    //                  100); //, "%2d",ImGuiSliderFlags_AlwaysClamp);
+    // ImGui::PopItemWidth();
 
-    ImGui::SameLine();
-    if (ImGui::Button("Smooth Cross Ite")) {
-      SmoothCrossIte();
-    }
+    // ImGui::SameLine();
+    // if (ImGui::Button("Smooth Cross Ite")) {
+    //   SmoothCrossIte();
+    // }
 
     ImGui::PushItemWidth(100);
     ImGui::SliderInt("Smooth Val", &GlobSmoothI, 10, 1000);
     ImGui::PopItemWidth();
-    SParam.GlobalSmoothVal = (double)GlobSmoothI;
-    ImGui::SameLine();
-    if (ImGui::Button("Smooth Global")) {
+    SParamCross.GlobalSmoothVal = (double)GlobSmoothI;
+    //ImGui::SameLine();
+    if (ImGui::Button("Compute Cross Field")) {
+      InitSurfField();
       SmoothCrossGlobal();
     }
 
+if (has_cross_field) {
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "COMPUTE FRAME");
-    if (ImGui::Button("Propagate Frame")) {
-      PropagateFrameFromBorder();
-    }
-    // ImGui::SameLine();
+    // if (ImGui::Button("Propagate Frame")) {
+    //   PropagateFrameFromBorder();
+    // }
+    // // ImGui::SameLine();
 
-    if (has_frame_field) {
+    // if (has_frame_field) {
+      ImGui::Checkbox("Multiscale", &SParamFrame.multi_scale);
       ImGui::Checkbox("Weight Q", &SParamFrame.weightByQuality);
-      ImGui::SameLine();
       ImGui::Checkbox("Fix Border", &SParamFrame.fix_borders);
-      ImGui::SameLine();
       ImGui::Checkbox("Align Border", &SParamFrame.align_borders);
-
-      if (ImGui::Button("Smooth Frame Ite")) {
+      ImGui::SliderInt("Iterations", &SParamFrame.iterations, 1, 100);
+      if (ImGui::Button("Smooth Frame Iterative")) {
+        if (!has_frame_field)
+          PropagateFrameFromBorder();
         SmoothFrameIterative();
       }
     }
@@ -602,9 +733,15 @@ void SetRenderBar() {
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "BATCH PROCESS");
     if (ImGui::Button("Batch Process")) {
-      BatchProcess();
+      ComputeFrameParam<UsedScalarType> FrameParam;
+      MapFeaturesOnTetraM(FrameParam.SurfaceFeatures);
+      ComputeFrame<UsedScalarType>(VertPos,PolyConnectivity,FrameField,FrameParam);
+      has_frame_field=true;
+      has_cross_field=true;
+      UpdateFrameFieldVisualization();
+      UpdateCrossFieldFromFrame();
     }
-  }
+
   ImGui::Separator();
   ImGui::TextColored(ImVec4(1, 0, 1, 1), "SAVE");
 
@@ -680,6 +817,10 @@ void GLDrawMesh() {
   GLDraw::DrawSurfaceMesh<UsedScalarType>(VertPos, ExtFace, FaceNormals,
                                           VertNormals, DrawSurface, DrawWire,
                                           true, TransparentSurface);
+
+  GLDraw::GLDrawEdges<UsedScalarType>(SurfVertPos, SParamCross.Features, 15,
+                                      Geo::Point3<UsedScalarType>(1, 0, 1));
+
 }
 
 int main(int argc, char *argv[]) {

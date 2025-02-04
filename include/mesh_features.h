@@ -3,6 +3,7 @@
 
 #include "point3.h"
 #include "pos3.h"
+#include "mesh_features_base.h"
 #include <cassert>
 #include <cstddef>
 #include <fstream>
@@ -267,7 +268,8 @@ void GetVertIndexFromBoolCorners(const std::vector<bool> &IsVertCorner,
 //                         const std::vector<std::vector<int>> &Faces,
 //                         const std::vector<std::pair<int, int>> &FeatureE,
 //                         const std::vector<ScalarType> Angles,
-//                         ScalarType Tolerance, std::vector<std::array<int, 3> > &TripleVert) {
+//                         ScalarType Tolerance, std::vector<std::array<int, 3>
+//                         > &TripleVert) {
 //   TripleVert.clear();
 //   if (FeatureE.size() == 0)
 //     return;
@@ -337,8 +339,9 @@ void GetVertIndexFromBoolCorners(const std::vector<bool> &IsVertCorner,
 //   }
 //   // then sort and unique
 //   std::sort(TripleVert.begin(), TripleVert.end());
-//   std::vector<std::array<int, 3> >::iterator last = std::unique(TripleVert.begin(), TripleVert.end());
-//   TripleVert.erase(last, TripleVert.end());
+//   std::vector<std::array<int, 3> >::iterator last =
+//   std::unique(TripleVert.begin(), TripleVert.end()); TripleVert.erase(last,
+//   TripleVert.end());
 // }
 
 // template <class ScalarType>
@@ -353,6 +356,97 @@ void GetVertIndexFromBoolCorners(const std::vector<bool> &IsVertCorner,
 // {
 //   for ()
 // }
+
+template <class ScalarType>
+ScalarType
+SignedDihedralAngleRad(const std::vector<Geo::Point3<ScalarType>> &Pos3D,
+                       const std::vector<std::vector<int>> &Faces,
+                       const std::vector<std::vector<int>> &NextF,
+                       const std::vector<std::vector<int>> &NextE, 
+                       int IndexF,
+                       int IndexE) {
+  int IndexF0 = IndexF;
+  assert(IndexF0 >= 0);
+  assert(IndexE >= 0);
+  assert(IndexF0 < Faces.size());
+  assert(IndexF0 < NextF.size());
+  assert(IndexF0 < NextE.size());
+  assert(IndexE < Faces[IndexF0].size());
+  assert(IndexE < NextF[IndexF0].size());
+  assert(IndexE < NextE[IndexF0].size());
+
+  int IndexV0=Faces[IndexF][IndexE];
+  int IndexV1=Faces[IndexF][(IndexE+1)%Faces[IndexF].size()];
+  Geo::Point3<ScalarType> DirE=Pos3D[IndexV1]-Pos3D[IndexV0];
+  DirE.Normalize();
+
+  int IndexF1 = NextF[IndexF0][IndexE];
+
+  // in this case it is border
+  if (IndexF1 == -1)
+    return 0;
+  Geo::Point3<ScalarType> Norm0 = Normal(Pos3D, Faces, IndexF0);
+  Geo::Point3<ScalarType> Norm1 = Normal(Pos3D, Faces, IndexF1);
+  Geo::Point3<ScalarType> c = Geo::Cross(Norm0, Norm1);
+  ScalarType d = Geo::Dot(c, DirE);
+  ScalarType AngleRad = Geo::AngleRad(Norm0,Norm1);
+  if (d>0)
+    return AngleRad;
+  else
+    return -AngleRad;
+}
+
+template <class ScalarType>
+void 
+SignedDihedralAngleRad(const std::vector<Geo::Point3<ScalarType>> &Pos3D,
+                       const std::vector<std::vector<int>> &Faces,
+                       std::vector<std::vector<ScalarType>> &Dihandle) {
+  std::vector<std::vector<int>> NextF, NextE;
+  Geo::getFFAdjacency(Faces, NextF, NextE);
+  Dihandle.clear();
+  Dihandle.resize(Faces.size());
+  for (size_t i = 0; i < Faces.size(); i++)
+    for (size_t j = 0; j < Faces[i].size(); j++) {
+      int IndexF = i;
+      int IndexE = j;
+      ScalarType DAngle =
+          SignedDihedralAngleRad(Pos3D, Faces, NextF, NextE, IndexF, IndexE);
+      Dihandle[i].push_back(DAngle);
+    }
+}
+
+template <class ScalarType>
+void getFeatureTypes(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                     const std::vector<std::vector<int>> &Faces,
+                     const std::vector<std::pair<int, int>> &Edges,
+                     std::vector<FeatureType> &FType) {
+  FType.clear();
+
+  std::vector<std::vector<ScalarType>> Dihandle;
+  SignedDihedralAngleRad(VertPos, Faces, Dihandle);
+
+  std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> EdgeMap;
+  FindEdgeFacesCorrespondences(VertPos, Faces, EdgeMap);
+  for (size_t i = 0; i < Edges.size(); i++) {
+    std::pair<int, int> KeyE = Edges[i];
+    assert(EdgeMap.count(KeyE) > 0);
+    assert(EdgeMap[KeyE].size() > 0);
+
+    int IndexF = EdgeMap[KeyE][0].first;
+    int IndexE = EdgeMap[KeyE][0].second;
+
+    assert(IndexF >= 0);
+    assert(IndexE >= 0);
+    assert(IndexF < Dihandle.size());
+    assert(IndexE < Dihandle[IndexF].size());
+    ScalarType CurrAngle = Dihandle[IndexF][IndexE];
+    if (CurrAngle < 0)
+      FType.push_back(FTConcave);
+    else
+      FType.push_back(FTConvex);
+  }
+}
+
 } // namespace Geo
 
 #endif

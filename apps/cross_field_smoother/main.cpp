@@ -209,6 +209,7 @@ bool LoadMesh(const std::string &path) {
     ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
     Geo::getFFAdjacency(Connectivity, NextF, NextE);
     AvEdge = AvgEdgeLen(VertPos, Connectivity);
+    //DesambiguateSamePosVertices(VertPos,Connectivity,0.0001);
     return true;
     // std::cout<<"FNorm 0 "<<FaceNormals.size()<<std::endl;
   } else {

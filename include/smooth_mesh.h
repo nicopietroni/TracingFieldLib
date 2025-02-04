@@ -7,9 +7,11 @@
 #include <cmath>
 #include <connectivity.h>
 #include <cstddef>
+#include <iostream>
 #include <set>
 #include <solve/least_squares_lin_constraint_solver.h>
 #include <stack>
+#include <utility>
 #include <vector>
 
 namespace Geo {
@@ -297,6 +299,163 @@ void SmoothLaplacian(std::vector<Geo::Point3<ScalarType>> &VertPos,
       NewVertPos[i] /= (ScalarType)SumNum[i];
       VertPos[i] = NewVertPos[i] * (1 - Damp) + VertPos[i] * Damp;
     }
+  }
+}
+
+template <class ScalarType>
+void SmoothLaplacianStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                         const std::vector<std::vector<int>> &Faces,
+                         const std::set<int> &FixedV,
+                         const std::vector<std::pair<int, int>> &LineSmooth,
+                         ScalarType Damp = 0.5) {
+  std::vector<Geo::Point3<ScalarType>> AvgPos(VertPos.size(),
+                                              Geo::Point3<ScalarType>(0, 0, 0));
+  std::vector<int> AvgNum(VertPos.size(), 0);
+
+  std::set<int> LineSmoothV;
+  for (size_t i = 0; i < LineSmooth.size(); i++) {
+    LineSmoothV.insert(LineSmooth[i].first);
+    LineSmoothV.insert(LineSmooth[i].second);
+  }
+
+  // cumulate the non line
+  for (size_t i = 0; i < Faces.size(); i++)
+    for (size_t j = 0; j < Faces[i].size(); j++) {
+      int IndexV0 = Faces[i][j];
+      int IndexV1 = Faces[i][(j + 1) % Faces[i].size()];
+      bool IsFixedV0 = (FixedV.count(IndexV0) > 0);
+      bool IsFixedV1 = (FixedV.count(IndexV1) > 0);
+      bool IsLineSmoothV0 = (LineSmoothV.count(IndexV0) > 0);
+      bool IsLineSmoothV1 = (LineSmoothV.count(IndexV1) > 0);
+      if ((!IsFixedV0) && (!IsLineSmoothV0)) {
+        AvgPos[IndexV0] += VertPos[IndexV1];
+        AvgNum[IndexV0]++;
+      }
+      if ((!IsFixedV1) && (!IsLineSmoothV1)) {
+        AvgPos[IndexV1] += VertPos[IndexV0];
+        AvgNum[IndexV1]++;
+      }
+    }
+
+  // cumulate the line
+  for (size_t i = 0; i < LineSmooth.size(); i++) {
+    int IndexV0 = LineSmooth[i].first;
+    int IndexV1 = LineSmooth[i].second;
+    bool IsFixedV0 = (FixedV.count(IndexV0) > 0);
+    bool IsFixedV1 = (FixedV.count(IndexV1) > 0);
+    if (!IsFixedV0) {
+      AvgPos[IndexV0] += VertPos[IndexV1];
+      AvgNum[IndexV0]++;
+    }
+    if (!IsFixedV1) {
+      AvgPos[IndexV1] += VertPos[IndexV0];
+      AvgNum[IndexV1]++;
+    }
+  }
+
+  //then average
+  for (size_t i = 0; i < AvgNum.size(); i++)
+  {
+    if (AvgNum[i]==0){
+      AvgPos[i]=VertPos[i];
+      continue;
+    }
+    AvgPos[i]/=AvgNum[i];    
+  }
+  for (size_t i = 0; i < AvgPos.size(); i++)
+    VertPos[i]=VertPos[i]*Damp+AvgPos[i]*(1-Damp);
+}
+
+template <class ScalarType>
+void SmoothLaplacianNonManif(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                             const std::vector<std::vector<int>> &Faces,
+                             int NumIte, ScalarType Damp = 0.5) {
+
+  std::map<std::pair<int, int>, int> EdgeNum;
+  for (size_t i = 0; i < Faces.size(); i++)
+    for (size_t j = 0; j < Faces[i].size(); j++) {
+      int IndexV0 = Faces[i][j];
+      int IndexV1 = Faces[i][(j + 1) % Faces[i].size()];
+      std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
+                               std::max(IndexV0, IndexV1));
+      if (EdgeNum.count(KeyE) == 0)
+        EdgeNum[KeyE] = 1;
+      else
+        EdgeNum[KeyE]++;
+    }
+
+  std::vector<std::pair<int, int>> NotManifE;
+  std::vector<std::pair<int, int>> BorderE;
+  std::map<std::pair<int, int>, int>::iterator IteEdgeMap;
+  std::vector<int> BorderV;
+  for (IteEdgeMap = EdgeNum.begin(); IteEdgeMap != EdgeNum.end();
+       IteEdgeMap++) {
+    int NuME = (*IteEdgeMap).second;
+    std::pair<int, int> EdgeK = (*IteEdgeMap).first;
+    if (NuME == 1)
+    {
+      BorderE.push_back(EdgeK);
+      BorderV.push_back(EdgeK.first);
+      BorderV.push_back(EdgeK.second);
+    }
+    if (NuME > 2) {
+      NotManifE.push_back(EdgeK);
+    }
+  }
+  
+  std::sort(BorderE.begin(), BorderE.end());
+  BorderE.erase(std::unique(BorderE.begin(), BorderE.end()), BorderE.end());
+
+  std::sort(NotManifE.begin(), NotManifE.end());
+  NotManifE.erase(std::unique(NotManifE.begin(), NotManifE.end()),
+                  NotManifE.end());
+
+  std::sort(BorderV.begin(), BorderV.end());
+  BorderV.erase(std::unique(BorderV.begin(), BorderV.end()),
+                  BorderV.end());
+
+  // find the fixed vertx
+  std::set<int> FixedV;
+
+  // then get the vertices tobe fixed
+  std::map<int, int> VertNonManifE;
+  for (size_t i = 0; i < NotManifE.size(); i++) {
+    int IndexV0 = NotManifE[i].first;
+    int IndexV1 = NotManifE[i].second;
+    VertNonManifE[IndexV0]++;
+    VertNonManifE[IndexV1]++;
+    // if (BorderV.count(IndexV0))
+    //   FixedV.insert(IndexV0);
+    // if (BorderV.count(IndexV1))
+    //   FixedV.insert(IndexV1);
+  }
+
+  // std::map<int, int>::iterator IteMapV;
+  // for (IteMapV = VertNonManifE.begin(); IteMapV != VertNonManifE.end();
+  //      IteMapV++)
+  //   if ((*IteMapV).second > 2)
+  //     FixedV.insert((*IteMapV).first);
+
+  
+  // then smooth
+  std::vector<std::pair<int, int>> LineSmooth=NotManifE;
+  LineSmooth.insert(LineSmooth.end(),BorderE.begin(),BorderE.end());
+  for (size_t s = 0; s < NumIte;s++)
+  {
+    SmoothLaplacianStep(VertPos,Faces,FixedV,LineSmooth,Damp);
+
+    // //reproject
+    // for (size_t i=0;i<BorderV.size();i++)
+    // {
+    //   int IndexV=BorderV[i];
+    //   assert(IndexV>=0);
+    //   assert(IndexV<VertPos.size());
+    //   Geo::Point3<ScalarType> Pos=VertPos[IndexV];
+    //   int ClosestF;
+    //   Geo::Point3<ScalarType> ClosestPos;
+    //   TriGrid.GridClosest(ReprojectV,ReprojectFaces,Pos, TriGrid.bbox.Diag(),ClosestF,ClosestPos);
+    //   VertPos[IndexV]=ClosestPos;
+    // }
   }
 }
 

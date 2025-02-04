@@ -10,6 +10,8 @@
 #include "point3.h"
 #include "segment2.h"
 #include "smooth_mesh.h"
+//#include "triangle3.h"
+//#include "normal.h"
 // #include "surface_cluster/cluster_operations.h"
 #include <cassert>
 #include <cstddef>
@@ -17,11 +19,13 @@
 #include <iostream>
 #include <map>
 #include <pos3.h>
+#include <queue>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
-#include <queue>
-#include <map>
+
+//#include "triangle3.h"
 // #include <igl/is_vertex_manifold.h>
 // #include <igl/is_edge_manifold.h>
 // //#include "eigen_interface.h"
@@ -819,6 +823,17 @@ void AppendMesh(std::vector<Geo::Point3<ScalarType>> &Vert,
   for (size_t i = NumF0; i < Elements.size(); i++)
     for (size_t j = 0; j < Elements[i].size(); j++)
       Elements[i][j] += NumV0;
+}
+
+template <class ScalarType>
+void AppendMeshes(
+    std::vector<Geo::Point3<ScalarType>> &Vert,
+    std::vector<std::vector<int>> &Elements,
+    const std::vector<std::vector<Geo::Point3<ScalarType>>> &To_append_Vert,
+    const std::vector<std::vector<std::vector<int>>> &To_append_Elements) {
+  assert(To_append_Vert.size() == To_append_Elements.size());
+  for (size_t i = 0; i < To_append_Elements.size(); i++)
+    AppendMesh(Vert, Elements, To_append_Vert[i], To_append_Elements[i]);
 }
 
 template <class ScalarType>
@@ -1786,5 +1801,6 @@ void OrientCoherently(std::vector<std::vector<int>> &faces) {
     }
   }
 }
+
 
 #endif

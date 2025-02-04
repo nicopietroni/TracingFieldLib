@@ -1,6 +1,7 @@
 #ifndef POLYHEDRA_MESH_FUNCTIONS
 #define POLYHEDRA_MESH_FUNCTIONS
 
+#include <cassert>
 #include <string>
 #include <fstream>
 #include <iostream>

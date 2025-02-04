@@ -285,6 +285,7 @@ public:
 
     std::vector<int> SampleableV;
     GetSamplableVert(SampleableV);
+    //std::cout<<"DE BOIA "<<SampleableV.size()<<std::endl;
     int RadiusStar = Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(
         SampleableV.size(), NumSources);
 
@@ -786,7 +787,8 @@ private:
     // sample the initial vertices
     std::vector<int> SampledVert;
     SampleTracingVert(NumSamples, SampledVert);
-    // std::cout<<"Sampled Vertices"<<SampledVert.size()<<std::endl;
+    // std::cout << "Test 1 " << SampledVert.size() << " Vertices"
+    //           << std::endl;
     //  add in between singularity samples
     if (minSingResample > 0) {
       std::vector<int> SingSingSampledVert;
@@ -797,7 +799,7 @@ private:
         SampledVert.push_back(SingSingSampledVert[i]);
       }
     }
-
+   
     // NEW, make it unique
     std::sort(SampledVert.begin(), SampledVert.end());
     std::vector<int>::iterator last =
@@ -806,7 +808,7 @@ private:
 
     std::cout << "Sampling on " << SampledVert.size() << " Vertices"
               << std::endl;
-
+    //exit(0);
     // FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
     FindSampledNodesFromVertex(SampledVert, StartingNodes);
 

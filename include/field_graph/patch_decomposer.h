@@ -1601,6 +1601,7 @@ private:
       TimeRemovePaths += elapsed.count() * 1e-6;
 
       // add the remaining to solve all the rest of the objetive function
+      std::cout << "* solving rest of mesh *" << std::endl;
       bool has_added_m = SolveAllMesh();
       // if (has_added_m)
       //   std::cout << "Added Mesh" << std::endl;

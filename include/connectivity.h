@@ -832,6 +832,30 @@ void getFFAdjacencyNonManifold(
   }
 }
 
+void getBorderVertNonManifMesh(const std::vector<std::vector<int>> &Faces,
+                               std::vector<size_t> &BorderV) {
+  std::vector<std::vector<std::vector<int>>> NextF, NextE;
+  getFFAdjacencyNonManifold(Faces, NextF, NextE);
+
+  for (size_t i = 0; i < NextF.size(); i++)
+    for (size_t j = 0; j < NextF[i].size(); j++) {
+      if (NextF[i][j].size() != 1)
+        continue;
+      if (NextF[i][j][0] != -1)
+        continue;
+
+      int numV = Faces[i].size();
+      int IndexV0 = Faces[i][j];
+      int IndexV1 = Faces[i][(j + 1) % numV];
+      BorderV.push_back(IndexV0);
+      BorderV.push_back(IndexV1);
+    }
+  std::sort(BorderV.begin(), BorderV.end());
+  std::vector<size_t>::iterator last =
+      std::unique(BorderV.begin(), BorderV.end());
+  BorderV.erase(last, BorderV.end());
+}
+
 void FindFaceStar(const std::vector<std::vector<int>> &connections,
                   std::vector<std::vector<int>> &Kernel,
                   const int extend_step = 0) {
@@ -937,7 +961,7 @@ void getBorderEdges(const std::vector<std::vector<int>> &Faces,
 //       std::cout<<"size "<<NextF[i][j].size()<<std::endl;
 //       if (NextF[i][j].size() > 0)
 //         continue;
-      
+
 //       int numV = Faces[i].size();
 //       int IndexV0 = Faces[i][j];
 //       int IndexV1 = Faces[i][(j + 1) % numV];
@@ -1024,6 +1048,21 @@ int NumSharedFaces(const int &VIndex0, const int &VIndex1,
   return SharedE;
 }
 
+// for each edge the element index and the index of the edge
+void GetEdgeElem(const std::vector<std::vector<int>> &connections,
+    std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> &EdgeElem) {
+  EdgeElem.clear();
+  for (size_t i = 0; i < connections.size(); i++) {
+    int sizeEl = connections[i].size();
+    for (size_t j = 0; j < sizeEl; j++) {
+      int IndexV0 = connections[i][j];
+      int IndexV1 = connections[i][(j + 1) % sizeEl];
+      std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
+                               std::max(IndexV0, IndexV1));
+      EdgeElem[KeyE].push_back(std::pair<int, int>((int)i,(int)j));
+    }
+  }
+}
 } // namespace Geo
 
 #endif

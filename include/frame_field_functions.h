@@ -888,6 +888,50 @@ void InterpolateElemFrameFromVert(
     PerElemFrame[i].Pos = BaryEl[i];
 }
 
+template <class ScalarType>
+static void InterpolateEdgeFrameFromElem(
+    const std::vector<std::vector<int>> &Elem,
+    const std::vector<Field::FrameField<ScalarType>> &ElemFrameField,
+    std::map<std::pair<int, int>, Field::FrameField<ScalarType>> &EdgeFrame) {
+  
+  typedef std::pair<int, int> EdgeIndex;
+  EdgeFrame.clear();
+  assert(ElemFrameField.size() == Elem.size());
+
+  std::vector<std::vector<int>> AdjEl;
+
+  // get adjacency edge to elem
+  std::map<EdgeIndex, std::vector<int>> EdgeElem;
+  for (size_t i = 0; i < Elem.size(); i++) {
+    int sizeEl = Elem[i].size();
+    for (size_t j = 0; j < sizeEl; j++) {
+      int IndexV0 = Elem[i][j];
+      int IndexV1 = Elem[i][(j + 1) % sizeEl];
+      std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
+                               std::max(IndexV0, IndexV1));
+      EdgeElem[KeyE].push_back(i);
+    }
+  }
+
+  std::map<EdgeIndex, std::vector<int>>::iterator IteMap;
+  for (IteMap = EdgeElem.begin(); IteMap != EdgeElem.end(); IteMap++)
+    AdjEl.push_back((*IteMap).second);
+
+  std::vector<Field::FrameField<ScalarType>> FrameInterp;
+  InterpolateFrameFromAdj(AdjEl, ElemFrameField, FrameInterp);
+  assert(AdjEl.size() == FrameInterp.size());
+
+  // then put into the map
+  int Index = 0;
+  for (IteMap = EdgeElem.begin(); IteMap != EdgeElem.end(); IteMap++) {
+    std::pair<int, int> KeyE = (*IteMap).first;
+    Field::FrameField<ScalarType> InterpFrame = FrameInterp[Index];
+    assert(EdgeFrame.count(KeyE) == 0);
+    EdgeFrame[KeyE] = InterpFrame;
+    Index++;
+  }
+}
+
 // std::vector<std::vector<int>> FT,FTIndex;
 
 // std::vector<Field::FrameField<UsedScalarType> > IntFacesFrameField;

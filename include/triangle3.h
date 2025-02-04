@@ -40,6 +40,22 @@ public:
     return (nDir);
   }
 
+  // Equality operator
+  bool operator==(const Traingle3<ScalarType> &other) const {
+    // Check if all three vertices are equal
+    return ((Pos[0] == other.Pos[0]) && 
+            (Pos[1] == other.Pos[1]) &&
+            (Pos[2] == other.Pos[2]));
+  }
+
+  // Less-than operator for use in std::set or std::map
+  bool operator<(const Traingle3<ScalarType> &other) const {
+    if (Pos[0] != other.Pos[0]) return (Pos[0] < other.Pos[0]);
+    if (Pos[1] != other.Pos[1]) return (Pos[1] < other.Pos[1]);
+    if (Pos[2] != other.Pos[2]) return (Pos[2] < other.Pos[2]);
+    return false;
+  }
+
   Traingle3(const CoordType &P0, const CoordType &P1, const CoordType &P2) {
     Pos[0] = P0;
     Pos[1] = P1;
@@ -285,10 +301,10 @@ Reproject(const Geo::Point3<ScalarType> &Pos,
 
 template <class ScalarType>
 void GetTriangles(const std::vector<int> &IndexF,
-                  const std::vector<Geo::Point3<ScalarType> > &Pos,
-                  const std::vector<std::vector<int> > &Faces,
-                  const std::vector<std::vector<int> > &VF,
-                  std::vector<Geo::Traingle3<ScalarType> > &TrisFan) {
+                  const std::vector<Geo::Point3<ScalarType>> &Pos,
+                  const std::vector<std::vector<int>> &Faces,
+                  const std::vector<std::vector<int>> &VF,
+                  std::vector<Geo::Traingle3<ScalarType>> &TrisFan) {
   TrisFan.clear();
   for (size_t i = 0; i < IndexF.size(); i++) {
     int CurrF = IndexF[i];
@@ -310,9 +326,8 @@ void GetTriangles(const std::vector<int> &IndexF,
 }
 
 template <class ScalarType>
-Point3<ScalarType> Normal(const Geo::Traingle3<ScalarType> &T)
-{
-    return Normal(T.P(0),T.P(1),T.P(2));
+Point3<ScalarType> Normal(const Geo::Traingle3<ScalarType> &T) {
+  return Normal(T.P(0), T.P(1), T.P(2));
 }
 
 } // namespace Geo

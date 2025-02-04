@@ -31,7 +31,6 @@ void SamplePoints(const std::vector<Geo::Point3<ScalarType> > &VertPos,
 {
     //compute the approximate radius
     ScalarType Rad=ComputeRadius(VertPos,Tets,num_samples);
-
     //sample one point for each center tet
     std::vector<Geo::Point3<ScalarType> > Centers;
     Tetra::FindCenter<ScalarType>(VertPos,Tets,Centers);
