@@ -453,6 +453,27 @@ public:
       Graph.EnableNode(Graph.NodesOnConcaveEByV[i]);
   }
 
+
+  static void GetM3ExitDrawPosition(const LabelNeighOrientedGraph<ScalarType> &Graph,
+                                    const std::vector<int> &IndexN,
+                                    const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                                    const std::vector<std::vector<int> > &InternalFaces,
+                                    std::vector<Geo::Point3<ScalarType> > &MidPointExit) {
+    MidPointExit.clear();
+    for (size_t i = 0; i < IndexN.size(); i++) {
+     int CurrN=IndexN[i];
+     for (size_t l = 0; l < Graph.N[CurrN].size(); l++) {
+        if (!Graph.IsExitLabel(CurrN, l)) continue;
+        int IndexF= Field::FrameFieldM3Graph::ElemOfNode(CurrN);
+        int IndexV0= InternalFaces[IndexF][l];
+        int IndexV1= InternalFaces[IndexF][(l+1)%InternalFaces[IndexF].size()];
+        Geo::Point3<ScalarType> Pos0=VertPos[IndexV0];
+        Geo::Point3<ScalarType> Pos1=VertPos[IndexV1];
+        Geo::Point3<ScalarType> MidP=Pos0*0.5+Pos1*0.5;
+        MidPointExit.push_back(MidP);
+      }
+    }
+  }
 };
 
 } // namespace Geo

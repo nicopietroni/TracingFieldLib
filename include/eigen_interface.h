@@ -3,11 +3,12 @@
 
 #include <Eigen/Geometry>
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include <cmath>
 #include <vector>
 #include <stdio.h>
 #include "point3.h"
-#include "mesh_functions.h"
+//#include "mesh_functions.h"
 
 // return mesh as vector of vertices and faces
 template <class ScalarType>

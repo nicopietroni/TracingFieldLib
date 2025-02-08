@@ -23,14 +23,15 @@ namespace GLGraphDraw {
 
 template <class ScalarType> class GLFrameLabelInternalFGraph {
 
-  static void DrawNodeFaceM6(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                           const std::vector<std::vector<int>> &InternalFaces,
-                           const int Node_To_Draw,
-                           const Geo::Point3<ScalarType> PolyColorLine,
-                           const ScalarType PolyLineWidth) {
+  static void
+  DrawNodeFaceM6(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                 const std::vector<std::vector<int>> &InternalFaces,
+                 const int Node_To_Draw,
+                 const Geo::Point3<ScalarType> PolyColorLine,
+                 const ScalarType PolyLineWidth) {
 
     int ElemIdx = Field::FrameFieldGraph::PolyOfNode(Node_To_Draw);
-    
+
     assert(ElemIdx >= 0);
     assert(ElemIdx < InternalFaces.size());
 
@@ -47,14 +48,15 @@ template <class ScalarType> class GLFrameLabelInternalFGraph {
     }
   }
 
-  static void DrawNodeFaceM3(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                           const std::vector<std::vector<int>> &InternalFaces,
-                           const int Node_To_Draw,
-                           const Geo::Point3<ScalarType> PolyColorLine,
-                           const ScalarType PolyLineWidth) {
+  static void
+  DrawNodeFaceM3(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                 const std::vector<std::vector<int>> &InternalFaces,
+                 const int Node_To_Draw,
+                 const Geo::Point3<ScalarType> PolyColorLine,
+                 const ScalarType PolyLineWidth) {
 
     int ElemIdx = Field::FrameFieldM3Graph::ElemOfNode(Node_To_Draw);
-    
+
     assert(ElemIdx >= 0);
     assert(ElemIdx < InternalFaces.size());
 
@@ -77,7 +79,7 @@ template <class ScalarType> class GLFrameLabelInternalFGraph {
       const std::vector<Field::FrameField<ScalarType>> &InternalFacesFrameField,
       const int Node_To_Draw, const Geo::Point3<ScalarType> ColFace,
       const Geo::Point3<ScalarType> ColDir, const ScalarType ThickFace,
-      const ScalarType ThickDir,const bool DrawFace) {
+      const ScalarType ThickDir, const bool DrawFace) {
     // int DirIdx = Field::FrameFieldGraph::FrameOfNode(Node_To_Draw);
     // int ElemIdx = Field::FrameFieldGraph::PolyOfNode(Node_To_Draw);
 
@@ -87,16 +89,13 @@ template <class ScalarType> class GLFrameLabelInternalFGraph {
 
     int IndexElem = Field::FrameFieldGraph::PolyOfNode(Node_To_Draw);
     int IndexDir = Field::FrameFieldGraph::FrameOfNode(Node_To_Draw);
-    
-    ScalarType AvgEd=AvgEdgeLen(VertPos,InternalFaces,IndexElem);
 
-    GLDraw::DrawDirectionFrame<ScalarType>(InternalFacesFrameField[IndexElem],IndexDir,
-                                          AvgEd/4,AvgEd/30,
-                                          Geo::Point3<ScalarType>(0,0,1),
-                                          Geo::Point3<ScalarType>(0.5,0.9,0.5),
-                                          10,10);
+    ScalarType AvgEd = AvgEdgeLen(VertPos, InternalFaces, IndexElem);
 
-   
+    GLDraw::DrawDirectionFrame<ScalarType>(
+        InternalFacesFrameField[IndexElem], IndexDir, AvgEd / 4, AvgEd / 30,
+        Geo::Point3<ScalarType>(0, 0, 1),
+        Geo::Point3<ScalarType>(0.5, 0.9, 0.5), 10, 10);
   }
 
   static void DrawNodeM3(
@@ -105,7 +104,7 @@ template <class ScalarType> class GLFrameLabelInternalFGraph {
       const std::vector<Field::FrameField<ScalarType>> &InternalFacesFrameField,
       const int Node_To_Draw, const Geo::Point3<ScalarType> ColFace,
       const Geo::Point3<ScalarType> ColDir, const ScalarType ThickFace,
-      const ScalarType ThickDir,const bool DrawFace) {
+      const ScalarType ThickDir, const bool DrawFace) {
 
     // int DirIdx = Field::FrameFieldM3Graph::DirOfNode(Node_To_Draw);
     // int ElemIdx = Field::FrameFieldM3Graph::ElemOfNode(Node_To_Draw);
@@ -116,29 +115,26 @@ template <class ScalarType> class GLFrameLabelInternalFGraph {
 
     int IndexElem = Field::FrameFieldM3Graph::ElemOfNode(Node_To_Draw);
     int IndexDir = Field::FrameFieldM3Graph::DirOfNode(Node_To_Draw);
-    
-    ScalarType AvgEd=AvgEdgeLen(VertPos,InternalFaces,IndexElem);
 
-    GLDraw::DrawDirectionFrame<ScalarType>(InternalFacesFrameField[IndexElem],IndexDir,
-                                          AvgEd/4,AvgEd/30,
-                                          Geo::Point3<ScalarType>(0,0,1),
-                                          ColDir,
-                                          ThickDir*2,
-                                          ThickDir);
+    ScalarType AvgEd = AvgEdgeLen(VertPos, InternalFaces, IndexElem);
+
+    GLDraw::DrawDirectionFrame<ScalarType>(
+        InternalFacesFrameField[IndexElem], IndexDir, AvgEd / 4, AvgEd / 30,
+        Geo::Point3<ScalarType>(0, 0, 1), ColDir, ThickDir * 2, ThickDir);
 
     // // draw the direction of the frame
     // ScalarType scaleVal =
     //     AvgEdgeLen<ScalarType>(VertPos, InternalFaces, ElemIdx);
     // GLDraw::DrawDirectionFrame<ScalarType>(InternalFacesFrameField[ElemIdx],
-    //                                        DirIdx, scaleVal, 0, ColDir, ColDir,
-    //                                        ThickDir, ThickDir);
+    //                                        DirIdx, scaleVal, 0, ColDir,
+    //                                        ColDir, ThickDir, ThickDir);
   }
 
   static Geo::Point3<ScalarType>
   GetColorNode(int Node_To_Draw,
                const Geo::LabelNeighOrientedGraph<ScalarType> &FaceGraph) {
 
-    Geo::Point3<ScalarType> Col0 = Geo::ColorRGBRamp<ScalarType>(1,0,0);
+    Geo::Point3<ScalarType> Col0 = Geo::ColorRGBRamp<ScalarType>(1, 0, 0);
 
     if (!FaceGraph.IsEnabled(Node_To_Draw))
       Col0 = Geo::Point3<ScalarType>(0, 0, 0);
@@ -148,7 +144,6 @@ template <class ScalarType> class GLFrameLabelInternalFGraph {
 
     return Col0;
   }
-
 
 public:
   struct InternalFDrawParam {
@@ -170,7 +165,7 @@ public:
       DrawNeigh = true;
       CurrNeigh = -1;
       DrawNeghDir = false;
-      DrawFace=true;
+      DrawFace = true;
       // DrawWeight = true;
     }
   };
@@ -186,7 +181,8 @@ public:
     Geo::Point3<ScalarType> Col0 = GetColorNode(Node_To_Draw, FaceGraph);
 
     DrawNodeM6(VertPos, InternalFaces, InternalFacesFrameField, Node_To_Draw,
-             Col0, Col0, DParam.lineFaceSize, DParam.lineDirSize,DParam.DrawFace);
+               Col0, Col0, DParam.lineFaceSize, DParam.lineDirSize,
+               DParam.DrawFace);
 
     // int FaceIdx0 = Field::FrameFieldM3Graph::ElemOfNode(Node_To_Draw);
     // GLDraw::DrawNormal<ScalarType>(VertPos,InternalFaces,FaceIdx0);
@@ -201,8 +197,9 @@ public:
     //   Geo::ComputeCoherentNormal(VertPos,InternalFaces[FaceIdx0],InternalFaces[FaceIdx1],NF0,NF1);
     //   //NF1=Geo::Normal(VertPos,InternalFaces,FaceIdx1);
     //   ScalarType AvgL1=AvgEdgeLen(VertPos,InternalFaces,FaceIdx1);
-    //   Geo::Point3<ScalarType> Bary1=ComputeFaceBarycenter<ScalarType>(VertPos,InternalFaces,FaceIdx1);
-    
+    //   Geo::Point3<ScalarType>
+    //   Bary1=ComputeFaceBarycenter<ScalarType>(VertPos,InternalFaces,FaceIdx1);
+
     //   Geo::Segment3<ScalarType> SegNorm1(Bary1,Bary1+NF1*AvgL1*0.3);
     //   SegNorm.push_back(SegNorm1);
     // }
@@ -221,12 +218,15 @@ public:
 
     //     GLDraw::GLDrawSegment<ScalarType>(SegNorm[IndexNeigh].P(0),SegNorm[IndexNeigh].P(1),100);
 
-    //     // Geo::Point3<ScalarType> Dir0=Geo::Normal(VertPos,InternalFaces,FaceIdx0);
-    //     // Geo::Point3<ScalarType> Dir1=SegNorm[IndexNeigh].P(1)-SegNorm[IndexNeigh].P(0);
+    //     // Geo::Point3<ScalarType>
+    //     Dir0=Geo::Normal(VertPos,InternalFaces,FaceIdx0);
+    //     // Geo::Point3<ScalarType>
+    //     Dir1=SegNorm[IndexNeigh].P(1)-SegNorm[IndexNeigh].P(0);
     //     // Dir1.Normalize();
     //     // std::cout<<"Angle:"<<Geo::AngleDeg(Dir0,Dir1)<<std::endl;
 
-    //     DrawNeighbor(VertPos, InternalFaces, InternalFacesFrameField, FaceGraph,
+    //     DrawNeighbor(VertPos, InternalFaces, InternalFacesFrameField,
+    //     FaceGraph,
     //                  Node_To_Draw, DParam.CurrNeigh, true);
     //   }
     // }
@@ -237,14 +237,16 @@ public:
       const std::vector<std::vector<int>> &InternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &InternalFacesFrameField,
       const Geo::LabelNeighOrientedGraph<ScalarType> &FaceGraph,
-      const int Node_To_Draw, 
-      const InternalFDrawParam &DParam) {
+      const int Node_To_Draw, const InternalFDrawParam &DParam) {
     // std::cout<<"W:"<<FaceGraph.Weight(Node_To_Draw)<<std::endl;
 
-    //Geo::Point3<ScalarType> Col0 = GetColorNode(Node_To_Draw, FaceGraph);
+    Geo::Point3<ScalarType> Col = DParam.ColFaceLine;
+    if (!FaceGraph.IsEnabled(Node_To_Draw))
+      Col = Geo::Point3<ScalarType>(1,0,0);
 
     DrawNodeM3(VertPos, InternalFaces, InternalFacesFrameField, Node_To_Draw,
-             DParam.ColFaceLine, DParam.ColDirLine, DParam.lineFaceSize, DParam.lineDirSize,DParam.DrawFace);
+               DParam.ColFaceLine, DParam.ColDirLine, DParam.lineFaceSize,
+               DParam.lineDirSize, DParam.DrawFace);
   }
 
   static void DrawNodeM3(
@@ -252,12 +254,10 @@ public:
       const std::vector<std::vector<int>> &InternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &InternalFacesFrameField,
       const Geo::LabelNeighOrientedGraph<ScalarType> &FaceGraph,
-      const std::vector<int> &Nodes_To_Draw, 
-      const InternalFDrawParam &DParam) 
-  {
-   for (size_t i=0;i<Nodes_To_Draw.size();i++)
-    DrawNodeM3(VertPos,InternalFaces,InternalFacesFrameField,
-              FaceGraph,Nodes_To_Draw[i],DParam);
+      const std::vector<int> &Nodes_To_Draw, const InternalFDrawParam &DParam) {
+    for (size_t i = 0; i < Nodes_To_Draw.size(); i++)
+      DrawNodeM3(VertPos, InternalFaces, InternalFacesFrameField, FaceGraph,
+                 Nodes_To_Draw[i], DParam);
   }
 
   static void DrawExitNodesM3(
@@ -265,12 +265,12 @@ public:
       const std::vector<std::vector<int>> &InternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &InternalFacesFrameField,
       const Geo::LabelNeighOrientedGraph<ScalarType> &FaceGraph,
-      const InternalFDrawParam &DParam=InternalFDrawParam()) {
-        std::vector<int> ExitN;
-        FaceGraph.NodesWithExitLabel(ExitN);
-        DrawNodeM3(VertPos,InternalFaces,InternalFacesFrameField,
-                   FaceGraph,ExitN,DParam);
-    }
+      const InternalFDrawParam &DParam = InternalFDrawParam()) {
+    std::vector<int> ExitN;
+    FaceGraph.NodesWithExitLabel(ExitN);
+    DrawNodeM3(VertPos, InternalFaces, InternalFacesFrameField, FaceGraph,
+               ExitN, DParam);
+  }
 
   static void DrawExitNodesM3(
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -278,39 +278,62 @@ public:
       const std::vector<Field::FrameField<ScalarType>> &InternalFacesFrameField,
       const Geo::LabelNeighOrientedGraph<ScalarType> &FaceGraph,
       const Geo::FeatureType &FType,
-      const InternalFDrawParam &DParam=InternalFDrawParam()) {
+      const InternalFDrawParam &DParam = InternalFDrawParam()) {
 
-        std::vector<int> ExitN;
-        if (FType==Geo::FTConcave)
-          FaceGraph.ConcaveNodesWithExitLabel(ExitN);
-        if (FType==Geo::FTConvex)
-          FaceGraph.ConvexNodesWithExitLabel(ExitN);
-        if (FType==Geo::FTFlat)
-          FaceGraph.FlatNodesWithExitLabel(ExitN);
-       
-        DrawNodeM3(VertPos,InternalFaces,InternalFacesFrameField,
-                   FaceGraph,ExitN,DParam);
-    }
+    std::vector<int> ExitN;
+    if (FType == Geo::FTConcave)
+      FaceGraph.ConcaveNodesWithExitLabel(ExitN);
+    if (FType == Geo::FTConvex)
+      FaceGraph.ConvexNodesWithExitLabel(ExitN);
+    if (FType == Geo::FTFlat)
+      FaceGraph.FlatNodesWithExitLabel(ExitN);
 
-    static void DrawTangentNodesM3(
+    DrawNodeM3(VertPos, InternalFaces, InternalFacesFrameField, FaceGraph,
+               ExitN, DParam);
+
+    std::vector<Geo::Point3<ScalarType>> MidPointExit;
+    Geo::LabelGraphFuctions<ScalarType>::GetM3ExitDrawPosition(FaceGraph,ExitN,VertPos,InternalFaces,MidPointExit);
+    GLDraw::DrawVertices<ScalarType>(MidPointExit,
+                                     Geo::Point3<ScalarType>(0, 1, 0),
+                                     20);
+    glPopAttrib();
+  }
+
+  static void DrawTangentNodesM3(
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
       const std::vector<std::vector<int>> &InternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &InternalFacesFrameField,
       const Geo::LabelNeighOrientedGraph<ScalarType> &FaceGraph,
       const Geo::FeatureType FType,
-      const InternalFDrawParam &DParam=InternalFDrawParam()) {
+      const InternalFDrawParam &DParam = InternalFDrawParam()) {
 
-        std::vector<int> TangentN;
-        if (FType==Geo::FTConcave)
-          FaceGraph.ConcaveTangentNodes(TangentN);
-        if (FType==Geo::FTConvex)
-          FaceGraph.ConvexTangentNodes(TangentN);
-        if (FType==Geo::FTFlat)
-          FaceGraph.FlatTangentNodes(TangentN);
-       
-        DrawNodeM3(VertPos,InternalFaces,InternalFacesFrameField,
-                   FaceGraph,TangentN,DParam);
-    }
+    std::vector<int> TangentN;
+    if (FType == Geo::FTConcave)
+      FaceGraph.ConcaveTangentNodes(TangentN);
+    if (FType == Geo::FTConvex)
+      FaceGraph.ConvexTangentNodes(TangentN);
+    if (FType == Geo::FTFlat)
+      FaceGraph.FlatTangentNodes(TangentN);
+
+    DrawNodeM3(VertPos, InternalFaces, InternalFacesFrameField, FaceGraph,
+               TangentN, DParam);
+  }
+
+  static void DrawNonActiveNodesM3(
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &InternalFaces,
+      const std::vector<Field::FrameField<ScalarType>> &InternalFacesFrameField,
+      const Geo::LabelNeighOrientedGraph<ScalarType> &FaceGraph,
+      const InternalFDrawParam &DParam = InternalFDrawParam()) {
+
+    std::vector<int> NonActiveN;
+    FaceGraph.GetNonEnabledNodes(NonActiveN);
+
+    DrawNodeM3(VertPos, InternalFaces,
+               InternalFacesFrameField, 
+               FaceGraph,NonActiveN, 
+               DParam);
+  }
 };
 
 }; // namespace GLGraphDraw

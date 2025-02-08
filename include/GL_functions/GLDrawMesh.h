@@ -159,6 +159,17 @@ namespace GLDraw
     }
 
     template <class ScalarType>
+    void DrawVertices(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                      Geo::Point3<ScalarType> pointCol = Geo::Point3<ScalarType>(1, 0, 1),
+                      int size = 20)
+    {
+        std::vector<int> To_DrawInt;
+        for (size_t j = 0; j < VertPos.size(); j++)
+            To_DrawInt.push_back(j);
+        DrawVertices(VertPos, To_DrawInt,pointCol,size);
+    }
+
+    template <class ScalarType>
     void DrawSurfaceFill3D(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                            const std::vector<std::vector<int>> &Connectivity,
                            const std::vector<Geo::Point3<ScalarType>> &FaceNormal,

@@ -10,6 +10,7 @@
 // #include "pos4.h"
 #include "cross_field.h"
 #include "frame_field.h"
+#include "mesh_functions.h"
 #include "polyhedra_connectivity.h"
 #include "polyhedra_mesh_functions.h"
 #include <set>

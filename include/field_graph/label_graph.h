@@ -97,6 +97,14 @@ public:
     IsExit[IndexN][IndexL] = true;
   }
 
+  void ClearExit(const int &IndexN, const int &IndexL) {
+    assert(IndexN >= 0);
+    assert(IndexN < (int)IsExit.size());
+    assert(IndexL >= 0);
+    assert(IndexL < (int)IsExit[IndexN].size());
+    IsExit[IndexN][IndexL] = false;
+  }
+
   void ClearExit(const int &IndexN) {
     assert(IndexN >= 0);
     assert(IndexN < (int)IsExit.size());
@@ -489,6 +497,15 @@ public:
     IdxNode.clear();
     for (size_t i = 0; i < NumNodes(); i++) {
       if (NodeType(i) != TypeNode)
+        continue;
+      IdxNode.push_back(i);
+    }
+  }
+
+  void GetNonEnabledNodes(std::vector<int> &IdxNode) const {
+    IdxNode.clear();
+    for (size_t i = 0; i < NumNodes(); i++) {
+      if (IsEnabled(i))
         continue;
       IdxNode.push_back(i);
     }

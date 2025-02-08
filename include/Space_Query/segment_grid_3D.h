@@ -8,6 +8,7 @@
 #include "grid_basics_2D.h"
 #include "grid_basics_3D.h"
 #include <iostream>
+#include <utility>
 #include <vector>
 
 namespace Geo {
@@ -171,7 +172,7 @@ public:
       if (closestS == -1) {
         radius = radius + voxel.Norm() / 4;
       } else {
-       return true;
+        return true;
       }
 
       iboxdone = iboxtodo;
@@ -244,13 +245,14 @@ public:
    *  \param face The face vector of the input mesh
    */
   void Init(const std::vector<Geo::Segment3<ScalarType>> &Seg) {
-   
+
     bbox.SetEmpty();
     TMark = 0;
     SegMark.clear();
     SegMark.resize(Seg.size(), 0);
 
-    if (Seg.size()==0)return;
+    if (Seg.size() == 0)
+      return;
 
     bbox.Min = Seg[0].P(0);
     bbox.Max = Seg[0].P(0);
@@ -310,6 +312,22 @@ void InitFromMeshBorder(const std::vector<Geo::Point3<ScalarType>> &VertPos,
       Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
       Segs.push_back(Geo::Segment3<ScalarType>(P0, P1));
     }
+  SegIndex.Init(Segs);
+}
+
+template <class ScalarType>
+void InitFromMeshFeatures(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                          const std::vector<std::pair<int, int>> &Features,
+                          std::vector<Geo::Segment3<ScalarType>> &Segs,
+                          Geo::SegmentSpatialIndex<ScalarType> &SegIndex) {
+  Segs.clear();
+  for (size_t i = 0; i < Features.size(); i++) {
+    int IndexV0 = Features[i].first;
+    int IndexV1 = Features[i].second;
+    Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
+    Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
+    Segs.push_back(Geo::Segment3<ScalarType>(P0, P1));
+  }
   SegIndex.Init(Segs);
 }
 

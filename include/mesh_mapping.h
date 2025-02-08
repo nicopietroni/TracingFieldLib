@@ -2,19 +2,20 @@
 #define MESH_MAPPING
 
 
-#include "point3.h"
-#include "triangle3.h"
+
 #include <cassert>
 #include <cstddef>
 #include <fstream>
 #include <iostream>
 #include <map>
-#include <pos3.h>
 #include <queue>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
+#include "pos3.h"
+#include "point3.h"
+#include "triangle3.h"
 
 namespace Geo {
 

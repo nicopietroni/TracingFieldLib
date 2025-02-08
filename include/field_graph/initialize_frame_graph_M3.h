@@ -204,13 +204,28 @@ template <class ScalarType> class M3LabelGraphInitialize {
       const std::vector<int> &FaceMap,
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+      const std::vector<std::pair<int, int>> &SurfConvexE,
+      const std::vector<std::pair<int, int>> &SurfConcaveE,
       std::vector<int> &TangentNodes) {
     TangentNodes.clear();
 
+    std::set<int> FeaturesN;
+    for (size_t i = 0; i < SurfConvexE.size(); i++) {
+      FeaturesN.insert(SurfConvexE[i].first);
+      FeaturesN.insert(SurfConvexE[i].second);
+    }
+    for (size_t i = 0; i < SurfConcaveE.size(); i++) {
+      FeaturesN.insert(SurfConcaveE[i].first);
+      FeaturesN.insert(SurfConcaveE[i].second);
+    }
     // first get the nodes encoding external faces
     for (size_t i = 0; i < FaceMap.size(); i++) {
+
       if (FaceMap[i] == -1)
         continue;
+      if (FeaturesN.count(FaceMap[i]) > 0)
+        continue;
+
       std::vector<int> IndexN;
       Field::FrameFieldM3Graph::NodesOfElem(i, IndexN);
       TangentNodes.insert(TangentNodes.end(), IndexN.begin(), IndexN.end());
@@ -429,15 +444,15 @@ template <class ScalarType> class M3LabelGraphInitialize {
   //   }
   // }
 
-  static void
-  GetFeaturesFaces(const std::vector<Geo::Point3<ScalarType>> &SurfVertPos,
-                   const std::vector<std::vector<int>> &SurfFaces,
-                   const std::vector<std::pair<int, int>> &FeaturesE,
-                   const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                   const std::vector<std::vector<int>> &TetraInternalFaces,
-                   std::vector<std::vector<int>> &FeatureEdgExtFaces,
-                   std::vector<std::vector<int>> &FeatureEdgeFaces,
-                   std::vector<std::vector<int>> &FeatureEdgeVertFaces) {
+  static void GetFeaturesFaces(
+      const std::vector<Geo::Point3<ScalarType>> &SurfVertPos,
+      const std::vector<std::vector<int>> &SurfFaces,
+      const std::vector<std::pair<int, int>> &FeaturesE,
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &TetraInternalFaces,
+      std::vector<std::vector<std::pair<int, int>>> &FeatureEdgExtFaces,
+      std::vector<std::vector<std::pair<int, int>>> &FeatureEdgeFaces,
+      std::vector<std::vector<int>> &FeatureEdgeVertFaces) {
     typedef std::pair<int, int> KeyEdge;
     std::vector<int> VertMap;
     int MappedVNum = FindVertCorrespondences(SurfVertPos, VertPos, VertMap);
@@ -486,13 +501,13 @@ template <class ScalarType> class M3LabelGraphInitialize {
           int IndexE = FeaturesESet[KeyE];
           assert(IndexE >= 0);
           assert(IndexE < FeatureEdgeFaces.size());
-          FeatureEdgeFaces[IndexE].push_back(i);
+          FeatureEdgeFaces[IndexE].push_back(std::pair<int, int>(i, j));
 
           // if an external faces then add
           KeyEdge TestK = TestFeatureV[IndexE];
           assert(TestK == KeyE);
           if (FaceMap[i] != -1) {
-            FeatureEdgExtFaces[IndexE].push_back(i);
+            FeatureEdgExtFaces[IndexE].push_back(std::pair<int, int>(i, j));
             assert(FeatureEdgExtFaces[IndexE].size() <= 2);
           }
         }
@@ -546,8 +561,9 @@ template <class ScalarType> class M3LabelGraphInitialize {
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField) {
 
-    std::vector<std::vector<int>> ConvexFeatureEdgeFaces,
-        ConvexFeatureEdgeVertFaces, ConvexFeatureEdgExtFaces;
+    std::vector<std::vector<std::pair<int, int>>> ConvexFeatureEdgeFaces,
+        ConvexFeatureEdgExtFaces;
+    std::vector<std::vector<int>> ConvexFeatureEdgeVertFaces;
 
     GetFeaturesFaces(SurfVertPos, SurfFaces, SurfConvexE, VertPos,
                      TetraInternalFaces, ConvexFeatureEdgExtFaces,
@@ -557,8 +573,9 @@ template <class ScalarType> class M3LabelGraphInitialize {
     assert(ConvexFeatureEdgeFaces.size() == ConvexFeatureEdgExtFaces.size());
     assert(SurfConvexE.size() == ConvexFeatureEdgExtFaces.size());
 
-    std::vector<std::vector<int>> ConcaveFeatureEdgeFaces,
-        ConcaveFeatureEdgeVertFaces, ConcaveFeatureEdgExtFaces;
+    std::vector<std::vector<std::pair<int, int>>> ConcaveFeatureEdgeFaces,
+        ConcaveFeatureEdgExtFaces;
+    std::vector<std::vector<int>> ConcaveFeatureEdgeVertFaces;
 
     GetFeaturesFaces(SurfVertPos, SurfFaces, SurfConcaveE, VertPos,
                      TetraInternalFaces, ConcaveFeatureEdgExtFaces,
@@ -594,8 +611,8 @@ template <class ScalarType> class M3LabelGraphInitialize {
       // 2 faces sharing the edge
       //  std::cout<<"Size:"<<ConvexFeatureEdgExtFaces[i].size()<<std::endl;
       assert(ConvexFeatureEdgExtFaces[i].size() == 2);
-      int IndexF0 = ConvexFeatureEdgExtFaces[i][0];
-      int IndexF1 = ConvexFeatureEdgExtFaces[i][1];
+      int IndexF0 = ConvexFeatureEdgExtFaces[i][0].first;
+      int IndexF1 = ConvexFeatureEdgExtFaces[i][1].first;
       Geo::Point3<ScalarType> Norm0 = FaceNormals[IndexF0];
       Geo::Point3<ScalarType> Norm1 = FaceNormals[IndexF1];
 
@@ -609,9 +626,9 @@ template <class ScalarType> class M3LabelGraphInitialize {
         int IndexN1 =
             Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
                 FacesFrameField, IndexF, Norm1);
-        Facegraph.ClearExit(IndexN0);
+        // Facegraph.ClearExit(IndexN0);
         Facegraph.NodeType(IndexN0) = Geo::TangentDomain;
-        Facegraph.ClearExit(IndexN1);
+        // Facegraph.ClearExit(IndexN1);
         Facegraph.NodeType(IndexN1) = Geo::TangentDomain;
 
         Facegraph.NodesOnConvexEByV.push_back(IndexN0);
@@ -629,8 +646,8 @@ template <class ScalarType> class M3LabelGraphInitialize {
       std::pair<int, int> KeyE = MappedFeatureE[i];
       // get inciding faces
       assert(ConcaveFeatureEdgExtFaces[i].size() == 2);
-      int IndexF0 = ConcaveFeatureEdgExtFaces[i][0];
-      int IndexF1 = ConcaveFeatureEdgExtFaces[i][1];
+      int IndexF0 = ConcaveFeatureEdgExtFaces[i][0].first;
+      int IndexF1 = ConcaveFeatureEdgExtFaces[i][1].first;
       // and relative nodes
       // get the nodes
       Geo::Point3<ScalarType> Norm0 = FaceNormals[IndexF0];
@@ -642,13 +659,13 @@ template <class ScalarType> class M3LabelGraphInitialize {
           FacesFrameField, IndexF1, Norm1);
 
       for (size_t j = 0; j < ConcaveFeatureEdgeFaces[i].size(); j++) {
-        int IndexF = ConcaveFeatureEdgeFaces[i][j];
+        int IndexF = ConcaveFeatureEdgeFaces[i][j].first;
 
         assert(IndexF >= 0);
         assert(IndexF < TetraInternalFaces.size());
         // get which edge on the feature
-        int IndexL =
-            WhichEdge(TetraInternalFaces[IndexF], KeyE.first, KeyE.second);
+        int IndexL = ConcaveFeatureEdgeFaces[i][j].second;
+        // WhichEdge(TetraInternalFaces[IndexF], KeyE.first, KeyE.second);
         assert(IndexL >= 0);
 
         // set by default all to tangent
@@ -656,7 +673,7 @@ template <class ScalarType> class M3LabelGraphInitialize {
         Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
         for (size_t k = 0; k < IndexN.size(); k++) {
           int CurrN = IndexN[k];
-          Facegraph.ClearExit(CurrN);
+          Facegraph.ClearExit(CurrN, IndexL);
           Facegraph.NodeType(CurrN) = Geo::TangentDomain;
           Facegraph.NodesOnConcaveE.push_back(CurrN);
         }
@@ -717,9 +734,12 @@ template <class ScalarType> class M3LabelGraphInitialize {
     // set as tangent the one sharing the edge
     for (size_t i = 0; i < ConvexFeatureEdgeFaces.size(); i++)
       for (size_t j = 0; j < ConvexFeatureEdgeFaces[i].size(); j++) {
-        int IndexF = ConvexFeatureEdgeFaces[i][j];
+        int IndexF = ConvexFeatureEdgeFaces[i][j].first;
+        int IndexL = ConvexFeatureEdgeFaces[i][j].second;
         assert(IndexF >= 0);
         assert(IndexF < TetraInternalFaces.size());
+        assert(IndexL >= 0);
+        assert(IndexL < TetraInternalFaces[IndexF].size());
         std::vector<int> IndexN;
         Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
         for (size_t k = 0; k < IndexN.size(); k++) {
@@ -729,197 +749,6 @@ template <class ScalarType> class M3LabelGraphInitialize {
           Facegraph.NodesOnConvexE.push_back(CurrN);
         }
       }
-
-    // MapFeatureE(SurfVertPos,FeaturesE,VertPos,TetraInternalFaces,
-    //                std::vector<std::pair<int,int>> &MappedFeatureE)
-    // typedef std::pair<int, int> KeyEdge;
-    // // std::set<int> ConvexVertSet;
-    // // std::set<int> ConcaveVertSet;
-
-    // // first set all vertices on
-    // std::vector<int> VertMap;
-    // int MappedVNum = FindVertCorrespondences(SurfVertPos, VertPos,
-    // VertMap); assert(VertMap.size() == SurfVertPos.size());
-
-    // std::set<int> ConvexVertSet;
-    // std::set<KeyEdge> ConvexESet;
-    // for (size_t i = 0; i < SurfConvexE.size(); i++) {
-    //   int IndexV0 = SurfConvexE[i].first;
-    //   int IndexV1 = SurfConvexE[i].second;
-    //   IndexV0 = VertMap[IndexV0];
-    //   IndexV1 = VertMap[IndexV1];
-    //   KeyEdge KeyE(std::min(IndexV0, IndexV1), std::max(IndexV0, IndexV1));
-    //   ConvexVertSet.insert(IndexV0);
-    //   ConvexVertSet.insert(IndexV1);
-    //   ConvexESet.insert(KeyE);
-    // }
-
-    // // save for each edge the external faces
-    // std::vector<std::vector<std::pair<int, int>>> SurfConcaveEdgeFaces;
-    // FindEdgeFacesCorrespondences(SurfVertPos, SurfFaces, SurfConcaveE,
-    //                              SurfConcaveEdgeFaces);
-    // assert(SurfConcaveE.size() == SurfConcaveEdgeFaces.size());
-
-    // // compute Normals
-    // std::vector<Geo::Point3<ScalarType>> FaceNormals;
-    // Geo::ComputeFaceNormals<ScalarType>(SurfVertPos, SurfFaces,
-    // FaceNormals);
-
-    // // compute mapping
-    // std::vector<int> FaceMap;
-    // int MappedFNum = FindFacesCorrespondences(SurfVertPos, SurfFaces,
-    // VertPos,
-    //                                           TetraInternalFaces, FaceMap);
-    // assert(FaceMap.size() == SurfFaces.size());
-
-    // struct ConcaveInfo {
-    //   int Node0;
-    //   int Node1;
-    //   std::vector<std::pair<int, int>> ENodes;
-    //   ConcaveInfo() {
-    //     Node0 = -1;
-    //     Node1 = -1;
-    //   }
-    // };
-
-    // std::map<KeyEdge, ConcaveInfo> ConcaveEMap;
-    // for (size_t i = 0; i < SurfConcaveEdgeFaces.size(); i++) {
-    //   // get the two vertices on the edge of the internal faces mesh
-    //   int IndexV0 = SurfConvexE[i].first;
-    //   int IndexV1 = SurfConvexE[i].second;
-    //   IndexV0 = VertMap[IndexV0];
-    //   IndexV1 = VertMap[IndexV1];
-    //   KeyEdge Key(std::min(IndexV0, IndexV1), std::max(IndexV0, IndexV1));
-
-    //   // get the two faces
-    //   assert(SurfConcaveEdgeFaces[i].size() == 2);
-    //   int IndexF0 = SurfConcaveEdgeFaces[i][0].first;
-    //   int IndexF1 = SurfConcaveEdgeFaces[i][1].first;
-
-    //   assert(IndexF0 != IndexF1);
-    //   assert(IndexF0 >= 0);
-    //   assert(IndexF1 >= 0);
-    //   assert(IndexF0 <= FaceNormals.size());
-    //   assert(IndexF1 <= FaceNormals.size());
-    //   Geo::Point3<ScalarType> Norm0 = FaceNormals[IndexF0];
-    //   Geo::Point3<ScalarType> Norm1 = FaceNormals[IndexF1];
-
-    //   IndexF0 = FaceMap[IndexF0];
-    //   IndexF1 = FaceMap[IndexF1];
-    //   assert(IndexF0 >= 0);
-    //   assert(IndexF1 >= 0);
-    //   assert(IndexF0 <= TetraInternalFaces.size());
-    //   assert(IndexF1 <= TetraInternalFaces.size());
-
-    //   // then get the corresponding node
-    //   int IndexN0 =
-    //   Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
-    //       FacesFrameField, IndexF0, Norm0);
-    //   int IndexN1 =
-    //   Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
-    //       FacesFrameField, IndexF1, Norm1);
-
-    //   ConcaveInfo CInfo;
-    //   CInfo.Node0 = IndexN0;
-    //   CInfo.Node1 = IndexN1;
-
-    //   ConcaveEMap[Key] = CInfo;
-    // }
-
-    // std::vector<ConcaveInfo> ConcaveEInfos;
-    // ConcaveEInfos.reserve(ConcaveEMap.size());
-    // std::transform(ConcaveEMap.begin(), ConcaveEMap.end(),
-    //                std::back_inserter(ConcaveEInfos),
-    //                [](const auto &pair) { return pair.second; });
-    // assert(ConcaveEInfos.size() == ConcaveEMap.size());
-
-    // // then add the nodes around that
-    // for (size_t i = 0; i < Facegraph.NumNodes(); i++) {
-    //   int IndexN = i;
-    //   int IndexF = Field::FrameFieldM3Graph::ElemOfNode(i);
-    //   assert(IndexF >= 0);
-    //   assert(IndexF < TetraInternalFaces.size());
-    //   for (size_t j = 0; j < TetraInternalFaces[IndexF].size(); j++) {
-    //     int IndexV0 = TetraInternalFaces[IndexF][j];
-    //     int SizeF = TetraInternalFaces[IndexF].size();
-    //     int IndexV1 = TetraInternalFaces[IndexF][(j + 1) % SizeF];
-    //     std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
-    //                              std::max(IndexV0, IndexV1));
-
-    //     // if no concave edge
-    //     if (ConcaveEMap.count(KeyE) == 0)
-    //       continue;
-    //     ConcaveEMap[KeyE].ENodes.push_back(std::pair<int, int>(IndexN, j));
-    //   }
-    // }
-
-    // // then set the convex edges
-    // Facegraph.NodesOnConvexE.clear();
-
-    // // set all faces on convex vertices to be tangent
-    // // and those who share one concave to internal
-    // int num = 0;
-    // for (size_t i = 0; i < Facegraph.NumNodes(); i++) {
-    //   int IndexN = i;
-    //   int IndexF = Field::FrameFieldM3Graph::ElemOfNode(i);
-    //   assert(IndexF >= 0);
-    //   assert(IndexF < TetraInternalFaces.size());
-    //   // bool hasConvexV=false;
-    //   bool hasConvexE = false;
-    //   for (size_t j = 0; j < TetraInternalFaces[IndexF].size(); j++) {
-    //     int IndexV0 = TetraInternalFaces[IndexF][j];
-    //     int SizeF = TetraInternalFaces[IndexF].size();
-    //     int IndexV1 = TetraInternalFaces[IndexF][(j + 1) % SizeF];
-    //     std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
-    //                              std::max(IndexV0, IndexV1));
-
-    //     hasConvexE |= (ConvexESet.count(KeyE) > 0);
-    //     // hasConvexV|=(ConvexVertSet.count(IndexV0)>0);
-    //   }
-
-    //   // if (hasConvexV)
-    //   // {
-    //   //   //Facegraph.ClearExit(IndexN);
-    //   //   Facegraph.NodeType(IndexN)=Geo::TangentDomain;
-    //   //   num++;
-    //   // }
-
-    //   if (hasConvexE) {
-    //     // Facegraph.NodesOnConvexE.push_back(IndexN);
-    //     Facegraph.ClearExit(IndexN);
-    //     Facegraph.NodeType(IndexN) = Geo::TangentDomain;
-    //   }
-    // }
-    // std::cout << "Convex Vert:" << num << " out of " <<
-    // Facegraph.NumNodes()
-    //           << std::endl;
-
-    // // then goes all over the ConcaveInfos
-    // for (size_t i = 0; i < ConcaveEInfos.size(); i++) {
-    //   int Node0 = ConcaveEInfos[i].Node0;
-    //   int Node1 = ConcaveEInfos[i].Node1;
-    //   for (size_t j = 0; j < ConcaveEInfos[i].ENodes.size(); j++) {
-    //     int NodeTest = ConcaveEInfos[i].ENodes[j].first;
-    //     int LabelTest = ConcaveEInfos[i].ENodes[j].second;
-    //     if (NodeTest == Node0)
-    //       continue;
-    //     if (NodeTest == Node1)
-    //       continue;
-    //     ScalarType Weight;
-    //     bool CanConn0 = CanConnectM3(VertPos, Facegraph,
-    //     TetraInternalFaces,
-    //                                  FacesFrameField, Node0, NodeTest,
-    //                                  Weight);
-    //     bool CanConn1 = CanConnectM3(VertPos, Facegraph,
-    //     TetraInternalFaces,
-    //                                  FacesFrameField, Node1, NodeTest,
-    //                                  Weight);
-    //     if (CanConn0 || CanConn1) {
-    //       Facegraph.SetExit(NodeTest, LabelTest);
-    //       Facegraph.NodeType(NodeTest) = Geo::Internal;
-    //     }
-    //   }
-    // }
   }
 
   // static void AddFeatureEdges(
@@ -1243,7 +1072,7 @@ public:
     ComputeNormals<ScalarType>(SurfVertPos, SurfFaces, FaceNormals, VertNorm);
     std::vector<int> TangentNodes;
     GetTangentNodesM3(VertMap, VertNorm, FaceMap, TetraInternalFaces,
-                      FacesFrameField, TangentNodes);
+                      FacesFrameField, SurfConvexE, SurfConcaveE, TangentNodes);
 
     // set as tangent nodes
 

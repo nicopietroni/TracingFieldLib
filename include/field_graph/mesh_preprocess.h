@@ -3,6 +3,7 @@
 
 #include "field_graph/graph_cross_field.h"
 #include "point3.h"
+#include "../smooth_mesh.h"
 #include <cassert>
 #include <connectivity.h>
 #include <cstddef>

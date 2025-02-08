@@ -1,11 +1,6 @@
 #ifndef FRAME_FIELD_GRAPH_SHEET_TRACING_ILP_M3
 #define FRAME_FIELD_GRAPH_SHEET_TRACING_ILP_M3
 
-#include "../connectivity.h"
-#include "../mesh_functions.h"
-#include "graph.h"
-#include "graph_cross_field.h"
-#include "graph_frame_field.h"
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -18,6 +13,12 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include "../connectivity.h"
+#include "../mesh_functions.h"
+#include "graph.h"
+#include "graph_cross_field.h"
+#include "graph_frame_field.h"
+#include "smooth_mesh.h"
 
 #define SOFT_SEED_CONST_M3 100000 // 10000 // 10000
 #define POW_EXP 4

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdlib>
 #include <iostream>
 #include <stdio.h>
 #include <sys/_types/_size_t.h>
@@ -76,19 +77,19 @@ bool showSing = true;
 bool has_graph = false;
 // bool has_init_patches=false;
 
-//TangentDomain,
+// TangentDomain,
 bool DrawTangentNode = false;
-//ExitDomain,
+// ExitDomain,
 bool DrawExitNode = false;
-//Internal,
+// Internal,
 bool DrawInternalNode = false;
-//TangentExitDomain,
+// TangentExitDomain,
 bool DrawTangentExit = false;
-//ConvexExitDomain
+// ConvexExitDomain
 bool DrawConvexExit = false;
-//DartOrthoDomain
+// DartOrthoDomain
 bool DrawDartOrthoDomain = false;
-//JumpNodes
+// JumpNodes
 bool DrawJumpNodes = false;
 
 bool DrawCorners = false;
@@ -378,10 +379,10 @@ void SampleTracing() {
   // if ((PDeco.start_spike) || (PDeco.start_concave))
   //   PathSampl.force_direct = true;
 
-  //PDeco.SampleInitialCandidates();
+  // PDeco.SampleInitialCandidates();
   PDeco.InitSampling(PDeco.add_only_where_needed);
-    if (PDeco.add_only_where_needed)
-      PDeco.InitMustPassEdges();
+  if (PDeco.add_only_where_needed)
+    PDeco.InitMustPassEdges();
 
   PDeco.RetraceCandidates();
 }
@@ -509,7 +510,7 @@ void InitPatches() {
   PDeco.UpdateAllUnsolvedPatches();
 
   std::cout << "Size Remaining:" << RemainingF.size() << std::endl;
-  PDeco.AddFeaturesAsPaths(TGraph,VertCurv,RemainingF,NewBorder);
+  PDeco.AddFeaturesAsPaths(TGraph, VertCurv, RemainingF, NewBorder);
   PathColors.resize(PathSampl.SelectedPaths.size());
   Geo::ScatterColor<ScalarType>(PathColors);
   UpdateColor();
@@ -814,7 +815,7 @@ void SetRenderBar() {
 
     ImGui::Checkbox("Draw Initial Pos", &DrawInitalPos);
     ImGui::InputInt("Cand Idx", &curr_cand);
-    curr_cand=std::min(curr_cand,PathSampl.NumCandidates()-1);
+    curr_cand = std::min(curr_cand, PathSampl.NumCandidates() - 1);
     ImGui::Checkbox("Draw Candidates", &DrawCandidates);
   }
   ImGui::Separator();
@@ -896,8 +897,7 @@ void PreprocessMesh() {
   RemainingF.clear();
   Geo::TracingPreprocess<ScalarType>::SplitCornerFeatures(
       VertPos, Connectivity, VertCurv, FaceCurv, Features, RemainingF,
-      SingIndex, SingValue, FeatureSingIndex, FeatureSingValue,
-      NewBorder);
+      SingIndex, SingValue, FeatureSingIndex, FeatureSingValue, NewBorder);
 
   Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
       VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
@@ -934,10 +934,10 @@ void BatchProcessMinPatch() {
   PDeco.stop_when_solved = true;
   PDeco.dynamic_smooth = false;
   PDeco.BatchDecompose(remove_batch);
-  //SmoothPaths();
-  //PDeco.SolveAllFeatures();
-  //SmoothPaths();
-  //PDeco.SolveAllMesh();
+  // SmoothPaths();
+  // PDeco.SolveAllFeatures();
+  // SmoothPaths();
+  // PDeco.SolveAllMesh();
   SmoothPaths();
   auto end3 = std::chrono::high_resolution_clock::now();
   auto elapsed3 =
@@ -1151,7 +1151,7 @@ void SetDecomposeBar() {
     RemainingF.clear();
     Geo::TracingPreprocess<ScalarType>::SplitCornerFeatures(
         VertPos, Connectivity, VertCurv, FaceCurv, Features, RemainingF,
-        SingIndex, SingValue, FeatureSingIndex, FeatureSingValue,NewBorder);
+        SingIndex, SingValue, FeatureSingIndex, FeatureSingValue, NewBorder);
 
     Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
         VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
@@ -1162,8 +1162,9 @@ void SetDecomposeBar() {
   if (ImGui::Button("Split Features")) {
     // Geo::TracingPreprocess<ScalarType>::SplitFeatures(
     //     VertPos, Connectivity, VertCurv, SingIndex, SingValue, Features);
-    Geo::TracingPreprocess<ScalarType>::SplitFeatures(VertPos, Connectivity, VertCurv, FaceCurv, Features,
-                                                      SingIndex, SingValue, FeatureSingIndex, FeatureSingValue);
+    Geo::TracingPreprocess<ScalarType>::SplitFeatures(
+        VertPos, Connectivity, VertCurv, FaceCurv, Features, SingIndex,
+        SingValue, FeatureSingIndex, FeatureSingValue);
     UpdateFeatureSing();
     Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
         VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
@@ -1308,8 +1309,8 @@ void SetDecomposeBar() {
     Geo::ScatterColor<ScalarType>(PathColors);
     UpdateColor();
     ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
-    //SmoothPaths();
-    // SampleTracing();
+    // SmoothPaths();
+    //  SampleTracing();
   }
   ImGui::SameLine();
   if (ImGui::Button("REMOVE")) {
@@ -1401,7 +1402,7 @@ void SetDecomposeBar() {
       // PathSampl.UpdateCandidatePriority();
 
       PDeco.AddNext(solved, terminated);
-      
+
       PathColors.resize(PathSampl.SelectedPaths.size());
       Geo::ScatterColor<ScalarType>(PathColors);
       UpdateColor();
@@ -1409,7 +1410,7 @@ void SetDecomposeBar() {
 
     ImGui::SameLine();
     if (ImGui::Button("Resample")) {
-     //SampleTracing();
+      // SampleTracing();
     }
     ImGui::SameLine();
     if (ImGui::Button("Remove")) {
@@ -1476,7 +1477,10 @@ void SaveAll() {
   SaveMesh();
 }
 
-std::vector<Geo::Point3<ScalarType>> VisCornerPos;
+std::vector<Geo::Point3<ScalarType>> VisDualCornerPos;
+std::vector<std::vector<int>> PerDualPatchVertIDX;
+std::vector<std::vector<int>> PerDualPatchFaceIDX;
+std::vector<std::vector<int>> PerDualPatchCornerIDX;
 
 void SaveDualPatches() {
   std::vector<std::vector<Geo::Point3<ScalarType>>> SubMeshesV;
@@ -1548,29 +1552,36 @@ void SetExportBar() {
 
   if (ImGui::Button("Extract Dual")) {
 
-    std::vector<std::vector<int>> PerPatchVertIDX;
-    std::vector<std::vector<int>> PerPatchFaceIDX;
-    std::vector<std::vector<int>> PerPatchCornerIDX;
     RestoreOriginalPosOnSplitBorders();
     Geo::DualPatch<ScalarType>::DisambiguateForDual(PatchM);
     Geo::DualPatch<ScalarType>::ExtractDual(
         VertPos, Connectivity, PatchM, DualParam, DualVertPos, DualConnectivity,
-        PerPatchVertIDX, PerPatchFaceIDX, PerPatchCornerIDX);
-    // // UPDATE COLOR
-    // FaceColDual.clear();
-    // FaceColDual.resize(DualConnectivity.size(),
-    //                    Geo::Point3<ScalarType>(0.5, 1, 0.83));
+        PerDualPatchVertIDX, PerDualPatchFaceIDX, PerDualPatchCornerIDX);
 
-    // for (size_t i = 0; i < PerPatchFaceIDX.size(); i++)
-    // {
-    //     Geo::Point3<ScalarType> CurrCol =
-    //     Geo::ScatterColor<ScalarType>(PerPatchFaceIDX.size(), i); for (size_t
-    //     j = 0; j < PerPatchFaceIDX[i].size(); j++)
-    //     {
-    //         int IndexF = PerPatchFaceIDX[i][j];
-    //         FaceColDual[IndexF] = CurrCol;
-    //     }
-    // }
+    // std::cout << "Size F:" << PerDualPatchFaceIDX.size() << std::endl;
+    // std::cout << "Vert FIdx:" << PerDualPatchVertIDX.size() << std::endl;
+    // std::cout << "Corner FIdx:" << PerDualPatchCornerIDX.size() << std::endl;
+    // // exit(0);
+
+    // UPDATE COLOR
+    FaceColDual.clear();
+    FaceColDual.resize(DualConnectivity.size(),
+                       Geo::Point3<ScalarType>(0.5, 1, 0.83));
+
+    for (size_t i = 0; i < PerDualPatchFaceIDX.size(); i++) {
+      Geo::Point3<ScalarType> CurrCol =
+          Geo::ScatterColor<ScalarType>(PerDualPatchFaceIDX.size(), i);
+      for (size_t j = 0; j < PerDualPatchFaceIDX[i].size(); j++) {
+        int IndexF = PerDualPatchFaceIDX[i][j];
+        FaceColDual[IndexF] = CurrCol;
+      }
+
+      // UPDATE CORNERS
+      Geo::DualPatch<ScalarType>::ExtractCornerVisPos(
+          DualVertPos, DualConnectivity, PerDualPatchFaceIDX, PerDualPatchCornerIDX,
+          VisDualCornerPos);
+    }
+
     // UPDATE MESH DATA
     ComputeNormals(DualVertPos, DualConnectivity, DualFaceNormals,
                    DualVertNormals);
@@ -1583,9 +1594,13 @@ void SetExportBar() {
     DrawPathMode = 2;
   }
   if (ImGui::Button("Smooth Dual Patches")) {
-    Geo::PatchOptimize<ScalarType>::DualMeshSmooth(VertPos, Connectivity,
-                                                    Features,DualVertPos, 
-                                                    DualConnectivity);
+    Geo::PatchOptimize<ScalarType>::DualMeshSmooth(
+        VertPos, Connectivity, Features, DualVertPos, DualConnectivity);
+
+    Geo::DualPatch<ScalarType>::ExtractCornerVisPos(
+        DualVertPos, DualConnectivity, 
+        PerDualPatchFaceIDX, PerDualPatchCornerIDX,
+        VisDualCornerPos);
   }
   if (ImGui::Button("Save Dual Patches")) {
     SaveDualPatches();
@@ -1695,7 +1710,7 @@ void GLDrawMesh() {
       glLineWidth(line_thick);
       GLDraw::DrawSurfaceMesh<ScalarType>(
           DualVertPos, DualConnectivity, DualFaceNormals, DualVertNormals, true,
-          wire, smoothshade, false, GLDraw::TRTriangle); //, &FaceColDual);
+          wire, smoothshade, false, GLDraw::TRTriangle, &FaceColDual);
     }
     if (showMesh) {
 
@@ -1786,11 +1801,11 @@ void GLDrawMesh() {
   if (DrawCorners)
     GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCorners(PatchM);
   if (DrawDualCorners)
-    GLDraw::DrawPoints(VisCornerPos);
+    GLDraw::DrawPoints(VisDualCornerPos);
 
   if (DrawSides)
     GLGraphDraw::GLDrawPatchData<ScalarType>::DrawSides(PatchM);
-  
+
   if (DrawInitalPos) {
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDParam1;
     PDParam1.ColPoint = Geo::Point3<ScalarType>(1, 0, 1);
@@ -1802,12 +1817,12 @@ void GLDrawMesh() {
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
         TGraph, VertCurv, NodesIdx, MeshBox.Diag() * 0.005, PDParam1);
 
-    //std::vector<int> StartIDX;
-    // PathSampl.GetStartingNodes(StartIDX);
-    // GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
-    //       TGraph, VertCurv, StartIDX,
-    //       MeshBox.Diag() * 0.005, PDParam, PathColors[CurrSelP]);
-    //GLDraw::DrawVertices(VertPos, StartIDX);
+    // std::vector<int> StartIDX;
+    //  PathSampl.GetStartingNodes(StartIDX);
+    //  GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
+    //        TGraph, VertCurv, StartIDX,
+    //        MeshBox.Diag() * 0.005, PDParam, PathColors[CurrSelP]);
+    // GLDraw::DrawVertices(VertPos, StartIDX);
   }
 
   // if (Draw_must_pass_on)
@@ -1832,8 +1847,7 @@ void GLDrawMesh() {
         TGraph, VertCurv, Geo::ExitDomain, MeshBox.Diag() * 0.01, PDParam);
   }
 
-  if (DrawConvexExit)
-  {
+  if (DrawConvexExit) {
     PDParam.ColLine = Geo::Point3<ScalarType>(1, 0, 0);
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
         TGraph, VertCurv, Geo::ConvexExitDomain, MeshBox.Diag() * 0.01,
@@ -1846,24 +1860,20 @@ void GLDrawMesh() {
         TGraph, VertCurv, Geo::TangentDomain, MeshBox.Diag() * 0.01, PDParam);
   }
 
-  if (DrawTangentExit)
-  {
+  if (DrawTangentExit) {
     PDParam.ColLine = Geo::Point3<ScalarType>(0, 1, 1);
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
         TGraph, VertCurv, Geo::TangentExitDomain, MeshBox.Diag() * 0.01,
         PDParam);
   }
 
-  if (DrawDartOrthoDomain)
-  {
+  if (DrawDartOrthoDomain) {
     PDParam.ColLine = Geo::Point3<ScalarType>(0, 1, 1);
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
-        TGraph, VertCurv, Geo::DartOrthoDomain, MeshBox.Diag() * 0.01,
-        PDParam);
+        TGraph, VertCurv, Geo::DartOrthoDomain, MeshBox.Diag() * 0.01, PDParam);
   }
 
-  if (DrawJumpNodes)
-  {
+  if (DrawJumpNodes) {
     PDParam.ColLine = Geo::Point3<ScalarType>(1, 1, 0);
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
         TGraph, VertCurv, Geo::JumpNodes, MeshBox.Diag() * 0.01, PDParam);

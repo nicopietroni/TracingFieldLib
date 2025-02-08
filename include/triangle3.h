@@ -1,16 +1,18 @@
 ﻿#ifndef TRIANGLE3_H
 #define TRIANGLE3_H
 
-#include "best_rotation.h"
+#include <assert.h>
+#include <cstddef>
+#include <iostream>
+#include <vector>
+
 #include "line3.h"
 #include "plane3.h"
 #include "point3.h"
 #include "segment3.h"
 #include "triangle2.h"
-#include <assert.h>
-#include <cstddef>
-#include <iostream>
-#include <vector>
+#include "best_rotation.h"
+
 
 namespace Geo {
 
