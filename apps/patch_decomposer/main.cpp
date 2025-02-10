@@ -23,6 +23,7 @@
 #include <GL_functions/GLDrawGraph.h>
 #include <GL_functions/GLDrawMesh.h>
 #include <GL_functions/GLDrawPatchData.h>
+#include <GL_functions/GLDrawSideDiscretization.h>
 #include <box3.h>
 #include <point3.h>
 
@@ -48,6 +49,7 @@
 #include <field_graph/tracing_interface.h>
 #include <math_utils.h>
 #include <mesh_functions.h>
+#include <patch_side_discretization.h>
 
 GLFWwindow *window;
 std::string PathMesh;
@@ -107,6 +109,11 @@ bool Draw_force_sample = false;
 bool Draw_allow_path_on = false;
 bool Draw_allow_arrive_to = false;
 
+
+bool DrawAssignTJuctions = true;
+bool DrawAssignValues = false;
+
+
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to
 // maximize ease of testing and compatibility with old VS compilers. To link
 // with VS2010-era libraries, VS2015+ requires linking with
@@ -140,6 +147,7 @@ Geo::Box3<ScalarType> MeshBox;
 std::vector<Field::CrossF<ScalarType>> VertCurv;
 std::vector<Field::CrossF<ScalarType>> FaceCurv;
 bool has_cross_field = false;
+bool has_dual_mesh = false;
 ScalarType minQCrossVert, maxQCrossVert;
 std::vector<int> SingIndex, SingValue;
 std::vector<int> FeatureSingIndex, FeatureSingValue;
@@ -233,6 +241,13 @@ std::vector<int> MaxPathRank;
 
 std::vector<std::pair<int, int>> RemainingF;
 std::vector<int> NewBorder;
+
+std::vector<Geo::Point3<ScalarType>> VisDualCornerPos;
+// std::vector<std::vector<int>> PerDualPatchVertIDX;
+std::vector<std::vector<int>> PerDualPatchFaceIDX;
+std::vector<std::vector<int>> PerDualPatchCornerIDX;
+
+Geo::SideDiscretization<ScalarType> SideD;
 
 void RestoreOriginalPosOnSplitBorders() {
   assert(ModSameBVert.size() == ModSameBOrigPos.size());
@@ -752,46 +767,48 @@ void SetRenderBar() {
       ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello,
                                           // world!" and append into it.
 
-  ImGui::Separator();
-  ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW MESH");
-  ImGui::Checkbox("Draw Mesh", &showMesh);
-  ImGui::Checkbox("Draw Features", &showFeatures);
-  static const char *itemsDrawMode[] = {"Smooth", "Flat", "Smooth Wire",
-                                        "Flat Wire"};
-  ImGui::Checkbox("Draw Dual", &showDual);
-  ImGui::SetNextItemWidth(100);
+  // ImGui::Separator();
+  // ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW MESH");
+  if (ImGui::CollapsingHeader("DRAW MESH")) {
+    ImGui::Checkbox("Draw Mesh", &showMesh);
+    ImGui::Checkbox("Draw Features", &showFeatures);
+    static const char *itemsDrawMode[] = {"Smooth", "Flat", "Smooth Wire",
+                                          "Flat Wire"};
+    ImGui::Checkbox("Draw Dual", &showDual);
+    ImGui::SetNextItemWidth(100);
 
-  ImGui::Checkbox("Draw Unsolved", &showUnsolved);
-  ImGui::SetNextItemWidth(100);
+    ImGui::Checkbox("Draw Unsolved", &showUnsolved);
+    ImGui::SetNextItemWidth(100);
 
-  ImGui::Combo("Mesh Mode", &DrawMeshMode, itemsDrawMode,
-               IM_ARRAYSIZE(itemsDrawMode));
+    ImGui::Combo("Mesh Mode", &DrawMeshMode, itemsDrawMode,
+                 IM_ARRAYSIZE(itemsDrawMode));
 
-  ImGui::Checkbox("Draw Cross", &showCross);
-  static const char *itemsFDrawMode[] = {"Face Field", "Vert Field"};
-  ImGui::SetNextItemWidth(100);
-  ImGui::Combo("Field Mode", &DrawFieldMode, itemsFDrawMode,
-               IM_ARRAYSIZE(itemsFDrawMode));
+    ImGui::Checkbox("Draw Cross", &showCross);
+    static const char *itemsFDrawMode[] = {"Face Field", "Vert Field"};
+    ImGui::SetNextItemWidth(100);
+    ImGui::Combo("Field Mode", &DrawFieldMode, itemsFDrawMode,
+                 IM_ARRAYSIZE(itemsFDrawMode));
 
-  ImGui::Checkbox("Draw Singularities", &showSing);
-
+    ImGui::Checkbox("Draw Singularities", &showSing);
+  }
   // ImGui::Checkbox("Draw Paths", &showPaths);
-  ImGui::Separator();
-  ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW PATHS");
-  if (ImGui::RadioButton("Draw Colored", DrawPathMode == 0)) {
-    DrawPathMode = 0;
+  // ImGui::Separator();
+  // ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW PATHS");
+  if (ImGui::CollapsingHeader("DRAW PATHS")) {
+    if (ImGui::RadioButton("Draw Colored", DrawPathMode == 0)) {
+      DrawPathMode = 0;
+    }
+    if (ImGui::RadioButton("Draw Importance", DrawPathMode == 1)) {
+      DrawPathMode = 1;
+    }
+    if (ImGui::RadioButton("No Draw", DrawPathMode == 2)) {
+      DrawPathMode = 2;
+    }
+    ImGui::InputInt("Curr Path", &CurrSelP);
+    CurrSelP = std::min(CurrSelP, (int)PathSampl.SelectedPaths.size() - 1);
+    ImGui::Checkbox("Draw Loops", &DrawLoops);
+    ImGui::Checkbox("Draw PolyL", &DrawPolyL);
   }
-  if (ImGui::RadioButton("Draw Importance", DrawPathMode == 1)) {
-    DrawPathMode = 1;
-  }
-  if (ImGui::RadioButton("No Draw", DrawPathMode == 2)) {
-    DrawPathMode = 2;
-  }
-  ImGui::InputInt("Curr Path", &CurrSelP);
-  CurrSelP = std::min(CurrSelP, (int)PathSampl.SelectedPaths.size() - 1);
-  ImGui::Checkbox("Draw Loops", &DrawLoops);
-  ImGui::Checkbox("Draw PolyL", &DrawPolyL);
-
   // ImGui::Separator();
   // ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW GRAPH");
   if (ImGui::CollapsingHeader("DRAW GRAPH")) {
@@ -818,24 +835,31 @@ void SetRenderBar() {
     curr_cand = std::min(curr_cand, PathSampl.NumCandidates() - 1);
     ImGui::Checkbox("Draw Candidates", &DrawCandidates);
   }
-  ImGui::Separator();
-  ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW PATCH");
-  ImGui::Checkbox("Draw Corners", &DrawCorners);
-  ImGui::Checkbox("Draw DualCorners", &DrawDualCorners);
-  ImGui::Checkbox("Draw TJunctions", &DrawTJunction);
+  // ImGui::Separator();
+  // ImGui::TextColored(ImVec4(1, 0, 1, 1), "DRAW PATCH");
+  if (ImGui::CollapsingHeader("DRAW PATCH")) {
+    ImGui::Checkbox("Draw Corners", &DrawCorners);
+    ImGui::Checkbox("Draw DualCorners", &DrawDualCorners);
+    ImGui::Checkbox("Draw TJunctions", &DrawTJunction);
 
-  ImGui::Checkbox("Draw Sides", &DrawSides);
-  ImGui::TextColored(ImVec4(1, 0, 1, 1), "COLOR PATCHES");
-  static const char *itemsShape[] = {"Uniform",      "By Patch",   "if Disk",
-                                     "Valence",      "Match Sing", "Unsolved",
-                                     "Uv Distortion"};
-  ImGui::SetNextItemWidth(100);
-  ImGui::Combo("Color Patches", &CurrCol, itemsShape, IM_ARRAYSIZE(itemsShape));
-  if (CurrCol != OldCol) {
-    UpdateColor();
-    OldCol = CurrCol;
+    ImGui::Checkbox("Draw Sides", &DrawSides);
+    // ImGui::TextColored(ImVec4(1, 0, 1, 1), "COLOR PATCHES");
+    static const char *itemsShape[] = {"Uniform",      "By Patch",   "if Disk",
+                                       "Valence",      "Match Sing", "Unsolved",
+                                       "Uv Distortion"};
+    ImGui::SetNextItemWidth(100);
+    ImGui::Combo("Color Patches", &CurrCol, itemsShape,
+                 IM_ARRAYSIZE(itemsShape));
+    if (CurrCol != OldCol) {
+      UpdateColor();
+      OldCol = CurrCol;
+    }
   }
-
+  if (ImGui::CollapsingHeader("DRAW SUBDIVISION"))
+  {
+    ImGui::Checkbox("Draw Assing TJunct", &DrawAssignTJuctions);
+    ImGui::Checkbox("Draw Assign Values", &DrawAssignValues);
+  }
   ImGui::End();
 }
 
@@ -1446,6 +1470,15 @@ void SetDecomposeBar() {
   ImGui::End();
 }
 
+void FindSubSides() {
+  SideD.InitFromLabels(DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+                       PerDualPatchCornerIDX);
+
+  // std::string subMeshFilename = ProjectName;
+  // subMeshFilename.append("_submesh.obj");
+  // PDeco.SaveSubMeshes(subMeshFilename);
+}
+
 void SaveSubMeshes() {
   std::string subMeshFilename = ProjectName;
   subMeshFilename.append("_submesh.obj");
@@ -1476,11 +1509,6 @@ void SaveAll() {
   SaveField();
   SaveMesh();
 }
-
-std::vector<Geo::Point3<ScalarType>> VisDualCornerPos;
-std::vector<std::vector<int>> PerDualPatchVertIDX;
-std::vector<std::vector<int>> PerDualPatchFaceIDX;
-std::vector<std::vector<int>> PerDualPatchCornerIDX;
 
 void SaveDualPatches() {
   std::vector<std::vector<Geo::Point3<ScalarType>>> SubMeshesV;
@@ -1554,10 +1582,10 @@ void SetExportBar() {
 
     RestoreOriginalPosOnSplitBorders();
     Geo::DualPatch<ScalarType>::DisambiguateForDual(PatchM);
+
     Geo::DualPatch<ScalarType>::ExtractDual(
         VertPos, Connectivity, PatchM, DualParam, DualVertPos, DualConnectivity,
-        PerDualPatchVertIDX, PerDualPatchFaceIDX, PerDualPatchCornerIDX);
-
+        PerDualPatchFaceIDX, PerDualPatchCornerIDX);
     // std::cout << "Size F:" << PerDualPatchFaceIDX.size() << std::endl;
     // std::cout << "Vert FIdx:" << PerDualPatchVertIDX.size() << std::endl;
     // std::cout << "Corner FIdx:" << PerDualPatchCornerIDX.size() << std::endl;
@@ -1571,6 +1599,10 @@ void SetExportBar() {
     for (size_t i = 0; i < PerDualPatchFaceIDX.size(); i++) {
       Geo::Point3<ScalarType> CurrCol =
           Geo::ScatterColor<ScalarType>(PerDualPatchFaceIDX.size(), i);
+
+      if (PerDualPatchCornerIDX[i].size() != 4)
+        CurrCol = Geo::Point3<ScalarType>(1, 0, 0);
+
       for (size_t j = 0; j < PerDualPatchFaceIDX[i].size(); j++) {
         int IndexF = PerDualPatchFaceIDX[i][j];
         FaceColDual[IndexF] = CurrCol;
@@ -1578,8 +1610,10 @@ void SetExportBar() {
 
       // UPDATE CORNERS
       Geo::DualPatch<ScalarType>::ExtractCornerVisPos(
-          DualVertPos, DualConnectivity, PerDualPatchFaceIDX, PerDualPatchCornerIDX,
-          VisDualCornerPos);
+          DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+          PerDualPatchCornerIDX, VisDualCornerPos);
+
+      has_dual_mesh = true;
     }
 
     // UPDATE MESH DATA
@@ -1598,9 +1632,8 @@ void SetExportBar() {
         VertPos, Connectivity, Features, DualVertPos, DualConnectivity);
 
     Geo::DualPatch<ScalarType>::ExtractCornerVisPos(
-        DualVertPos, DualConnectivity, 
-        PerDualPatchFaceIDX, PerDualPatchCornerIDX,
-        VisDualCornerPos);
+        DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+        PerDualPatchCornerIDX, VisDualCornerPos);
   }
   if (ImGui::Button("Save Dual Patches")) {
     SaveDualPatches();
@@ -1611,6 +1644,13 @@ void SetExportBar() {
     WriteOBJ(FinalMFilename.c_str(), DualVertPos, DualConnectivity);
   }
   // PatchM.ExtractDual();
+  if (has_dual_mesh) {
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1, 0, 1, 1), "QUADRANGULATE");
+    if (ImGui::Button("Find Subdivision")) {
+      FindSubSides();
+    }
+  }
 
   ImGui::Separator();
   ImGui::TextColored(ImVec4(1, 0, 1, 1), "SAVE");
@@ -1884,6 +1924,9 @@ void GLDrawMesh() {
     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
         TGraph, VertCurv, Geo::Internal, MeshBox.Diag() * 0.01, PDParam);
   }
+
+  if (DrawAssignTJuctions)
+  GLGraphDraw::GLDrawPatchSideDiscretization<ScalarType>::DrawMultipleSide(SideD);
 
   //     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,
   //                                                                 Geo::ExitDomain,MeshBox.Diag()*0.005);
