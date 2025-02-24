@@ -6,6 +6,7 @@
 #include "connectivity.h"
 #include "cotangent.h"
 #include "field_graph/t_junction.h"
+#include "mesh_functions.h"
 #include "normal.h"
 #include "plane3.h"
 #include "point2.h"
@@ -17,6 +18,7 @@
 #include "triangle3.h"
 #include <cassert>
 #include <chrono>
+#include <cstddef>
 #include <iostream>
 #include <set>
 #include <sys/_types/_size_t.h>
@@ -910,6 +912,20 @@ public:
         VertPos[IndexVOrig] = SmoothedPos;
       }
   }
+
+  // static void
+  // SmoothQuadMesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
+  //               const std::vector<std::vector<int>> &Faces,
+  //               UVSmoothParam UVP = UVSmoothParam()) {
+  //   std::vector<Geo::Point3<ScalarType>> TriPos;
+  //   std::vector<std::vector<int>> TrisFaces;
+  //   SplitQuadInto4Tris(VertPos,Faces,TriPos,TrisFaces);
+  //   //smooth it
+  //   Smooth(TriPos,TrisFaces,UVP);
+  //   //copy back
+  //   for(size_t i=0;i<VertPos.size();i++)
+  //     VertPos[i]=TriPos[i];
+  // }
 };
 
 } // namespace Geo

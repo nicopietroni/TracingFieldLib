@@ -683,6 +683,74 @@ void SplitQuadIntoTris(const std::vector<Geo::Point3<ScalarType>> &Pos,
 }
 
 template <class ScalarType>
+void ComputeFaceBarycenters(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            const std::vector<std::vector<int>> &Faces,
+                            std::vector<Geo::Point3<ScalarType>> &BaryF) {
+  BaryF.clear();
+  // go over all faces
+  for (size_t i = 0; i < Faces.size(); i++) {
+    size_t sizeF = Faces[i].size();
+
+    // get vertex barycenter
+    Geo::Point3<ScalarType> BaryVal(0, 0, 0);
+    for (size_t j = 0; j < sizeF; j++) {
+      int IndexV = Faces[i][j];
+      BaryVal += VertPos[IndexV];
+    }
+    BaryVal /= sizeF;
+    BaryF.push_back(BaryVal);
+  }
+}
+
+template <class ScalarType>
+void SplitQuadInto4Tris(const std::vector<Geo::Point3<ScalarType>> &QuadPos,
+                       const std::vector<std::vector<int>> &QuadsFaces,
+                       std::vector<Geo::Point3<ScalarType>> &TriPos,
+                       std::vector<std::vector<int>> &TrisFaces) {
+  TrisFaces.clear();
+  TriPos.clear();
+
+  // 2 triangles for each quad
+  TrisFaces.resize((int)QuadsFaces.size() * 4, std::vector<int>(3, -1));
+
+  TriPos=QuadPos;
+  std::vector<Geo::Point3<ScalarType>> BaryF;
+  //add new central vertex
+  ComputeFaceBarycenters<ScalarType>(QuadPos,QuadsFaces,BaryF);
+  TriPos.insert(TriPos.end(),BaryF.begin(),BaryF.end());
+
+  for (size_t i = 0; i < QuadsFaces.size(); i++) {
+    assert(QuadsFaces[i].size() == 4);
+    int IndexV0 = QuadsFaces[i][0];
+    int IndexV1 = QuadsFaces[i][1];
+    int IndexV2 = QuadsFaces[i][2];
+    int IndexV3 = QuadsFaces[i][3];
+    int IndexMid = QuadPos.size()+i;
+
+    int IndexTriF0 = i * 4;
+    int IndexTriF1 = IndexTriF0 + 1;
+    int IndexTriF2 = IndexTriF0 + 2;
+    int IndexTriF3 = IndexTriF0 + 2;
+
+    TrisFaces[IndexTriF0][0] = IndexV0;
+    TrisFaces[IndexTriF0][1] = IndexV1;
+    TrisFaces[IndexTriF0][2] = IndexMid;
+    
+    TrisFaces[IndexTriF1][0] = IndexV1;
+    TrisFaces[IndexTriF1][1] = IndexV2;
+    TrisFaces[IndexTriF1][2] = IndexMid;
+
+    TrisFaces[IndexTriF2][0] = IndexV2;
+    TrisFaces[IndexTriF2][1] = IndexV3;
+    TrisFaces[IndexTriF2][2] = IndexMid;
+
+    TrisFaces[IndexTriF3][0] = IndexV3;
+    TrisFaces[IndexTriF3][1] = IndexV0;
+    TrisFaces[IndexTriF3][2] = IndexMid;
+  }
+}
+
+template <class ScalarType>
 void VVConnectedComponenentFrom(
     const std::vector<Geo::Point3<ScalarType>> &VertPos,
     const std::vector<std::vector<int>> &Elements,
@@ -1039,26 +1107,6 @@ int ExpectedValence(const std::vector<Geo::Point3<ScalarType>> &Pos,
   int ExpVal = floor(0.5 + AngleV / 60);
   ExpVal = std::max(ExpVal, 1);
   return ExpVal;
-}
-
-template <class ScalarType>
-void ComputeFaceBarycenters(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                            const std::vector<std::vector<int>> &Faces,
-                            std::vector<Geo::Point3<ScalarType>> &BaryF) {
-  BaryF.clear();
-  // go over all faces
-  for (size_t i = 0; i < Faces.size(); i++) {
-    size_t sizeF = Faces[i].size();
-
-    // get vertex barycenter
-    Geo::Point3<ScalarType> BaryVal(0, 0, 0);
-    for (size_t j = 0; j < sizeF; j++) {
-      int IndexV = Faces[i][j];
-      BaryVal += VertPos[IndexV];
-    }
-    BaryVal /= sizeF;
-    BaryF.push_back(BaryVal);
-  }
 }
 
 template <class ScalarType>

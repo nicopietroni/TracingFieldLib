@@ -130,5 +130,35 @@ void FindEdgeFacesCorrespondences(
   }
 }
 
+template <class ScalarType>
+bool FindEdgePosCorrespondences(
+    const std::vector<Geo::Point3<ScalarType> > &Vert,
+    const std::vector<std::vector<int> > &Faces,
+    const std::vector<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &EdgePos,
+    std::vector<std::pair<int,int> > &EdgeIdx) 
+{
+  std::map<Geo::Point3<ScalarType>,int> VertIdx;
+  for (size_t i=0;i<Vert.size();i++)
+    VertIdx[Vert[i]]=i;
+
+  EdgeIdx.clear();
+  for (size_t i=0;i<EdgePos.size();i++)
+  {
+    Geo::Point3<ScalarType> P0=EdgePos[i].first;
+    Geo::Point3<ScalarType> P1=EdgePos[i].second;
+    if (VertIdx.count(P0)==0)return false;
+    if (VertIdx.count(P1)==0)return false;
+    int IndexV0=VertIdx[P0];
+    int IndexV1=VertIdx[P1];
+    
+    EdgeIdx.push_back(std::pair<int,int>(std::min(IndexV0,IndexV1),
+                                         std::max(IndexV0,IndexV1)));
+  }
+  std::sort(EdgeIdx.begin(), EdgeIdx.end());
+  EdgeIdx.erase(std::unique(EdgeIdx.begin(), EdgeIdx.end()),
+                     EdgeIdx.end());
+  return true;
+}
+
 };
 #endif

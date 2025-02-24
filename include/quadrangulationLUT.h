@@ -1,0 +1,182 @@
+#ifndef QUADRANGULATION_LUT
+#define QUADRANGULATION_LUT
+
+#include "point2.h"
+#include "point3.h"
+#include <cassert>
+#include <cmath>
+#include <cstddef>
+#include <iostream>
+#include <map>
+#include <string>
+#include <tuple>
+#include <vector>
+#include "smooth_mesh.h"
+
+namespace Geo {
+
+template <class ScalarType> class QuadrangulationLUT {
+
+  int firstIndex(const std::vector<int> &quadruple) {
+    std::vector<int> best = quadruple;
+    std::vector<int> rotated = quadruple;
+
+    int FirstIdx = 0;
+    for (int i = 1; i < 4; ++i) {
+      rotate(rotated.begin(), rotated.begin() + 1, rotated.end());
+      if (rotated < best) {
+        best = rotated;
+        FirstIdx = i;
+      }
+    }
+    return FirstIdx;
+  }
+
+  std::map<std::vector<int>, std::vector<std::vector<int> > > LUT;
+
+  // Helper function to parse a quadruple from a formatted string like (x,y,z,w)
+  std::vector<int> parseQuadruple(const std::string &str) {
+    int a, b, c, d;
+    char ch;
+    std::stringstream ss(str);
+    ss >> ch >> a >> ch >> b >> ch >> c >> ch >> d >> ch; // Parsing "(a,b,c,d)"
+    return std::vector<int>{a, b, c, d};
+  }
+
+  bool LoadLUT() {
+    std::string LutPath = std::string(LUT_PATH);
+    LUT.clear();
+
+    std::ifstream file(LutPath.c_str());
+    if (!file.is_open()) {
+      std::cerr << "Error: Unable to open file: " << LutPath.c_str() << std::endl;
+      return false;
+    }
+
+    int numEntries;
+    file >> numEntries; // Read number of entries
+    file.ignore();      // Ignore newline
+
+    for (int i = 0; i < numEntries; ++i) {
+      // std::string dummy;
+      // file >> dummy; // Read and ignore "c"
+
+      // Read the key (four integers)
+      int k1, k2, k3, k4;
+      file >> k1 >> k2 >> k3 >> k4;
+      //std::cout<<"Read Key "<<k1<<" "<<k2<<" "<<k3<<" "<<k4<<std::endl;
+
+      std::vector<int> key{k1, k2, k3, k4};
+      // Quadruple key = {k1, k2, k3, k4};
+
+      // Read number of quadruples
+      int numQuadruples;
+      file >> numQuadruples;
+      //std::cout<<"Num Q: "<<numQuadruples<<std::endl;
+      // Read quadruples
+      std::vector<std::vector<int> > quads;
+      for (int j = 0; j < numQuadruples; ++j) {
+        std::string quadStr;
+        file >> quadStr;
+        //std::cout<<"String:"<<quadStr.c_str()<<std::endl;
+        quads.push_back(parseQuadruple(quadStr));
+      //   std::cout<<"Quadruple "<<quads.back()[0]<<","<<quads.back()[1]<<","<<
+      //                            quads.back()[2]<<","<<quads.back()[3]<<std::endl;
+       }
+
+      // Store in map
+      // std::cout<<"Adding Key"<<std::endl;
+      // for (size_t j=0;j<key.size();j++)
+      //   std::cout<<key[j]<<" ";
+      // std::cout<<std::endl;
+
+      LUT[key] = quads;
+      //exit(0);
+    }
+    return true;
+  }
+
+public:
+
+  void Initialize()
+  {
+    LoadLUT();
+  }
+
+  bool GetQuadrangulation(std::vector<std::vector<Geo::Point2<ScalarType> > > &SidePos,
+                          std::vector<Geo::Point2<ScalarType> > &VertPos,
+                          std::vector<std::vector<int> > &Connectivity)
+  {
+    std::vector<int> Code;
+    int NumSides=SidePos.size();
+    if (NumSides!=4)return false;
+    for (size_t i=0;i<SidePos.size();i++)
+    {
+      assert(SidePos[i].size()>1);
+      if (SidePos[i].size()<=1)return false;
+
+      Geo::Point2<ScalarType> LastC=SidePos[i].back();
+      Geo::Point2<ScalarType> NextC=SidePos[(i+1)%NumSides][0];
+      assert(LastC==NextC);
+      Code.push_back(SidePos[i].size()-1);
+    }
+
+    int Index0=firstIndex(Code);
+    std::rotate(Code.begin(), Code.begin() + Index0, Code.end());
+    std::cout<<"Searching for "<<Code[0]<<" "<<Code[1]<<" "<<
+                                 Code[2]<<" "<<Code[3]<<std::endl;
+    if (LUT.count(Code)>0)
+    {
+      Connectivity=LUT[Code];
+
+      //set the boundary nodes
+      int NumB=0;
+      for (size_t j=0;j<Code.size();j++)
+        NumB+=Code[j];
+      
+      int VertNum=0;
+      for (size_t j=0;j<Connectivity.size();j++)
+      for (size_t k=0;k<Connectivity[j].size();k++)
+        VertNum=std::max(VertNum,Connectivity[j][k]);
+      
+      VertPos.clear();
+      VertPos.resize(VertNum+1,Geo::Point2<ScalarType>(0,0));
+
+      std::vector<Geo::Point2<ScalarType> > AllSideP;
+      for (size_t j=0;j<SidePos.size();j++)
+        AllSideP.insert(AllSideP.end(),SidePos[j].begin(),SidePos[j].end());
+      
+      AllSideP.erase(std::unique(AllSideP.begin(), AllSideP.end()), AllSideP.end());
+      AllSideP.pop_back();
+
+      Geo::Point2<ScalarType> Avg(0,0);
+      std::vector<int> FixedVert;
+      for (size_t j=0;j<AllSideP.size();j++)
+      {
+        VertPos[j]=AllSideP[j];
+        FixedVert.push_back(j);
+        Avg+=VertPos[j];
+      }
+      Avg/=AllSideP.size();
+
+      for (size_t j=AllSideP.size();j<VertPos.size();j++)
+        VertPos[j]=Avg;
+      
+      SmoothParam<ScalarType> SParam;
+      SParam.FixedVert=FixedVert;
+      SParam.NumIte=20;
+      SParam.Damp=0;
+      Geo::SmoothLaplacian<ScalarType>(VertPos,Connectivity,SParam);
+      //Geo::SmoothLaplacianImplicit(VertPos,Connectivity,FixedVert);
+      
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
+};
+
+} // namespace Geo
+#endif

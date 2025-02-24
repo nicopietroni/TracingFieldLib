@@ -1,0 +1,26 @@
+#cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.16)
+project(lut_creator)
+
+# Set the C++ standard to C++17
+set(CMAKE_CXX_STANDARD 17)
+
+# Set the C++ standard to C++17
+set(CMAKE_CXX_STANDARD 17)
+
+if(NOT CMAKE_BUILD_TYPE)
+   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+endif()
+
+set(TRACEFIELD_DIR = "../../include" CACHE INTERNAL "")
+set(EIGENPATH  = "../../external_lib/eigen-3.4.0/" CACHE INTERNAL "")
+
+set(LUT_PATH "../../../include/Lut.txt")
+add_definitions(-DLUT_PATH=\"${LUT_PATH}\")
+
+#set(IGLLIB  = "../../external_lib/libigl/include/" CACHE INTERNAL "")
+
+include_directories(${TRACEFIELD_DIR})
+include_directories(${EIGENPATH})
+#include_directories(${IGLLIB})
+add_executable( ${PROJECT_NAME} main.cpp)

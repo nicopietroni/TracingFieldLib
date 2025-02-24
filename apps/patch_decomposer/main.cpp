@@ -10,6 +10,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <sys/_types/_size_t.h>
+#include <utility>
 #include <vector>
 
 #ifdef __APPLE__
@@ -24,6 +25,7 @@
 #include <GL_functions/GLDrawMesh.h>
 #include <GL_functions/GLDrawPatchData.h>
 #include <GL_functions/GLDrawSideDiscretization.h>
+#include <GL_functions/GLDrawLabel_imgui.h>
 #include <box3.h>
 #include <point3.h>
 
@@ -50,6 +52,10 @@
 #include <math_utils.h>
 #include <mesh_functions.h>
 #include <patch_side_discretization.h>
+#include <quadrangulation.h>
+#include <mesh_mapping.h>
+#include <mesh_features.h>
+#include <quadrangulationLUT.h>
 
 GLFWwindow *window;
 std::string PathMesh;
@@ -109,10 +115,11 @@ bool Draw_force_sample = false;
 bool Draw_allow_path_on = false;
 bool Draw_allow_arrive_to = false;
 
+//bool DrawAssignTJuctions = false;
 
-bool DrawAssignTJuctions = true;
+bool DrawSubdivision = false;
 bool DrawAssignValues = false;
-
+bool DrawQuadMesh = false;
 
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to
 // maximize ease of testing and compatibility with old VS compilers. To link
@@ -225,6 +232,7 @@ int DrawFieldMode = 0;
 ScalarType AVLen = 0;
 
 std::vector<std::pair<int, int>> Features;
+std::vector<int> CornersIdx;
 
 std::vector<int> ModSameBVert;
 std::vector<Geo::Point3<ScalarType>> ModSameBOrigPos;
@@ -247,7 +255,21 @@ std::vector<Geo::Point3<ScalarType>> VisDualCornerPos;
 std::vector<std::vector<int>> PerDualPatchFaceIDX;
 std::vector<std::vector<int>> PerDualPatchCornerIDX;
 
+std::vector<std::pair<int, int>> DualFeatures;
+std::vector<int> DualCorners;
+
 Geo::SideDiscretization<ScalarType> SideD;
+
+ScalarType QuadSize = 0.02;
+
+std::vector<Geo::Point3<ScalarType>> QuadVert;
+std::vector<std::vector<int>> QuadFaces;
+std::vector<Geo::Point3<ScalarType>> QuadFaceNormals, QuadVertNormals;
+std::vector<Geo::Point3<ScalarType>> QuadFaceColors;
+std::vector<std::pair<int, int>> QuadFeatures;
+std::vector<int> QuadCorners;
+
+Geo::QuadrangulationLUT<ScalarType> Q_LUT;
 
 void RestoreOriginalPosOnSplitBorders() {
   assert(ModSameBVert.size() == ModSameBOrigPos.size());
@@ -762,6 +784,8 @@ void InitIMGui() {
 }
 
 void SetRenderBar() {
+  //GLGraphDraw::GLDrawPatchSideDiscretization<ScalarType>::DrawSideValue(SideD);
+
   ImGui::Begin(
       "Render", NULL,
       ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello,
@@ -855,9 +879,9 @@ void SetRenderBar() {
       OldCol = CurrCol;
     }
   }
-  if (ImGui::CollapsingHeader("DRAW SUBDIVISION"))
-  {
-    ImGui::Checkbox("Draw Assing TJunct", &DrawAssignTJuctions);
+  if (ImGui::CollapsingHeader("DRAW SUBDIVISION")) {
+    //ImGui::Checkbox("Draw Assing TJunct", &DrawAssignTJuctions);
+    ImGui::Checkbox("Draw Side Samples Sample", &DrawAssignValues);
     ImGui::Checkbox("Draw Assign Values", &DrawAssignValues);
   }
   ImGui::End();
@@ -1470,14 +1494,14 @@ void SetDecomposeBar() {
   ImGui::End();
 }
 
-void FindSubSides() {
-  SideD.InitFromLabels(DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
-                       PerDualPatchCornerIDX);
+// void InitSubsides() {
+//   SideD.InitFromLabels(DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+//                        PerDualPatchCornerIDX);
 
-  // std::string subMeshFilename = ProjectName;
-  // subMeshFilename.append("_submesh.obj");
-  // PDeco.SaveSubMeshes(subMeshFilename);
-}
+//   // std::string subMeshFilename = ProjectName;
+//   // subMeshFilename.append("_submesh.obj");
+//   // PDeco.SaveSubMeshes(subMeshFilename);
+// }
 
 void SaveSubMeshes() {
   std::string subMeshFilename = ProjectName;
@@ -1532,6 +1556,7 @@ int EvenMode = 0;
 int OnlyDualP = -1;
 
 void SetExportBar() {
+
   ImGui::Begin(
       "Finalize", NULL,
       ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello,
@@ -1613,6 +1638,12 @@ void SetExportBar() {
           DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
           PerDualPatchCornerIDX, VisDualCornerPos);
 
+      std::vector<int> PrimalCorners;
+      Geo::DualPatch<ScalarType>::RetrieveDualFeatures(VertPos, Connectivity,
+                                                       Features,PrimalCorners,
+                                                       DualVertPos, DualConnectivity,
+                                                       DualFeatures,DualCorners);
+
       has_dual_mesh = true;
     }
 
@@ -1635,25 +1666,92 @@ void SetExportBar() {
         DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
         PerDualPatchCornerIDX, VisDualCornerPos);
   }
-  if (ImGui::Button("Save Dual Patches")) {
-    SaveDualPatches();
-  }
-  if (ImGui::Button("Save Dual Mesh")) {
-    std::string FinalMFilename = ProjectName;
-    FinalMFilename.append("_dual.obj");
-    WriteOBJ(FinalMFilename.c_str(), DualVertPos, DualConnectivity);
-  }
+
   // PatchM.ExtractDual();
   if (has_dual_mesh) {
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1, 0, 1, 1), "QUADRANGULATE");
-    if (ImGui::Button("Find Subdivision")) {
-      FindSubSides();
+
+    ScalarType minValue = 0.001;
+    ScalarType maxValue = 0.1;
+
+    ImGui::SliderScalar("Quad Size", ImGuiDataType_Double, &QuadSize, &minValue,
+                        &maxValue, "%.2f");
+    if (ImGui::Button("Init Subdivision")) {
+      DrawSubdivision = true;
+      DrawQuadMesh = false;
+      SideD.InitFromLabels(DualVertPos, DualConnectivity, 
+                           PerDualPatchFaceIDX, PerDualPatchCornerIDX);
+      SideD.InitSolveIntegerValues(MeshBox.Diag() * QuadSize);
+    }
+    if (ImGui::Button("Solve Subdivision")) {
+      DrawSubdivision = true;
+      DrawQuadMesh = false;
+      SideD.SolveIntegerValues();
+    }
+    if (ImGui::Button("Quadrangulate")) {
+      DrawSubdivision = false;
+      DrawQuadMesh = true;
+      showMesh=false;
+      showDual=false;
+      std::vector<std::vector<int>> PatchFaces, PatchCorners;
+      std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+          SideSamples;
+
+      std::vector<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > FeatureData;
+      SideD.GetFeaturesQuadrData(DualVertPos,DualFeatures,FeatureData);
+      SideD.GetQuadrangulationData(PatchFaces, PatchCorners, SideSamples);
+      
+      Geo::Quadrangulation<ScalarType>::QuadrangulateQuadPatchsWithSubs(DualVertPos, DualConnectivity, 
+                                                                        PatchFaces, PatchCorners, 
+                                                                        SideSamples, QuadVert, 
+                                                                        QuadFaces);
+      RemoveDuplicatedVert(QuadVert, QuadFaces);
+      RemoveUnfererencedVert(QuadVert, QuadFaces);
+      
+      
+      Geo::SmoothParam<ScalarType> SParam;
+      bool has_mapped=FindEdgePosCorrespondences(QuadVert,QuadFaces,FeatureData,SParam.Features);
+      assert(has_mapped);
+
+      std::vector<std::pair<int, int>> BorderE;
+      Geo::getBorderEdges(QuadFaces,BorderE);
+      for (size_t i=0;i<BorderE.size();i++)
+      {
+        SParam.FixedVert.push_back(BorderE[i].first);
+        SParam.FixedVert.push_back(BorderE[i].second);
+      }
+      //find the corners
+      std::set<Geo::Point3<ScalarType> > CornerPosSet;
+      for (size_t i=0;i<CornersIdx.size();i++)
+        CornerPosSet.insert(VertPos[CornersIdx[i]]);
+
+      for (size_t i=0;i<QuadVert.size();i++)
+      {
+        if (CornerPosSet.count(QuadVert[i])>0)
+        SParam.FixedVert.push_back(i);
+      }
+      
+      SParam.ReprojVert=&VertPos;
+      SParam.ReprojFaces=&Connectivity;
+      SParam.NumIte=100;
+      Geo::SmoothLaplacian<ScalarType>(QuadVert,QuadFaces,SParam);
+
+      Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
+                                      QuadVertNormals);
+      QuadFaceColors = std::vector<Geo::Point3<ScalarType>>(
+          QuadFaces.size(), Geo::Point3<ScalarType>(0.8, 0.8, 0.8));
     }
   }
 
   ImGui::Separator();
   ImGui::TextColored(ImVec4(1, 0, 1, 1), "SAVE");
+
+  if (ImGui::Button("Mesh"))
+    SaveMesh();
+  ImGui::SameLine();
+  if (ImGui::Button("Field"))
+    SaveField();
 
   if (ImGui::Button("SubMeshes"))
     SaveSubMeshes();
@@ -1662,21 +1760,49 @@ void SetExportBar() {
   if (ImGui::Button("Patches"))
     SavePatches();
 
+  if (ImGui::Button("Dual Patches")) {
+    SaveDualPatches();
+  }
   ImGui::SameLine();
-  if (ImGui::Button("Field"))
-    SaveField();
+  if (ImGui::Button("Dual Mesh")) {
+    std::string FinalMFilename = ProjectName;
+    FinalMFilename.append("_dual.obj");
+    WriteOBJ(FinalMFilename.c_str(), DualVertPos, DualConnectivity);
+  }
 
-  ImGui::SameLine();
-  if (ImGui::Button("Mesh"))
-    SaveMesh();
-
-  if (ImGui::Button("Save All Data"))
+  if (ImGui::Button("Save ALL"))
     SaveAll();
 
   ImGui::End();
 }
 
 int BorderSize = 15;
+
+// void TestLabel()
+// {
+//   GLGraphDraw::GLDrawPatchSideDiscretization<ScalarType>::DrawSideValue(SideD);
+
+//   // std::vector<Geo::Point3<ScalarType>> LabelPos;
+//   // LabelPos.push_back(MeshBox.Center());
+
+//   // std::vector<Geo::Point3<ScalarType>> LabelCol;
+//   // LabelCol.push_back(Geo::Point3<ScalarType>(0,0,1));
+
+//   // std::vector<std::string> LabelText;
+//   // LabelText.push_back(std::string("DE boia"));
+
+//   // // std::vector<Geo::Point2<ScalarType>> LabelPos2D;
+//   // // LabelPos2D.push_back(Geo::Point2<ScalarType>(100,100));
+//   // GLDraw::GLDrawLabel<ScalarType>::IMGuiDrawLabels3D(LabelPos,LabelCol,LabelText);
+//   //GLDraw::GLDrawLabel<ScalarType>::IMGuiDrawLabelsScreen(LabelPos2D,LabelCol,LabelText);
+
+//   //  ImGui::Begin(
+//   //     "TEST", NULL,
+//   //     ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello,
+//   //                                         // world!" and append into it.
+//   //   ImGui::End();
+
+// }
 
 void GLDrawMesh() {
   int display_w, display_h;
@@ -1702,6 +1828,7 @@ void GLDrawMesh() {
   glLoadIdentity();
   gluLookAt(0, 0, 3.5f, 0, 0, 0, 0, 1, 0);
 
+  
   trackball.GetView();
 
   trackball.Apply();
@@ -1763,8 +1890,16 @@ void GLDrawMesh() {
       glPopAttrib();
     }
     if (showFeatures)
-      GLDraw::GLDrawEdges<ScalarType>(VertPos, Features, 15,
-                                      Geo::Point3<ScalarType>(0, 1, 1));
+    {
+      GLDraw::DrawVertices(VertPos,CornersIdx,Geo::Point3<ScalarType>(0,0,0),30);
+
+      if (showMesh)
+        GLDraw::GLDrawEdges<ScalarType>(VertPos, Features, 15,
+                                        Geo::Point3<ScalarType>(0, 1, 1));
+      if (showDual)
+        GLDraw::GLDrawEdges<ScalarType>(DualVertPos, DualFeatures, 15,
+                                        Geo::Point3<ScalarType>(1, 0, 1));
+    }
     glPopAttrib();
   }
 
@@ -1792,14 +1927,15 @@ void GLDrawMesh() {
     // PDParam.lineSize = 15;
     // PDParam.pointSize = 20;
     // std::vector<std::vector<int>> Loops;
-    if (CurrSelP == -1)
-      GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(
-          TGraph, VertCurv, PathSampl.SelectedPaths, MeshBox.Diag() * 0.005,
-          PDParam, PathColors, DrawLoops, DrawPolyL);
-    else
-      GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
-          TGraph, VertCurv, PathSampl.SelectedPaths[CurrSelP],
-          MeshBox.Diag() * 0.005, PDParam, PathColors[CurrSelP]);
+
+      if (CurrSelP == -1)
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawPaths(
+            TGraph, VertCurv, PathSampl.SelectedPaths, MeshBox.Diag() * 0.005,
+            PDParam, PathColors, DrawLoops, DrawPolyL);
+      else
+        GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
+            TGraph, VertCurv, PathSampl.SelectedPaths[CurrSelP],
+            MeshBox.Diag() * 0.005, PDParam, PathColors[CurrSelP]);
   }
 
   if (DrawPathMode == 1) {
@@ -1925,12 +2061,36 @@ void GLDrawMesh() {
         TGraph, VertCurv, Geo::Internal, MeshBox.Diag() * 0.01, PDParam);
   }
 
-  if (DrawAssignTJuctions)
-  GLGraphDraw::GLDrawPatchSideDiscretization<ScalarType>::DrawMultipleSide(SideD);
+  // if (DrawAssignTJuctions)
+  //   GLGraphDraw::GLDrawPatchSideDiscretization<ScalarType>::DrawMultipleSide(
+  //       SideD);
 
   //     GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(TGraph,VertCurv,
   //                                                                 Geo::ExitDomain,MeshBox.Diag()*0.005);
   // bool DrawSamplesPaths=false;
+
+  
+  if (DrawAssignValues)
+    GLGraphDraw::GLDrawPatchSideDiscretization<ScalarType>::DrawSideValue(SideD);
+  if (DrawSubdivision) 
+    GLGraphDraw::GLDrawPatchSideDiscretization<ScalarType>::DrawSubdivision(SideD);
+    // GLGraphDraw::GLDrawPatchSideDiscretization<ScalarType>::GLDrawSortedSubdivision(SideD);
+  
+
+  if (DrawQuadMesh)
+    GLDraw::DrawSurfaceMesh<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
+                                        QuadVertNormals, true, true, false, false,
+                                        GLDraw::TrQuad, &QuadFaceColors);
+  // GLDraw::DrawPoints(QuadVert,Geo::Point3<ScalarType>(0,0,0));
+
+  // IMGuiDrawLabelsScreen(std::vector<Geo::Point2<ScalarType>> LabelPos,
+  //                       std::vector<Geo::Point3<ScalarType>> LabelCol,
+  //                       std::vector<std::string> LabelText) {
+  // IMGuiDrawLabels3D(std::vector<Geo::Point3<ScalarType>> LabelPos,
+  //                       std::vector<Geo::Point3<ScalarType>> LabelCol,
+  //                       std::vector<std::string> LabelText)
+
+ 
 }
 
 int main(int argc, char *argv[]) {
@@ -1964,6 +2124,8 @@ int main(int argc, char *argv[]) {
 
       ProjectName = RemoveExtension(PathMesh);
 
+      Q_LUT.Initialize();
+      
       continue;
     }
 
@@ -1991,6 +2153,8 @@ int main(int argc, char *argv[]) {
       if (!load_feat)
         exit(0);
       std::cout << "Loaded Features" << std::endl;
+
+      Geo::Corners<ScalarType>(VertPos,Features,45,CornersIdx);
       // has_load_features = true;
       continue;
     }
@@ -2028,9 +2192,12 @@ int main(int argc, char *argv[]) {
     // ImGui::SetNextWindowPos(ImVec2(windowWidth-400, windowHeight-200));
     SetExportBar();
 
-    ImGui::Render();
-
+    
     GLDrawMesh();
+
+    //TestLabel();
+
+    ImGui::Render();
 
     // GLDraw::DrawVertices(VertPos,SampledVert);
 

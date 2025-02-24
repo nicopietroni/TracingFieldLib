@@ -108,6 +108,31 @@ namespace GLDraw
     }
 
     template <class ScalarType>
+    void DrawPoints(const std::vector<Geo::Point3<ScalarType>> &Samples,
+                    const std::vector<Geo::Point3<ScalarType> > &pointCol,
+                    int size = 20)
+    {
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+        glDisable(GL_LIGHTING);
+        glDepthRange(0.0, 0.9999);
+
+        glPointSize(size);
+
+        glBegin(GL_POINTS);
+        for (size_t i = 0; i < Samples.size(); i++)
+        {
+            Geo::Point3<ScalarType> CurrPos = Samples[i];
+
+            glColor(pointCol[i]);
+            glVertex(CurrPos);
+        }
+        glEnd();
+        glDepthRange(0.0, 1.0);
+        glPopAttrib();
+    }
+
+    template <class ScalarType>
     void DrawVertices(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                       const std::vector<int> &To_Draw,
                       Geo::Point3<ScalarType> pointCol = Geo::Point3<ScalarType>(1, 0, 1),
@@ -195,7 +220,7 @@ namespace GLDraw
                 glBegin(GL_TRIANGLES);
             if (TRM == TrQuad)
                 glBegin(GL_QUADS);
-            if (TRM == TrQuad)
+            if (TRM == TrPolygon)
                 glBegin(GL_POLYGON);
 
             if (!SmoothShade)
