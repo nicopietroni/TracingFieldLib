@@ -1218,8 +1218,15 @@ void SmoothReproject3DStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
     FeatureLines.clear();
   }
 
+  SmoothParam<ScalarType> SParam;
+  SParam.Features=FeatureLines;
+  SParam.FixedVert=FixedVert;
+  SParam.line_border=false;
+  SParam.NumIte=1;
+
   for (size_t s = 0; s < steps; s++) {
-    Geo::SmoothLaplacian(VertPos, Faces, 1, FixedVert, FeatureLines, false);
+    //Geo::SmoothLaplacian(VertPos, Faces, 1, FixedVert, FeatureLines, false);
+    Geo::SmoothLaplacian(VertPos, Faces, SParam);
     if (reproject)
       ReprojectStep(VertPos, VertPos0, Faces0, TriGrid);
   }

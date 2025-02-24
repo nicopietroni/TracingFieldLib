@@ -243,7 +243,7 @@ private:
     PolyP.PolyPos = SubSide;
     std::vector<Geo::Point3<ScalarType>> SidePos =
         PolyP.SampleUniformly(VarValue[IndexVariable] + 1);
-        //PolyP.SampleUniformly(VarValue[IndexVariable] - 1);
+    // PolyP.SampleUniformly(VarValue[IndexVariable] - 1);
 
     SampleSidePoints[IndexVariable].push_back(SubSide[0]);
     SampleSidePoints[IndexVariable].insert(
@@ -808,8 +808,6 @@ private:
     std::sort(ChangeOp.begin(), ChangeOp.end());
   }
 
-  
-
   // void InitVarFeatures(const std::vector<Geo::Point3<ScalarType>> &Vert,
   //                      const std::vector<std::pair<int, int>> &Features) {
   //   typedef std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>
@@ -963,7 +961,7 @@ public:
   }
 
   void GetVariablesValues(std::vector<int> &_VarValue) const {
-    _VarValue=VarValue;
+    _VarValue = VarValue;
   }
 
   void InitFromLabels(const std::vector<Geo::Point3<ScalarType>> &Vert,
@@ -971,9 +969,25 @@ public:
                       const std::vector<std::vector<int>> &_PatchFacesIdx,
                       const std::vector<std::vector<int>> &_PatchCornersIdx) {
 
-    PatchFacesIdx = _PatchFacesIdx;
-    PatchCornersIdx = _PatchCornersIdx;
+    PatchSides.clear();
+    VarSide.clear();
+    VarTargetValue.clear();
+    VarValue.clear();
+    VarSequences.clear();
+    NumVariables = 0;
 
+    OppEquivalences.clear();
+    PatchFacesIdx.clear();
+    PatchCornersIdx.clear();
+
+    // filters the ones that are not quads
+    assert(_PatchFacesIdx.size() == _PatchCornersIdx.size());
+    for (size_t i = 0; i < _PatchFacesIdx.size(); i++) {
+      if (_PatchCornersIdx[i].size() != 4)
+        continue;
+      PatchFacesIdx.push_back(_PatchFacesIdx[i]);
+      PatchCornersIdx.push_back(_PatchCornersIdx[i]);
+    }
     std::set<Geo::Point3<ScalarType>> AllCornerPos;
     std::vector<std::set<Geo::Point3<ScalarType>>> PatchCornerPos;
     PatchCornerPos.resize(PatchCornersIdx.size());
@@ -1046,7 +1060,6 @@ public:
 
     InitPatchAdj();
 
-    
     // InitVarFeatures(Vert,_Features);
   }
 
@@ -1059,7 +1072,6 @@ public:
 
     InitMatchingType();
     FindDiscretizationPoint();
-
   }
 
   void SolveIntegerValues() {
@@ -1182,8 +1194,9 @@ public:
       SidePoints.insert(SidePoints.end(), side_samples.begin(),
                         side_samples.end());
     }
-    //erase duplicates along TJunctions
-    SidePoints.erase(std::unique(SidePoints.begin(), SidePoints.end()),SidePoints.end());
+    // erase duplicates along TJunctions
+    SidePoints.erase(std::unique(SidePoints.begin(), SidePoints.end()),
+                     SidePoints.end());
   }
 
   void GetSortedSideSamples(
@@ -1211,13 +1224,13 @@ public:
       GetSortedSideSamples(i, SidePoints[i]);
   }
 
-  void GetFeaturesQuadrData(const std::vector<Geo::Point3<ScalarType>> &Vert,
-                            const std::vector<std::pair<int,int> > &Features,
-                            std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
-                            &GeoFeatures)
-  {
+  void GetFeaturesQuadrData(
+      const std::vector<Geo::Point3<ScalarType>> &Vert,
+      const std::vector<std::pair<int, int>> &Features,
+      std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
+          &GeoFeatures) {
     typedef std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> EdgePos;
-    assert(SampleSidePoints.size()==NumVariables);
+    assert(SampleSidePoints.size() == NumVariables);
     GeoFeatures.clear();
     std::set<EdgePos> FeaturesPos;
     for (size_t i = 0; i < Features.size(); i++) {
@@ -1246,7 +1259,7 @@ public:
           break;
       }
       if (IsFeature) {
-        assert(SampleSidePoints[i].size()>=2);
+        assert(SampleSidePoints[i].size() >= 2);
         for (size_t j = 0; j < SampleSidePoints[i].size() - 1; j++) {
           Geo::Point3<ScalarType> Pos0 = SampleSidePoints[i][j];
           Geo::Point3<ScalarType> Pos1 = SampleSidePoints[i][j + 1];
@@ -1260,7 +1273,7 @@ public:
     GeoFeatures.erase(std::unique(GeoFeatures.begin(), GeoFeatures.end()),
                       GeoFeatures.end());
   }
-    
+
   void GetQuadrangulationData(
       std::vector<std::vector<int>> &PatchFaces,
       std::vector<std::vector<int>> &PatchCorners,

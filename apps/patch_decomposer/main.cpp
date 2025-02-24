@@ -1676,7 +1676,7 @@ void SetExportBar() {
     ScalarType maxValue = 0.1;
 
     ImGui::SliderScalar("Quad Size", ImGuiDataType_Double, &QuadSize, &minValue,
-                        &maxValue, "%.2f");
+                        &maxValue, "%.3f");
     if (ImGui::Button("Init Subdivision")) {
       DrawSubdivision = true;
       DrawQuadMesh = false;
@@ -1704,8 +1704,8 @@ void SetExportBar() {
       
       Geo::Quadrangulation<ScalarType>::QuadrangulateQuadPatchsWithSubs(DualVertPos, DualConnectivity, 
                                                                         PatchFaces, PatchCorners, 
-                                                                        SideSamples, QuadVert, 
-                                                                        QuadFaces);
+                                                                        SideSamples, Q_LUT,
+                                                                        QuadVert, QuadFaces);
       RemoveDuplicatedVert(QuadVert, QuadFaces);
       RemoveUnfererencedVert(QuadVert, QuadFaces);
       
@@ -1735,12 +1735,14 @@ void SetExportBar() {
       SParam.ReprojVert=&VertPos;
       SParam.ReprojFaces=&Connectivity;
       SParam.NumIte=100;
+      SParam.Damp=0.5;
       Geo::SmoothLaplacian<ScalarType>(QuadVert,QuadFaces,SParam);
 
       Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
                                       QuadVertNormals);
       QuadFaceColors = std::vector<Geo::Point3<ScalarType>>(
           QuadFaces.size(), Geo::Point3<ScalarType>(0.8, 0.8, 0.8));
+      //WriteOBJ("testQuad.obj",QuadVert, QuadFaces);
     }
   }
 

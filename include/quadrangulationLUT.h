@@ -17,7 +17,7 @@ namespace Geo {
 
 template <class ScalarType> class QuadrangulationLUT {
 
-  int firstIndex(const std::vector<int> &quadruple) {
+  int firstIndex(const std::vector<int> &quadruple)const {
     std::vector<int> best = quadruple;
     std::vector<int> rotated = quadruple;
 
@@ -103,9 +103,9 @@ public:
     LoadLUT();
   }
 
-  bool GetQuadrangulation(std::vector<std::vector<Geo::Point2<ScalarType> > > &SidePos,
+  bool GetQuadrangulation(const std::vector<std::vector<Geo::Point2<ScalarType> > > &SidePos,
                           std::vector<Geo::Point2<ScalarType> > &VertPos,
-                          std::vector<std::vector<int> > &Connectivity)
+                          std::vector<std::vector<int> > &Connectivity)const
   {
     std::vector<int> Code;
     int NumSides=SidePos.size();
@@ -123,12 +123,12 @@ public:
 
     int Index0=firstIndex(Code);
     std::rotate(Code.begin(), Code.begin() + Index0, Code.end());
-    std::cout<<"Searching for "<<Code[0]<<" "<<Code[1]<<" "<<
-                                 Code[2]<<" "<<Code[3]<<std::endl;
+    // std::cout<<"Searching for "<<Code[0]<<" "<<Code[1]<<" "<<
+    //                              Code[2]<<" "<<Code[3]<<std::endl;
     if (LUT.count(Code)>0)
     {
-      Connectivity=LUT[Code];
-
+      //Connectivity=LUT[Code];
+      Connectivity=LUT.at(Code);
       //set the boundary nodes
       int NumB=0;
       for (size_t j=0;j<Code.size();j++)
@@ -148,6 +148,8 @@ public:
       
       AllSideP.erase(std::unique(AllSideP.begin(), AllSideP.end()), AllSideP.end());
       AllSideP.pop_back();
+
+      //NumBorders=AllSideP.size();
 
       Geo::Point2<ScalarType> Avg(0,0);
       std::vector<int> FixedVert;

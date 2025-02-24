@@ -7,7 +7,7 @@
 #include "box3.h"
 #include "math_utils.h"
 #include "mesh_manifold.h"
-#include "polyhedra_mesh.h"
+//#include "polyhedra_mesh.h"
 #include "quadric.h"
 #include <algorithm>
 #include <cassert>
