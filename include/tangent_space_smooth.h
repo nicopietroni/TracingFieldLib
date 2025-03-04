@@ -22,6 +22,7 @@
 #include <iostream>
 #include <set>
 #include <sys/_types/_size_t.h>
+#include <utility>
 #include <vector>
 
 namespace Geo {
@@ -917,15 +918,44 @@ public:
   // SmoothQuadMesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
   //               const std::vector<std::vector<int>> &Faces,
   //               UVSmoothParam UVP = UVSmoothParam()) {
-  //   std::vector<Geo::Point3<ScalarType>> TriPos;
+  //   //std::vector<Geo::Point3<ScalarType>> TriPos;
   //   std::vector<std::vector<int>> TrisFaces;
-  //   SplitQuadInto4Tris(VertPos,Faces,TriPos,TrisFaces);
+  //   //SplitQuadInto4Tris(VertPos,Faces,TriPos,TrisFaces);
+  //   SplitQuadIntoTris<ScalarType>(VertPos,Faces,TrisFaces);
   //   //smooth it
-  //   Smooth(TriPos,TrisFaces,UVP);
+  //   //Smooth(TriPos,TrisFaces,UVP);
+  //   Smooth(VertPos,TrisFaces,UVP);
   //   //copy back
-  //   for(size_t i=0;i<VertPos.size();i++)
-  //     VertPos[i]=TriPos[i];
+  //   // for(size_t i=0;i<VertPos.size();i++)
+  //   //   VertPos[i]=TriPos[i];
   // }
+
+  static void
+  SmoothQuadMesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                const std::vector<std::vector<int>> &Faces,
+                UVSmoothParam UVP = UVSmoothParam()) {
+
+    std::vector<std::vector<int>> TrisFaces;
+    SplitQuadIntoTris<ScalarType>(VertPos,Faces,TrisFaces);
+    
+    //add to features original edges
+    std::vector<std::pair<int,int>> QuadE;
+    for (size_t i=0;i<Faces.size();i++)
+    for (size_t j=0;j<Faces[i].size();j++)
+    {
+      int IndexV0=Faces[i][j];
+      int IndexV1=Faces[i][(j+1)%Faces[i].size()];
+      QuadE.push_back(std::pair<int,int>(std::min(IndexV0,IndexV1),
+                                         std::max(IndexV0,IndexV1)));                            
+    }
+    std::sort(QuadE.begin(), QuadE.end());
+    QuadE.erase(std::unique(QuadE.begin(), QuadE.end()), QuadE.end());
+    UVP.FeatureLines=QuadE;
+
+    //smooth it
+    Smooth(VertPos,TrisFaces,UVP);
+  }
+
 };
 
 } // namespace Geo

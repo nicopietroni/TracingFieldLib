@@ -3,6 +3,7 @@
 
 #include <eigen_interface.h>
 #include <Eigen/Sparse>
+#include <iostream>
 #include "linear_constraint.h"
 
 namespace Geo
@@ -41,6 +42,13 @@ void InitFromConstraints(const std::vector<LinearConstraint<ScalarType> > &LinCo
                          Eigen::SparseMatrix<ScalarType>& A0,
                          Eigen::SparseMatrix<ScalarType>& A)
 {
+    //find the max constr CompIDX
+    int NumComp=0;
+    for (size_t i=0;i<LinConstr.size();i++)
+    for (size_t j=0;j<LinConstr[i].LHSide.size();j++)
+        NumComp=std::max(NumComp,(int)LinConstr[i].LHSide[j].IndexCoord);
+    NumComp++;
+    
     std::vector<std::pair<int,int> > index;
     std::vector<ScalarType> entry;
     int MaxVarCoord=-1;
@@ -51,7 +59,8 @@ void InitFromConstraints(const std::vector<LinearConstraint<ScalarType> > &LinCo
         {
             size_t IndexVar=LinConstr[i].LHSide[j].IndexVar;
             size_t IndexCoord=LinConstr[i].LHSide[j].IndexCoord;
-            size_t VarCoord=IndexVar*3+IndexCoord;
+            size_t VarCoord=IndexVar*NumComp+IndexCoord;
+            //size_t VarCoord=IndexVar*3+IndexCoord;
             MaxVarCoord=std::max(MaxVarCoord,(int)VarCoord);
             ScalarType W=LinConstr[i].LHSide[j].W;
             if (W==0)continue;
@@ -79,7 +88,7 @@ class LinearConstraintLeastSQSolver
     MatrixXm V;
 
 public:
-
+    
     void Init(const std::vector<LinearConstraint<ScalarType> > &_LinConstr)
     {
         
@@ -152,7 +161,6 @@ public:
 
         for (int i=0;i<V.rows();i++)
             Solution[i]=V(i,0);
-
     }
 };
 }
