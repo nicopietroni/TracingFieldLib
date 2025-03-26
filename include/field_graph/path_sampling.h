@@ -69,10 +69,11 @@ public:
   bool UniformWDist;
 
   std::vector<std::vector<int>> SampledPaths;
+  std::vector<ScalarType> SampledPathsLenghtW;
   std::vector<SP_Status> SampledPaths_Status;
   std::vector<std::pair<ScalarType, int>> Candidates;
 
-  enum PriorityType { PrioLen, PrioDist };
+  enum PriorityType { PrioLen,PrioLenW, PrioDist };
   PriorityType PType;
 
   int NumSamples;
@@ -285,7 +286,7 @@ public:
 
     std::vector<int> SampleableV;
     GetSamplableVert(SampleableV);
-    //std::cout<<"DE BOIA "<<SampleableV.size()<<std::endl;
+    // std::cout<<"DE BOIA "<<SampleableV.size()<<std::endl;
     int RadiusStar = Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(
         SampleableV.size(), NumSources);
 
@@ -447,8 +448,8 @@ public:
     if (PathStartingNodes.count(OppNode) > 0)
       return false;
 
-    if ((TGraph.NodeType(OppNode)==TangentExitDomain)||
-        (TGraph.NodeType(OppNode)==TangentDomain))
+    if ((TGraph.NodeType(OppNode) == TangentExitDomain) ||
+        (TGraph.NodeType(OppNode) == TangentDomain))
       return false;
 
     return true;
@@ -779,6 +780,7 @@ private:
 
     StartingNodes.clear();
     SampledPaths.clear();
+    SampledPathsLenghtW.clear();
 
     std::cout << "Sampling starting Nodes" << std::endl;
     std::cout << "Target Samples " << NumSamples << std::endl;
@@ -799,7 +801,7 @@ private:
         SampledVert.push_back(SingSingSampledVert[i]);
       }
     }
-   
+
     // NEW, make it unique
     std::sort(SampledVert.begin(), SampledVert.end());
     std::vector<int>::iterator last =
@@ -808,8 +810,8 @@ private:
 
     std::cout << "Sampling on " << SampledVert.size() << " Vertices"
               << std::endl;
-    //exit(0);
-    // FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
+    // exit(0);
+    //  FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
     FindSampledNodesFromVertex(SampledVert, StartingNodes);
 
     // std::cout << "Sampled " << StartingNodes.size()<<" starting Nodes de
@@ -865,16 +867,18 @@ private:
       TParam.simplify = true;
       TParam.enable_when_need = true;
       TParam.force_direct = force_direct;
-      // int OppStartN=Field::CrossFieldGraph::OppositeNodeCrossField(StartingNodes[i]);
+      // int
+      // OppStartN=Field::CrossFieldGraph::OppositeNodeCrossField(StartingNodes[i]);
       // bool canLoop=CanEndTo(OppStartN);
-      bool canLoop=CanEndTo(StartingNodes[i]);
+      bool canLoop = CanEndTo(StartingNodes[i]);
 
       if (!canLoop)
-        TParam.TMode=Geo::GraphTracing<ScalarType>::TMOnlyOpenPath;
-
+        TParam.TMode = Geo::GraphTracing<ScalarType>::TMOnlyOpenPath;
+      
+      ScalarType PathL;
       typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
           Geo::GraphTracing<ScalarType>::TraceDirectLoopOrBorderBorderFrom(
-              TGraph, TParam, CurrPath);
+              TGraph, TParam, CurrPath,PathL);
 
       // std::cout<<"STEP 1"<<std::endl;
       // Graph().PrintData();
@@ -927,6 +931,7 @@ private:
       //   SampledNodes.insert(OppN);
       // }
       SampledPaths.push_back(CurrPath);
+      SampledPathsLenghtW.push_back(PathL);
       NewStartingNodes.push_back(StartingNodes[i]);
     }
 
@@ -964,10 +969,15 @@ public:
       if (PType == PrioDist) {
         // std::cout<<"Using Distance"<<std::endl;
         Prio = Distance(SampledPaths[IndexPath]);
-      } else {
+      }
+     if (PType == PrioLen) {
         // std::cout<<"Using Lenght"<<std::endl;
         ScalarType PathL = Geo::PathFunctions<ScalarType>::CrossEuclideanLenght(
-            VertPos, SampledPaths[IndexPath]);
+             VertPos, SampledPaths[IndexPath]);
+        Prio = ((ScalarType)1) / PathL;
+      }
+      if (PType == PrioLenW) {
+        ScalarType PathL = SampledPathsLenghtW[IndexPath];
         Prio = ((ScalarType)1) / PathL;
       }
       // Prio = 1 / (ScalarType)SampledPaths[IndexPath].size();
@@ -1313,7 +1323,7 @@ private:
     TGraph.DisableNodes(SwapDisable);
   }
 
-  void RetraceCandidatesConflictWithSelected() {
+  void RetraceCandidatesConflictWithSelected(bool check_start=true) {
     assert(SampledPaths_Status.size() == SampledPaths.size());
     assert(StartingNodes.size() == SampledPaths.size());
 
@@ -1343,10 +1353,10 @@ private:
 
       // check if the start nodes is avalable
       if ((ConflictNodes.count(StartingNodes[i]) > 0) ||
-          (!CanStartFrom(StartingNodes[i]))) {
+          ((check_start)&&(!CanStartFrom(StartingNodes[i])))) {
         // assert(!TGraph.IsEnabled(StartingNodes[i]));
         SampledPaths_Status[i] = SP_Discarded;
-        // std::cout<<"Discarded 5"<<std::endl;
+        //std::cout<<"Discarded DEEDDEDE 0"<<std::endl;
         continue;
       }
 
@@ -1363,7 +1373,6 @@ private:
       //         TGraph, StartingNodes[i], SampledPaths[i], true, &ArrivalNodes,
       //         only_visible);
 
-     
       typename Geo::GraphTracing<ScalarType>::TraceParam TParam;
       TParam.StartN = StartingNodes[i];
       TParam.ArrivalNodes = &ArrivalNodes;
@@ -1372,17 +1381,22 @@ private:
       TParam.simplify = true;
       TParam.enable_when_need = true;
       TParam.force_direct = force_direct;
-      //TMOnlyLoop,TMOpenPath,TMAll,TMBestOfTwo
-      // int OppStartN=Field::CrossFieldGraph::OppositeNodeCrossField(StartingNodes[i]);
-      // bool canLoop=CanEndTo(OppStartN);
-      bool canLoop=CanEndTo(StartingNodes[i]);
-      
-      if (!canLoop)
-        TParam.TMode=Geo::GraphTracing<ScalarType>::TMOnlyOpenPath;
+      // TMOnlyLoop,TMOpenPath,TMAll,TMBestOfTwo
+      //  int
+      //  OppStartN=Field::CrossFieldGraph::OppositeNodeCrossField(StartingNodes[i]);
+      //  bool canLoop=CanEndTo(OppStartN);
+      bool canLoop = CanEndTo(StartingNodes[i]);
 
+      if (!canLoop)
+        TParam.TMode = Geo::GraphTracing<ScalarType>::TMOnlyOpenPath;
+      
+      ScalarType PathL;
       typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
           Geo::GraphTracing<ScalarType>::TraceDirectLoopOrBorderBorderFrom(
-              TGraph, TParam, SampledPaths[i]);
+              TGraph, TParam, SampledPaths[i],PathL);
+
+      assert(i<SampledPathsLenghtW.size());
+      SampledPathsLenghtW[i]=PathL;
 
       // typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
       //     Geo::GraphTracing<ScalarType>::TraceDirectLoopOrBorderBorderFrom(
@@ -1391,6 +1405,8 @@ private:
 
       if (TStatus != Geo::GraphTracing<ScalarType>::TraceSuccess) {
         SampledPaths_Status[i] = SP_Discarded;
+        //std::cout<<"Discarded DEEDDEDE 1"<<std::endl;
+
         // std::cout<<"Discarded 6"<<std::endl;
         continue;
       }
@@ -1414,6 +1430,8 @@ private:
 
       if (self_intersect) {
         SampledPaths_Status[i] = SP_Discarded;
+        //std::cout<<"Discarded DEEDDEDE 2"<<std::endl;
+
         // std::cout<<"Discarded 7"<<std::endl;
         continue;
       }
@@ -1584,6 +1602,7 @@ public:
   void ClearSampledPaths() {
     StartingNodes.clear();
     SampledPaths.clear();
+    SampledPathsLenghtW.clear();
     SampledPaths_Status.clear();
     Candidates.clear();
     // ConflictNodes.clear();
@@ -1755,8 +1774,11 @@ public:
       int IndexPath = Candidates[i].second;
 
       if (SampledPaths_Status[IndexPath] != SP_Evaluate)
+      {
+        // if (SampledPaths_Status[IndexPath] == SP_Discarded); 
+        //   std::cout<<"Discarded "<<IndexPath<<std::endl;
         continue;
-
+      }
       // CHECK OF PASSING ON REQUIRED PATCHES
 
       if (checkMustStartEnd) {
@@ -1773,6 +1795,7 @@ public:
           // {
           // std::cout<<"Discarded 0"<<std::endl;
           SampledPaths_Status[IndexPath] = SP_Discarded;
+          //std::cout<<"Test 0"<<std::endl;
           continue;
           // std::cout<<"Discarded 0"<<std::endl;
 
@@ -1800,6 +1823,7 @@ public:
       if (!pass_edges) {
         SampledPaths_Status[IndexPath] = SP_Discarded;
         // std::cout<<"Discarded 1"<<std::endl;
+        //std::cout<<"Test 2"<<std::endl;
         continue;
       }
 
@@ -1816,12 +1840,14 @@ public:
 
       if (has_conflict) {
         SampledPaths_Status[IndexPath] = SP_Discarded;
+        //std::cout<<"Test 2"<<std::endl;
         continue;
       }
 
       bool cross_properly = CrossProperly(SampledPaths[IndexPath]);
       if (!cross_properly) {
         SampledPaths_Status[IndexPath] = SP_Discarded;
+        //std::cout<<"Test 3"<<std::endl;
         continue;
       }
 
@@ -1865,7 +1891,7 @@ public:
 
         TGraph.CurrDistIndex() = 1;
         // std::cout<<"Dynamic Update"<<std::endl;
-        RetraceCandidatesConflictWithSelected();
+        RetraceCandidatesConflictWithSelected(true);
 
         // end = std::chrono::high_resolution_clock::now();
         // duration = std::chrono::duration_cast<std::chrono::microseconds>(end
@@ -2350,19 +2376,26 @@ public:
 
   void
   AddFeaturePathsFromVert(const std::vector<std::vector<int>> &VertSequences) {
+    int non_mapped=0;
     for (size_t i = 0; i < VertSequences.size(); i++) {
       std::vector<std::vector<int>> NodesSeq;
       bool isOKRec = PathFunctions<ScalarType>::ReconstructPathsFromElem(
           Graph(), VertSequences[i], NodesSeq);
-      assert(isOKRec);
-      for (size_t j = 0; j < NodesSeq.size(); j++) {
-        SelectedPaths.push_back(NodesSeq[j]);
-        AddToConflictNodes(NodesSeq[j]);
-        AddToConflictEdges(NodesSeq[j]);
-        DisableGraphPathNodes(NodesSeq[j]);
-        DisableGraphArches(NodesSeq[j]);
+      if (isOKRec) {
+        for (size_t j = 0; j < NodesSeq.size(); j++) {
+          SelectedPaths.push_back(NodesSeq[j]);
+          AddToConflictNodes(NodesSeq[j]);
+          AddToConflictEdges(NodesSeq[j]);
+          DisableGraphPathNodes(NodesSeq[j]);
+          DisableGraphArches(NodesSeq[j]);
+        }
+      } else {
+        non_mapped++;
       }
     }
+    if (non_mapped>0)
+      std::cout<<"NON Mapped "<<non_mapped<<" Features (maybe border)"<<std::endl;
+
     InitializeDistance();
   }
 

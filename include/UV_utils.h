@@ -5,6 +5,7 @@
 #include <Space_Query/segment_grid_2D.h>
 #include <cross_field.h>
 #include <point2.h>
+#include <triangle2.h>
 
 namespace Geo {
 
@@ -541,9 +542,8 @@ public:
   static void SplitAlongSeams(
       std::vector<Geo::Point3<ScalarType>> &VertPos,
       std::vector<std::vector<int>> &Connectivity,
-      const std::vector<std::vector<Geo::Point2<ScalarType> > > &FaceUV,
-      std::vector<Geo::Point2<ScalarType> > &VertUV) 
-  {
+      const std::vector<std::vector<Geo::Point2<ScalarType>>> &FaceUV,
+      std::vector<Geo::Point2<ScalarType>> &VertUV) {
 
     std::vector<std::pair<int, int>> SplitEdges;
     std::vector<std::vector<int>> NextF, NextE;
@@ -590,16 +590,38 @@ public:
 
     SplitMeshFromEdges(VertPos, Connectivity, NextF, NextE, SplitEdges);
     VertUV.clear();
-    VertUV.resize(VertPos.size(),Geo::Point2<ScalarType>(0,0));
+    VertUV.resize(VertPos.size(), Geo::Point2<ScalarType>(0, 0));
     for (size_t i = 0; i < Connectivity.size(); i++) {
-      for (size_t j = 0; j < Connectivity[i].size(); j++) 
-      {
-        int IndexV=Connectivity[i][j];
-        VertUV[IndexV]=FaceUV[i][j];
+      for (size_t j = 0; j < Connectivity[i].size(); j++) {
+        int IndexV = Connectivity[i][j];
+        VertUV[IndexV] = FaceUV[i][j];
       }
     }
   }
 
+  static int InsideFace(const std::vector<Geo::Point2<ScalarType>> &VertPos,
+                        const std::vector<std::vector<int>> &Connectivity,
+                        const Geo::Point2<ScalarType> &TestP, 
+                        Geo::Point3<ScalarType> &Bary,
+                        ScalarType inflate = 1.01) {
+    for (size_t i = 0; i < Connectivity.size(); i++) {
+      assert(Connectivity[i].size() == 3);
+      int IndexV0 = Connectivity[i][0];
+      int IndexV1 = Connectivity[i][1];
+      int IndexV2 = Connectivity[i][2];
+      Geo::Point2<ScalarType> P0 = VertPos[IndexV0];
+      Geo::Point2<ScalarType> P1 = VertPos[IndexV1];
+      Geo::Point2<ScalarType> P2 = VertPos[IndexV2];
+      Geo::Traingle2<ScalarType> T(P0, P1, P2);
+      T = Scale(T, inflate);
+      bool IsIn = IsInside(T, TestP);
+      if (!IsIn)
+        continue;
+      Geo::BarycentricCoords<ScalarType>(T, TestP, Bary.X, Bary.Y, Bary.Z);
+      return i;
+    }
+    return -1;
+  }
 };
 
 } // namespace Geo

@@ -1,255 +1,245 @@
 #ifndef EIGEN_INTERFACE
 #define EIGEN_INTERFACE
 
-#include <Eigen/Geometry>
+#include "point3.h"
 #include <Eigen/Dense>
+#include <Eigen/Geometry>
 #include <Eigen/Sparse>
 #include <cmath>
-#include <vector>
 #include <stdio.h>
-#include "point3.h"
-//#include "mesh_functions.h"
+#include <vector>
+// #include "mesh_functions.h"
 
 // return mesh as vector of vertices and faces
-template <class ScalarType>
-class EigenInterface
-{
+template <class ScalarType> class EigenInterface {
 
 public:
-    typedef typename Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> MatrixXm;
+  typedef typename Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic>
+      MatrixXm;
 
-    static void GetVertData(const std::vector<Geo::Point2<ScalarType>> &VertPos,
-                            MatrixXm &vert)
-    {
-        // create eigen matrix of vertices
-        vert = MatrixXm(VertPos.size(), 2);
+  static void GetVertData(const std::vector<Geo::Point2<ScalarType>> &VertPos,
+                          MatrixXm &vert) {
+    // create eigen matrix of vertices
+    vert = MatrixXm(VertPos.size(), 2);
 
-        // copy vertices
-        for (int i = 0; i < (int)VertPos.size(); i++)
-            for (int j = 0; j < 2; j++)
-                vert(i, j) = VertPos[i].cV(j);
+    // copy vertices
+    for (int i = 0; i < (int)VertPos.size(); i++)
+      for (int j = 0; j < 2; j++)
+        vert(i, j) = VertPos[i].cV(j);
+  }
+
+  static void GetVertData(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                          MatrixXm &vert) {
+    // create eigen matrix of vertices
+    vert = MatrixXm(VertPos.size(), 3);
+
+    // copy vertices
+    for (int i = 0; i < (int)VertPos.size(); i++)
+      for (int j = 0; j < 3; j++)
+        vert(i, j) = VertPos[i].cV(j);
+  }
+
+  static void
+  GetTriMeshData(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                 const std::vector<std::vector<int>> &Faces,
+                 Eigen::MatrixXi &faces, MatrixXm &vert) {
+    // assert(!HasUnfererencedVert<ScalarType>(VertPos, Faces));
+
+    // create eigen matrix of vertices
+    vert = MatrixXm(VertPos.size(), 3);
+
+    // copy vertices
+    for (int i = 0; i < (int)VertPos.size(); i++)
+      for (int j = 0; j < 3; j++)
+        vert(i, j) = VertPos[i].cV(j);
+
+    // create eigen matrix of faces
+    faces = Eigen::MatrixXi(Faces.size(), 3);
+
+    // copy faces
+    for (int i = 0; i < (int)Faces.size(); i++) {
+      assert(Faces[i].size() == 3);
+      for (int j = 0; j < 3; j++)
+        faces(i, j) = Faces[i][j];
+    }
+  }
+
+  static void
+  GetTriMeshData(const std::vector<Geo::Point2<ScalarType>> &VertPos,
+                 const std::vector<std::vector<int>> &Faces,
+                 Eigen::MatrixXi &faces, MatrixXm &vert) {
+    assert(!HasUnfererencedVert(VertPos, Faces));
+
+    // create eigen matrix of vertices
+    vert = MatrixXm(VertPos.size(), 2);
+
+    // copy vertices
+    for (int i = 0; i < (int)VertPos.size(); i++)
+      for (int j = 0; j < 2; j++)
+        vert(i, j) = VertPos[i].cV(j);
+
+    // create eigen matrix of faces
+    faces = Eigen::MatrixXi(Faces.size(), 3);
+
+    // copy faces
+    for (int i = 0; i < (int)Faces.size(); i++) {
+      assert(Faces[i].size() == 3);
+      for (int j = 0; j < 3; j++)
+        faces(i, j) = Faces[i][j];
+    }
+  }
+
+  static void GetTriMeshData(const Eigen::MatrixXi &eigen_f,
+                             const MatrixXm &eigen_v,
+                             std::vector<Geo::Point3<ScalarType>> &VertPos,
+                             std::vector<std::vector<int>> &Faces) {
+    Faces.clear();
+    VertPos.clear();
+
+    for (int i = 0; i < eigen_v.rows(); ++i) {
+      Geo::Point3<ScalarType> curr_V;
+      for (int j = 0; j < eigen_v.cols(); ++j) {
+        curr_V.V(j) = eigen_v(i, j);
+      }
+      VertPos.push_back(curr_V);
     }
 
-    static void GetVertData(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                            MatrixXm &vert)
-    {
-        // create eigen matrix of vertices
-        vert = MatrixXm(VertPos.size(), 3);
-
-        // copy vertices
-        for (int i = 0; i < (int)VertPos.size(); i++)
-            for (int j = 0; j < 3; j++)
-                vert(i, j) = VertPos[i].cV(j);
+    for (int i = 0; i < eigen_f.rows(); ++i) {
+      std::vector<int> FaceIdx;
+      for (int j = 0; j < eigen_f.cols(); ++j) {
+        FaceIdx.push_back(eigen_f(i, j));
+      }
+      Faces.push_back(FaceIdx);
     }
+  }
 
-    static void GetTriMeshData(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                               const std::vector<std::vector<int>> &Faces,
-                               Eigen::MatrixXi &faces,
-                               MatrixXm &vert)
-    {
-        //assert(!HasUnfererencedVert<ScalarType>(VertPos, Faces));
+  static Eigen::Vector3<ScalarType> ToEigen(const Geo::Point3<ScalarType> &V) {
+    return (Eigen::Vector3<ScalarType>(V.X, V.Y, V.Z));
+  }
 
-        // create eigen matrix of vertices
-        vert = MatrixXm(VertPos.size(), 3);
+  static Geo::Point3<ScalarType> ToPoint3(const Eigen::Vector3<ScalarType> &V) {
+    return (Geo::Point3<ScalarType>(V(0), V(1), V(2)));
+  }
 
-        // copy vertices
-        for (int i = 0; i < (int)VertPos.size(); i++)
-            for (int j = 0; j < 3; j++)
-                vert(i, j) = VertPos[i].cV(j);
+  static Eigen::Matrix3<ScalarType>
+  FramesToEigen(const Geo::Point3<ScalarType> &V0,
+                const Geo::Point3<ScalarType> &V1,
+                const Geo::Point3<ScalarType> &V2) {
+    Eigen::Matrix3<ScalarType> m;
 
-        // create eigen matrix of faces
-        faces = Eigen::MatrixXi(Faces.size(), 3);
+    m(0, 0) = V0.X;
+    m(1, 0) = V0.Y;
+    m(2, 0) = V0.Z;
 
-        // copy faces
-        for (int i = 0; i < (int)Faces.size(); i++)
-        {
-            assert(Faces[i].size() == 3);
-            for (int j = 0; j < 3; j++)
-                faces(i, j) = Faces[i][j];
+    m(0, 1) = V1.X;
+    m(1, 1) = V1.Y;
+    m(2, 1) = V1.Z;
+
+    m(0, 2) = V2.X;
+    m(1, 2) = V2.Y;
+    m(2, 2) = V2.Z;
+
+    return m;
+  }
+
+  static void EigenToFrames(const Eigen::Matrix3<ScalarType> &m,
+                            Geo::Point3<ScalarType> &V0,
+                            Geo::Point3<ScalarType> &V1,
+                            Geo::Point3<ScalarType> &V2) {
+    V0.X = m(0, 0);
+    V0.Y = m(1, 0);
+    V0.Z = m(2, 0);
+
+    V1.X = m(0, 1);
+    V1.Y = m(1, 1);
+    V1.Z = m(2, 1);
+
+    V2.X = m(0, 2);
+    V2.Y = m(1, 2);
+    V2.Z = m(2, 2);
+  }
+
+  static void NormalizeColumns(Eigen::Matrix3<ScalarType> &m) {
+    Geo::Point3<ScalarType> V0, V1, V2;
+    EigenToFrames(m, V0, V1, V2);
+    V0.Normalize();
+    V1.Normalize();
+    V2.Normalize();
+    m = FramesToEigen(V0, V1, V2);
+  }
+
+  // Point3<S> operator * ( const Point3<S> & v ) const
+  //{
+  //     Point3<S> t;
+
+  //    t[0] = a[0]*v[0] + a[1]*v[1] + a[2]*v[2];
+  //    t[1] = a[3]*v[0] + a[4]*v[1] + a[5]*v[2];
+  //    t[2] = a[6]*v[0] + a[7]*v[1] + a[8]*v[2];
+  //    return t;
+  //}
+
+  static Eigen::Vector3<ScalarType>
+  ToEigenVect(const Geo::Point3<ScalarType> &P) {
+    Eigen::Vector3<ScalarType> ret;
+    ret[0] = P.X;
+    ret[1] = P.Y;
+    ret[2] = P.Z;
+    return ret;
+  }
+
+  static std::vector<Eigen::Vector3<ScalarType>>
+  ToEigenVect(const std::vector<Geo::Point3<ScalarType>> &P) {
+    std::vector<Eigen::Vector3<ScalarType>> ret;
+    for (size_t i = 0; i < P.size(); i++)
+      ret.push_back(ToEigenVect(P[i]));
+    return ret;
+  }
+
+  static bool hasNaNInf(const Eigen::SparseMatrix<ScalarType> &matrix) {
+    for (int k = 0; k < matrix.outerSize(); ++k) {
+      for (typename Eigen::SparseMatrix<ScalarType>::InnerIterator it(matrix,
+                                                                      k);
+           it; ++it) {
+        if (std::isnan(it.value()) || std::isinf(it.value())) {
+          return true;
         }
+      }
     }
+    return false;
+  }
 
-    static void GetTriMeshData(const std::vector<Geo::Point2<ScalarType>> &VertPos,
-                               const std::vector<std::vector<int>> &Faces,
-                               Eigen::MatrixXi &faces,
-                               MatrixXm &vert)
-    {
-        assert(!HasUnfererencedVert(VertPos, Faces));
-
-        // create eigen matrix of vertices
-        vert = MatrixXm(VertPos.size(), 2);
-
-        // copy vertices
-        for (int i = 0; i < (int)VertPos.size(); i++)
-            for (int j = 0; j < 2; j++)
-                vert(i, j) = VertPos[i].cV(j);
-
-        // create eigen matrix of faces
-        faces = Eigen::MatrixXi(Faces.size(), 3);
-
-        // copy faces
-        for (int i = 0; i < (int)Faces.size(); i++)
-        {
-            assert(Faces[i].size() == 3);
-            for (int j = 0; j < 3; j++)
-                faces(i, j) = Faces[i][j];
-        }
+  static Eigen::VectorX<ScalarType>
+  toEigenVector(const std::vector<ScalarType> &std_vec) {
+    Eigen::VectorX<ScalarType> eigen_vec(std_vec.size());
+    for (std::size_t i = 0; i < std_vec.size(); ++i) {
+      eigen_vec(i) = std_vec[i];
     }
+    return eigen_vec;
+  }
 
-    static void GetTriMeshData(const Eigen::MatrixXi &eigen_f,
-                               const MatrixXm &eigen_v,
-                               std::vector<Geo::Point3<ScalarType>> &VertPos,
-                               std::vector<std::vector<int>> &Faces)
-    {
-        Faces.clear();
-        VertPos.clear();
-
-        for (int i = 0; i < eigen_v.rows(); ++i)
-        {
-            Geo::Point3<ScalarType> curr_V;
-            for (int j = 0; j < eigen_v.cols(); ++j)
-            {
-                curr_V.V(j) = eigen_v(i, j);
-            }
-            VertPos.push_back(curr_V);
-        }
-
-        for (int i = 0; i < eigen_f.rows(); ++i)
-        {
-            std::vector<int> FaceIdx;
-            for (int j = 0; j < eigen_f.cols(); ++j)
-            {
-                FaceIdx.push_back(eigen_f(i, j));
-            }
-            Faces.push_back(FaceIdx);
-        }
-    }
-
-    static Eigen::Vector3<ScalarType> ToEigen(const Geo::Point3<ScalarType> &V)
-    {
-        return (Eigen::Vector3<ScalarType>(V.X, V.Y, V.Z));
-    }
-
-    static Geo::Point3<ScalarType> ToPoint3(const Eigen::Vector3<ScalarType> &V)
-    {
-        return (Geo::Point3<ScalarType>(V(0), V(1), V(2)));
-    }
-
-    static Eigen::Matrix3<ScalarType> FramesToEigen(const Geo::Point3<ScalarType> &V0,
-                                                    const Geo::Point3<ScalarType> &V1,
-                                                    const Geo::Point3<ScalarType> &V2)
-    {
-        Eigen::Matrix3<ScalarType> m;
-
-        m(0, 0) = V0.X;
-        m(1, 0) = V0.Y;
-        m(2, 0) = V0.Z;
-
-        m(0, 1) = V1.X;
-        m(1, 1) = V1.Y;
-        m(2, 1) = V1.Z;
-
-        m(0, 2) = V2.X;
-        m(1, 2) = V2.Y;
-        m(2, 2) = V2.Z;
-
-        return m;
-    }
-
-    static void EigenToFrames(const Eigen::Matrix3<ScalarType> &m,
-                              Geo::Point3<ScalarType> &V0,
-                              Geo::Point3<ScalarType> &V1,
-                              Geo::Point3<ScalarType> &V2)
-    {
-        V0.X = m(0, 0);
-        V0.Y = m(1, 0);
-        V0.Z = m(2, 0);
-
-        V1.X = m(0, 1);
-        V1.Y = m(1, 1);
-        V1.Z = m(2, 1);
-
-        V2.X = m(0, 2);
-        V2.Y = m(1, 2);
-        V2.Z = m(2, 2);
-    }
-
-    static void NormalizeColumns(Eigen::Matrix3<ScalarType> &m)
-    {
-        Geo::Point3<ScalarType> V0, V1, V2;
-        EigenToFrames(m, V0, V1, V2);
-        V0.Normalize();
-        V1.Normalize();
-        V2.Normalize();
-        m = FramesToEigen(V0, V1, V2);
-    }
-
-    // Point3<S> operator * ( const Point3<S> & v ) const
-    //{
-    //     Point3<S> t;
-
-    //    t[0] = a[0]*v[0] + a[1]*v[1] + a[2]*v[2];
-    //    t[1] = a[3]*v[0] + a[4]*v[1] + a[5]*v[2];
-    //    t[2] = a[6]*v[0] + a[7]*v[1] + a[8]*v[2];
-    //    return t;
-    //}
-
-    static Eigen::Vector3<ScalarType> ToEigenVect(const Geo::Point3<ScalarType> &P)
-    {
-        Eigen::Vector3<ScalarType> ret;
-        ret[0] = P.X;
-        ret[1] = P.Y;
-        ret[2] = P.Z;
-        return ret;
-    }
-
-    static std::vector<Eigen::Vector3<ScalarType>> ToEigenVect(const std::vector<Geo::Point3<ScalarType>> &P)
-    {
-        std::vector<Eigen::Vector3<ScalarType>> ret;
-        for (size_t i = 0; i < P.size(); i++)
-            ret.push_back(ToEigenVect(P[i]));
-        return ret;
-    }
-
-    static bool hasNaNInf(const Eigen::SparseMatrix<ScalarType> &matrix)
-    {
-        for (int k = 0; k < matrix.outerSize(); ++k)
-        {
-            for (typename Eigen::SparseMatrix<ScalarType>::InnerIterator it(matrix, k); it; ++it)
-            {
-                if (std::isnan(it.value()) || std::isinf(it.value()))
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 };
 
 template <class ScalarType>
 Geo::Point3<ScalarType> operator*(const Eigen::Matrix4<ScalarType> &m,
-                                  const Geo::Point3<ScalarType> &p)
-{
-    ScalarType w;
-    Geo::Point3<ScalarType> s;
-    s.X = m(0, 0) * p.X + m(0, 1) * p.Y + m(0, 2) * p.Z + m(0, 3);
-    s.Y = m(1, 0) * p.X + m(1, 1) * p.Y + m(1, 2) * p.Z + m(1, 3);
-    s.Z = m(2, 0) * p.X + m(2, 1) * p.Y + m(2, 2) * p.Z + m(2, 3);
-    w = m(3, 0) * p.X + m(3, 1) * p.Y + m(3, 2) * p.Z + m(3, 3);
-    if (w != 0)
-        s /= w;
-    return s;
+                                  const Geo::Point3<ScalarType> &p) {
+  ScalarType w;
+  Geo::Point3<ScalarType> s;
+  s.X = m(0, 0) * p.X + m(0, 1) * p.Y + m(0, 2) * p.Z + m(0, 3);
+  s.Y = m(1, 0) * p.X + m(1, 1) * p.Y + m(1, 2) * p.Z + m(1, 3);
+  s.Z = m(2, 0) * p.X + m(2, 1) * p.Y + m(2, 2) * p.Z + m(2, 3);
+  w = m(3, 0) * p.X + m(3, 1) * p.Y + m(3, 2) * p.Z + m(3, 3);
+  if (w != 0)
+    s /= w;
+  return s;
 }
 
 template <class ScalarType>
 Geo::Point3<ScalarType> operator*(const Eigen::Matrix3<ScalarType> &m,
-                                  const Geo::Point3<ScalarType> &p)
-{
-    Eigen::Vector3<ScalarType> pEig = EigenInterface<ScalarType>::ToEigenVect(p);
-    pEig = m * pEig;
-    Geo::Point3<ScalarType> rot_p = EigenInterface<ScalarType>::ToPoint3(pEig);
-    return rot_p;
+                                  const Geo::Point3<ScalarType> &p) {
+  Eigen::Vector3<ScalarType> pEig = EigenInterface<ScalarType>::ToEigenVect(p);
+  pEig = m * pEig;
+  Geo::Point3<ScalarType> rot_p = EigenInterface<ScalarType>::ToPoint3(pEig);
+  return rot_p;
 }
 
 //// return normals of the mesh
@@ -363,7 +353,8 @@ Geo::Point3<ScalarType> operator*(const Eigen::Matrix3<ScalarType> &m,
 //     tri::RequireCompactness(m);
 
 //    typename MeshType::template PerVertexAttributeHandle<ScalarType> h =
-//            tri::Allocator<MeshType>:: template GetPerVertexAttribute<ScalarType>(m, "area");
+//            tri::Allocator<MeshType>:: template
+//            GetPerVertexAttribute<ScalarType>(m, "area");
 //    for(int i=0;i<m.vn;++i) h[i]=0;
 
 //    for(FaceIterator fi=m.face.begin(); fi!=m.face.end();++fi)
@@ -395,7 +386,8 @@ Geo::Point3<ScalarType> operator*(const Eigen::Matrix3<ScalarType> &m,
 //            entry.push_back(h[i]/maxA);
 //        }
 //    }
-//    tri::Allocator<MeshType>::template DeletePerVertexAttribute<ScalarType>(m,h);
+//    tri::Allocator<MeshType>::template
+//    DeletePerVertexAttribute<ScalarType>(m,h);
 //}
 
 // static void GetLaplacianEntry(MeshType &mesh,
@@ -413,7 +405,8 @@ Geo::Point3<ScalarType> operator*(const Eigen::Matrix3<ScalarType> &m,
 
 //        if (cotangent)
 //        {
-//            weight=Harmonic<MeshType>::template CotangentWeight<ScalarType>(f,i);
+//            weight=Harmonic<MeshType>::template
+//            CotangentWeight<ScalarType>(f,i);
 //        }
 
 //        //get the index of the vertices
@@ -471,39 +464,33 @@ Geo::Point3<ScalarType> operator*(const Eigen::Matrix3<ScalarType> &m,
 // }
 
 template <class ScalarType>
-void SetScale(Eigen::Matrix4<ScalarType> &m,
-              const ScalarType sx,
-              const ScalarType sy,
-              const ScalarType sz)
-{
-    m.setZero();
-    m(0, 0) = sx;
-    m(1, 1) = sy;
-    m(2, 2) = sz;
-    m(3, 3) = 1;
+void SetScale(Eigen::Matrix4<ScalarType> &m, const ScalarType sx,
+              const ScalarType sy, const ScalarType sz) {
+  m.setZero();
+  m(0, 0) = sx;
+  m(1, 1) = sy;
+  m(2, 2) = sz;
+  m(3, 3) = 1;
 }
 
 template <class ScalarType>
-void SetTranslate(Eigen::Matrix4<ScalarType> &m,
-                  const ScalarType tx,
-                  const ScalarType ty,
-                  const ScalarType tz)
-{
-    m.setIdentity();
-    m(0, 3) = tx;
-    m(1, 3) = ty;
-    m(2, 3) = tz;
+void SetTranslate(Eigen::Matrix4<ScalarType> &m, const ScalarType tx,
+                  const ScalarType ty, const ScalarType tz) {
+  m.setIdentity();
+  m(0, 3) = tx;
+  m(1, 3) = ty;
+  m(2, 3) = tz;
 }
 
-bool canMultiply(const Eigen::MatrixXd &A, const Eigen::VectorXd &V)
-{
-    return A.cols() == V.rows();
+bool canMultiply(const Eigen::MatrixXd &A, const Eigen::VectorXd &V) {
+  return A.cols() == V.rows();
 }
 
 // template<typename ScalarType>
 // bool hasNaNInf(const Eigen::SparseMatrix<ScalarType>& matrix) {
 //     for (int k = 0; k < matrix.outerSize(); ++k) {
-//         for (typename Eigen::SparseMatrix<ScalarType>::InnerIterator it(matrix, k); it; ++it) {
+//         for (typename Eigen::SparseMatrix<ScalarType>::InnerIterator
+//         it(matrix, k); it; ++it) {
 //             if (std::isnan(it.value())||std::isinf(it.value())) {
 //                 return true;
 //             }

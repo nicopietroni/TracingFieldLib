@@ -27,8 +27,17 @@ namespace Geo {
 
 template <class ScalarType> class DualPatch {
 
-  //**** NEW VERSION ****
+public:
+  struct PrimalPatchData {
+    std::vector<std::vector<std::vector<int>>> PatchFaces;
+    std::vector<std::vector<Geo::Point3<ScalarType>>> PatchVertPos;
+    std::vector<std::vector<std::vector<int>>> PatchCorners;
+    std::vector<std::vector<std::vector<std::vector<std::pair<int, int>>>>>
+        EdgePatchSides;
+    std::vector<std::vector<int>> PatchSingularities;
+  };
 
+private:
   typedef std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> PosPair;
 
   static bool
@@ -49,6 +58,7 @@ template <class ScalarType> class DualPatch {
       Geo::Point3<ScalarType> SegP0 = PatchVertPos[IndexV0];
       Geo::Point3<ScalarType> SegP1 = PatchVertPos[IndexV1];
       PosPair PP(std::min(SegP0, SegP1), std::max(SegP0, SegP1));
+      // std::cout<<"Size DMap:"<<DistMap.size()<<std::endl;
       assert(DistMap.count(PP) > 0);
 
       if (DistMap.count(PP) == 0)
@@ -125,6 +135,7 @@ template <class ScalarType> class DualPatch {
     BestEdgeDist.clear();
     BestEdgeDist.resize(PatchEdges.size(), -1);
 
+    // std::cout<<"test 1"<<std::endl;
     for (size_t i = 0; i < PatchEdges.size(); i++)
       BestEdgeSide(PatchVertPos, PatchEdges[i], DistMap, BestSplEdges[i],
                    BestEdgeDist[i]);
@@ -145,6 +156,7 @@ template <class ScalarType> class DualPatch {
     BestEdgeDist.clear();
     BestEdgeDist.resize(PatchEdges.size(), -1);
 
+    // std::cout<<"test 0"<<std::endl;
     for (size_t i = 0; i < PatchEdges.size(); i++) {
       bool found = BestEdgeSide(PatchVertPos, PatchEdges[i], DistMap,
                                 BestSplEdges[i], BestEdgeDist[i]);
@@ -313,23 +325,36 @@ template <class ScalarType> class DualPatch {
   }
 
   static void InitPatchDistanceMap(
-      const PatchManaging<ScalarType> &PM, const std::vector<int> &CenterV,
+      const PrimalPatchData &PData, const std::vector<int> &CenterV,
       const std::vector<std::vector<Geo::Point2<ScalarType>>> &PatchVertUV,
       std::vector<std::map<PosPair, ScalarType>> &PatchDistMap) {
     PatchDistMap.clear();
-    assert(CenterV.size() == PM.NumPatches());
+    int NumPatches = PData.PatchFaces.size();
+    // assert(CenterV.size() == PM.NumPatches());
+    assert(CenterV.size() == NumPatches);
     PatchDistMap.resize(CenterV.size());
     for (size_t i = 0; i < CenterV.size(); i++) {
       if (CenterV[i] == -1)
         continue;
-      if (PM.isEmpty(i))
+
+      // if (PM.isEmpty(i))
+      if (PData.PatchFaces[i].size() == 0)
         continue;
+
       int IndexC = CenterV[i];
       Geo::Point2<ScalarType> CentralPos = PatchVertUV[i][IndexC];
-      assert(PM.NumBorders(i) == 1);
-      for (int s = 0; s < PM.NumSides(i); s++) {
+      // assert(PM.NumBorders(i) == 1);
+      assert(PData.EdgePatchSides[i].size() == 1);
+      int NumSides = PData.PatchCorners[i][0].size();
+      // for (int s = 0; s < PM.NumSides(i); s++) {
+      for (int s = 0; s < NumSides; s++) {
         std::vector<int> SideV;
-        PM.GetAllSideVert(i, s, SideV);
+
+        // PM.GetAllSideVert(i, s, SideV);
+        for (size_t j = 0; j < PData.EdgePatchSides[i][0][s].size(); j++)
+          SideV.push_back(PData.EdgePatchSides[i][0][s][j].first);
+        SideV.push_back(PData.EdgePatchSides[i][0][s].back().second);
+
         assert(SideV.size() >= 2);
         int IndexC0 = SideV[0];
         int IndexC1 = SideV.back();
@@ -348,10 +373,8 @@ template <class ScalarType> class DualPatch {
               DistanceFunct(SegUVP0, SegUVP1, UVC0, UVC1, CentralPos);
           if (DistTest < 0)
             exit(0);
-          Geo::Point3<ScalarType> SegP0_3D =
-              PM.PData.SubPatchVertPos[i][IndexV0];
-          Geo::Point3<ScalarType> SegP1_3D =
-              PM.PData.SubPatchVertPos[i][IndexV1];
+          Geo::Point3<ScalarType> SegP0_3D = PData.PatchVertPos[i][IndexV0];
+          Geo::Point3<ScalarType> SegP1_3D = PData.PatchVertPos[i][IndexV1];
           PosPair Key(std::min(SegP0_3D, SegP1_3D),
                       std::max(SegP0_3D, SegP1_3D));
           PatchDistMap[i][Key] = DistTest;
@@ -569,7 +592,7 @@ template <class ScalarType> class DualPatch {
   }
 
   static void FindSplitPos(
-      const PatchManaging<ScalarType> &PM, const std::vector<int> &CentralV,
+      const PrimalPatchData &PData, const std::vector<int> &CentralV,
       const std::vector<std::vector<Geo::Point2<ScalarType>>> PatchVertUVArap,
       std::vector<PosPair> &AllSplEdgesPos,
       std::vector<std::vector<std::pair<int, int>>> &SplEdgesIDX,
@@ -577,29 +600,32 @@ template <class ScalarType> class DualPatch {
 
     // //per patch per side the edge to be split
     std::vector<std::vector<PosPair>> SplEdgesPos;
-    SplEdgesPos.resize(PM.NumPatches());
+    int NumPatches = PData.PatchFaces.size();
+    SplEdgesPos.resize(NumPatches);
+
+    // SplEdgesPos.resize(PM.NumPatches());
 
     // for each patch the distance to the center vertex
     std::vector<std::map<PosPair, ScalarType>> DistMap;
-    InitPatchDistanceMap(PM, CentralV, PatchVertUVArap, DistMap);
+    // InitPatchDistanceMap(PM, CentralV, PatchVertUVArap, DistMap);
+    InitPatchDistanceMap(PData, CentralV, PatchVertUVArap, DistMap);
 
     // for each patch for each edge the best split edge
     std::vector<std::vector<PosPair>> BestSplEdges;
-    BestSplEdges.resize(PM.NumPatches());
+    BestSplEdges.resize(NumPatches);
 
     // current best distance per patch per side
     std::vector<std::vector<ScalarType>> BestSplEdgesDist;
-    BestSplEdgesDist.resize(PM.NumPatches());
+    BestSplEdgesDist.resize(NumPatches);
     std::map<PosPair, ScalarType> JointDistMap;
-    for (size_t i = 0; i < PM.NumPatches(); i++) {
+    for (size_t i = 0; i < NumPatches; i++) {
       // no need to split
       if (CentralV[i] == -1)
         continue;
 
-      std::vector<Geo::Point3<ScalarType>> PatchVertPos =
-          PM.PData.SubPatchVertPos[i];
+      std::vector<Geo::Point3<ScalarType>> PatchVertPos = PData.PatchVertPos[i];
       std::vector<std::vector<std::pair<int, int>>> PatchEdges =
-          PM.PData.EdgePatchSides[i][0];
+          PData.EdgePatchSides[i][0];
 
       InitPatchBestCandidates(PatchVertPos, PatchEdges, DistMap[i],
                               BestSplEdges[i], BestSplEdgesDist[i]);
@@ -610,33 +636,32 @@ template <class ScalarType> class DualPatch {
     }
 
     std::vector<std::vector<PosPair>> BestSplJointEdges;
-    BestSplJointEdges.resize(PM.NumPatches());
+    BestSplJointEdges.resize(NumPatches);
 
     std::vector<std::vector<ScalarType>> BestSplJointEdgesDist;
-    BestSplJointEdgesDist.resize(PM.NumPatches());
-    for (size_t i = 0; i < PM.NumPatches(); i++) {
+    BestSplJointEdgesDist.resize(NumPatches);
+    for (size_t i = 0; i < NumPatches; i++) {
       if (CentralV[i] == -1)
         continue;
 
-      std::vector<Geo::Point3<ScalarType>> PatchVertPos =
-          PM.PData.SubPatchVertPos[i];
+      std::vector<Geo::Point3<ScalarType>> PatchVertPos = PData.PatchVertPos[i];
       std::vector<std::vector<std::pair<int, int>>> PatchEdges =
-          PM.PData.EdgePatchSides[i][0];
+          PData.EdgePatchSides[i][0];
 
       InitPatchBestJointCandidates(PatchVertPos, PatchEdges, JointDistMap,
                                    BestSplJointEdges[i],
                                    BestSplJointEdgesDist[i]);
     }
 
-    for (size_t i = 0; i < PM.NumPatches(); i++) {
+    // for (size_t i = 0; i < PM.NumPatches(); i++) {
+    for (size_t i = 0; i < NumPatches; i++) {
       if (CentralV[i] == -1)
         continue;
 
-      std::vector<Geo::Point3<ScalarType>> PatchVertPos =
-          PM.PData.SubPatchVertPos[i];
-      std::vector<std::vector<int>> PatchFaces = PM.PData.SubPatchFaces[i];
+      std::vector<Geo::Point3<ScalarType>> PatchVertPos = PData.PatchVertPos[i];
+      std::vector<std::vector<int>> PatchFaces = PData.PatchFaces[i];
       std::vector<std::vector<std::pair<int, int>>> PatchEdges =
-          PM.PData.EdgePatchSides[i][0];
+          PData.EdgePatchSides[i][0];
       // ComputeSplitEdges(PatchVertPos, PatchEdges, DistMap[i],
       // SplEdgesPos[i]);
       ComputeSplitEdges(PatchVertPos, BestSplEdges[i], BestSplJointEdges[i],
@@ -654,10 +679,10 @@ template <class ScalarType> class DualPatch {
     // map pair of pos to pair of indexes
     // std::vector<std::vector<std::pair<int, int>>> SplEdgesIDX;
     SplEdgesIDX.clear();
-    SplEdgesIDX.resize(PM.NumPatches());
-    for (size_t i = 0; i < PM.NumPatches(); i++)
-      PosPairToIdx(PM.PData.SubPatchVertPos[i], PM.PData.SubPatchFaces[i],
-                   SplEdgesPos[i], SplEdgesIDX[i]);
+    SplEdgesIDX.resize(NumPatches);
+    for (size_t i = 0; i < NumPatches; i++)
+      PosPairToIdx(PData.PatchVertPos[i], PData.PatchFaces[i], SplEdgesPos[i],
+                   SplEdgesIDX[i]);
   }
 
   static int
@@ -833,326 +858,8 @@ public:
     }
   }
 
-  // static bool ExtractDual(const std::vector<Geo::Point3<ScalarType>>
-  // &VertPos,
-  //                         const std::vector<std::vector<int>> &Faces,
-  //                         const PatchManaging<ScalarType> &PM,
-  //                         DualParameter &DualParam,
-  //                         std::vector<Geo::Point3<ScalarType>> &DualVertPos,
-  //                         std::vector<std::vector<int>> &DualFaces,
-  //                         std::vector<std::vector<int>> &PerPatchVertIDX,
-  //                         std::vector<std::vector<int>> &PerPatchFaceIDX,
-  //                         std::vector<std::vector<int>> &PerPatchCornerIDX,
-  //                         bool find_corners = true, bool write_timing = true)
-  //                         {
 
-  //   DualVertPos.clear();
-  //   DualFaces.clear();
-  //   PerPatchFaceIDX.clear();
-  //   PerPatchVertIDX.clear();
-  //   PerPatchCornerIDX.clear();
-
-  //   std::vector<int> CentralV(PM.NumPatches(), -1);
-  //   std::vector<bool> HasSing(PM.NumPatches(), false);
-
-  //   // per patch parametrization
-  //   std::vector<std::vector<Geo::Point2<ScalarType>>> PatchVertUV;
-  //   std::vector<std::vector<Geo::Point2<ScalarType>>> PatchVertUVArap;
-  //   PatchVertUV.resize(PM.NumPatches());
-  //   PatchVertUVArap.resize(PM.NumPatches());
-
-  //   // per patch flag if border vertex or not
-  //   std::vector<std::vector<bool>> PerPatchIsB;
-  //   PerPatchIsB.resize(PM.NumPatches());
-
-  //   auto t0 = std::chrono::high_resolution_clock::now();
-
-  //   // save face incident on corners
-  //   std::map<Geo::Traingle3<ScalarType>,
-  //   std::vector<Geo::Point3<ScalarType>>>
-  //       TriCorners;
-
-  //   for (size_t i = 0; i < PM.NumPatches(); i++) {
-  //     std::vector<std::vector<int>> SharedF;
-  //     GetPatchFacesOn(PM.PData.SubPatchVertPos[i], PM.PData.SubPatchFaces[i],
-  //                     PM.PData.PatchCorners[i][0], SharedF);
-  //     assert(SharedF.size() == PM.PData.PatchCorners[i][0].size());
-  //     for (size_t j = 0; j < SharedF.size(); j++) {
-  //       int IndexV = PM.PData.PatchCorners[i][0][j];
-  //       assert(IndexV >= 0);
-  //       assert(IndexV < PM.PData.SubPatchVertPos[i].size());
-  //       Geo::Point3<ScalarType> CornerPos =
-  //       PM.PData.SubPatchVertPos[i][IndexV]; assert(SharedF[j].size() > 0);
-  //       for (size_t k = 0; k < SharedF[j].size(); k++) {
-  //         int IndexF = SharedF[j][k];
-  //         assert(IndexF >= 0);
-  //         assert(IndexF < PM.PData.SubPatchFaces[i].size());
-  //         Geo::Traingle3<ScalarType> TKey = TriangleOfFace<ScalarType>(
-  //             PM.PData.SubPatchVertPos[i], PM.PData.SubPatchFaces[i],
-  //             IndexF);
-  //         TriCorners[TKey].push_back(CornerPos);
-  //       }
-  //     }
-  //   }
-
-  //   for (size_t i = 0; i < PM.NumPatches(); i++) {
-  //     // avoid empty patches
-  //     if (PM.PData.SubPatchFaces[i].size() == 0) {
-  //       std::cout << "WARNING PATCH ZERO SIDES" << std::endl;
-  //       continue;
-  //     }
-  //     // avoid patches with multiple boundaries
-  //     if (PM.PData.PatchCorners[i].size() != 1) {
-  //       std::cout << "WARNING PATCH MULTIPL SIDES" << std::endl;
-  //       continue;
-  //     }
-  //     // avoid valence 2 (or smaller) paches
-  //     if (PM.PData.PatchCorners[i][0].size() < 3) {
-  //       std::cout << "WARNING PATCH SIDES < 3" << std::endl;
-  //       continue;
-  //     }
-  //     int NumSides = PM.NumSides(i);
-
-  //     // no need to split quads if not required
-  //     if ((NumSides == 4) && (DualParam.OnlyNonQuad))
-  //       continue;
-
-  //     // get position per patch
-  //     std::vector<Geo::Point3<ScalarType>> PatchVertPos =
-  //         PM.PData.SubPatchVertPos[i];
-  //     // and face per patch
-  //     std::vector<std::vector<int>> PatchFaces = PM.PData.SubPatchFaces[i];
-  //     // update border flab
-  //     getBorderVert(PatchFaces, PerPatchIsB[i]);
-
-  //     // parametrize with tytte
-  //     bool done_param = Geo::UVParam<ScalarType>::TutteEmbedding(
-  //         PatchVertPos, PatchFaces, PM.PData.PatchCorners[i][0],
-  //         PatchVertUV[i],true);
-
-  //     assert(done_param);
-
-  //     // parametrize with LSQConformal
-  //     bool done_param_1 = Geo::UVParam<ScalarType>::LeastSquaresConformal(
-  //         PatchVertPos, PatchFaces, PatchVertUVArap[i]);
-  //     assert(done_param_1);
-
-  //     // set the initial central position
-  //     std::vector<int> PatchSing;
-  //     PM.PatchSingularities(i, PatchSing);
-  //     // see if it has singularities
-  //     if ((PatchSing.size() == 1) && (DualParam.InitSingPos)) {
-  //       HasSing[i] = true;
-  //       CentralV[i] = PatchSing[0];
-  //     } else {
-  //       CentralV[i] = FindInitialCentralPos(PatchVertUV[i], PerPatchIsB[i]);
-  //       // assert(PM.PData.PatchCorners[i][0].size() == 4);
-  //     }
-  //   }
-
-  //   // // then propagate on the non done so far
-  //   std::vector<PosPair> AllSplEdgesPos;
-
-  //   // // map pair of pos to pair of indexes
-  //   std::vector<std::vector<std::pair<int, int>>> SplEdgesIDX;
-
-  //   // iterate to optimize
-  //   for (size_t s = 0; s < DualParam.MaxIte; s++) {
-
-  //     if (DualParam.RType == RTypeEven)
-  //       FindSplitPos(PM, CentralV, PatchVertUV, AllSplEdgesPos, SplEdgesIDX,
-  //                    DualParam.JointBorder);
-  //     else
-  //       FindSplitPos(PM, CentralV, PatchVertUVArap, AllSplEdgesPos,
-  //       SplEdgesIDX,
-  //                    DualParam.JointBorder);
-
-  //     // optimize singularities
-  //     for (size_t i = 0; i < PM.NumPatches(); i++) {
-  //       if (CentralV[i] == -1)
-  //         continue;
-
-  //       std::vector<Geo::Point3<ScalarType>> PatchVertPos =
-  //           PM.PData.SubPatchVertPos[i];
-
-  //       std::vector<std::vector<int>> PatchFaces = PM.PData.SubPatchFaces[i];
-  //       std::vector<std::vector<std::pair<int, int>>> PatchEdges =
-  //           PM.PData.EdgePatchSides[i][0];
-
-  //       if (HasSing[i] && DualParam.FixSingPos)
-  //         continue;
-
-  //       if (DualParam.RType == RTypeEven) {
-  //         CentralV[i] =
-  //             OptimizeSingularPos(PatchVertPos, PatchVertUV[i],
-  //             SplEdgesIDX[i],
-  //                                 PM.PData.PatchCorners[i][0],
-  //                                 PerPatchIsB[i]);
-  //       } else {
-  //         CentralV[i] = OptimizeSingularPos(
-  //             PatchVertPos, PatchVertUVArap[i], SplEdgesIDX[i],
-  //             PM.PData.PatchCorners[i][0], PerPatchIsB[i]);
-  //       }
-  //     }
-  //   }
-
-  //   FindSplitPos(PM, CentralV, PatchVertUVArap, AllSplEdgesPos, SplEdgesIDX,
-  //                DualParam.JointBorder);
-  //   auto t1 = std::chrono::high_resolution_clock::now();
-
-  //   std::cout << "SPLITTING PATCHES" << std::endl;
-  //   std::set<int> SplitPatchSet(DualParam.OnlyPatch.begin(),
-  //                               DualParam.OnlyPatch.end());
-
-  //   std::set<Geo::Point3<ScalarType>> PatchCornerSet;
-  //   for (size_t i = 0; i < PM.NumPatches(); i++) {
-  //     // avoid empty patches
-  //     if (PM.PData.SubPatchFaces[i].size() == 0)
-  //       continue;
-  //     // avoid patches with multiple boundaries
-  //     if (PM.PData.PatchCorners[i].size() != 1)
-  //       continue;
-
-  //     // avoid valence 2 (or smaller) paches
-  //     if (PM.PData.PatchCorners[i][0].size() < 3)
-  //       continue;
-
-  //     // tutte embedding
-  //     std::vector<Geo::Point3<ScalarType>> PatchVertPos =
-  //         PM.PData.SubPatchVertPos[i];
-  //     std::vector<std::vector<int>> PatchFaces = PM.PData.SubPatchFaces[i];
-
-  //     if ((SplitPatchSet.size() != 0) && (SplitPatchSet.count(i) == 0))
-  //       continue;
-
-  //     if (CentralV[i] != -1) {
-  //       // std::cout<<"split Step"<<std::endl;
-  //       if (find_corners)
-  //         PatchCornerSet.insert(PatchVertPos[CentralV[i]]);
-
-  //       std::vector<int> NewCornerIdX;
-  //       SplitPatchWith(PatchVertPos, PatchFaces, PatchVertUV[i], CentralV[i],
-  //                      SplEdgesIDX[i], NewCornerIdX);
-
-  //       for (size_t j = 0; j < NewCornerIdX.size(); j++) {
-  //         Geo::Point3<ScalarType> InsertedPos =
-  //         PatchVertPos[NewCornerIdX[j]]; PatchCornerSet.insert(InsertedPos);
-  //       }
-  //     }
-
-  //     AppendMesh(DualVertPos, DualFaces, PatchVertPos, PatchFaces);
-  //   }
-
-  //   std::vector<std::set<Geo::Point3<ScalarType>>> PerPatchCornerSet;
-  //   if (find_corners) {
-  //     std::vector<std::vector<int>> PerPatchVertIDX0;
-  //     std::vector<std::vector<int>> PerPatchFaceIDX0;
-  //     FFConnectedComponenent(DualFaces, PerPatchFaceIDX0, PerPatchVertIDX0);
-  //     PerPatchCornerSet.resize(PerPatchVertIDX0.size());
-
-  //     // then update the patch corner (shared among and centeal)
-  //     for (size_t i = 0; i < PerPatchVertIDX0.size(); i++)
-  //       for (size_t j = 0; j < PerPatchVertIDX0[i].size(); j++) {
-  //         int IndexV = PerPatchVertIDX0[i][j];
-  //         Geo::Point3<ScalarType> VertPos = DualVertPos[IndexV];
-  //         if (PatchCornerSet.count(VertPos) > 0)
-  //           PerPatchCornerSet[i].insert(VertPos);
-  //       }
-
-  //     // then others
-  //     for (size_t i = 0; i < PerPatchFaceIDX0.size(); i++)
-  //       for (size_t j = 0; j < PerPatchFaceIDX0[i].size(); j++) {
-  //         int IndexF = PerPatchFaceIDX0[i][j];
-  //         Geo::Traingle3<ScalarType> TKey =
-  //             TriangleOfFace<ScalarType>(DualVertPos, DualFaces, IndexF);
-  //         if (TriCorners.count(TKey) == 0)
-  //           continue;
-  //         std::vector<Geo::Point3<ScalarType>> CurrCorn = TriCorners[TKey];
-  //         PerPatchCornerSet[i].insert(CurrCorn.begin(), CurrCorn.end());
-  //       }
-  //   }
-
-  //   std::cout << "MAKING CONSISTENT" << std::endl;
-  //   if (DualFaces.size() > 0) {
-  //     bool edge_manf = EdgeManifold<ScalarType>(DualVertPos, DualFaces);
-  //     bool vert_manf = VertManifold<ScalarType>(DualVertPos, DualFaces);
-  //     assert(edge_manf);
-  //     assert(vert_manf);
-
-  //     MakeConsistent(DualVertPos, DualFaces, AllSplEdgesPos);
-  //     RemoveUnfererencedVert(DualVertPos, DualFaces);
-  //     // RemoveDuplicatedVert(DualVertPos, DualFaces);
-  //     //  WriteOBJ("test1.obj", DualVertPos, DualFaces);
-  //     //  exit(0);
-  //   }
-  //   std::cout << "MADE CONSISTENT" << std::endl;
-  //   if (DualFaces.size() > 0) {
-  //     std::vector<std::vector<int>> NextF, NextE;
-  //     getFFAdjacency(DualFaces, NextF, NextE);
-  //     SplitNonManifoldBorderV<ScalarType>(DualVertPos, DualFaces, NextF,
-  //     NextE); bool edge_manf = EdgeManifold<ScalarType>(DualVertPos,
-  //     DualFaces); bool vert_manf = VertManifold<ScalarType>(DualVertPos,
-  //     DualFaces); if ((!edge_manf) || (!vert_manf)) {
-  //       std::cout << "WARNING DUAL MESH NON MANIFOLD" << std::endl;
-  //       WriteOBJ("non_manif.obj", DualVertPos, DualFaces);
-  //       // exit(0);
-  //     }
-  //     // assert(edge_manf);
-  //     // assert(vert_manf);
-  //   }
-  //   auto t2 = std::chrono::high_resolution_clock::now();
-
-  //   // get connected components
-  //   if (find_corners) {
-  //     FFConnectedComponenent(DualFaces, PerPatchFaceIDX, PerPatchVertIDX);
-  //     assert(PerPatchCornerSet.size() == PerPatchVertIDX.size());
-  //     // then update the patch corner
-  //     PerPatchCornerIDX.resize(PerPatchFaceIDX.size());
-  //     for (size_t i = 0; i < PerPatchVertIDX.size(); i++)
-  //       for (size_t j = 0; j < PerPatchVertIDX[i].size(); j++) {
-  //         int IndexV = PerPatchVertIDX[i][j];
-  //         Geo::Point3<ScalarType> VertPos = DualVertPos[IndexV];
-  //         if (PerPatchCornerSet[i].count(VertPos) > 0)
-  //           PerPatchCornerIDX[i].push_back(IndexV);
-  //       }
-  //   }
-
-  //   // std::cout << "SMOOTHING" << std::endl;
-  //   // typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam SmParam;
-  //   // SmParam.Steps = DualParam.SmoothSteps;
-  //   // if ((DualFaces.size() > 0) && (DualParam.SmoothSteps > 0))
-  //   //   Geo::Local_Param_Smooth<ScalarType>::SmoothWithInternalBorders(
-  //   //       DualVertPos, DualFaces, false, SmParam);
-
-  //   // auto t3 = std::chrono::high_resolution_clock::now();
-
-  //   if (write_timing) {
-  //     auto duration0 =
-  //         std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
-  //     auto duration1 =
-  //         std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-  //     // auto duration3 =
-  //     //     std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2);
-
-  //     std::cout << "Time Deriving Pos: " << duration0.count() << "
-  //     milliseconds"
-  //               << std::endl;
-  //     std::cout << "Time Cutting Mesh: " << duration1.count() << "
-  //     milliseconds"
-  //               << std::endl;
-  //     // std::cout << "Time Smoothing: " << duration3.count() << "
-  //     milliseconds"
-  //     //           << std::endl;
-  //   }
-  //   //
-  //   std::cout << "DONE" << std::endl;
-  //   return true;
-  // }
-
-  static bool ExtractDual(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                          const std::vector<std::vector<int>> &Faces,
-                          const PatchManaging<ScalarType> &PM,
-                          DualParameter &DualParam,
+  static bool ExtractDual(PrimalPatchData &PData, DualParameter &DualParam,
                           std::vector<Geo::Point3<ScalarType>> &DualVertPos,
                           std::vector<std::vector<int>> &DualFaces,
                           std::vector<std::vector<int>> &PerPatchFaceIDX,
@@ -1165,54 +872,77 @@ public:
     // PerPatchVertIDX.clear();
     PerPatchCornerIDX.clear();
 
-    std::vector<int> CentralV(PM.NumPatches(), -1);
-    std::vector<bool> HasSing(PM.NumPatches(), false);
+    int NumPatches = PData.PatchFaces.size();
+
+    std::vector<int> CentralV(NumPatches, -1);
+    std::vector<bool> HasSing(NumPatches, false);
 
     // per patch parametrization
     std::vector<std::vector<Geo::Point2<ScalarType>>> PatchVertUV;
     std::vector<std::vector<Geo::Point2<ScalarType>>> PatchVertUVArap;
-    PatchVertUV.resize(PM.NumPatches());
-    PatchVertUVArap.resize(PM.NumPatches());
+    PatchVertUV.resize(NumPatches);
+    PatchVertUVArap.resize(NumPatches);
 
     // per patch flag if border vertex or not
     std::vector<std::vector<bool>> PerPatchIsB;
-    PerPatchIsB.resize(PM.NumPatches());
+    PerPatchIsB.resize(NumPatches);
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
-    for (size_t i = 0; i < PM.NumPatches(); i++) {
+    for (size_t i = 0; i < NumPatches; i++) {
       // avoid empty patches
-      if (PM.PData.SubPatchFaces[i].size() == 0) {
+      if (PData.PatchFaces[i].size() == 0) {
         std::cout << "WARNING PATCH ZERO SIDES" << std::endl;
         continue;
       }
       // avoid patches with multiple boundaries
-      if (PM.PData.PatchCorners[i].size() != 1) {
+      if (PData.PatchCorners[i].size() != 1) {
         std::cout << "WARNING PATCH MULTIPL SIDES" << std::endl;
         continue;
       }
       // avoid valence 2 (or smaller) paches
-      if (PM.PData.PatchCorners[i][0].size() < 3) {
+      if (PData.PatchCorners[i][0].size() < 3) {
         std::cout << "WARNING PATCH SIDES < 3" << std::endl;
         continue;
       }
-      int NumSides = PM.NumSides(i);
+
+      // split the patch that does not have intenal vert
+      std::vector<size_t> BorderV;
+      Geo::getBorderVert(PData.PatchFaces[i], BorderV);
+
+      // all external vertices splic
+      if (BorderV.size() == PData.PatchVertPos[i].size()) {
+        int NumF0 = PData.PatchFaces[i].size();
+        Geo::Point3<ScalarType> bary(0.3333333, 0.3333333, 0.3333333);
+        for (size_t j = 0; j < NumF0; j++)
+          RefineMesh<ScalarType>::SplitTriangleInside(
+              PData.PatchVertPos[i], PData.PatchFaces[i], j, bary);
+      }
+
+      // int NumSides = PM.NumSides(i);
+      //     int NumSides(const int &IndexPatch) const {
+      //   int sideNum = 0;
+      //   for (size_t i = 0; i < PData.EdgePatchSides[IndexPatch].size(); i++)
+      //     sideNum += PData.EdgePatchSides[IndexPatch][i].size();
+      //   return sideNum;
+      // }
+      // need to check if ok might be slighly different
+      int NumSides = PData.PatchCorners[i][0].size();
 
       // no need to split quads if not required
       if ((NumSides == 4) && (DualParam.OnlyNonQuad))
         continue;
 
       // get position per patch
-      std::vector<Geo::Point3<ScalarType>> PatchVertPos =
-          PM.PData.SubPatchVertPos[i];
+      std::vector<Geo::Point3<ScalarType>> PatchVertPos = PData.PatchVertPos[i];
       // and face per patch
-      std::vector<std::vector<int>> PatchFaces = PM.PData.SubPatchFaces[i];
+      std::vector<std::vector<int>> PatchFaces = PData.PatchFaces[i];
       // update border flab
       getBorderVert(PatchFaces, PerPatchIsB[i]);
 
       // parametrize with tytte
       bool done_param = Geo::UVParam<ScalarType>::TutteEmbedding(
-          PatchVertPos, PatchFaces, PM.PData.PatchCorners[i][0], PatchVertUV[i],
+          PatchVertPos, PatchFaces, PData.PatchCorners[i][0], PatchVertUV[i],
           true);
 
       assert(done_param);
@@ -1223,9 +953,9 @@ public:
       assert(done_param_1);
 
       // set the initial central position
-      std::vector<int> PatchSing;
-      PM.PatchSingularities(i, PatchSing);
-      // see if it has singularities
+      std::vector<int> PatchSing = PData.PatchSingularities[i];
+      // PM.PatchSingularities(i, PatchSing);
+      //  see if it has singularities
       if ((PatchSing.size() == 1) && (DualParam.InitSingPos)) {
         HasSing[i] = true;
         CentralV[i] = PatchSing[0];
@@ -1245,40 +975,42 @@ public:
     for (size_t s = 0; s < DualParam.MaxIte; s++) {
 
       if (DualParam.RType == RTypeEven)
-        FindSplitPos(PM, CentralV, PatchVertUV, AllSplEdgesPos, SplEdgesIDX,
+        FindSplitPos(PData, CentralV, PatchVertUV, 
+                     AllSplEdgesPos, SplEdgesIDX,
                      DualParam.JointBorder);
       else
-        FindSplitPos(PM, CentralV, PatchVertUVArap, AllSplEdgesPos, SplEdgesIDX,
+        FindSplitPos(PData, CentralV, PatchVertUVArap, 
+                     AllSplEdgesPos,SplEdgesIDX, 
                      DualParam.JointBorder);
 
       // optimize singularities
-      for (size_t i = 0; i < PM.NumPatches(); i++) {
+      for (size_t i = 0; i < NumPatches; i++) {
         if (CentralV[i] == -1)
           continue;
 
         std::vector<Geo::Point3<ScalarType>> PatchVertPos =
-            PM.PData.SubPatchVertPos[i];
+            PData.PatchVertPos[i];
 
-        std::vector<std::vector<int>> PatchFaces = PM.PData.SubPatchFaces[i];
+        std::vector<std::vector<int>> PatchFaces = PData.PatchFaces[i];
         std::vector<std::vector<std::pair<int, int>>> PatchEdges =
-            PM.PData.EdgePatchSides[i][0];
+            PData.EdgePatchSides[i][0];
 
         if (HasSing[i] && DualParam.FixSingPos)
           continue;
 
         if (DualParam.RType == RTypeEven) {
-          CentralV[i] =
-              OptimizeSingularPos(PatchVertPos, PatchVertUV[i], SplEdgesIDX[i],
-                                  PM.PData.PatchCorners[i][0], PerPatchIsB[i]);
+          CentralV[i] = OptimizeSingularPos(PatchVertPos, PatchVertUV[i], SplEdgesIDX[i],
+                                  PData.PatchCorners[i][0], PerPatchIsB[i]);
         } else {
-          CentralV[i] = OptimizeSingularPos(
-              PatchVertPos, PatchVertUVArap[i], SplEdgesIDX[i],
-              PM.PData.PatchCorners[i][0], PerPatchIsB[i]);
+          CentralV[i] = OptimizeSingularPos(PatchVertPos, PatchVertUVArap[i], SplEdgesIDX[i],
+                                            PData.PatchCorners[i][0], PerPatchIsB[i]);
         }
       }
     }
 
-    FindSplitPos(PM, CentralV, PatchVertUVArap, AllSplEdgesPos, SplEdgesIDX,
+    // FindSplitPos(PM, CentralV, PatchVertUVArap, AllSplEdgesPos, SplEdgesIDX,
+    //              DualParam.JointBorder);
+    FindSplitPos(PData, CentralV, PatchVertUVArap, AllSplEdgesPos, SplEdgesIDX,
                  DualParam.JointBorder);
     auto t1 = std::chrono::high_resolution_clock::now();
 
@@ -1289,32 +1021,35 @@ public:
     // std::set<Geo::Point3<ScalarType>> PatchCornerSet;
     std::vector<std::set<Geo::Point3<ScalarType>>> PerPatchCornerSet;
 
-    for (size_t i = 0; i < PM.NumPatches(); i++) {
+    for (size_t i = 0; i < NumPatches; i++) {
 
       std::vector<Geo::Point3<ScalarType>> CurrCornerPos;
 
       // avoid empty patches
-      if (PM.PData.SubPatchFaces[i].size() == 0)
+      // if (PM.PData.SubPatchFaces[i].size() == 0)
+      if (PData.PatchFaces[i].size() == 0)
         continue;
       // avoid patches with multiple boundaries
-      if (PM.PData.PatchCorners[i].size() != 1)
+      // if (PM.PData.PatchCorners[i].size() != 1)
+      if (PData.PatchCorners[i].size() != 1)
         continue;
 
       // avoid valence 2 (or smaller) paches
-      if (PM.PData.PatchCorners[i][0].size() < 3)
+      // if (PM.PData.PatchCorners[i][0].size() < 3)
+      if (PData.PatchCorners[i][0].size() < 3)
         continue;
 
       // tutte embedding
-      std::vector<Geo::Point3<ScalarType>> PatchVertPos =
-          PM.PData.SubPatchVertPos[i];
-      std::vector<std::vector<int>> PatchFaces = PM.PData.SubPatchFaces[i];
+      std::vector<Geo::Point3<ScalarType>> PatchVertPos = PData.PatchVertPos[i];
+
+      std::vector<std::vector<int>> PatchFaces = PData.PatchFaces[i];
 
       if ((SplitPatchSet.size() != 0) && (SplitPatchSet.count(i) == 0))
         continue;
 
       if (find_corners) {
-        for (size_t j = 0; j < PM.PData.PatchCorners[i][0].size(); j++) {
-          int IndexV = PM.PData.PatchCorners[i][0][j];
+        for (size_t j = 0; j < PData.PatchCorners[i][0].size(); j++) {
+          int IndexV = PData.PatchCorners[i][0][j];
           assert(IndexV >= 0);
           assert(IndexV < PatchVertPos.size());
           CurrCornerPos.push_back(PatchVertPos[IndexV]);
@@ -1457,54 +1192,48 @@ public:
                        const std::vector<Geo::Point3<ScalarType>> &DualVertPos,
                        const std::vector<std::vector<int>> &DualFaces,
                        std::vector<std::pair<int, int>> &DualFeatures,
-                       std::vector<int> &DualCorners) 
-  {
-    typedef std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType> > EdgePos;
+                       std::vector<int> &DualCorners) {
+    typedef std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> EdgePos;
     DualFeatures.clear();
     DualCorners.clear();
     std::set<EdgePos> FeatSet;
-    std::set<Geo::Point3<ScalarType> > CornerSet;
-    for (size_t i=0;i<PrimalFeatures.size();i++)
-    {
-      int IndexV0=PrimalFeatures[i].first;
-      int IndexV1=PrimalFeatures[i].second;
-      Geo::Point3<ScalarType> Pos0=PrimalVert[IndexV0];
-      Geo::Point3<ScalarType> Pos1=PrimalVert[IndexV1];
-      EdgePos Key(std::min(Pos0,Pos1),std::max(Pos0,Pos1));
+    std::set<Geo::Point3<ScalarType>> CornerSet;
+    for (size_t i = 0; i < PrimalFeatures.size(); i++) {
+      int IndexV0 = PrimalFeatures[i].first;
+      int IndexV1 = PrimalFeatures[i].second;
+      Geo::Point3<ScalarType> Pos0 = PrimalVert[IndexV0];
+      Geo::Point3<ScalarType> Pos1 = PrimalVert[IndexV1];
+      EdgePos Key(std::min(Pos0, Pos1), std::max(Pos0, Pos1));
       FeatSet.insert(Key);
-      Geo::Point3<ScalarType> Mid=(Key.first*0.5+Key.second*0.5);
-      EdgePos KeyMid0(std::min(Pos0,Mid),std::max(Pos0,Mid));
-      EdgePos KeyMid1(std::min(Pos1,Mid),std::max(Pos1,Mid));
+      Geo::Point3<ScalarType> Mid = (Key.first * 0.5 + Key.second * 0.5);
+      EdgePos KeyMid0(std::min(Pos0, Mid), std::max(Pos0, Mid));
+      EdgePos KeyMid1(std::min(Pos1, Mid), std::max(Pos1, Mid));
       FeatSet.insert(KeyMid0);
       FeatSet.insert(KeyMid1);
     }
 
-    //add the corners
-    for (size_t i=0;i<PrimalCorners.size();i++)
-    {
-      Geo::Point3<ScalarType> Pos=PrimalVert[PrimalCorners[i]];
+    // add the corners
+    for (size_t i = 0; i < PrimalCorners.size(); i++) {
+      Geo::Point3<ScalarType> Pos = PrimalVert[PrimalCorners[i]];
       CornerSet.insert(Pos);
     }
-    
-    for (size_t i=0;i<DualVertPos.size();i++)
-    {
-      if(CornerSet.count(DualVertPos[i])>0)
+
+    for (size_t i = 0; i < DualVertPos.size(); i++) {
+      if (CornerSet.count(DualVertPos[i]) > 0)
         DualCorners.push_back(i);
     }
 
-    for (size_t i=0;i<DualFaces.size();i++)
-    for (size_t j=0;j<DualFaces[i].size();j++)
-    {
-      int IndexV0=DualFaces[i][j];
-      int IndexV1=DualFaces[i][(j+1)%DualFaces[i].size()];
-      Geo::Point3<ScalarType> Pos0=DualVertPos[IndexV0];
-      Geo::Point3<ScalarType> Pos1=DualVertPos[IndexV1];
-      EdgePos Key(std::min(Pos0,Pos1),std::max(Pos0,Pos1));
-      if (FeatSet.count(Key)>0)
-        DualFeatures.push_back(std::pair<int, int>(IndexV0,IndexV1));
-    }
+    for (size_t i = 0; i < DualFaces.size(); i++)
+      for (size_t j = 0; j < DualFaces[i].size(); j++) {
+        int IndexV0 = DualFaces[i][j];
+        int IndexV1 = DualFaces[i][(j + 1) % DualFaces[i].size()];
+        Geo::Point3<ScalarType> Pos0 = DualVertPos[IndexV0];
+        Geo::Point3<ScalarType> Pos1 = DualVertPos[IndexV1];
+        EdgePos Key(std::min(Pos0, Pos1), std::max(Pos0, Pos1));
+        if (FeatSet.count(Key) > 0)
+          DualFeatures.push_back(std::pair<int, int>(IndexV0, IndexV1));
+      }
   }
-
 };
 
 } // namespace Geo

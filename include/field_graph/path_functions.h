@@ -50,7 +50,7 @@ public:
     // non enabled but still used to trace
     for (size_t i = startIDX; i < endIDX; i++) {
       if (!TGraph.IsEnabled(PathN[i])) {
-        std::cout << "Non Enabled Node" << std::endl;
+        //std::cout << "Non Enabled Node" << std::endl;
         return false;
       }
     }
@@ -60,11 +60,11 @@ public:
       int IndexN1 = PathN[(i + 1)];
 
       if (TGraph.WhichConnection(IndexN0, IndexN1) == -1) {
-        std::cout << "Non Symmetric Arc" << std::endl;
+        //std::cout << "Non Symmetric Arc" << std::endl;
         return false;
       }
       if (!TGraph.ActiveArcNodes(IndexN0, IndexN1)) {
-        std::cout << "Non Active Arc" << std::endl;
+        //std::cout << "Non Active Arc" << std::endl;
         return false;
       }
     }
@@ -370,14 +370,13 @@ public:
     std::vector<int> Neigh;
     std::vector<ScalarType> NeighW;
     TGraph.GetNeigh(Node0, true, true, Neigh, NeighW);
-
     for (size_t j = 0; j < Neigh.size(); j++) {
       int NeighV = -1;
 
       if (TGraph.TypeofGraph() == GT_CrossField)
         NeighV = Field::CrossFieldGraph::ElemOfNode(Neigh[j]);
       else
-        NeighV = Field::CrossFieldGraph::ElemOfNode(Neigh[j]);
+        NeighV = Field::FrameFieldGraph::PolyOfNode(Neigh[j]);
 
       if (NeighV != VertIdx1)
         continue;
@@ -429,6 +428,23 @@ public:
     return found;
   }
 
+  static ScalarType PathWeight(const TracingGraph<ScalarType> &Tgraph,
+                               const std::vector<int> &Nodes)
+  {
+    ScalarType TotW=0;
+    for (size_t i=0;i<Nodes.size()-1;i++)
+    {
+      int NodeIdx0,NodeIdx1;
+      NodeIdx0=Nodes[i];
+      NodeIdx1=Nodes[i+1];
+      int LocalConn=Tgraph.WhichConnection(NodeIdx0,NodeIdx1);
+      assert(LocalConn!=-1);
+      ScalarType CurrW=Tgraph.WeightLink(NodeIdx0,LocalConn);
+      TotW+=CurrW;
+    }
+    return TotW;
+  }
+
   // should work generic but to be tested
   static bool ReconstructPathFromElem(const TracingGraph<ScalarType> &Tgraph,
                                       const std::vector<int> &Elems,
@@ -462,8 +478,9 @@ public:
                                        const std::vector<int> &Elems,
                                        std::vector<std::vector<int>> &Nodes) {
     if (Elems.size() < 2)
+    {
       return false;
-
+    }
     Nodes.clear();
 
     std::vector<std::pair<int, int>> NodesE;
@@ -473,10 +490,14 @@ public:
       int E1 = Elems[i + 1];
 
       int NodeIdx0, NodeIdx1;
+      //std::cout<<"Testing "<<i<<std::endl;
       bool found = BestConnectionNodePair(Tgraph, E0, E1, NodeIdx0, NodeIdx1);
       if (!found) {
+        // std::cout<<"Vert0:"<<E0<<std::endl;
+        // std::cout<<"Vert1:"<<E1<<std::endl;
         return false;
       }
+      //std::cout<<"OK"<<E0<<std::endl;
       NodesE.push_back(std::pair<int, int>(NodeIdx0, NodeIdx1));
     }
 

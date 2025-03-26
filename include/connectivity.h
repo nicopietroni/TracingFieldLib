@@ -110,16 +110,29 @@ void FindVertexStar(const std::vector<std::vector<int>> &connections,
   Kernel.resize(NumVert);
   for (size_t i = 0; i < connections.size(); i++) {
     // int sizeF=connections[i].size();
+    // for (size_t j = 0; j < connections[i].size(); j++) {
+    //   int VertIDX0 = connections[i][j];
+    //   for (size_t k = 0; k < connections[i].size(); k++) {
+    //     if (j == k)
+    //       continue;
+    //     int VertIDX1 = connections[i][k];
+    //     assert(VertIDX0 != VertIDX1);
+    //     Kernel[VertIDX0].push_back(VertIDX1);
+    //     Kernel[VertIDX1].push_back(VertIDX0);
+    //   }
+    // }
+    int sizeF=connections[i].size();
     for (size_t j = 0; j < connections[i].size(); j++) {
       int VertIDX0 = connections[i][j];
-      for (size_t k = 0; k < connections[i].size(); k++) {
-        if (j == k)
-          continue;
-        int VertIDX1 = connections[i][k];
-        assert(VertIDX0 != VertIDX1);
+      int VertIDX1 = connections[i][(j+1)%sizeF];
+      // for (size_t k = 0; k < connections[i].size(); k++) {
+      //   if (j == k)
+      //     continue;
+      //   int VertIDX1 = connections[i][k];
+      //   assert(VertIDX0 != VertIDX1);
         Kernel[VertIDX0].push_back(VertIDX1);
         Kernel[VertIDX1].push_back(VertIDX0);
-      }
+     // }
     }
   }
   // make them unique

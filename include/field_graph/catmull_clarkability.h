@@ -11,8 +11,10 @@ ScalarType OrderedCC(ScalarType L1,
                      ScalarType L3)
 {
     ScalarType CC=L1+L2-L3;
+
     //CC+=std::min(L1,std::min(L2,L3));
     //if (CC<0)return 0;
+
     return (CC);
 }
 
@@ -24,8 +26,10 @@ ScalarType OrderedCC(ScalarType L1,
                      ScalarType L5)
 {
     ScalarType CC=(L3+L4+L5)-(L1+L2);
+
     //CC+=std::min(L1,std::min(L2,std::min(L3,std::min(L4,L5))));
     //if (CC<0)return 0;
+
     return CC;
 }
 

@@ -1,168 +1,193 @@
 #ifndef LEAST_SQUARES_SOLVE
 #define LEAST_SQUARES_SOLVE
 
-#include <eigen_interface.h>
-#include <Eigen/Sparse>
-#include <iostream>
 #include "linear_constraint.h"
+#include <Eigen/Sparse>
+#include <cassert>
+#include <eigen_interface.h>
+#include <iostream>
 
-namespace Geo
-{
+namespace Geo {
 template <class ScalarType>
-void InitSparse(const std::vector<std::pair<int,int> > &Index,
-                const std::vector<ScalarType> &Values,
-                const int m,
-                const int n,
-                Eigen::SparseMatrix<ScalarType>& A)
-{
-    A.setZero();
+void InitSparse(const std::vector<std::pair<int, int>> &Index,
+                const std::vector<ScalarType> &Values, const int m, const int n,
+                Eigen::SparseMatrix<ScalarType> &A) {
+  A.setZero();
 
-    assert(Index.size()==Values.size());
+  assert(Index.size() == Values.size());
 
-    std::vector<Eigen::Triplet<ScalarType> > IJV;
-    IJV.reserve(Index.size());
+  std::vector<Eigen::Triplet<ScalarType>> IJV;
+  IJV.reserve(Index.size());
 
-    for(size_t i= 0;i<Index.size();i++)
-    {
-        int row=Index[i].first;
-        int col=Index[i].second;
-        ScalarType val=Values[i];
+  for (size_t i = 0; i < Index.size(); i++) {
+    int row = Index[i].first;
+    int col = Index[i].second;
+    ScalarType val = Values[i];
 
-        assert(row<m);
-        assert(col<n);
+    assert(row < m);
+    assert(col < n);
 
-        IJV.push_back(Eigen::Triplet<ScalarType>(row,col,val));
-    }
-    A.resize(m,n);
-    A.setFromTriplets(IJV.begin(),IJV.end());
+    IJV.push_back(Eigen::Triplet<ScalarType>(row, col, val));
+  }
+  A.resize(m, n);
+  A.setFromTriplets(IJV.begin(), IJV.end());
 }
 
 template <class ScalarType>
-void InitFromConstraints(const std::vector<LinearConstraint<ScalarType> > &LinConstr,
-                         Eigen::SparseMatrix<ScalarType>& A0,
-                         Eigen::SparseMatrix<ScalarType>& A)
-{
-    //find the max constr CompIDX
-    int NumComp=0;
-    for (size_t i=0;i<LinConstr.size();i++)
-    for (size_t j=0;j<LinConstr[i].LHSide.size();j++)
-        NumComp=std::max(NumComp,(int)LinConstr[i].LHSide[j].IndexCoord);
-    NumComp++;
-    
-    std::vector<std::pair<int,int> > index;
-    std::vector<ScalarType> entry;
-    int MaxVarCoord=-1;
-    for (size_t i=0;i<LinConstr.size();i++)
-    {
-        int CurrRow=i;
-        for (size_t j=0;j<LinConstr[i].LHSide.size();j++)
-        {
-            size_t IndexVar=LinConstr[i].LHSide[j].IndexVar;
-            size_t IndexCoord=LinConstr[i].LHSide[j].IndexCoord;
-            size_t VarCoord=IndexVar*NumComp+IndexCoord;
-            //size_t VarCoord=IndexVar*3+IndexCoord;
-            MaxVarCoord=std::max(MaxVarCoord,(int)VarCoord);
-            ScalarType W=LinConstr[i].LHSide[j].W;
-            if (W==0)continue;
-            index.push_back(std::pair<int,int>(CurrRow,VarCoord));
-            entry.push_back(W*LinConstr[i].Weight);
-        }
+void InitFromConstraints(
+    const std::vector<LinearConstraint<ScalarType>> &LinConstr,
+    Eigen::SparseMatrix<ScalarType> &A0, Eigen::SparseMatrix<ScalarType> &A) {
+  // find the max constr CompIDX
+  int NumComp = 0;
+  for (size_t i = 0; i < LinConstr.size(); i++)
+    for (size_t j = 0; j < LinConstr[i].LHSide.size(); j++)
+      NumComp = std::max(NumComp, (int)LinConstr[i].LHSide[j].IndexCoord);
+  NumComp++;
+
+  std::vector<std::pair<int, int>> index;
+  std::vector<ScalarType> entry;
+  int MaxVarCoord = -1;
+  for (size_t i = 0; i < LinConstr.size(); i++) {
+    int CurrRow = i;
+    for (size_t j = 0; j < LinConstr[i].LHSide.size(); j++) {
+      size_t IndexVar = LinConstr[i].LHSide[j].IndexVar;
+      size_t IndexCoord = LinConstr[i].LHSide[j].IndexCoord;
+      size_t VarCoord = IndexVar * NumComp + IndexCoord;
+      // size_t VarCoord=IndexVar*3+IndexCoord;
+      MaxVarCoord = std::max(MaxVarCoord, (int)VarCoord);
+      ScalarType W = LinConstr[i].LHSide[j].W;
+      if (W == 0)
+        continue;
+      index.push_back(std::pair<int, int>(CurrRow, VarCoord));
+      entry.push_back(W * LinConstr[i].Weight);
     }
+  }
 
-    //int sizeM=Kernels.size()*3+FixedVert.size()*3+LinConstr.size();
-    int sizeRow=LinConstr.size();
-    int sizeCol=MaxVarCoord+1;
-    InitSparse(index,entry,sizeRow,sizeCol,A0);
-    //then
+  // int sizeM=Kernels.size()*3+FixedVert.size()*3+LinConstr.size();
+  int sizeRow = LinConstr.size();
+  int sizeCol = MaxVarCoord + 1;
+  InitSparse(index, entry, sizeRow, sizeCol, A0);
+  // then
 
-    A=A0.transpose()*A0;
+  A = A0.transpose() * A0;
 }
 
-template <class ScalarType>
-class LinearConstraintLeastSQSolver
-{
-    Eigen::SparseMatrix<ScalarType> A0,A;
-    Eigen::SimplicialCholesky<Eigen::SparseMatrix<ScalarType > > *solver;
-    std::vector<LinearConstraint<ScalarType> > LinConstr;
-    typedef typename Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic> MatrixXm;
-    MatrixXm V;
+template <class ScalarType> class LinearConstraintLeastSQSolver {
+  Eigen::SparseMatrix<ScalarType> A0, A;
+  Eigen::SimplicialCholesky<Eigen::SparseMatrix<ScalarType>> *solver;
+  std::vector<LinearConstraint<ScalarType>> LinConstr;
+  typedef typename Eigen::Matrix<ScalarType, Eigen::Dynamic, Eigen::Dynamic>
+      MatrixXm;
+  MatrixXm V,V0;
 
 public:
+
+  const Eigen::SparseMatrix<ScalarType> &OriginalA()
+  {return A0;}
+
+  void Init(const std::vector<LinearConstraint<ScalarType>> &_LinConstr) {
+
+    LinConstr = _LinConstr;
+
+    // for (size_t i=0;i<LinConstr.size();i++)
+    // {
+    //     if (LinConstr[i].hasNaNInf())
+    //     {std::cout<<"Error on LinConstrs "<<std::endl;exit(0);}
+    // }
+
+    InitFromConstraints<ScalarType>(LinConstr, A0, A);
+
+    // if (EigenInterface<ScalarType>::hasNaNInf(A0))
+    // {std::cout<<"Error on A0 in Init!!!!"<<std::endl;exit(0);}
+
+    solver = new Eigen::SimplicialCholesky<Eigen::SparseMatrix<ScalarType>>(A);
+    assert(solver->info() == Eigen::Success);
+    // if (solver->info() != Eigen::Success)
+    // {std::cout<<"Error Not Success Eigen!!!!"<<std::endl;exit(0);}
+  }
+
+  void Solve(std::vector<ScalarType> &Solution,
+             const std::vector<ScalarType> &RHS = std::vector<ScalarType>()) {
+    bool UseOriginalRHS = (RHS.size() != LinConstr.size());
+    int NumRows = LinConstr.size();
+
+    V = MatrixXm(NumRows, 1);
+    V.setZero();
+    for (int i = 0; i < NumRows; i++) {
+      int CurrRow = i;
+
+      if (UseOriginalRHS)
+        V(CurrRow) = LinConstr[i].RHSide * LinConstr[i].Weight;
+      else
+        V(CurrRow) = RHS[i] * LinConstr[i].Weight;
+    }
+
+    for (int i = 0; i < V.rows(); i++) {
+      if (std::isnan(V(i)) || std::isinf(V(i))) {
+        {
+          std::cout << "Error on V 0!!!!"
+                    << " index " << i << std::endl;
+          exit(0);
+        }
+      }
+    }
+    // if (hasNaNInf(A0))
+    // {std::cout<<"Error on A0!!!!"<<std::endl;exit(0);}
+
+    V0=V;
+    V = A0.transpose() * V;
+
+    //  for (int i=0;i<V.rows();i++)
+    //  {
+    //   if (std::isnan(V(i))||std::isinf(V(i)))
+    //   {
+    //      std::cout<<"ROWS 1:"<<V.rows()<<std::endl;
+    //      std::cout<<"Error on V 1!!!!"<<" index "<< i<<"
+    //      value:"<<V(i)<<std::endl;exit(0);
+    //   }
+    //  }
+
+    // std::cout<<"SOLVING"<<std::endl;
+    // solve the system
     
-    void Init(const std::vector<LinearConstraint<ScalarType> > &_LinConstr)
-    {
-        
-        LinConstr=_LinConstr;
+    V = solver->solve(V).eval();
+    // std::cout<<"DONE"<<std::endl;
 
-        // for (size_t i=0;i<LinConstr.size();i++)
-        // {
-        //     if (LinConstr[i].hasNaNInf())
-        //     {std::cout<<"Error on LinConstrs "<<std::endl;exit(0);}
-        // }
+    // update the position
+    Solution.resize(V.rows());
 
-        InitFromConstraints<ScalarType>(LinConstr,A0,A);
+    for (int i = 0; i < V.rows(); i++)
+      Solution[i] = V(i, 0);
+  }
 
-        // if (EigenInterface<ScalarType>::hasNaNInf(A0))
-        // {std::cout<<"Error on A0 in Init!!!!"<<std::endl;exit(0);}
-
-        solver= new Eigen::SimplicialCholesky<Eigen::SparseMatrix<ScalarType > > (A);
-        assert(solver->info() == Eigen::Success);
-        // if (solver->info() != Eigen::Success)
-        // {std::cout<<"Error Not Success Eigen!!!!"<<std::endl;exit(0);}
+  void Residual(const std::vector<ScalarType> &Solution,
+                std::vector<ScalarType> &Residual) {
+    int NumVar = A0.cols();
+    assert(Solution.size() == NumVar);
+    MatrixXm X;
+    X = MatrixXm(NumVar, 1);
+    X.setZero();
+    for (int i = 0; i < NumVar; i++) {
+      int CurrRow = i;
+      X(CurrRow) = LinConstr[i].RHSide * LinConstr[i].Weight;
     }
 
-    void Solve(std::vector<ScalarType> &Solution,const std::vector<ScalarType> &RHS=std::vector<ScalarType>())
-    {
-        bool UseOriginalRHS=(RHS.size()!=LinConstr.size());
-        int NumRows=LinConstr.size();
+    // std::cout<<"test 0"<<std::endl;
+    // std::cout<<"A0: "<<A0.rows()<<" x "<<A0.cols()<<std::endl;
+    // std::cout<<"X: "<<X.rows()<<std::endl;
+    // std::cout<<"V0: "<<V0.rows()<<std::endl;
+    Eigen::VectorX<ScalarType> r = A0 * X - V0;
+    // std::cout<<"A0: "<<A0.rows()<<" x "<<A0.cols()<<std::endl;
+    //std::cout<<" de de r: "<<r.rows()<<std::endl;
+    
+    //std::cout<<"test 1"<<std::endl;
+    // update the position
+    Residual.resize(r.rows());
 
-        V=MatrixXm(NumRows,1);
-        V.setZero();
-        for (int i=0;i<NumRows;i++)
-        {
-            int CurrRow=i;
-
-            if (UseOriginalRHS)
-                V(CurrRow)=LinConstr[i].RHSide*LinConstr[i].Weight;
-            else
-                V(CurrRow)=RHS[i]*LinConstr[i].Weight;
-        }
-
-        for (int i=0;i<V.rows();i++)
-        {
-         if (std::isnan(V(i))||std::isinf(V(i)))
-         {
-            {std::cout<<"Error on V 0!!!!"<<" index "<< i<<std::endl;exit(0);}
-         }
-        }
-        // if (hasNaNInf(A0))
-        // {std::cout<<"Error on A0!!!!"<<std::endl;exit(0);}
-        //std::cout<<"ROWS 0 :"<<V.rows()<<std::endl;
-            
-        V=A0.transpose()*V;
-
-        //std::cout<<"ROWS 1:"<<V.rows()<<std::endl;
-        // for (int i=0;i<V.rows();i++)
-        // {
-        //  if (std::isnan(V(i))||std::isinf(V(i)))
-        //  {
-        //     std::cout<<"ROWS 1:"<<V.rows()<<std::endl;
-        //     std::cout<<"Error on V 1!!!!"<<" index "<< i<<" value:"<<V(i)<<std::endl;exit(0);
-        //  }
-        // }
-
-        //std::cout<<"SOLVING"<<std::endl;
-        //solve the system
-        V = solver->solve(V).eval();
-        //std::cout<<"DONE"<<std::endl;
-
-        //update the position
-        Solution.resize(V.rows());
-
-        for (int i=0;i<V.rows();i++)
-            Solution[i]=V(i,0);
-    }
+    for (int i = 0; i < r.rows(); i++)
+      Residual[i] = r(i, 0);
+  }
 };
-}
+} // namespace Geo
 
 #endif

@@ -1087,7 +1087,7 @@ private:
   void SolveGlobal() {
     std::vector<LinearConstraint<ScalarType>> LSQCostr;
 
-     if (force_parity) {
+    if (force_parity) {
       for (size_t i = 0; i < VarValue.size(); i++) {
         assert(VarValue[i] % 2 == 0);
         VarValue[i] /= 2;
@@ -1095,7 +1095,7 @@ private:
       }
     }
     // add equality constraints
-    //int MaxVal=0;
+    // int MaxVal=0;
     for (size_t i = 0; i < OppEquivalences.size(); i++) {
       std::vector<int> Var0 = OppEquivalences[i].first;
       std::vector<int> Var1 = OppEquivalences[i].second;
@@ -1104,45 +1104,43 @@ private:
       EqConstr.RHSide = 0;
       EqConstr.Weight = RegVsIso;
 
-      for (size_t j = 0; j < Var0.size(); j++)
-      {
+      for (size_t j = 0; j < Var0.size(); j++) {
         EqConstr.LHSide.push_back(VarTerm<ScalarType>(Var0[j], 0, 1));
-        //MaxVal=std::max(MaxVal,Var0[j]);
+        // MaxVal=std::max(MaxVal,Var0[j]);
       }
 
-      for (size_t j = 0; j < Var1.size(); j++)
-      {
+      for (size_t j = 0; j < Var1.size(); j++) {
         EqConstr.LHSide.push_back(VarTerm<ScalarType>(Var1[j], 0, -1));
-        //MaxVal=std::max(MaxVal,Var0[j]);
+        // MaxVal=std::max(MaxVal,Var0[j]);
       }
       LSQCostr.push_back(EqConstr);
     }
 
     // add isotropy constraint
-    ScalarType delta_val=0.00001;
+    ScalarType delta_val = 0.00001;
     for (size_t i = 0; i < VarTargetValue.size(); i++) {
       LinearConstraint<ScalarType> IsoConstr;
       IsoConstr.RHSide = VarTargetValue[i];
-      IsoConstr.Weight = delta_val+(1 - RegVsIso);
+      IsoConstr.Weight = delta_val + (1 - RegVsIso);
       IsoConstr.LHSide.push_back(VarTerm<ScalarType>(i, 0, 1));
       LSQCostr.push_back(IsoConstr);
     }
-    
+
     Geo::IntegerLinearConstraintLeastSQSolver<ScalarType> IntLSQ;
     IntLSQ.Init(LSQCostr, 1);
-    //std::cout<<"DE 1 "<<VarTargetValue.size()<<std::endl;
+    // std::cout<<"DE 1 "<<VarTargetValue.size()<<std::endl;
     IntLSQ.Solve(VarValue);
     if (force_parity) {
       for (size_t i = 0; i < VarValue.size(); i++)
         VarValue[i] *= 2;
     }
-    //std::cout<<"DE 2 "<<VarValue.size()<<std::endl;
-    // EqConstr.RHSide=0;
-    // EqConstr.Weight=RegVsIso;
-    // for (size_t j=0;j<Var0.size();j++)
-    //   EqConstr.LHSide.push_back(VarTerm<ScalarType>(Var0[j],0,1));
-    // for (size_t j=0;j<Var1.size();j++)
-    //   EqConstr.LHSide.push_back(VarTerm<ScalarType>(Var1[j],0,-1));
+    // std::cout<<"DE 2 "<<VarValue.size()<<std::endl;
+    //  EqConstr.RHSide=0;
+    //  EqConstr.Weight=RegVsIso;
+    //  for (size_t j=0;j<Var0.size();j++)
+    //    EqConstr.LHSide.push_back(VarTerm<ScalarType>(Var0[j],0,1));
+    //  for (size_t j=0;j<Var1.size();j++)
+    //    EqConstr.LHSide.push_back(VarTerm<ScalarType>(Var1[j],0,-1));
   }
 
 public:
@@ -1427,10 +1425,16 @@ public:
     //   SolveIntegerValues();
     //   break;
     default:
+      assert(_SM == SM_GlobalSolve);
       InitTargetValue(_TargetL);
       InitOppositeEquivalences();
       SolveGlobal();
-      assert(_SM == SM_GlobalSolve);
+
+      // if (!force_parity) {
+      //   EM = EM_ForceRegular;
+      //   check_parity=true;
+      //   SolveIntegerValues();
+      // }
       // code block
     }
     InitMatchingType();

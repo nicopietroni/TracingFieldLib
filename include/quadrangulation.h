@@ -5,6 +5,7 @@
 #include "Space_Query/triangle_grid_2D.h"
 #include "Space_Query/triangle_grid_3D.h"
 #include "UV_param.h"
+#include "UV_utils.h"
 #include "box2.h"
 #include "mesh_functions.h"
 #include "point2.h"
@@ -359,6 +360,10 @@ public:
         int IndexF = -1;
         GridUV.FirstTrianglesOverPoint(PatchVertUV, Patch_Faces, IntP, IndexF,
                                        BaryCoords);
+        if (IndexF == -1) {
+          IndexF = Geo::UVUtils<ScalarType>::InsideFace(PatchVertUV, Patch_Faces, IntP, BaryCoords);
+        }
+
         assert(IndexF != -1);
 
         int IndexV0 = Patch_Faces[IndexF][0];
@@ -408,9 +413,14 @@ public:
   {
 
     std::vector<Geo::Point2<ScalarType>> QuadVertUV;
-    bool found=QLut.GetQuadrangulation(UVSideSubd, QuadVertUV, QuadFaces);
-    if (!found)return false;
+    bool found = QLut.GetQuadrangulation(UVSideSubd, QuadVertUV, QuadFaces);
+    if (!found)
+      return false;
 
+    // std::cout<<"DEDE"<<std::endl;
+    //     WriteOBJ("Test0.obj",PatchVertUV, Patch_Faces);
+    //     WriteOBJ("Test1.obj",QuadVertUV, QuadFaces);
+    //     exit(0);
     std::vector<Geo::Point3<ScalarType>> AllSide3D;
     for (size_t i = 0; i < SideSubd.size(); i++)
       AllSide3D.insert(AllSide3D.end(), SideSubd[i].begin(), SideSubd[i].end());
@@ -419,8 +429,7 @@ public:
                     AllSide3D.end());
     AllSide3D.pop_back();
 
-    QuadVert.resize(QuadVertUV.size(), Geo::Point3<ScalarType>(0, 0,0));
-
+    QuadVert.resize(QuadVertUV.size(), Geo::Point3<ScalarType>(0, 0, 0));
 
     // set boundary
     assert(AllSide3D.size() <= QuadVert.size());
@@ -431,7 +440,7 @@ public:
 
     for (size_t i = 0; i < BorderNum; i++)
       QuadVert[i] = AllSide3D[i];
-    
+
     // initialize the grid for sampling
     Geo::TriangleSpatialIndex2D<ScalarType> GridUV;
     GridUV.Init(PatchVertUV, Patch_Faces);
@@ -442,6 +451,13 @@ public:
       int IndexF = -1;
       GridUV.FirstTrianglesOverPoint(PatchVertUV, Patch_Faces, QuadVertUV[i],
                                      IndexF, BaryCoords);
+      if (IndexF == -1) {
+        std::cout << "DEDE" << std::endl;
+        WriteOBJ("Test0.obj", PatchVertUV, Patch_Faces);
+        WriteOBJ("Test1.obj", QuadVertUV, QuadFaces);
+        // QuadVertUV
+        exit(0);
+      }
       assert(IndexF != -1);
 
       int IndexV0 = Patch_Faces[IndexF][0];
@@ -455,7 +471,6 @@ public:
       Geo::Point3<ScalarType> InterpP =
           P0 * BaryCoords.X + P1 * BaryCoords.Y + P2 * BaryCoords.Z;
       QuadVert[i] = InterpP;
-      
     }
 
     // // then set the rest
@@ -521,7 +536,7 @@ public:
         UVSideSubd.back().push_back(UVInterp);
       }
     }
-    
+
     size_t Size0 = SideSubd[0].size();
     size_t Size1 = SideSubd[1].size();
     size_t Size2 = SideSubd[2].size();
@@ -532,7 +547,7 @@ public:
     if (IsRegular) {
       SampleRegular(VertUV, PatchVert, Patch_Faces, Size0, Size1, SideSubd,
                     UVSideSubd, QuadVert, QuadFaces);
-     
+
       has_sampled = true;
     } else {
       has_sampled = SampleWithLUT(VertUV, PatchVert, Patch_Faces, SideSubd,
@@ -586,7 +601,7 @@ public:
       QuadrangulateQuadPatchWithSubs(CurrPatchVert, CurrPatchFaces,
                                      CurrPatchCorners, SideSamples3D[i], QLut,
                                      Curr_Patch_QuadVert, Curr_Patch_QuadFaces);
-      
+
       AppendMesh<ScalarType>(QuadVert, QuadFaces, Curr_Patch_QuadVert,
                              Curr_Patch_QuadFaces);
     }

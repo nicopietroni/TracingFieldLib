@@ -1,6 +1,7 @@
 #ifndef QUADRANGULATION_LUT
 #define QUADRANGULATION_LUT
 
+#include "connectivity.h"
 #include "point2.h"
 #include "point3.h"
 #include <cassert>
@@ -164,13 +165,16 @@ public:
       for (size_t j=AllSideP.size();j<VertPos.size();j++)
         VertPos[j]=Avg;
       
+      
+      //Geo::SmoothLaplacian<ScalarType>(VertPos,Connectivity,SParam);
+      //getBorderVert(Connectivity,FixedVert);
+      //Geo::SmoothLaplacianImplicit(VertPos,Connectivity,FixedVert);
       SmoothParam<ScalarType> SParam;
       SParam.FixedVert=FixedVert;
-      SParam.NumIte=20;
+      SParam.NumIte=10;
       SParam.Damp=0;
-      Geo::SmoothLaplacian<ScalarType>(VertPos,Connectivity,SParam);
-      //Geo::SmoothLaplacianImplicit(VertPos,Connectivity,FixedVert);
       
+      Geo::SmoothLaplacian<ScalarType>(VertPos,Connectivity,SParam);
       return true;
     }
     else

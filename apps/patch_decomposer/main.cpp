@@ -274,14 +274,14 @@ Geo::QuadrangulationLUT<ScalarType> Q_LUT;
 int QuadSmoothSteps = 10;
 
 // subdivision solve mode
-bool force_parity=true;
-ScalarType RegVsIso=1.0;
-bool SubdBase = true;
-bool SubdBaseRegular = false;
-// bool SubdIteForceRegular = false;
-// bool SubdIteBlend = false;
-bool SubdIterative = false;
-bool SubdGlobal = false;
+bool force_parity = true;
+ScalarType RegVsIso = 1.0;
+// bool SubdBase = false;
+// bool SubdBaseRegular = false;
+// // bool SubdIteForceRegular = false;
+// // bool SubdIteBlend = false;
+// bool SubdIterative = false;
+// bool SubdGlobal = true;
 
 void RestoreOriginalPosOnSplitBorders() {
   assert(ModSameBVert.size() == ModSameBOrigPos.size());
@@ -430,6 +430,7 @@ void SampleTracing() {
 
   // PDeco.SampleInitialCandidates();
   PDeco.InitSampling(PDeco.add_only_where_needed);
+  PathSampl.force_direct = true;
   if (PDeco.add_only_where_needed)
     PDeco.InitMustPassEdges();
 
@@ -993,12 +994,15 @@ void BatchProcessMinPatch() {
   PDeco.add_only_where_needed = true;
   PDeco.stop_when_solved = true;
   PDeco.dynamic_smooth = false;
+  // PDeco.SolveAllFeatures();
   PDeco.BatchDecompose(remove_batch);
   // SmoothPaths();
   // PDeco.SolveAllFeatures();
   // SmoothPaths();
   // PDeco.SolveAllMesh();
+
   SmoothPaths();
+
   auto end3 = std::chrono::high_resolution_clock::now();
   auto elapsed3 =
       std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2);
@@ -1128,20 +1132,16 @@ void SetDecomposeBar() {
 
   ImGui::SetNextItemWidth(100);
   ImGui::InputInt("Density", &PathSampl.NumSamples);
-  ImGui::SameLine();
-  ImGui::Checkbox("Split", &PDeco.split_removal);
-
-  ImGui::SetNextItemWidth(120);
-  ImGui::Checkbox("Dynamic Updata", &PDeco.dynamic_updates);
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(120);
-  ImGui::Checkbox("Dynamic Smooth", &PDeco.dynamic_smooth);
+  ImGui::Checkbox("Dynamic Update", &PDeco.dynamic_updates);
+  // ImGui::SetNextItemWidth(120);
+  ImGui::Checkbox("Force Features", &PDeco.force_all_features);
+  ImGui::Checkbox("Split Remove", &PDeco.split_removal);
+  // ImGui::Checkbox("Dynamic Smooth", &PDeco.dynamic_smooth);
+  // split_removal
+  // ImGui::SetNextItemWidth(120);
+  // ImGui::Checkbox("Dynamic Smooth", &PDeco.dynamic_smooth);
 
   if (ImGui::Button("MINIMAL PATCH")) {
-    // remove_batch = true;
-    // PDeco.add_only_where_needed = true;
-    // PDeco.stop_when_solved = true;
-    // PDeco.dynamic_smooth = false;
     BatchProcessMinPatch();
     PathColors.resize(PathSampl.SelectedPaths.size());
     Geo::ScatterColor<ScalarType>(PathColors);
@@ -1219,18 +1219,18 @@ void SetDecomposeBar() {
     UpdateAfterRemesh();
   }
 
-  if (ImGui::Button("Split Features")) {
-    // Geo::TracingPreprocess<ScalarType>::SplitFeatures(
-    //     VertPos, Connectivity, VertCurv, SingIndex, SingValue, Features);
-    Geo::TracingPreprocess<ScalarType>::SplitFeatures(
-        VertPos, Connectivity, VertCurv, FaceCurv, Features, SingIndex,
-        SingValue, FeatureSingIndex, FeatureSingValue);
-    UpdateFeatureSing();
-    Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
-        VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
+  // if (ImGui::Button("Split Features")) {
+  //   // Geo::TracingPreprocess<ScalarType>::SplitFeatures(
+  //   //     VertPos, Connectivity, VertCurv, SingIndex, SingValue, Features);
+  //   Geo::TracingPreprocess<ScalarType>::SplitFeatures(
+  //       VertPos, Connectivity, VertCurv, FaceCurv, Features, SingIndex,
+  //       SingValue, FeatureSingIndex, FeatureSingValue);
+  //   UpdateFeatureSing();
+  //   Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
+  //       VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
 
-    UpdateAfterRemesh();
-  }
+  //   UpdateAfterRemesh();
+  // }
 
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
@@ -1354,8 +1354,10 @@ void SetDecomposeBar() {
   ImGui::InputInt("Sing Dist", &PathSampl.minSingResample);
 
   if (ImGui::Button("FEATURES")) {
-    PDeco.SolveAllFeatures();
-    // PDeco.SolveSpikeSpike();
+    PathSampl.dynamicUpdates = PDeco.dynamic_updates;
+    PDeco.ForceAllFeatures();
+    // PDeco.SolveAllFeatures();
+    //  PDeco.SolveSpikeSpike();
     PathColors.resize(PathSampl.SelectedPaths.size());
     Geo::ScatterColor<ScalarType>(PathColors);
     UpdateColor();
@@ -1586,7 +1588,8 @@ void SmoothQuadMesh() {
   // UVP);
 
   // 3D SPACE SMOOTH
-  std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> FeatureData;
+  std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
+      FeatureData;
   SideD.GetFeaturesQuadrData(DualVertPos, DualFeatures, FeatureData);
 
   Geo::SmoothParam<ScalarType> SParam;
@@ -1615,13 +1618,16 @@ void SmoothQuadMesh() {
   SParam.NumIte = QuadSmoothSteps;
   SParam.Damp = 0.5;
   SParam.post_project = true;
+  //SParam.SType=Geo::SMBestPoly;
   Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParam);
 
-  Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
+  Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces,
+                                  QuadFaceNormals,
                                   QuadVertNormals);
 }
 
 Geo::DualPatch<ScalarType>::DualParameter DualParam;
+
 int EvenMode = 0;
 int OnlyDualP = -1;
 
@@ -1678,9 +1684,25 @@ void SetExportBar() {
     RestoreOriginalPosOnSplitBorders();
     Geo::DualPatch<ScalarType>::DisambiguateForDual(PatchM);
 
+    // Geo::DualPatch<ScalarType>::ExtractDual(
+    //     VertPos, Connectivity, PatchM, DualParam, DualVertPos,
+    //     DualConnectivity, PerDualPatchFaceIDX, PerDualPatchCornerIDX);
+
+    Geo::DualPatch<ScalarType>::PrimalPatchData PData;
+    PData.PatchFaces = PatchM.PData.SubPatchFaces;
+    PData.PatchVertPos = PatchM.PData.SubPatchVertPos;
+    PData.PatchCorners = PatchM.PData.PatchCorners;
+    PData.EdgePatchSides = PatchM.PData.EdgePatchSides;
+    for (size_t i = 0; i < PatchM.NumPatches(); i++) {
+      std::vector<int> PatchSing;
+      PatchM.PatchSingularities(i, PatchSing);
+      PData.PatchSingularities.push_back(PatchSing);
+    }
+
     Geo::DualPatch<ScalarType>::ExtractDual(
-        VertPos, Connectivity, PatchM, DualParam, DualVertPos, DualConnectivity,
-        PerDualPatchFaceIDX, PerDualPatchCornerIDX);
+        PData, DualParam, DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+        PerDualPatchCornerIDX);
+
     // std::cout << "Size F:" << PerDualPatchFaceIDX.size() << std::endl;
     // std::cout << "Vert FIdx:" << PerDualPatchVertIDX.size() << std::endl;
     // std::cout << "Corner FIdx:" << PerDualPatchCornerIDX.size() << std::endl;
@@ -1757,66 +1779,66 @@ void SetExportBar() {
                         &minValueRvsIso, &maxValueRvsIso, "%.2f");
 
     ImGui::Checkbox("Force Parity", &force_parity);
-    
-    if (ImGui::RadioButton("Base Init", SubdBase)) {
-      SubdBase = true;
-      SubdBaseRegular = false;
-      // SubdIteForceRegular = false;
-      // SubdIteBlend = false;
-      SubdIterative = false;
-      SubdGlobal = false;
-    }
-    if (ImGui::RadioButton("Base Regular", SubdBaseRegular)) {
-      SubdBase = false;
-      SubdBaseRegular = true;
-     // SubdIteForceRegular = false;
-      // SubdIteBlend = false;
-      SubdIterative = false;
-      SubdGlobal = false;
-    }
-    if (ImGui::RadioButton("Iterative", SubdIterative)) {
-      SubdBase = false;
-      SubdBaseRegular = false;
-      // SubdIteForceRegular = false;
-      // SubdIteBlend = false;
-      SubdIterative = true;
-      SubdGlobal = false;
-    }
-    // if (ImGui::RadioButton("Ite Blend", SubdIteBlend)) {
-    //   SubdBase = false;
+
+    // if (ImGui::RadioButton("Base Init", SubdBase)) {
+    //   SubdBase = true;
     //   SubdBaseRegular = false;
-    //   SubdIteForceRegular = false;
-    //   SubdIteBlend = true;
+    //   // SubdIteForceRegular = false;
+    //   // SubdIteBlend = false;
+    //   SubdIterative = false;
     //   SubdGlobal = false;
     // }
-    if (ImGui::RadioButton("Global", SubdGlobal)) {
-      SubdBase = false;
-      SubdBaseRegular = false;
-      // SubdIteForceRegular = false;
-      // SubdIteBlend = false;
-      SubdIterative = false;
-      SubdGlobal = true;
-    }
+    // if (ImGui::RadioButton("Base Regular", SubdBaseRegular)) {
+    //   SubdBase = false;
+    //   SubdBaseRegular = true;
+    //   // SubdIteForceRegular = false;
+    //   // SubdIteBlend = false;
+    //   SubdIterative = false;
+    //   SubdGlobal = false;
+    // }
+    // if (ImGui::RadioButton("Iterative", SubdIterative)) {
+    //   SubdBase = false;
+    //   SubdBaseRegular = false;
+    //   // SubdIteForceRegular = false;
+    //   // SubdIteBlend = false;
+    //   SubdIterative = true;
+    //   SubdGlobal = false;
+    // }
+    // // if (ImGui::RadioButton("Ite Blend", SubdIteBlend)) {
+    // //   SubdBase = false;
+    // //   SubdBaseRegular = false;
+    // //   SubdIteForceRegular = false;
+    // //   SubdIteBlend = true;
+    // //   SubdGlobal = false;
+    // // }
+    // if (ImGui::RadioButton("Global", SubdGlobal)) {
+    //   SubdBase = false;
+    //   SubdBaseRegular = false;
+    //   // SubdIteForceRegular = false;
+    //   // SubdIteBlend = false;
+    //   SubdIterative = false;
+    //   SubdGlobal = true;
+    // }
     if (ImGui::Button("Solve Subdivision")) {
       DrawSubdivision = true;
       DrawQuadMesh = false;
       ScalarType EdgeS = MeshBox.Diag() * QuadSize;
 
       Geo::SideDiscretization<ScalarType>::solveMode SM;
-      if (SubdBase)
-        SM = Geo::SideDiscretization<ScalarType>::SM_Base;
-      if (SubdBaseRegular)
-        SM = Geo::SideDiscretization<ScalarType>::SM_Base_Regular;
-      if (SubdIterative)
-        SM = Geo::SideDiscretization<ScalarType>::SM_Iterative;
-      // if (SubdIteForceRegular)
-      //   SM = Geo::SideDiscretization<ScalarType>::SM_Ite_ForceRegular;
-      // if (SubdIteBlend)
-      //   SM = Geo::SideDiscretization<ScalarType>::SM_Ite_Blend;
-      if (SubdGlobal)
+      // if (SubdBase)
+      //   SM = Geo::SideDiscretization<ScalarType>::SM_Base;
+      // if (SubdBaseRegular)
+      //   SM = Geo::SideDiscretization<ScalarType>::SM_Base_Regular;
+      // if (SubdIterative)
+      //   SM = Geo::SideDiscretization<ScalarType>::SM_Iterative;
+      // // if (SubdIteForceRegular)
+      // //   SM = Geo::SideDiscretization<ScalarType>::SM_Ite_ForceRegular;
+      // // if (SubdIteBlend)
+      // //   SM = Geo::SideDiscretization<ScalarType>::SM_Ite_Blend;
+      // if (SubdGlobal)
         SM = Geo::SideDiscretization<ScalarType>::SM_GlobalSolve;
 
-      SideD.Solve(EdgeS, SM,force_parity,RegVsIso);
+      SideD.Solve(EdgeS, SM, force_parity, RegVsIso);
     }
     // if (ImGui::Button("Init Target Subdivision")) {
     //   DrawSubdivision = true;
@@ -2225,8 +2247,16 @@ void GLDrawMesh() {
   //                       std::vector<std::string> LabelText)
 }
 
+void InitDefaultParameters() {
+  DualParam.OnlyNonQuad = true;
+  DualParam.InitSingPos = true;
+  DualParam.FixSingPos = false;
+  DualParam.JointBorder = true;
+}
+
 int main(int argc, char *argv[]) {
 
+  InitDefaultParameters();
   // oss<<"Initialized Log Window"<<std::endl;
   // AScene.SetOutputStream(&oss);
 
