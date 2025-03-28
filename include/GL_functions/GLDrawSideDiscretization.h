@@ -71,8 +71,7 @@ public:
   }
 
   static void
-  GLDrawSortedSubdivision(const Geo::SideDiscretization<ScalarType> &SideD
-                          ) 
+  GLDrawSortedSubdivision(const Geo::SideDiscretization<ScalarType> &SideD) 
   {
     std::vector<std::vector<std::vector<Geo::Point3<ScalarType> > > > SidePoints;
     SideD.GetSortedSideSamples(SidePoints);

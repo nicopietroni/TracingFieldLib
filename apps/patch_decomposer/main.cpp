@@ -194,6 +194,7 @@ int failed_trace = 0;
 int tested_trace = 0;
 
 bool single_boundary_cond = true;
+bool self_connection_cond=true;
 bool disk_like_cond = true;
 bool single_sing_cond = false;
 bool match_sing_cond = true;
@@ -210,6 +211,7 @@ ScalarType CCability = 1;
 ScalarType EqSideThr = 1;
 
 bool old_single_boundary_cond = single_boundary_cond;
+bool old_self_connection_cond = self_connection_cond;
 bool old_disk_like_cond = disk_like_cond;
 bool old_single_sing_cond = single_sing_cond;
 bool old_match_sing_cond = match_sing_cond;
@@ -343,6 +345,7 @@ void InitGraph() {
 bool UpdateConditions() {
   bool has_changed = false;
   has_changed |= old_single_boundary_cond != single_boundary_cond;
+  has_changed |= old_self_connection_cond != self_connection_cond;
   has_changed |= old_disk_like_cond != disk_like_cond;
   has_changed |= old_single_sing_cond != single_sing_cond;
   has_changed |= old_match_sing_cond != match_sing_cond;
@@ -358,6 +361,7 @@ bool UpdateConditions() {
   has_changed |= max_uvDist != old_max_uvDist;
 
   old_single_boundary_cond = single_boundary_cond;
+  old_self_connection_cond = self_connection_cond;
   old_disk_like_cond = disk_like_cond;
   old_single_sing_cond = single_sing_cond;
   old_match_sing_cond = match_sing_cond;
@@ -381,6 +385,8 @@ void InitConditions() {
     PDeco.AddCondition(new Geo::SingleBoundaryCondition<ScalarType>());
   if (disk_like_cond)
     PDeco.AddCondition(new Geo::DiskLikeCondition<ScalarType>());
+  if (self_connection_cond)
+    PDeco.AddCondition(new Geo::SelfConnectingPatchCondition<ScalarType>());
   if (single_sing_cond)
     PDeco.AddCondition(new Geo::SingleSingularityCondition<ScalarType>());
   if (match_sing_cond)
@@ -1261,14 +1267,16 @@ void SetDecomposeBar() {
   ImGui::Separator();
   ImGui::TextColored(ImVec4(1, 0, 1, 1), "CONDITIONS");
   ImGui::TextColored(ImVec4(0, 0, 1, 1), "structure");
-  ImGui::Checkbox("Darts", &PDeco.allow_darts);
-  ImGui::SameLine();
-  ImGui::Checkbox("Concave", &PDeco.allow_concave);
+  // ImGui::Checkbox("Darts", &PDeco.allow_darts);
+  // ImGui::SameLine();
+  // ImGui::Checkbox("Concave", &PDeco.allow_concave);
 
   ImGui::TextColored(ImVec4(0, 0, 1, 1), "topology");
   ImGui::Checkbox("1 Boundary", &single_boundary_cond);
   ImGui::SameLine();
   ImGui::Checkbox("Disk Like", &disk_like_cond);
+  ImGui::SameLine();
+  ImGui::Checkbox("Not Self Connection ", &self_connection_cond);
 
   ImGui::TextColored(ImVec4(0, 0, 1, 1), "singularity");
   ImGui::Checkbox("1 Sing Patch", &single_sing_cond);

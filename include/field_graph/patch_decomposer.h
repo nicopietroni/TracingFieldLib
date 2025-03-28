@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstddef>
 #include <iostream>
+#include <iterator>
 #include <ostream>
 #include <set>
 #include <sys/_types/_size_t.h>
@@ -225,6 +226,8 @@ public:
   bool end_patch_border;
   bool end_concave;
   bool end_spike;
+
+  int sing_dist_interval_step;
 
   std::set<int> FixedPaths;
 
@@ -937,10 +940,8 @@ public:
   // int time_rem3;
   // int time_rem4;
 
-  bool RemoveIfPossible(int &Path_To_remove, 
-                        bool remove_unsolved = false,
-                        int minGain=0,
-                        bool debug_msg = false) {
+  bool RemoveIfPossible(int &Path_To_remove, bool remove_unsolved = false,
+                        int minGain = 0, bool debug_msg = false) {
     if (debug_msg)
       std::cout << "Checking Path:" << Path_To_remove << std::endl;
 
@@ -1059,7 +1060,7 @@ public:
     if (remove_unsolved) {
       // std::cout << "Unsolved Before: " << UnsolvedBefore << std::endl;
       // std::cout << "Unsolved After: " << UnsolvedAfter << std::endl;
-      IsOkLocally = ((UnsolvedBefore-UnsolvedAfter)>=minGain);
+      IsOkLocally = ((UnsolvedBefore - UnsolvedAfter) >= minGain);
       IsOkLocally &= (MandatoryUnsolvedAfter == 0);
     }
     // GLOBAL UPDATE
@@ -1189,7 +1190,8 @@ public:
 
   int current_rem_cand;
 
-  bool RemoveNextIfPossible(bool remove_unsolved = false, int minimal_gain=0) {
+  bool RemoveNextIfPossible(bool remove_unsolved = false,
+                            int minimal_gain = 0) {
     if (current_rem_cand > PathSampl.SelectedPaths.size())
       current_rem_cand = PathSampl.SelectedPaths.size() - 1;
 
@@ -1199,7 +1201,8 @@ public:
         current_rem_cand--;
         continue;
       }
-      has_removed |= RemoveIfPossible(current_rem_cand, remove_unsolved,minimal_gain);
+      has_removed |=
+          RemoveIfPossible(current_rem_cand, remove_unsolved, minimal_gain);
 
       // TestedRemovedPath.insert(current_rem_cand);
       current_rem_cand--;
@@ -1282,6 +1285,8 @@ public:
     first_ite = true;
     update_dart = true;
     force_all_features = false;
+
+    sing_dist_interval_step = 0;
   }
 
   //    std::set<int> TestedRemovedPath;
@@ -1534,7 +1539,8 @@ public:
   //       }
 
   //       if (is_removable)
-  //         RemovePrio.push_back(std::pair<int, int>(priority, Path_To_remove));
+  //         RemovePrio.push_back(std::pair<int, int>(priority,
+  //         Path_To_remove));
 
   //       // restore
   //       PathSampl.SelectedPaths[Path_To_remove] = TestPath;
@@ -1598,21 +1604,21 @@ public:
   //   } while (removed);
 
   //   CompactData();
-  
+
   // }
 
   void FinalRemovePath() {
     current_rem_cand = PathSampl.SelectedPaths.size() - 1;
     std::cout << "FINAL REMOVAL" << std::endl;
     int NumPath0 = PathSampl.SelectedPaths.size();
-    while (RemoveNextIfPossible(true,1)) {
+    while (RemoveNextIfPossible(true, 1)) {
       // update dart if needed
       // UpdateOrthoDartNodeTypeIfNeeded();
     };
 
     CompactData();
 
-    while (RemoveNextIfPossible(true,0)) {
+    while (RemoveNextIfPossible(true, 0)) {
       // update dart if needed
       // UpdateOrthoDartNodeTypeIfNeeded();
     };
@@ -1660,7 +1666,7 @@ public:
   {
     // std::cout<<"STEP 0"<<std::endl;
     // PathSampl.Graph().PrintData();
-
+    PathSampl.MaxCrossJump = 6;
     bool has_added = false;
 
     // SetSpikeSpikeConfiguration();
@@ -1716,6 +1722,8 @@ public:
     // PathSampl.Graph().PrintData();
     //}
     PathSampl.force_direct = false;
+
+    PathSampl.MaxCrossJump = -1;
     return has_added;
   }
 
@@ -1932,7 +1940,10 @@ private:
     PathSampl.InitWithSelected();
     bool has_added = false;
     first_ite = true;
+    int CurrIte = 0;
+    bool all_interval = true;
     do {
+
       // this firs step solve all the features (concave, spikes)
       has_added = false;
       std::cout << "* solving all features *" << std::endl;
@@ -1960,6 +1971,14 @@ private:
           std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
       TimeRemovePaths += elapsed.count() * 1e-6;
 
+      if (GeoVertIDX.size() > 2) {
+        all_interval = (CurrIte == GeoVertIDX.size() - 1);
+
+        EnableInterval(CurrIte);
+        CurrIte++;
+        CurrIte = std::min(CurrIte, (int)GeoVertIDX.size() - 1);
+      }
+
       // add the remaining to solve all the rest of the objetive function
       std::cout << "* solving rest of mesh *" << std::endl;
       bool has_added_m = SolveAllMesh();
@@ -1975,9 +1994,10 @@ private:
       elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
       TimeRemovePaths += elapsed.count() * 1e-6;
 
-     
-      // first_ite = false;
-    } while (has_added);
+      // PostEnableInterval();
+      //  first_ite = false;
+      std::cout << "*** STEP " << CurrIte << std::endl;
+    } while ((has_added) || (!all_interval));
 
     if (Do_remove)
       FinalRemovePath();
@@ -2179,8 +2199,144 @@ public:
     //   all_solved = (UnsolvedPatches.size() == 0);
   }
 
+  std::vector<std::vector<int>> GeoVertIDX;
+
+  void InitSingGeodesicInterval() {
+    GeoVertIDX.clear();
+    if (sing_dist_interval_step <= 1)
+      return;
+
+    typename Geo::Geodesic<ScalarType>::GeodesicParam GParam;
+    for (size_t i = 0; i < PathSampl.SingVertices().size(); i++)
+      GParam.Seeds.push_back(PathSampl.SingVertices()[i]);
+
+    std::vector<std::vector<int>> VVAdj;
+    Geo::FindVertexStar(PathSampl.Faces(), VVAdj);
+
+    // GParam.MaxSteps = stepDist;
+    Geo::TMark TempMark;
+    Geo::Geodesic<ScalarType>::NodeDijkstra(PathSampl.VerticesPos(), VVAdj,
+                                            TempMark, GParam);
+
+    ScalarType max_value =
+        (*std::max_element(GParam.Dist.begin(), GParam.Dist.end()));
+    // std::cout << "max Val " << max_value << std::endl;
+
+    // std::vector<ScalarType> IntervalVal;
+    // IntervalVal.resize(sing_dist_interval_step);
+    // ScalarType CurrVal = max_value / 2;
+    // for (size_t i = 0; i < IntervalVal.size(); i++) {
+    //   IntervalVal[i] = CurrVal;
+    //   CurrVal /= 2;
+    // }
+    // IntervalVal.back() = 0;
+
+    std::vector<std::pair<ScalarType, int>> SortedD;
+    for (size_t i = 0; i < PathSampl.VerticesPos().size(); i++)
+      SortedD.push_back(std::pair<ScalarType, int>(GParam.Dist[i], i));
+    std::sort(SortedD.begin(), SortedD.end());
+    std::reverse(SortedD.begin(), SortedD.end());
+    int stepSize = floor(0.5 + (ScalarType)SortedD.size() /
+                                   (ScalarType)sing_dist_interval_step);
+
+    GeoVertIDX.resize(sing_dist_interval_step);
+    assert(PathSampl.VerticesPos().size() == GParam.Dist.size());
+    for (size_t j = 0; j < GeoVertIDX.size() - 1; j++) {
+      int currEnd = (j + 1) * stepSize;
+      for (size_t k = 0; k < currEnd; k++)
+        GeoVertIDX[j].push_back(SortedD[k].second);
+    }
+
+    for (size_t k = 0; k < PathSampl.VerticesPos().size(); k++)
+      GeoVertIDX.back().push_back(SortedD[k].second);
+    // std::vector<ScalarType> IntervalVal;
+
+    // ScalarType StepVal =
+    //     ((ScalarType)SortedD.size()) / (ScalarType)sing_dist_interval_step;
+
+    // for (size_t i = 0; i < sing_dist_interval_step - 1; i++) {
+    //   ScalarType IdxScalar = (ScalarType)SortedD.size() * StepVal * (i + 1);
+    //   int IdxInt = floor(IdxScalar + 0.5);
+    //   IdxInt = std::min(IdxInt, (int)SortedD.size() - 1);
+    //   IdxInt = std::max(IdxInt, 0);
+    //   ScalarType CurrVal = SortedD[IdxInt];
+    //   IntervalVal.push_back(CurrVal);
+    // }
+    // IntervalVal.push_back(-1);
+
+    // // reverse from most farther
+    // std::reverse(IntervalVal.begin(), IntervalVal.end());
+
+    // GeoVertIDX.clear();
+    // GeoVertIDX.resize(IntervalVal.size());
+    // assert(PathSampl.VerticesPos().size() == GParam.Dist.size());
+    // for (size_t i = 0; i < PathSampl.VerticesPos().size(); i++) {
+    //   ScalarType CurrD = GParam.Dist[i];
+    //   for (size_t j = 0; j < IntervalVal.size(); j++) {
+    //     if (CurrD <= IntervalVal[i])
+    //       continue;
+    //     GeoVertIDX[j].push_back(i);
+    //   }
+    // }
+
+    // for (size_t i = 0; i < GeoVertIDX.size(); i++)
+    // std::cout << "Interval " << IntervalVal[i] << std::endl;
+
+    // for (size_t i = 0; i < GeoVertIDX.size(); i++)
+    //   std::cout << "SIZE Part " << GeoVertIDX[i].size() << std::endl;
+
+    // std::cout << "Total Size " << PathSampl.VerticesPos().size() <<
+    // std::endl;
+    // exit(0);
+  }
+
+  // std::vector<int> HasDisabled;
+
+  // void EnableInterval(const int IndexInterval) {
+  //   assert(IndexInterval >= 0);
+  //   assert(IndexInterval < GeoVertIDX.size());
+
+  //   std::vector<int> NodesIDX;
+  //   Field::CrossFieldGraph::NodesOfElems(GeoVertIDX[IndexInterval],NodesIDX);
+
+  //   std::set<int> NodesIDXSet(NodesIDX.begin(), NodesIDX.end());
+
+  //   HasDisabled.clear();
+  //   for (size_t i = 0; i < PathSampl.Graph().NumNodes(); i++) {
+  //     if (!PathSampl.Graph().IsEnabled(i))
+  //       continue;
+  //     if (NodesIDXSet.count(i) == 0) {
+  //       PathSampl.Graph().DisableNode(i);
+  //       HasDisabled.push_back(i);
+  //     }
+  //   }
+  // }
+
+  void EnableInterval(const int IndexInterval) {
+    assert(IndexInterval >= 0);
+    assert(IndexInterval < GeoVertIDX.size());
+
+    std::set<int> GeoVertIDXSet(GeoVertIDX[IndexInterval].begin(),
+                                GeoVertIDX[IndexInterval].end());
+
+    PathSampl.FilterDisableVert.clear();
+    for (size_t i = 0; i < PathSampl.VerticesPos().size(); i++) {
+      if (GeoVertIDXSet.count(i) > 0)
+        continue;
+      PathSampl.FilterDisableVert.push_back(i);
+    }
+  }
+
+  // void PostEnableInterval()
+  // {
+  //   for (size_t i=0;i<HasDisabled.size();i++)
+  //   PathSampl.Graph().EnableNode(HasDisabled[i]);
+  // }
+
   void BatchDecompose(bool Do_remove) {
+
     // bool has_added = false;
+    InitSingGeodesicInterval();
 
     PathSampl.dynamicUpdates = dynamic_updates;
 

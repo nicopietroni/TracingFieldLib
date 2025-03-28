@@ -797,6 +797,70 @@ private:
     }
   }
 
+  static bool MatchPatchPreconditions(const PrimalPatchData &PData,
+                                      const int &IndexPatch) {
+    assert(IndexPatch >= 0);
+    assert(IndexPatch < PData.PatchFaces.size());
+    assert(IndexPatch < PData.PatchCorners.size());
+
+    // avoid empty patches
+    if (PData.PatchFaces[IndexPatch].size() == 0) {
+      std::cout << "WARNING PATCH ZERO SIDES" << std::endl;
+      return false;
+    }
+    // avoid patches with multiple boundaries
+    if (PData.PatchCorners[IndexPatch].size() != 1) {
+      std::cout << "WARNING PATCH MULTIPL SIDES" << std::endl;
+      return false;
+    }
+    // avoid valence 2 (or smaller) paches
+    if (PData.PatchCorners[IndexPatch][0].size() < 3) {
+      std::cout << "WARNING PATCH SIDES < 3" << std::endl;
+      return false;
+    }
+    return true;
+  }
+
+  static void SplitPatchIfNeeded(PrimalPatchData &PData,
+                                 const int &IndexPatch) {
+    // split the patch that does not have intenal vert
+    std::vector<size_t> BorderV;
+    Geo::getBorderVert(PData.PatchFaces[IndexPatch], BorderV);
+
+    // all external vertices splic
+    if (BorderV.size() == PData.PatchVertPos[IndexPatch].size()) {
+      int NumF0 = PData.PatchFaces[IndexPatch].size();
+      Geo::Point3<ScalarType> bary(0.3333333, 0.3333333, 0.3333333);
+      for (size_t j = 0; j < NumF0; j++)
+        RefineMesh<ScalarType>::SplitTriangleInside(
+            PData.PatchVertPos[IndexPatch], PData.PatchFaces[IndexPatch], j,
+            bary);
+    }
+  }
+
+  static void
+  ParametrizePatch(PrimalPatchData &PData, const int &IndexPatch,
+                   std::vector<Geo::Point2<ScalarType>> &PatchVertUV,
+                   std::vector<Geo::Point2<ScalarType>> &PatchVertUVArap) {
+    // get position per patch
+    std::vector<Geo::Point3<ScalarType>> PatchVertPos =
+        PData.PatchVertPos[IndexPatch];
+    // and face per patch
+    std::vector<std::vector<int>> PatchFaces = PData.PatchFaces[IndexPatch];
+
+    // parametrize with tytte
+    bool done_param = Geo::UVParam<ScalarType>::TutteEmbedding(
+        PatchVertPos, PatchFaces, PData.PatchCorners[IndexPatch][0],
+        PatchVertUV, true);
+
+    assert(done_param);
+
+    // parametrize with LSQConformal
+    bool done_param_1 = Geo::UVParam<ScalarType>::LeastSquaresConformal(
+        PatchVertPos, PatchFaces, PatchVertUVArap);
+    assert(done_param_1);
+  }
+
 public:
   enum RegType { RTypeEven, RTypeOrtho };
 
@@ -858,7 +922,6 @@ public:
     }
   }
 
-
   static bool ExtractDual(PrimalPatchData &PData, DualParameter &DualParam,
                           std::vector<Geo::Point3<ScalarType>> &DualVertPos,
                           std::vector<std::vector<int>> &DualFaces,
@@ -889,68 +952,23 @@ public:
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
+    // INITIALIZE PATCHES - PARAMETRIZE AND INIT CENTRAL POS
     for (size_t i = 0; i < NumPatches; i++) {
-      // avoid empty patches
-      if (PData.PatchFaces[i].size() == 0) {
-        std::cout << "WARNING PATCH ZERO SIDES" << std::endl;
-        continue;
-      }
-      // avoid patches with multiple boundaries
-      if (PData.PatchCorners[i].size() != 1) {
-        std::cout << "WARNING PATCH MULTIPL SIDES" << std::endl;
-        continue;
-      }
-      // avoid valence 2 (or smaller) paches
-      if (PData.PatchCorners[i][0].size() < 3) {
-        std::cout << "WARNING PATCH SIDES < 3" << std::endl;
-        continue;
-      }
 
-      // split the patch that does not have intenal vert
-      std::vector<size_t> BorderV;
-      Geo::getBorderVert(PData.PatchFaces[i], BorderV);
+      if (!MatchPatchPreconditions(PData, i))
+        continue;
 
-      // all external vertices splic
-      if (BorderV.size() == PData.PatchVertPos[i].size()) {
-        int NumF0 = PData.PatchFaces[i].size();
-        Geo::Point3<ScalarType> bary(0.3333333, 0.3333333, 0.3333333);
-        for (size_t j = 0; j < NumF0; j++)
-          RefineMesh<ScalarType>::SplitTriangleInside(
-              PData.PatchVertPos[i], PData.PatchFaces[i], j, bary);
-      }
-
-      // int NumSides = PM.NumSides(i);
-      //     int NumSides(const int &IndexPatch) const {
-      //   int sideNum = 0;
-      //   for (size_t i = 0; i < PData.EdgePatchSides[IndexPatch].size(); i++)
-      //     sideNum += PData.EdgePatchSides[IndexPatch][i].size();
-      //   return sideNum;
-      // }
-      // need to check if ok might be slighly different
-      int NumSides = PData.PatchCorners[i][0].size();
+      SplitPatchIfNeeded(PData, i);
 
       // no need to split quads if not required
+      int NumSides = PData.PatchCorners[i][0].size();
       if ((NumSides == 4) && (DualParam.OnlyNonQuad))
         continue;
 
-      // get position per patch
-      std::vector<Geo::Point3<ScalarType>> PatchVertPos = PData.PatchVertPos[i];
-      // and face per patch
-      std::vector<std::vector<int>> PatchFaces = PData.PatchFaces[i];
-      // update border flab
-      getBorderVert(PatchFaces, PerPatchIsB[i]);
+      ParametrizePatch(PData, i, PatchVertUV[i], PatchVertUVArap[i]);
 
-      // parametrize with tytte
-      bool done_param = Geo::UVParam<ScalarType>::TutteEmbedding(
-          PatchVertPos, PatchFaces, PData.PatchCorners[i][0], PatchVertUV[i],
-          true);
-
-      assert(done_param);
-
-      // parametrize with LSQConformal
-      bool done_param_1 = Geo::UVParam<ScalarType>::LeastSquaresConformal(
-          PatchVertPos, PatchFaces, PatchVertUVArap[i]);
-      assert(done_param_1);
+      // get the border vert
+      getBorderVert(PData.PatchFaces[i], PerPatchIsB[i]);
 
       // set the initial central position
       std::vector<int> PatchSing = PData.PatchSingularities[i];
@@ -965,7 +983,7 @@ public:
       }
     }
 
-    // // then propagate on the non done so far
+    // then propagate on the non done so far
     std::vector<PosPair> AllSplEdgesPos;
 
     // // map pair of pos to pair of indexes
@@ -975,13 +993,11 @@ public:
     for (size_t s = 0; s < DualParam.MaxIte; s++) {
 
       if (DualParam.RType == RTypeEven)
-        FindSplitPos(PData, CentralV, PatchVertUV, 
-                     AllSplEdgesPos, SplEdgesIDX,
+        FindSplitPos(PData, CentralV, PatchVertUV, AllSplEdgesPos, SplEdgesIDX,
                      DualParam.JointBorder);
       else
-        FindSplitPos(PData, CentralV, PatchVertUVArap, 
-                     AllSplEdgesPos,SplEdgesIDX, 
-                     DualParam.JointBorder);
+        FindSplitPos(PData, CentralV, PatchVertUVArap, AllSplEdgesPos,
+                     SplEdgesIDX, DualParam.JointBorder);
 
       // optimize singularities
       for (size_t i = 0; i < NumPatches; i++) {
@@ -999,11 +1015,13 @@ public:
           continue;
 
         if (DualParam.RType == RTypeEven) {
-          CentralV[i] = OptimizeSingularPos(PatchVertPos, PatchVertUV[i], SplEdgesIDX[i],
+          CentralV[i] =
+              OptimizeSingularPos(PatchVertPos, PatchVertUV[i], SplEdgesIDX[i],
                                   PData.PatchCorners[i][0], PerPatchIsB[i]);
         } else {
-          CentralV[i] = OptimizeSingularPos(PatchVertPos, PatchVertUVArap[i], SplEdgesIDX[i],
-                                            PData.PatchCorners[i][0], PerPatchIsB[i]);
+          CentralV[i] = OptimizeSingularPos(
+              PatchVertPos, PatchVertUVArap[i], SplEdgesIDX[i],
+              PData.PatchCorners[i][0], PerPatchIsB[i]);
         }
       }
     }

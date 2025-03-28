@@ -206,12 +206,10 @@ private:
     Len=PathFunctions<ScalarType>::PathWeight(TGraph, PathN);
 
     if (make_direct) {
-      // std::cout<<"TEST CASCINA De0"<<std::endl;
       assert(TGraph.EnabledN[PathN[0]]);
       assert(TGraph.EnabledN[PathN.back()]);
       bool has_direct =
           Geo::PathFunctions<ScalarType>::MakeDirectConnection(TGraph, PathN);
-      // std::cout<<"TEST CASCINA De1"<<std::endl;
 
       if (!has_direct) {
         if (enable_when_need)

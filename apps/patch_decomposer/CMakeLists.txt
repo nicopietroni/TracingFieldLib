@@ -53,10 +53,14 @@ add_executable(${PROJECT_NAME} main.cpp
 #               ../../external_lib/FileBrowser/ImGuiFileBrowser.cpp
 #               ${GLEWPATH}/src/glew.c
                )
-
+find_package(Threads REQUIRED)
+#target_link_libraries(patch_decomposer PRIVATE Threads::Threads)
+               
 target_include_directories(${PROJECT_NAME} PRIVATE ${GLEW_INCLUDE_DIR})
 
 target_link_libraries(${PROJECT_NAME}
+    PRIVATE
+    Threads::Threads
     ${GLEW_LIB} 
     "-framework OpenGL"
     "-framework Cocoa"

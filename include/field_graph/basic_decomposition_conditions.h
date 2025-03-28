@@ -135,6 +135,9 @@ public:
         return true;
     }
 
+    bool Mandatory()const override
+    {return true;}
+    
     std::string Name()const override
     {return std::string("dual_meshing");}
 };

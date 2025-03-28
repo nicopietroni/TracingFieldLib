@@ -1,6 +1,7 @@
 #ifndef FIELD_GRAPH
 #define FIELD_GRAPH
 
+#include "graph_cross_field.h"
 #include "triangle2.h"
 #include <algorithm>
 #include <cassert>
@@ -774,6 +775,12 @@ public:
 
   TracingGraph(GraphType _GType) {
     GType = _GType;
+    CurrDIndex = 0;
+  }
+
+  TracingGraph() 
+  {
+    GType = GT_CrossField;
     CurrDIndex = 0;
   }
 };
