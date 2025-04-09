@@ -2,6 +2,7 @@
 #define QUADRANGULATION_LUT
 
 #include "connectivity.h"
+#include "mesh_functions.h"
 #include "point2.h"
 #include "point3.h"
 #include <cassert>
@@ -175,6 +176,9 @@ public:
       SParam.Damp=0;
       
       Geo::SmoothLaplacian<ScalarType>(VertPos,Connectivity,SParam);
+
+      //then invert faces orientation (it is like that in the LUT)
+      InvertOrientation(Connectivity);
       return true;
     }
     else

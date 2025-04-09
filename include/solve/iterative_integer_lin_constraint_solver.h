@@ -19,6 +19,8 @@ template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
   LinearConstraintLeastSQSolver<ScalarType> LQSolver;
   std::vector<bool> FixedVar;
   std::vector<int> FixedInt;
+  std::vector<ScalarType> SoftW;
+
   // std::vector<ScalarType> FixedW;
 
   enum SolveType { ST_IterativeFix, ST_Increment };
@@ -27,9 +29,13 @@ template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
   SolveType SType;
   FixOrderType FOrdType;
 
-  int MinValue;
-  bool PrioritizeMinVal;
+  std::vector<int> MinValue, MaxValue;
+  std::vector<int> SoftMinValue, SoftMaxValue, OptValues;
+  // bool PrioritizeMinVal;
   int InitialSize;
+
+  ScalarType MaxSoftW;
+  ScalarType SoftIncreaseW;
 
   Eigen::VectorXi StQRorder;
 
@@ -37,13 +43,11 @@ template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
                                  int indexVar, ScalarType x_i_new,
                                  ScalarType x_i_old) {
 
-    Eigen::VectorX<ScalarType> r = EigenInterface<ScalarType>::toEigenVector(Residual);
-    Eigen::VectorX<ScalarType> delta_r = LQSolver.OriginalA().col(indexVar) * (x_i_new - x_i_old);
-    Eigen::SparseMatrix<ScalarType> A0=LQSolver.OriginalA();
-    // std::cout<<"rows A "<<A0.rows()<<std::endl;
-    // std::cout<<"rows r "<<r.rows()<<std::endl;
-    // std::cout<<"rows delta_r "<<delta_r.rows()<<std::endl;
-    // std::cout<<"Size 1 "<<r.rows()<<std::endl;
+    Eigen::VectorX<ScalarType> r =
+        EigenInterface<ScalarType>::toEigenVector(Residual);
+    Eigen::VectorX<ScalarType> delta_r =
+        LQSolver.OriginalA().col(indexVar) * (x_i_new - x_i_old);
+    Eigen::SparseMatrix<ScalarType> A0 = LQSolver.OriginalA();
     ScalarType deltaE = 2 * r.dot(delta_r) + delta_r.squaredNorm();
     return deltaE;
   }
@@ -54,32 +58,60 @@ template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
     for (size_t i = 0; i < Solution.size(); i++) {
       if (FixedVar[i])
         continue;
-      if (floor(Solution[i] + 0.5) < MinValue) {
+      if (floor(Solution[i] + 0.5) < MinValue[i])
         LessIdx.push_back(i);
-        // std::cout<<" Value: "<<Solution[i]<<std::endl;
-      }
     }
-    // if (LessIdx.size()>0)
-    //   std::cout<<" Less than Minimal: "<<LessIdx.size()<<" out of
-    //   "<<Solution.size()<<std::endl;
   }
 
-  ScalarType RoundedValue(const ScalarType &CurrVal) {
-    return std::max((ScalarType)MinValue, (floor(CurrVal + 0.5)));
+  void GetMoreThenMaxVal(const std::vector<ScalarType> &Solution,
+                         std::vector<int> &MoreIDx) {
+    MoreIDx.clear();
+    for (size_t i = 0; i < Solution.size(); i++) {
+      if (FixedVar[i])
+        continue;
+      if (floor(Solution[i] + 0.5) > MaxValue[i])
+        MoreIDx.push_back(i);
+    }
+  }
+
+  void GetOutOfSoftRange(const std::vector<ScalarType> &Solution,
+                         std::vector<int> &OutSoftRange) {
+    OutSoftRange.clear();
+    for (size_t i = 0; i < Solution.size(); i++) {
+      if (FixedVar[i])
+        continue;
+      if (Solution[i] < SoftMinValue[i])
+        OutSoftRange.push_back(i);
+
+      if (Solution[i] > SoftMaxValue[i])
+        OutSoftRange.push_back(i);
+    }
+  }
+
+  ScalarType RoundedValue(const int &IndexVar, const ScalarType &CurrVal) {
+    assert(IndexVar < MinValue.size());
+    assert(IndexVar < MaxValue.size());
+    assert(IndexVar >= 0);
+    assert(IndexVar >= 0);
+    ScalarType RoundedVal = (floor(CurrVal + 0.5));
+    RoundedVal = std::max(RoundedVal, (ScalarType)MinValue[IndexVar]);
+    RoundedVal = std::min(RoundedVal, (ScalarType)MaxValue[IndexVar]);
+    return RoundedVal;
   }
 
   ScalarType FindErrApproximate(const std::vector<ScalarType> &Solution,
                                 const int &IndexVar) {
-    return (fabs(Solution[IndexVar] - RoundedValue(Solution[IndexVar])));
+    return (
+        fabs(Solution[IndexVar] - RoundedValue(IndexVar, Solution[IndexVar])));
   }
 
   ScalarType DiffEnApproximate(const std::vector<ScalarType> &Solution,
                                const std::vector<ScalarType> &Residual,
                                const int &IndexVar) {
     ScalarType OldVal = Solution[IndexVar];
-    ScalarType NewVal = RoundedValue(OldVal);
-    return (computeEnergyChange(Residual,IndexVar,NewVal,OldVal));
-    //return (fabs(Solution[IndexVar] - RoundedValue(Solution[IndexVar])));
+    ScalarType NewVal = RoundedValue(IndexVar, OldVal);
+    return (computeEnergyChange(Residual, IndexVar, NewVal, OldVal));
+    // return (fabs(Solution[IndexVar] - RoundedValue(Solution[IndexVar])));
   }
 
   void SortByRound(const std::vector<ScalarType> &Solution,
@@ -93,9 +125,9 @@ template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
     }
 
     // if (FOrdType == StQRPivoting) {
-    //   Eigen::ColPivHouseholderQR<Eigen::MatrixX<ScalarType>> qr(LQSolver.OriginalA());
-    //   Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> P = qr.colsPermutation();
-    //   order = P.indices();
+    //   Eigen::ColPivHouseholderQR<Eigen::MatrixX<ScalarType>>
+    //   qr(LQSolver.OriginalA()); Eigen::PermutationMatrix<Eigen::Dynamic,
+    //   Eigen::Dynamic> P = qr.colsPermutation(); order = P.indices();
     //   assert(order.size()==Solution.size());
     // }
 
@@ -105,15 +137,15 @@ template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
 
       ScalarType Diff = 0;
       if (FOrdType == ST_ClosestInt)
-        Diff = FindErrApproximate(Solution, i); // fabs(Solution[i] - floor(Solution[i] + 0.5));//
+        Diff = FindErrApproximate(
+            Solution, i); // fabs(Solution[i] - floor(Solution[i] + 0.5));//
       if (FOrdType == ST_LowError)
-        Diff = DiffEnApproximate(Solution,Residual, i);
-      if (FOrdType == StQRPivoting)
-      {
-        assert(i<StQRorder.size());
-        Diff= StQRorder[i];
+        Diff = DiffEnApproximate(Solution, Residual, i);
+      if (FOrdType == StQRPivoting) {
+        assert(i < StQRorder.size());
+        Diff = StQRorder[i];
       }
-      RoundPrio.push_back(std::pair<ScalarType, int>(Diff,i));
+      RoundPrio.push_back(std::pair<ScalarType, int>(Diff, i));
       // if (Solution[i]<MinValue)
       // std::cout<<"dede"<<std::endl;
     }
@@ -126,22 +158,93 @@ template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
     }
   }
 
-  std::vector<LinearConstraint<ScalarType>> LinConstr;
+  // std::vector<LinearConstraint<ScalarType>> LinConstr;
+  std::vector<LinearConstraint<ScalarType>> BasicLinConstr;
+  std::vector<LinearConstraint<ScalarType>> HardLinConstr;
+  std::vector<LinearConstraint<ScalarType>> SoftLinConstr;
+
+  LinearConstraint<ScalarType> GetLSQLinearConstr(const int &IndexVar,
+                                                  const ScalarType &TargetVal,
+                                                  ScalarType TargetW) {
+    LinearConstraint<ScalarType> LConstr;
+    LConstr.Weight = TargetW;
+    LConstr.LHSide.push_back(VarTerm<ScalarType>(IndexVar, 0, 1));
+    LConstr.RHSide = TargetVal;
+    return LConstr;
+  }
+
+  void InitStQRPivoting() {
+    Eigen::ColPivHouseholderQR<Eigen::MatrixX<ScalarType>> qr(
+        LQSolver.OriginalA());
+    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> P =
+        qr.colsPermutation();
+    StQRorder = P.indices();
+  }
+
+  void UpdateHardConstraints() {
+    HardLinConstr.clear();
+    for (size_t i = 0; i < FixedVar.size(); i++) {
+      if (!FixedVar[i])
+        continue;
+      int IndexVar = i;
+      int ValueVar = FixedInt[IndexVar];
+
+      LinearConstraint<ScalarType> LConstr;
+      LConstr = GetLSQLinearConstr(IndexVar, ValueVar, WeightFIX);
+      HardLinConstr.push_back(LConstr);
+    }
+  }
+
+  void UpdateSoftConstraints() {
+    SoftLinConstr.clear();
+    for (size_t i = 0; i < SoftW.size(); i++) {
+      // already fixed
+      if (FixedVar[i])
+        continue;
+      if (SoftW[i] == 0)
+        continue;
+
+      int IndexVar = i;
+      int ValueVar = OptValues[IndexVar];
+      ScalarType CurrW = SoftW[IndexVar];
+
+      LinearConstraint<ScalarType> LConstr;
+      LConstr = GetLSQLinearConstr(IndexVar, ValueVar, CurrW);
+      SoftLinConstr.push_back(LConstr);
+    }
+  }
+
+  bool AllFixed() {
+    for (size_t i = 0; i < FixedVar.size(); i++)
+      if (!FixedVar[i])
+        return false;
+    return true;
+  }
+
+  bool UseSoft;
 
 public:
-
-  void Init(const std::vector<LinearConstraint<ScalarType>> &_LinConstr,
-            const int _MinValue) {
-    LinConstr = _LinConstr;
-    InitialSize = LinConstr.size();
+  void Init(const std::vector<LinearConstraint<ScalarType>> &_BasicLinConstr,
+            const std::vector<int> &_MinValue,
+            const std::vector<int> &_MaxValue,
+            const std::vector<int> &_SoftMinValue = std::vector<int>(),
+            const std::vector<int> &_SoftMaxValue = std::vector<int>(),
+            const std::vector<int> &_OptValues = std::vector<int>()) {
+    BasicLinConstr = _BasicLinConstr;
+    InitialSize = BasicLinConstr.size();
 
     MinValue = _MinValue;
+    MaxValue = _MaxValue;
+    SoftMinValue = _SoftMinValue;
+    SoftMaxValue = _SoftMaxValue;
+    OptValues = _OptValues;
+
     int MaxVar = 0;
     int MaxComp = 0;
-    for (size_t i = 0; i < LinConstr.size(); i++)
-      for (size_t j = 0; j < LinConstr[i].LHSide.size(); j++) {
-        int IndexVar = LinConstr[i].LHSide[j].IndexVar;
-        int IndexComp = LinConstr[i].LHSide[j].IndexCoord;
+    for (size_t i = 0; i < BasicLinConstr.size(); i++)
+      for (size_t j = 0; j < BasicLinConstr[i].LHSide.size(); j++) {
+        int IndexVar = BasicLinConstr[i].LHSide[j].IndexVar;
+        int IndexComp = BasicLinConstr[i].LHSide[j].IndexCoord;
         MaxVar = std::max(MaxVar, IndexVar);
         MaxComp = std::max(MaxComp, IndexComp);
       }
@@ -149,85 +252,91 @@ public:
     // std::cout<<"Var Max "<<NumVar<<std::endl;
     FixedVar.resize(NumVar, false);
     FixedInt.resize(NumVar, -1);
+    SoftW.resize(NumVar, 0);
 
+    UseSoft = (SoftMinValue.size() == NumVar);
+    UseSoft &= (SoftMaxValue.size() == NumVar);
+    UseSoft &= (OptValues.size() == NumVar);
+    UseSoft &= (MaxSoftW > 0);
+    UseSoft &= (SoftIncreaseW > 0);
   }
 
   bool SolveIterationIterativeFix(std::vector<ScalarType> &Solution) {
-    LQSolver.Init(LinConstr);
 
-    if ((FOrdType == StQRPivoting)&&(StQRorder.size()==0)) 
-    {
-      Eigen::ColPivHouseholderQR<Eigen::MatrixX<ScalarType>> qr(LQSolver.OriginalA());
-      Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> P = qr.colsPermutation();
-      StQRorder = P.indices();
-      //assert(StQRorder.size()==Solution.size());
-    }
+    std::vector<LinearConstraint<ScalarType>> AllLinConstr = BasicLinConstr;
+    AllLinConstr.insert(AllLinConstr.end(), HardLinConstr.begin(),
+                        HardLinConstr.end());
+
+    AllLinConstr.insert(AllLinConstr.end(), SoftLinConstr.begin(),
+                        SoftLinConstr.end());
+
+    LQSolver.Init(AllLinConstr);
+
+    if ((FOrdType == StQRPivoting) && (StQRorder.size() == 0))
+      InitStQRPivoting();
 
     Solution.clear();
     LQSolver.Solve(Solution);
 
-    std::vector<int> LessIdx;
-    if (PrioritizeMinVal)
-      GetLessThenMinVal(Solution, LessIdx);
+    if (AllFixed())
+      return true;
 
-    std::vector<int> FixVar;
-    std::vector<int> FixValue;
-    if (LessIdx.size() > 0) {
-      FixVar = LessIdx;
-      FixValue.resize(FixVar.size(), MinValue);
-    } else {
+    bool AddedSoft = false;
+    if (UseSoft) {
+      std::vector<int> SoftOutRange;
+      GetOutOfSoftRange(Solution, SoftOutRange);
+
+      for (size_t i = 0; i < SoftOutRange.size(); i++) {
+        int CurrVar = SoftOutRange[i];
+        if (SoftW[CurrVar] >= MaxSoftW)
+          continue;
+        AddedSoft = true;
+        SoftW[CurrVar] += SoftIncreaseW;
+        SoftW[CurrVar] = std::min(SoftW[CurrVar], MaxSoftW);
+      }
+    }
+
+    std::vector<int> LessIdx, MoreIdx;
+
+    GetLessThenMinVal(Solution, LessIdx);
+    GetMoreThenMaxVal(Solution, MoreIdx);
+
+    bool AddedHardLimits = false;
+
+    if ((LessIdx.size() > 0) && (!AddedSoft)) {
+      for (size_t i = 0; i < LessIdx.size(); i++) {
+        int IndexVar = LessIdx[i];
+        FixedVar[IndexVar] = true;
+        FixedInt[IndexVar] = MinValue[IndexVar];
+      }
+      AddedHardLimits = true;
+    }
+
+    if ((MoreIdx.size() > 0) && (!AddedSoft)) {
+      for (size_t i = 0; i < MoreIdx.size(); i++) {
+        int IndexVar = MoreIdx[i];
+        FixedVar[IndexVar] = true;
+        FixedInt[IndexVar] = MaxValue[IndexVar];
+      }
+      AddedHardLimits = true;
+    }
+
+    if ((!AddedHardLimits) && (!AddedSoft)) {
       std::vector<std::pair<int, int>> RoundRank;
       SortByRound(Solution, RoundRank);
       if (RoundRank.size() > 0) {
         // fix the one on top
-        FixVar.push_back(RoundRank[0].first);
-        FixValue.push_back(RoundRank[0].second);
+        int IndexVar = RoundRank[0].first;
+        int ValueVar = RoundRank[0].second;
+        FixedVar[IndexVar] = true;
+        FixedInt[IndexVar] = ValueVar;
       }
     }
-    if (FixVar.size() == 0)
-      return true;
 
-    for (size_t i = 0; i < FixVar.size(); i++) {
-      int IndexVar = FixVar[i];
-      int ValueVar = FixValue[i];
-      ValueVar = std::max(MinValue, ValueVar);
-      FixedVar[IndexVar] = true;
-      FixedInt[IndexVar] = ValueVar;
+    UpdateHardConstraints();
+    UpdateSoftConstraints();
 
-      LinearConstraint<ScalarType> LConstr;
-      LConstr.Weight = WeightFIX;
-      LConstr.LHSide.push_back(VarTerm<ScalarType>(IndexVar, 0, 1));
-      LConstr.RHSide = ValueVar;
-      LinConstr.push_back(LConstr);
-    }
     return false;
-  }
-
-  void SolveIterationIncrement(std::vector<ScalarType> &Solution,
-                               const ScalarType &CurrW) {
-    // remove the added ones
-    LinConstr.resize(InitialSize);
-
-    for (size_t i = 0; i < Solution.size(); i++) {
-      LinearConstraint<ScalarType> LConstr;
-      int ValueVar = floor(Solution[i] + 0.5);
-      if (ValueVar >= MinValue) {
-        LConstr.Weight = CurrW;
-        LConstr.LHSide.push_back(VarTerm<ScalarType>(i, 0, 1));
-
-        LConstr.RHSide = ValueVar;
-        LinConstr.push_back(LConstr);
-      } else {
-        LConstr.Weight = WeightFIX;
-        LConstr.LHSide.push_back(VarTerm<ScalarType>(i, 0, 1));
-        LConstr.RHSide = MinValue;
-        LinConstr.push_back(LConstr);
-      }
-    }
-
-    LQSolver.Init(LinConstr);
-    Solution.clear();
-    LQSolver.Solve(Solution);
   }
 
   void Solve(std::vector<int> &Solution) {
@@ -236,37 +345,28 @@ public:
     if (SType == ST_IterativeFix) {
       do {
         completed = SolveIterationIterativeFix(Float_Solution);
-        // std::cout<<"Iteration Completed "<<std::endl;
       } while (!completed);
-    } else {
-      size_t max_steps = 10;
-      LQSolver.Init(LinConstr);
-      Solution.clear();
-      LQSolver.Solve(Float_Solution);
-      ScalarType CurrW = 1;
-      for (size_t s = 0; s < max_steps; s++) {
-        SolveIterationIncrement(Float_Solution, CurrW);
-        CurrW *= 2;
-      }
     }
 
     // then round
     Solution.clear();
     for (size_t i = 0; i < Float_Solution.size(); i++) {
       int IntValue = floor(Float_Solution[i] + 0.5);
-      IntValue = std::max(MinValue, IntValue);
-
+      IntValue = std::max(MinValue[i], IntValue);
+      IntValue = std::min(MaxValue[i], IntValue);
       Solution.push_back(IntValue);
     }
   }
 
   IntegerLinearConstraintLeastSQSolver() {
     SType = ST_IterativeFix;
-    FOrdType = ST_ClosestInt;//StQRPivoting;;//;//ST_LowError;//
-    PrioritizeMinVal = true;
+    FOrdType = ST_ClosestInt;
+    // StQRPivoting;;//;//ST_LowError;//
+    // PrioritizeMinVal = true;
+    MaxSoftW = 1;
+    SoftIncreaseW = 0.1;
   }
 };
 
 } // namespace Geo
-
 #endif

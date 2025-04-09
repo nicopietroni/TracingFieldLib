@@ -1833,8 +1833,11 @@ private:
   }
 
   // END FUNCTION FOR SUBDIVIDE
-  std::map<int, int> SingValence;
-  std::map<int, int> FeatureSingValence;
+  // std::map<int, int> SingValence;
+  // std::map<int, int> FeatureSingValence;
+
+  std::unordered_map<int, int> SingValence;
+  std::unordered_map<int, int> FeatureSingValence;
 
   void GetCornersStats(std::vector<std::pair<int, int>> &CornNum) {
     std::map<int, int> CornerNumsMap;
@@ -2329,6 +2332,17 @@ public:
     return false;
   }
 
+  bool HasSingleSingularities(int IndexPatch) const {
+    int numSing = 0;
+    for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();i++) {
+      int IndexVOr = PData.SubPatchVertToOriginal[IndexPatch][i];
+      if (SingValence.count(IndexVOr) == 0)
+        continue;
+      numSing++;
+    }
+    return (numSing==1);
+  }
+
   void PatchSingularities(const int IndexPatch,
                           std::vector<int> &PatchSing) const {
     PatchSing.clear();
@@ -2355,7 +2369,7 @@ public:
   //       return false; // multiple singularities
   //     TargetValence = SingValence.at(IndexVOr);
   //   }
-
+  
   bool MatchSingularity(int IndexPatch) const {
     assert(IndexPatch >= 0);
     assert(IndexPatch < PData.SubPatchVertToOriginal.size());

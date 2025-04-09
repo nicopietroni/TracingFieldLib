@@ -24,12 +24,25 @@
 #include <string>
 #include <utility>
 #include <vector>
-
+#include <unordered_set>
 //#include "triangle3.h"
 // #include <igl/is_vertex_manifold.h>
 // #include <igl/is_edge_manifold.h>
 // //#include "eigen_interface.h"
 // #include "Space_Query/triangle_grid_2D.h"
+
+// Main function: returns true if there's at least one duplicate
+template <class ScalarType>
+bool HasDuplicateVert(const std::vector<Geo::Point3<ScalarType>>& points) {
+    std::unordered_set<Geo::Point3<ScalarType>, Geo::Point3Hash<ScalarType>> pointSet;
+    for (const auto& p : points) {
+        if (!pointSet.insert(p).second) {
+            // insert() returns .second == false if already existed
+            return true;
+        }
+    }
+    return false;
+}
 
 template <class ScalarType>
 bool HasUnfererencedVert(const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -945,6 +958,21 @@ void CopySubMesh(const std::vector<Geo::Point3<ScalarType>> &Vert,
 }
 
 template <class ScalarType>
+void CopySubMesh(const std::vector<Geo::Point3<ScalarType>> &Vert,
+                 const std::vector<std::vector<int>> &Elements,
+                 const std::vector<int> &ToCopyEl,
+                 std::vector<Geo::Point3<ScalarType>> &CopiedMeshesVert,
+                 std::vector<std::vector<int>> &CopiedMeshesElem)
+{
+  std::vector<int> OriginalVert,OriginalElem;
+  CopySubMesh<ScalarType>(Vert,Elements,ToCopyEl,
+                          CopiedMeshesVert,
+                          CopiedMeshesElem,
+                          OriginalVert,
+                          OriginalElem);
+}
+
+template <class ScalarType>
 void SplitByFFConnectedComponenent(
     const std::vector<Geo::Point3<ScalarType>> &Vert,
     const std::vector<std::vector<int>> &Elements,
@@ -1015,19 +1043,38 @@ int PolyMeshGenus(int NVert, int nEdges, int NFaces, int NHoles,
   return -((NVert + NFaces - nEdges + NHoles - 2 * NComponents) / 2);
 }
 
-int NumEdges(const std::vector<std::vector<int>> &Connectivity) {
-  std::set<std::pair<int, int>> EdgeSet;
-  for (size_t i = 0; i < Connectivity.size(); i++) {
-    int sizeF = Connectivity[i].size();
-    for (int j = 0; j < sizeF; j++) {
-      int IndexV0 = Connectivity[i][j];
-      int IndexV1 = Connectivity[i][(j + 1) % sizeF];
-      std::pair<int, int> entry(std::min(IndexV0, IndexV1),
-                                std::max(IndexV0, IndexV1));
-      EdgeSet.insert(entry);
+// int NumEdges(const std::vector<std::vector<int>> &Connectivity) {
+//   std::set<std::pair<int, int>> EdgeSet;
+//   for (size_t i = 0; i < Connectivity.size(); i++) {
+//     int sizeF = Connectivity[i].size();
+//     for (int j = 0; j < sizeF; j++) {
+//       int IndexV0 = Connectivity[i][j];
+//       int IndexV1 = Connectivity[i][(j + 1) % sizeF];
+//       std::pair<int, int> entry(std::min(IndexV0, IndexV1),
+//                                 std::max(IndexV0, IndexV1));
+//       EdgeSet.insert(entry);
+//     }
+//   }
+//   return EdgeSet.size();
+// }
+
+int NumEdges(const std::vector<std::vector<int>>& Connectivity) {
+  std::unordered_set<uint64_t> EdgeSet;
+
+  for (const auto& face : Connectivity) {
+    int sizeF = static_cast<int>(face.size());
+    for (int j = 0; j < sizeF; ++j) {
+      int v0 = face[j];
+      int v1 = face[(j + 1) % sizeF];
+      int minV = std::min(v0, v1);
+      int maxV = std::max(v0, v1);
+
+      uint64_t edgeKey = (static_cast<uint64_t>(minV) << 32) | static_cast<uint32_t>(maxV);
+      EdgeSet.insert(edgeKey);
     }
   }
-  return EdgeSet.size();
+
+  return static_cast<int>(EdgeSet.size());
 }
 
 template <class ScalarType>
@@ -1621,6 +1668,7 @@ GetDegenerateTriangles(const std::vector<Geo::Point3<ScalarType>> &VertPos,
     }
   }
 }
+
 
 // template <class ScalarType>
 // static void

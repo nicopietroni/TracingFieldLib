@@ -18,6 +18,7 @@
 #include <iostream>
 #include <mesh_manifold.h>
 #include <point3.h>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -143,6 +144,7 @@ private:
     // BestEdgeDist[i]);
   }
 
+
   static void InitPatchBestJointCandidates(
       const std::vector<Geo::Point3<ScalarType>> &PatchVertPos,
       const std::vector<std::vector<std::pair<int, int>>> &PatchEdges,
@@ -172,7 +174,8 @@ private:
                     const std::vector<PosPair> &BestSplEdges,
                     const std::vector<PosPair> &BestSplEdgesJoint,
                     const std::vector<ScalarType> &BestSplEdgesJointDist,
-                    std::vector<PosPair> &SplEdges, bool UseJointBorder) {
+                    std::vector<PosPair> &SplEdges, 
+                    bool UseJointBorder) {
     SplEdges.clear();
     assert(BestSplEdges.size() == BestSplEdgesJoint.size());
     assert(BestSplEdges.size() == BestSplEdgesJointDist.size());
@@ -186,6 +189,33 @@ private:
         SplEdges.push_back(BestPair);
       } else
         SplEdges.push_back(BestPairJ);
+    }
+    //then update 
+  }
+
+  static void CorrectWithPrimalTJunctions(const PrimalPatchData &PData,
+                                          const int &IndexPatch,
+                                          const std::set<Geo::Point3<ScalarType> > &PrimalCorner,
+                                          std::vector<PosPair> &BestSplEdges)
+  {
+    assert(IndexPatch>=0);
+    assert(IndexPatch<PData.EdgePatchSides.size());
+    assert(BestSplEdges.size()==PData.EdgePatchSides[IndexPatch][0].size());
+
+    for (size_t s=0;s<BestSplEdges.size();s++)
+    {
+      std::vector<int> SideV;
+      GetOrderedPatchSideVert(PData,IndexPatch,s,SideV);
+      //check all but the first and last
+      for (size_t i=1;i<SideV.size()-1;i++)
+      {
+        int TestVIndex=SideV[i];
+        Geo::Point3<ScalarType> TestVCoord=PData.PatchVertPos[IndexPatch][TestVIndex];
+        if (PrimalCorner.count(TestVCoord)==0)continue;
+        BestSplEdges[s].first=TestVCoord;
+        BestSplEdges[s].second=TestVCoord;
+        //std::cout<<"DEDDEEDED TROVATO!!"<<std::endl;
+      }
     }
   }
 
@@ -207,8 +237,20 @@ private:
         EdgeMap[PP] = EdgeI;
       }
     }
+
+    std::map<Geo::Point3<ScalarType>,int> VertMap;
+    for (size_t i = 0; i < VertPos.size(); i++)
+      VertMap[VertPos[i]]=i;
+
     for (size_t i = 0; i < SplEdgesPos.size(); i++) {
       PosPair PP = SplEdgesPos[i];
+      if (PP.first==PP.second)//this case split on a vertex
+      {
+        assert(VertMap.count(PP.first) > 0);
+        int IndexV=VertMap[PP.first];
+        SplEdgesIdx.push_back(std::pair<int, int>(IndexV,IndexV));
+        continue;
+      }
       assert(EdgeMap.count(PP) > 0);
       if (EdgeMap.count(PP) == 0)
         exit(0);
@@ -236,13 +278,21 @@ private:
     std::vector<std::vector<Geo::Point2<ScalarType>>> SplitPoly;
     assert(CentralV != -1);
     Geo::Point2<ScalarType> CentralUV = PatchUV[CentralV];
+    std::set<Geo::Point3<ScalarType>> CornersOnV;
     for (size_t i = 0; i < SplEdgesIdx.size(); i++) {
       Geo::Point2<ScalarType> P0 = CentralUV;
       int IndexV0 = SplEdgesIdx[i].first;
       int IndexV1 = SplEdgesIdx[i].second;
-      Geo::Point2<ScalarType> P1 = (PatchUV[IndexV0] + PatchUV[IndexV1]) / 2;
-      // inflate a bit
-      P1 = P0 + (P1 - P0) * 1.01;
+      Geo::Point2<ScalarType> P1;
+      if (IndexV0!=IndexV1)
+      {
+        P1 = (PatchUV[IndexV0] + PatchUV[IndexV1]) / 2;
+        P1 = P0 + (P1 - P0) * 1.01;
+      }
+      else {
+        P1=PatchUV[IndexV0];
+        CornersOnV.insert(VertPos[IndexV0]);
+      }
       SplitPoly.resize(SplitPoly.size() + 1);
       SplitPoly.back().push_back(P0);
       SplitPoly.back().push_back(P1);
@@ -298,9 +348,10 @@ private:
     for (size_t i = 0; i < NewBorderVIDX.size(); i++) {
       int IndexV = NewBorderVIDX[i];
       Geo::Point3<ScalarType> PosTest = VertPos[IndexV];
-      if (OldBorderPos.count(PosTest) > 0)
-        continue;
-      NewCorners.push_back(IndexV);
+      bool IsOldBorder=(OldBorderPos.count(PosTest)>0);
+      bool IsCornersOnV=(CornersOnV.count(PosTest)>0);
+      if ((!IsOldBorder)||IsCornersOnV)
+        NewCorners.push_back(IndexV);
     }
 
     std::vector<std::vector<int>> NextFP;
@@ -324,15 +375,36 @@ private:
     return (pow(Ratio0 - Ratio1, 2));
   }
 
+  static void GetOrderedPatchSideVert(const PrimalPatchData &PData,
+                                    const int IndexPatch,
+                                    const int IndexSide,
+                                    std::vector<int> &SideV)
+  {
+    SideV.clear();
+    assert(IndexPatch>=0);
+    assert(IndexPatch<PData.EdgePatchSides.size());
+    assert(IndexSide<PData.EdgePatchSides[IndexPatch][0].size());
+
+    for (size_t j = 0; j < PData.EdgePatchSides[IndexPatch][0][IndexSide].size(); j++)
+      SideV.push_back(PData.EdgePatchSides[IndexPatch][0][IndexSide][j].first);
+
+    SideV.push_back(PData.EdgePatchSides[IndexPatch][0][IndexSide].back().second);
+  }
+
   static void InitPatchDistanceMap(
       const PrimalPatchData &PData, const std::vector<int> &CenterV,
       const std::vector<std::vector<Geo::Point2<ScalarType>>> &PatchVertUV,
-      std::vector<std::map<PosPair, ScalarType>> &PatchDistMap) {
-    PatchDistMap.clear();
+      std::vector<std::map<PosPair, ScalarType>> &PatchEdgeDistMap,
+      std::vector<std::map<Geo::Point3<ScalarType>, ScalarType>> &PatchVertDistMap) {
+    PatchEdgeDistMap.clear();
+    PatchVertDistMap.clear();
+
     int NumPatches = PData.PatchFaces.size();
     // assert(CenterV.size() == PM.NumPatches());
     assert(CenterV.size() == NumPatches);
-    PatchDistMap.resize(CenterV.size());
+    PatchEdgeDistMap.resize(CenterV.size());
+    PatchVertDistMap.resize(CenterV.size());
+
     for (size_t i = 0; i < CenterV.size(); i++) {
       if (CenterV[i] == -1)
         continue;
@@ -351,9 +423,11 @@ private:
         std::vector<int> SideV;
 
         // PM.GetAllSideVert(i, s, SideV);
-        for (size_t j = 0; j < PData.EdgePatchSides[i][0][s].size(); j++)
-          SideV.push_back(PData.EdgePatchSides[i][0][s][j].first);
-        SideV.push_back(PData.EdgePatchSides[i][0][s].back().second);
+        GetOrderedPatchSideVert(PData,i,s,SideV);
+        // for (size_t j = 0; j < PData.EdgePatchSides[i][0][s].size(); j++)
+        //   SideV.push_back(PData.EdgePatchSides[i][0][s][j].first);
+
+        // SideV.push_back(PData.EdgePatchSides[i][0][s].back().second);
 
         assert(SideV.size() >= 2);
         int IndexC0 = SideV[0];
@@ -377,7 +451,9 @@ private:
           Geo::Point3<ScalarType> SegP1_3D = PData.PatchVertPos[i][IndexV1];
           PosPair Key(std::min(SegP0_3D, SegP1_3D),
                       std::max(SegP0_3D, SegP1_3D));
-          PatchDistMap[i][Key] = DistTest;
+          PatchEdgeDistMap[i][Key] = DistTest;
+          PatchVertDistMap[i][SegP0_3D] =(CentralPos-SegUVP0).Norm();
+          PatchVertDistMap[i][SegP1_3D] =(CentralPos-SegUVP1).Norm();
         }
       }
     }
@@ -596,7 +672,8 @@ private:
       const std::vector<std::vector<Geo::Point2<ScalarType>>> PatchVertUVArap,
       std::vector<PosPair> &AllSplEdgesPos,
       std::vector<std::vector<std::pair<int, int>>> &SplEdgesIDX,
-      bool UseJointBorder) {
+      bool UseJointBorder,
+      const std::set<Geo::Point3<ScalarType> > &PrimalCorner=std::set<Geo::Point3<ScalarType> >()) {
 
     // //per patch per side the edge to be split
     std::vector<std::vector<PosPair>> SplEdgesPos;
@@ -605,10 +682,10 @@ private:
 
     // SplEdgesPos.resize(PM.NumPatches());
 
-    // for each patch the distance to the center vertex
+    // FOR EACH PATCH COMPUTE THE DISTANCE TO THE CENTRAL VERTEX
     std::vector<std::map<PosPair, ScalarType>> DistMap;
-    // InitPatchDistanceMap(PM, CentralV, PatchVertUVArap, DistMap);
-    InitPatchDistanceMap(PData, CentralV, PatchVertUVArap, DistMap);
+    std::vector<std::map<Geo::Point3<ScalarType>, ScalarType>> DistVertMap;
+    InitPatchDistanceMap(PData, CentralV, PatchVertUVArap, DistMap,DistVertMap);
 
     // for each patch for each edge the best split edge
     std::vector<std::vector<PosPair>> BestSplEdges;
@@ -623,17 +700,21 @@ private:
       if (CentralV[i] == -1)
         continue;
 
+      //get position
       std::vector<Geo::Point3<ScalarType>> PatchVertPos = PData.PatchVertPos[i];
-      std::vector<std::vector<std::pair<int, int>>> PatchEdges =
-          PData.EdgePatchSides[i][0];
+      //as well ase edges on the side (considering one boundary per patch)
+      std::vector<std::vector<std::pair<int, int>>> PatchEdges =PData.EdgePatchSides[i][0];
 
+      //find best candidate locally
       InitPatchBestCandidates(PatchVertPos, PatchEdges, DistMap[i],
                               BestSplEdges[i], BestSplEdgesDist[i]);
-
+      
+      //update the joint distance map to make them coherent
       UpdateJointAlignDistanceMap(PatchVertPos, PatchEdges, BestSplEdges[i],
                                   BestSplEdgesDist[i], DistMap[i],
                                   JointDistMap);
     }
+
 
     std::vector<std::vector<PosPair>> BestSplJointEdges;
     BestSplJointEdges.resize(NumPatches);
@@ -667,6 +748,9 @@ private:
       ComputeSplitEdges(PatchVertPos, BestSplEdges[i], BestSplJointEdges[i],
                         BestSplJointEdgesDist[i], SplEdgesPos[i],
                         UseJointBorder);
+      
+      // std::vector<std::vector<std::pair<int, int>>> PatchEdges =PData.EdgePatchSides[i][0];
+      CorrectWithPrimalTJunctions(PData,i,PrimalCorner,SplEdgesPos[i]);
     }
 
     // then propagate on the non done so far
@@ -861,6 +945,22 @@ private:
     assert(done_param_1);
   }
 
+  static void
+  PrimalCornerPos(PrimalPatchData &PData,
+                  std::set<Geo::Point3<ScalarType> > &CornerPosSet) 
+  {
+    for (size_t i=0;i<PData.PatchCorners.size();i++)
+    for (size_t j=0;j<PData.PatchCorners[i].size();j++)
+    for (size_t k=0;k<PData.PatchCorners[i][j].size();k++)
+    {
+      int IndexV=PData.PatchCorners[i][j][k];
+      assert(IndexV>=0);
+      assert(IndexV<PData.PatchVertPos[i].size());
+      Geo::Point3<ScalarType> VertPos=PData.PatchVertPos[i][IndexV];
+      CornerPosSet.insert(VertPos);
+    }
+  }
+
 public:
   enum RegType { RTypeEven, RTypeOrtho };
 
@@ -927,7 +1027,9 @@ public:
                           std::vector<std::vector<int>> &DualFaces,
                           std::vector<std::vector<int>> &PerPatchFaceIDX,
                           std::vector<std::vector<int>> &PerPatchCornerIDX,
-                          bool find_corners = true, bool write_timing = true) {
+                          bool find_corners = true, 
+                          bool write_timing = true,
+                          bool minimize_t_junctions=false) {
 
     DualVertPos.clear();
     DualFaces.clear();
@@ -986,18 +1088,24 @@ public:
     // then propagate on the non done so far
     std::vector<PosPair> AllSplEdgesPos;
 
-    // // map pair of pos to pair of indexes
+    // map pair of pos to pair of indexes
     std::vector<std::vector<std::pair<int, int>>> SplEdgesIDX;
+
+    //get corner Pos to see if they are T-junctions
+    //in another patch
+    std::set<Geo::Point3<ScalarType> > PrimalCornerPosSet;
+    if (minimize_t_junctions)
+      PrimalCornerPos(PData,PrimalCornerPosSet);
 
     // iterate to optimize
     for (size_t s = 0; s < DualParam.MaxIte; s++) {
 
       if (DualParam.RType == RTypeEven)
         FindSplitPos(PData, CentralV, PatchVertUV, AllSplEdgesPos, SplEdgesIDX,
-                     DualParam.JointBorder);
+                     DualParam.JointBorder,PrimalCornerPosSet);
       else
         FindSplitPos(PData, CentralV, PatchVertUVArap, AllSplEdgesPos,
-                     SplEdgesIDX, DualParam.JointBorder);
+                     SplEdgesIDX, DualParam.JointBorder,PrimalCornerPosSet);
 
       // optimize singularities
       for (size_t i = 0; i < NumPatches; i++) {
@@ -1028,8 +1136,9 @@ public:
 
     // FindSplitPos(PM, CentralV, PatchVertUVArap, AllSplEdgesPos, SplEdgesIDX,
     //              DualParam.JointBorder);
-    FindSplitPos(PData, CentralV, PatchVertUVArap, AllSplEdgesPos, SplEdgesIDX,
-                 DualParam.JointBorder);
+    FindSplitPos(PData, CentralV, PatchVertUVArap, 
+                 AllSplEdgesPos, SplEdgesIDX,
+                 DualParam.JointBorder,PrimalCornerPosSet);
     auto t1 = std::chrono::high_resolution_clock::now();
 
     std::cout << "SPLITTING PATCHES" << std::endl;

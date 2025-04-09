@@ -14,7 +14,10 @@ namespace Geo{
 template <class ScalarType>
 class PatchCondition
 {
+    
 public:
+
+    //ScalarType elapsed_time;
 
     virtual void UpdatePatchIndex(std::map<int,int> &PatchIdxRemap)
     {(void)PatchIdxRemap;}
@@ -54,6 +57,12 @@ public:
 
     virtual bool Mandatory()const
     {return false;}
+
+    virtual int Score(const PatchManaging<ScalarType> &PatchM,
+                      const int &IndexPatch)const
+    {return 0;}
+    // PatchCondition()
+    // {elapsed_time=0;}
 };
 
 template <class ScalarType>
@@ -87,7 +96,16 @@ public:
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
-    {   return PatchM.isDiskLike(IndexPatch);}
+    {   
+        //auto t0 = std::chrono::high_resolution_clock::now();
+        if (PatchM.NumBorders(IndexPatch)!=1)return false;
+        bool IsDisc= PatchM.isDiskLike(IndexPatch);
+        // auto t1 = std::chrono::high_resolution_clock::now();
+        // auto elapsed=std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+        // //this->elapsed_time+=elapsed.count() * 1e-6;
+        // std::cout<<"ELAPSED Disk Like:"<<elapsed.count()<<std::endl;
+        return IsDisc;
+    }
 
     std::string Name()const override
     {return std::string("disk_like");}
@@ -107,7 +125,18 @@ public:
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
-    {   return (!PatchM.HasMultipleSingularities(IndexPatch));}
+    {   
+        //auto t0 = std::chrono::high_resolution_clock::now();
+        bool HasMultiple= PatchM.HasMultipleSingularities(IndexPatch);
+        // auto t1 = std::chrono::high_resolution_clock::now();
+        // auto elapsed=std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+        // //this->elapsed_time+=elapsed.count() * 1e-6;
+        // std::cout<<"ELAPSED Multiple Sing:"<<elapsed.count()<<std::endl;
+        return (!HasMultiple);
+    }
+
+    bool Mandatory()const override
+    {return true;}
 
     std::string Name()const override
     {return std::string("single_sing");}
@@ -125,14 +154,21 @@ public:
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
     { 
-        std::vector<int> Istances;
-        PosInstances<ScalarType>(PatchM.PData.SubPatchVertPos[IndexPatch],Istances);
-        for (size_t i=0;i<Istances.size();i++)
-        {
-            assert(Istances[i]>0);
-            if (Istances[i]>1)return false;
-        }
-        return true;
+        // std::vector<int> Istances;
+        // PosInstances<ScalarType>(PatchM.PData.SubPatchVertPos[IndexPatch],Istances);
+        // for (size_t i=0;i<Istances.size();i++)
+        // {
+        //     assert(Istances[i]>0);
+        //     if (Istances[i]>1)return false;
+        // }
+        // return true;
+        //auto t0 = std::chrono::high_resolution_clock::now();
+        bool HasDupl=HasDuplicateVert(PatchM.PData.SubPatchVertPos[IndexPatch]);
+        // auto t1 = std::chrono::high_resolution_clock::now();
+        // auto elapsed=std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+        // //this->elapsed_time+=std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+        // std::cout<<"ELAPSED Self Conn:"<<elapsed.count()<<std::endl;
+        return (!HasDupl);
     }
 
     bool Mandatory()const override
@@ -153,10 +189,33 @@ public:
 
     bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                    const int &IndexPatch)const override
-    {   return (PatchM.MatchSingularity(IndexPatch));}
+    {   
+        //auto t0 = std::chrono::high_resolution_clock::now();
+        bool MatchSing=PatchM.MatchSingularity(IndexPatch);
+        // auto t1 = std::chrono::high_resolution_clock::now();
+        // auto elapsed=std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+        //this->elapsed_time+=elapsed.count() * 1e-6;
+        //std::cout<<"ELAPSED Match Sing:"<<elapsed.count()<<std::endl;
+        return (MatchSing);
+    }
 
     std::string Name()const override
     {return std::string("match_sing");}
+
+    //if has singularity and match then keep
+    bool Mandatory()const override
+    {
+        return false;
+    }
+
+    //avoid to go to valence 2 and 6
+    virtual int Score(const PatchManaging<ScalarType> &PatchM,
+                     const int &IndexPatch)const
+    {
+        int SideN=PatchM.NumSides(IndexPatch);
+        if ((SideN==2)||(SideN==6))return -1;
+        return 0;
+    }
 };
 
 template <class ScalarType>
@@ -207,6 +266,11 @@ public:
         minCornerNum=3;
         maxCornerNum=6;
     }
+
+    bool Mandatory()const override
+    {
+        return true;
+    }
 };
 
 template <class ScalarType>
@@ -231,7 +295,13 @@ public:
         // std::cout<<"##DEDE 2:"<<PatchM.NumCorners(IndexPatch)<<std::endl;
         // std::cout<<"##DEDE 3:"<<PatchM.PData.SideLenghts[IndexPatch].size()<<std::endl;
         // PatchM.WriteMesh(IndexPatch,std::string("testCC.obj"));
+
+        //auto t0 = std::chrono::high_resolution_clock::now();
         bool IsCC=IsCatmullClarkable(PatchM.PData.SideLenghts[IndexPatch][0],SideThr,true);
+        // auto t1 = std::chrono::high_resolution_clock::now();
+        // auto elapsed=std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+        // this->elapsed_time+=elapsed.count() * 1e-6;
+       
         return (IsCC);
         
     }

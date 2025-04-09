@@ -73,6 +73,7 @@ public:
   bool force_direct;
   bool only_visible;
   bool avoidSingularities;
+  bool distanceSingularities;
   bool UniformWDist;
   int MaxCrossJump;
   std::vector<std::vector<int>> SampledPaths;
@@ -656,8 +657,8 @@ public:
     std::vector<int> StartN;
 
     // first add singularities
-    //  if (avoidSingularities)
-    //    StartN.insert(StartN.end(), SingNodes.begin(), SingNodes.end());
+     if (distanceSingularities)
+       StartN.insert(StartN.end(), SingNodes.begin(), SingNodes.end());
 
     std::vector<int> BorderNodes;
     TGraph.GetNodeType(Geo::TangentDomain, BorderNodes);
@@ -1053,8 +1054,8 @@ private:
   //   // TimeSampling += elapsed0.count() * 1e-6;
   // }
 
-#define MIN_PARALLEL 10
-#define MAX_PROCESS 4
+#define MIN_PARALLEL 20
+#define MAX_PROCESS 8
 
   void SampleParallel(std::vector<int> &ArrivalNodes,
                       std::vector<int> &NewStartingNodes) {
@@ -1114,16 +1115,31 @@ private:
       th.join();
 
     // Merge thread-local results
+    // int CurrIdx=0;
+    // for (int t = 0; t < parallel_proc; ++t) {
+    //   SampledPaths.insert(SampledPaths.end(), thread_paths[t].begin(),
+    //                       thread_paths[t].end());
+    //   SampledPathsLenghtW.insert(SampledPathsLenghtW.end(),
+    //                              thread_lengths[t].begin(),
+    //                              thread_lengths[t].end());
+    //   NewStartingNodes.insert(NewStartingNodes.end(),
+    //                           thread_start_nodes[t].begin(),
+    //                           thread_start_nodes[t].end());
+    // }
+    int CurrIdx=0;
+    bool added=false;
+    do{
+      added=false;
     for (int t = 0; t < parallel_proc; ++t) {
-      SampledPaths.insert(SampledPaths.end(), thread_paths[t].begin(),
-                          thread_paths[t].end());
-      SampledPathsLenghtW.insert(SampledPathsLenghtW.end(),
-                                 thread_lengths[t].begin(),
-                                 thread_lengths[t].end());
-      NewStartingNodes.insert(NewStartingNodes.end(),
-                              thread_start_nodes[t].begin(),
-                              thread_start_nodes[t].end());
+      if (CurrIdx>=thread_paths[t].size())continue;
+
+      SampledPaths.push_back(thread_paths[t][CurrIdx]);
+      SampledPathsLenghtW.push_back(thread_lengths[t][CurrIdx]);
+      NewStartingNodes.push_back(thread_start_nodes[t][CurrIdx]);
+      added=true;
     }
+    CurrIdx++;
+    }while (added);
   }
 
   void SampleNormal(std::vector<int> &ArrivalNodes,
@@ -1665,15 +1681,6 @@ private:
     // CHECK THIS ONE MIGHT MAKE SLOWER
     TGraph.DisableNodeType(TangentDomain);
 
-    //   for (size_t i = 0; i < TGraph.NumNodes(); i++) {
-    //   if (TGraph.NodeType(i) == Geo::TangentDomain) {
-    //     if (TGraph.IsEnabled(i)) {
-    //       std::cout << "Error Enabled Node Graph cortano" << std::endl;
-    //       exit(0);
-    //     }
-    //   }
-    // }
-
     TGraph.EnableNodes(FilterDisableN);
     FilterDisableN.clear();
     std::vector<int> DisableN;
@@ -1699,24 +1706,9 @@ private:
       // check if the start nodes is avalable
       if ((ConflictNodes.count(StartingNodes[i]) > 0) ||
           ((check_start) && (!CanStartFrom(StartingNodes[i])))) {
-        // assert(!TGraph.IsEnabled(StartingNodes[i]));
         SampledPaths_Status[i] = SP_Discarded;
-        // std::cout<<"Discarded DEEDDEDE 0"<<std::endl;
         continue;
       }
-
-      // bool has_traced =
-      //     Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(
-      //         TGraph, StartingNodes[i], SampledPaths[i], true, &ArrivalNodes,
-      //         only_visible);
-      // if (!has_traced) {
-      //   SampledPaths_Status[i] = SP_Discarded;
-      //   continue;
-      // }
-      // typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
-      //     Geo::GraphTracing<ScalarType>::TraceLoopOrBorderBorderFrom(
-      //         TGraph, StartingNodes[i], SampledPaths[i], true, &ArrivalNodes,
-      //         only_visible);
 
       typename Geo::GraphTracing<ScalarType>::TraceParam TParam;
       TParam.StartN = StartingNodes[i];
@@ -1743,11 +1735,6 @@ private:
       assert(i < SampledPathsLenghtW.size());
       SampledPathsLenghtW[i] = PathL;
 
-      // typename Geo::GraphTracing<ScalarType>::TraceStatus TStatus =
-      //     Geo::GraphTracing<ScalarType>::TraceDirectLoopOrBorderBorderFrom(
-      //         TGraph, StartingNodes[i], SampledPaths[i], &ArrivalNodes,
-      //         only_visible, true, force_direct);
-
       if (TStatus != Geo::GraphTracing<ScalarType>::TraceSuccess) {
         SampledPaths_Status[i] = SP_Discarded;
         // std::cout<<"Discarded DEEDDEDE 1"<<std::endl;
@@ -1756,16 +1743,7 @@ private:
         continue;
       }
 
-      // for (size_t j = 0; j < SampledPaths[i].size(); j++) {
-      //   if (!TGraph.IsEnabled(SampledPaths[i][j])) {
-      //       std::cout << "Error Enabled Node Graph putignano" << std::endl;
-      //       exit(0);
-      //     }
-      //   if (TGraph.NodeType(SampledPaths[i][j]) == Geo::TangentDomain) {
-      //       std::cout << "Error Enabled Node Graph putignano" << std::endl;
-      //       exit(0);
-      //     }
-      // }
+      
       if (MaxCrossJump != -1) {
         int TestNum = NumCrossPaths(SampledPaths[i]);
         // std::cout<<"Num Jump: "<<TestNum<<std::endl;
@@ -2370,7 +2348,7 @@ public:
   }
 
   void RestoreNodeType() {
-    std::cout << "Restorning modes:" << SwapNodeType.size() << std::endl;
+    std::cout << "Restoring modes:" << SwapNodeType.size() << std::endl;
     for (size_t i = 0; i < SwapNodeType.size(); i++) {
       int IndexN = SwapNodeType[i].first;
       NType TypeNode = SwapNodeType[i].second;
@@ -2786,6 +2764,7 @@ public:
 
     // NumSamples = 1000;
 
+    distanceSingularities =false;
     dynamicUpdates = true;
     SelectedPaths.clear();
     CanEmit.clear();
@@ -2807,6 +2786,7 @@ public:
       : VertPos(_VertPos), Connectivity(_Connectivity), TGraph(_TGraph),
         VertCurv(_VertCurv), SingIndex(_SingIndex), SingValue(_SingValue) {
     avoidSingularities = true;
+    distanceSingularities =false;
     dynamicUpdates = true;
     updatePatches = true;
     // orthoBorderDist=true;
