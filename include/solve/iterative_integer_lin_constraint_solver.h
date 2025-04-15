@@ -22,12 +22,13 @@ template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
   std::vector<ScalarType> SoftW;
 
   // std::vector<ScalarType> FixedW;
-
-  enum SolveType { ST_IterativeFix, ST_Increment };
-  enum FixOrderType { ST_ClosestInt, ST_LowError, StQRPivoting };
-
-  SolveType SType;
+public:
+  // enum SolveType { ST_IterativeFix, ST_Increment };
+  enum FixOrderType { ST_ClosestInt, ST_LowError, ST_StQRPivoting };
+  // SolveType SType;
   FixOrderType FOrdType;
+
+private:
 
   std::vector<int> MinValue, MaxValue;
   std::vector<int> SoftMinValue, SoftMaxValue, OptValues;
@@ -141,7 +142,7 @@ template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
             Solution, i); // fabs(Solution[i] - floor(Solution[i] + 0.5));//
       if (FOrdType == ST_LowError)
         Diff = DiffEnApproximate(Solution, Residual, i);
-      if (FOrdType == StQRPivoting) {
+      if (FOrdType == ST_StQRPivoting) {
         assert(i < StQRorder.size());
         Diff = StQRorder[i];
       }
@@ -223,6 +224,16 @@ template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
 
   bool UseSoft;
 
+  void PrintUsedMethod()
+  {
+    if (FOrdType == ST_ClosestInt)
+      std::cout<<"Rounding CLOSEST Int"<<std::endl;
+    if (FOrdType == ST_LowError)
+      std::cout<<"Rounding LOWEST Err"<<std::endl;
+    if (FOrdType == ST_StQRPivoting)
+      std::cout<<"Rounding SQRPivot"<<std::endl;
+  }
+
 public:
   void Init(const std::vector<LinearConstraint<ScalarType>> &_BasicLinConstr,
             const std::vector<int> &_MinValue,
@@ -263,6 +274,7 @@ public:
 
   bool SolveIterationIterativeFix(std::vector<ScalarType> &Solution) {
 
+    
     std::vector<LinearConstraint<ScalarType>> AllLinConstr = BasicLinConstr;
     AllLinConstr.insert(AllLinConstr.end(), HardLinConstr.begin(),
                         HardLinConstr.end());
@@ -272,7 +284,7 @@ public:
 
     LQSolver.Init(AllLinConstr);
 
-    if ((FOrdType == StQRPivoting) && (StQRorder.size() == 0))
+    if ((FOrdType == ST_StQRPivoting) && (StQRorder.size() == 0))
       InitStQRPivoting();
 
     Solution.clear();
@@ -340,13 +352,15 @@ public:
   }
 
   void Solve(std::vector<int> &Solution) {
+    PrintUsedMethod();
+
     bool completed = false;
     std::vector<ScalarType> Float_Solution;
-    if (SType == ST_IterativeFix) {
-      do {
-        completed = SolveIterationIterativeFix(Float_Solution);
-      } while (!completed);
-    }
+    // if (SType == ST_IterativeFix) {
+    do {
+      completed = SolveIterationIterativeFix(Float_Solution);
+    } while (!completed);
+    //}
 
     // then round
     Solution.clear();
@@ -359,12 +373,12 @@ public:
   }
 
   IntegerLinearConstraintLeastSQSolver() {
-    SType = ST_IterativeFix;
+    // SType = ST_IterativeFix;
     FOrdType = ST_ClosestInt;
     // StQRPivoting;;//;//ST_LowError;//
     // PrioritizeMinVal = true;
-    MaxSoftW = 1;
-    SoftIncreaseW = 0.1;
+    MaxSoftW = 2;
+    SoftIncreaseW = 0.2;
   }
 };
 

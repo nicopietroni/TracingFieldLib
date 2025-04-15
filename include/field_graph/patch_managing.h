@@ -15,6 +15,7 @@
 #include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
+
 // #include "../math_utils.h"
 #include "../IO/io_obj.h"
 #include "../tangent_space_smooth.h"
@@ -25,6 +26,8 @@
 #include <UV_param.h>
 #include <pos3.h>
 #include <unordered_map>
+
+#define PARALLEL_PATCH_UPDATE
 
 namespace Geo {
 
@@ -66,10 +69,16 @@ public:
     std::vector<int> OriginalFaceToPatch;
 
     // for each edge in terms of vertices the direction is transversed
-    std::map<std::pair<int, int>, std::pair<int, int>> PathsEdges2;
+    // std::map<std::pair<int, int>, std::pair<int, int>> PathsEdges2;
+    std::unordered_map<std::pair<int, int>, std::pair<int, int>,
+                       hashPairIntFunction>
+        PathsEdges2;
 
     // this one store for each edge the faces that are on it
-    std::map<std::pair<int, int>, std::vector<int>> EdgesToFace;
+    // std::map<std::pair<int, int>, std::vector<int>> EdgesToFace;
+    std::unordered_map<std::pair<int, int>, std::vector<int>,
+                       hashPairIntFunction>
+        EdgesToFace;
 
     // the old nodes used to check if need to update
     std::vector<std::vector<int>> OLDPathNodes;
@@ -121,37 +130,6 @@ public:
     // }
   };
 
-  // enum CornerType{CTypeFlat,CTypeConvex,CTypeSpike,CTypeConcave};
-
-  //    //per patch per loop corners
-  //    std::vector<std::vector<std::vector<int> > > PatchCorners;
-  //    std::vector<std::vector<std::vector<CornerType> > > TypeOfCorner;
-
-  //    //for each patch, for each loop, for each edge the sequence
-  //    std::vector<std::vector<std::vector<std::vector<std::pair<int,int> > > >
-  //    > EdgePatchSides;
-  //    //per patch per loop per side
-  //    std::vector<std::vector<std::vector<ScalarType> > > SideLenghts;
-
-  //    bool UpdateVisual;
-
-  //    //ONLY FOR VISUALIZATION
-  //    std::vector<std::vector<Geo::Point3<ScalarType> > > VisualCorners;
-  //    std::vector<std::vector<CornerType> > VisualCornerType;
-
-  //    //for each patch, for each side , the vector of points
-  //    std::vector<std::vector<std::vector<Geo::Point3<ScalarType> > > >
-  //    VisualPaths;
-
-  //    //SUBMESHES
-  //    std::vector<std::vector<Geo::Point3<ScalarType> > > SubPatchVertPos;
-  //    std::vector<std::vector<std::vector<int> > > SubPatchFaces;
-
-  //    //their mapping to original one
-  //    std::vector<std::vector<int > > SubPatchVertToOriginal;
-  //    std::vector<std::vector<int > > SubPatchFacesToOriginal;
-  // END SUBMESHES
-
   // the original mesh
   std::vector<Geo::Point3<ScalarType>> &VertPos;
   std::vector<std::vector<int>> &Faces;
@@ -159,10 +137,6 @@ public:
   const std::vector<Field::CrossF<ScalarType>> &Cross;
 
   bool UpdateVisual;
-
-  //    //mapping patch to faces and viceversa
-  //    std::vector<std::vector<int> > PatchOriginalFaces;
-  //    std::vector<int> OriginalFaceToPatch;
 
   PatchData PData;
 
@@ -179,16 +153,6 @@ private:
 
   // the vactor with nodes composing the paths
   const std::vector<std::vector<int>> &PathNodes;
-
-  //    //the old nodes used to check if need to update
-  //    std::vector<std::vector<int> > OLDPathNodes;
-
-  //    //for each edge the nodes that are passed with respect to the first node
-  //    // std::unordered_map<std::pair<int,int>,int[2],Geo::hashPairIntFunction
-  //    > PathsEdges; std::map<std::pair<int,int>,std::vector<int> > PathsEdges;
-
-  //    //this one store for each edge the faces that are on it
-  //    std::map<std::pair<int,int>,std::vector<int> > EdgesToFace;
 
   void InitVisualCorners(int IndexP) {
     PData.VisualCorners[IndexP].clear();
@@ -500,47 +464,6 @@ private:
     }
   }
 
-  // void GetBorderNodes(const int &IndexV, Geo::Point3<ScalarType> &Dir,
-  //                     std::vector<size_t> &BorderN) {
-  //   // BorderN.clear();
-  //   // GetNodeOfType(IndexV,Geo::TangentDomain,BorderN);
-  //   std::vector<size_t> BorderN0;
-  //   GetNodeOfType(IndexV, Geo::TangentDomain, BorderN0);
-
-  //   std::vector<size_t> BorderN1;
-  //   GetNodeOfType(IndexV, Geo::TangentExitDomain, BorderN1);
-  //   BorderN.clear();
-  //   BorderN = BorderN0;
-  //   BorderN.insert(BorderN.end(), BorderN1.begin(), BorderN1.end());
-  //   // assert(BorderN.size()<=2);
-  //   if (BorderN.size() == 2) {
-  //     size_t Dir0 = Field::CrossFieldGraph::DirOfNode(BorderN[0]);
-  //     size_t Dir1 = Field::CrossFieldGraph::DirOfNode(BorderN[1]);
-  //     // // check if is concave
-  //     // if ((Dir0 % 2) != (Dir1 % 2)) {
-  //     BorderN.clear();
-  //     assert(IndexV < Cross.size());
-  //     assert(IndexV >= 0);
-  //     Geo::Point3<ScalarType> Dir0_Cross = Cross[IndexV].GetDirection(Dir0);
-  //     Geo::Point3<ScalarType> Dir1_Cross = Cross[IndexV].GetDirection(Dir1);
-  //     ScalarType Dot0 = fabs(Geo::Dot(Dir0_Cross, Dir));
-  //     ScalarType Dot1 = fabs(Geo::Dot(Dir1_Cross, Dir));
-  //     size_t IndexN0 = Dir0; // BorderN[0];
-  //     size_t IndexN1 = Dir1; // BorderN[1];
-
-  //     // if (Dot0 > Dot1)
-  //     //     BorderN.push_back(BorderN[0]);
-  //     // else
-  //     //     BorderN.push_back(BorderN[1]);
-
-  //     if (Dot0 > Dot1)
-  //       BorderN.push_back(IndexN0);
-  //     else
-  //       BorderN.push_back(IndexN1);
-  //     // }
-  //   }
-  // }
-
   int GetBorderNode2(const int &IndexV, Geo::Point3<ScalarType> &Dir) {
     assert(IndexV < Cross.size());
     assert(IndexV >= 0);
@@ -573,85 +496,6 @@ private:
     assert(BestN != -1);
     return BestN;
   }
-
-  // int GetConnectedNodeOnV(const int &IndexN0, const int &IndexV1)
-  // {
-  //   std::vector<int> NeighNode;
-  //   std::vector<ScalarType> NeighW;
-  //   TGraph.GetNeigh(IndexN0,false,false,NeighNode,NeighW);
-  //   int IndexN=-1;
-  //   std::cout<<"IndexN0:"<<IndexN0<<std::endl;
-  //   std::cout<<"IndexV1:"<<IndexV1<<std::endl;
-  //   for (size_t i=0;i<NeighNode.size();i++)
-  //   {
-  //     int IndexEl=Field::CrossFieldGraph::ElemOfNode(NeighNode[i]);
-  //     std::cout<<"IndexEl:"<<IndexEl<<std::endl;
-  //     if (IndexEl==IndexV1)
-  //     {
-  //       assert(IndexN==-1);
-  //       IndexN=NeighNode[i];
-  //     }
-  //   }
-  //   assert(IndexN!=-1);
-  //   return IndexN;
-  // }
-  // void AddBorderPaths() {
-  //   // get all border pos
-  //   std::vector<std::vector<Pos3>> BorderPos;
-  //   getBorderSequnces(Faces, NextF, NextE, BorderPos);
-
-  //   for (size_t i = 0; i < BorderPos.size(); i++) {
-  //     for (size_t j = 0; j < BorderPos[i].size(); j++) {
-  //       Pos3 CurrPos = BorderPos[i][j];
-  //       int IndexV0 = CurrPos.V;
-  //       int IndexV1 = CurrPos.VFlip(Faces);
-
-  //       std::vector<size_t> TangentN0;
-  //       // GetNodeOfType(IndexV0,Geo::TangentDomain,TangentV0);
-
-  //       std::vector<size_t> TangentN1;
-  //       // GetNodeOfType(IndexV1,Geo::TangentDomain,TangentV1);
-
-  //       //Geo::Point3<ScalarType> Dir = VertPos[IndexV0] - VertPos[IndexV1];
-  //       Geo::Point3<ScalarType> Dir = VertPos[IndexV1] - VertPos[IndexV0];
-  //       Dir.Normalize();
-  //       GetBorderNodes(IndexV0, Dir, TangentN0);
-  //       Dir = -Dir;
-  //       GetBorderNodes(IndexV1, Dir, TangentN1);
-
-  //       // std::cout<<"Size 0"<<TangentN0.size()<<std::endl;
-  //       // std::cout<<"Size 1"<<TangentN1.size()<<std::endl;
-
-  //       // assert(TangentV0.size()<=2);
-  //       // assert(TangentV1.size()<=2);
-
-  //       std::pair<int, int> key0(IndexV0, IndexV1);
-  //       std::pair<int, int> key1(IndexV1, IndexV0);
-
-  //       for (size_t k = 0; k < TangentN0.size(); k++)
-  //         PData.PathsEdges[key0].push_back(TangentN0[k]);
-
-  //       for (size_t k = 0; k < TangentN1.size(); k++)
-  //         PData.PathsEdges[key1].push_back(TangentN1[k]);
-
-  //     }
-  //   }
-
-  //   // //make unique per direction
-  //   // std::map<std::pair<int, int>, std::vector<int>>::iterator IteM;
-  //   // for
-  //   (IteM=PData.PathsEdges.begin();IteM!=PData.PathsEdges.end();IteM++)
-  //   // {
-  //   //   std::vector<int> VertDirs=(*IteM).second;
-  //   //   std::cout<<"Size 0:"<<VertDirs.size()<<std::endl;
-  //   //   std::sort(VertDirs.begin(),VertDirs.end());
-  //   //   std::vector<int>::iterator last =
-  //   //   std::unique(VertDirs.begin(),VertDirs.end()); VertDirs.erase(last,
-  //   //   VertDirs.end()); std::cout<<"Size 1:"<<VertDirs.size()<<std::endl;
-  //   //   std::pair<int, int> Key=(*IteM).first;
-  //   //   PData.PathsEdges[Key]=VertDirs;
-  //   // }
-  // }
 
   void AddBorderPaths() {
     // get all border pos
@@ -701,169 +545,6 @@ private:
     }
   };
 
-  // CornerType GetCornerType(int CountDir[4], const ScalarType &angleDeg)
-  // {
-  //   std::set<int> DirM2;
-  //   for (size_t k = 0; k < 4; k++) {
-  //     if (CountDir[k] > 0)
-  //       DirM2.insert(k % 2);
-  //   }
-
-  //   if (DirM2.size() == 2) {
-  //     if (angleDeg < 180)
-  //       return CTypeConvex;
-  //     else {
-  //       return CTypeConcave;
-  //     }
-  //   }
-
-  //   if ((CountDir[0] == 2) && (CountDir[2] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[0] == 2) && (CountDir[2] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-
-  //   if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-
-  //   if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-
-  //   if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-  //   //        if ((CountDir[1]==2)&&(CountDir[3]==2))
-  //   //             return CTypeFlat;
-
-  //   //        return CTypeSpike;
-  //   return CTypeFlat;
-  // }
-
-  // CornerType GetCornerType(int startDir, int CountDir[4],
-  //                          const ScalarType &angleDeg) {
-  //   std::set<int> DirM2;
-  //   int TotDir = 0;
-  //   for (size_t k = 0; k < 4; k++) {
-  //     TotDir += CountDir[k];
-  //     if (CountDir[k] > 0)
-  //       DirM2.insert(k % 2);
-  //   }
-
-  //   if (CountDir[startDir] == 0) {
-  //     std::cout << "** Error First Direction **" << std::endl;
-  //     exit(0);
-  //   }
-
-  //   // check exactly directions for a patch
-  //   if (TotDir != 2) {
-  //     std::cout << "** Error Num Direction Per Corner Per Patch**" << std::endl;
-  //     std::cout << "** Value:" << TotDir << " **" << std::endl;
-  //     exit(0);
-  //   }
-
-  //   // int startDir=0;
-  //   // for (size_t i=0;i<4;i++)
-  //   // {
-  //   //   if (CountDir[i]>0){startDir=i;break;}
-  //   // }
-  //   // assert(startDir!=-1);
-  //   if (DirM2.size() == 2) {
-  //     // check if they are in order with respect to the first
-  //     if (CountDir[(startDir + 1) % 4] > 0)
-  //       return CTypeConvex;
-  //     else
-  //       return CTypeConcave;
-  //     // if (angleDeg < 180)
-  //     //   return CTypeConvex;
-  //     // else {
-  //     //   // std::cout << "**CONCAVE**" << std::endl;
-  //     //   // for (size_t k = 0; k < 4; k++)
-  //     //   //     std::cout << CountDir[k] << " ";
-  //     //   // std::cout << std::endl
-  //     //   //           << std::endl;
-  //     //   return CTypeConcave;
-  //     // }
-  //   }
-
-  //   if ((CountDir[0] == 2) && (CountDir[2] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[0] == 2) && (CountDir[2] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-
-  //   if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-
-  //   if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-
-  //   if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-  //   //        if ((CountDir[1]==2)&&(CountDir[3]==2))
-  //   //             return CTypeFlat;
-
-  //   //        return CTypeSpike;
-  //   return CTypeFlat;
-  // }
-
-  // CornerType GetCornerType2(const int &indexD0,
-  //                           const int &indexD1,
-  //                           const Geo::Point3<ScalarType> &Dir0,
-  //                           const Geo::Point3<ScalarType> &Dir1,
-  //                           const Geo::Point3<ScalarType> &OrthoD,
-  //                           const ScalarType &angleDeg) {
-  //   std::set<int> DirM2;
-  //   DirM2.insert(indexD0 % 2);
-  //   DirM2.insert(indexD1 % 2);
-
-  //   if (DirM2.size() == 2) {
-  //     // check which turn make
-  //     Geo::Point3<ScalarType> N = Geo::Cross(Dir0, Dir1);
-  //     ScalarType Verse = Geo::Dot(OrthoD, N);
-  //     if (Verse < 0)
-  //       return CTypeConvex;
-  //     else
-  //       return CTypeConcave;
-  //   }
-
-  //   int CountDir[4]={0,0,0,0};
-  //   CountDir[indexD0]++;
-  //   CountDir[indexD1]++;
-  //   if ((CountDir[0] == 2) && (CountDir[2] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[0] == 2) && (CountDir[2] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-
-  //   if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[2] == 2) && (CountDir[0] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-
-  //   if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[1] == 2) && (CountDir[3] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-
-  //   if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg > 270))
-  //     return CTypeSpike;
-  //   if ((CountDir[3] == 2) && (CountDir[1] == 0) && (angleDeg < 90))
-  //     return CTypeConvex;
-  //   //        if ((CountDir[1]==2)&&(CountDir[3]==2))
-  //   //             return CTypeFlat;
-
-  //   //        return CTypeSpike;
-  //   return CTypeFlat;
-  // }
-
   CornerType GetCornerType2(const int &indexD0, const int &indexD1,
                             const Geo::Point3<ScalarType> &Dir0,
                             const Geo::Point3<ScalarType> &Dir1,
@@ -887,138 +568,6 @@ private:
       return CTypeConcave;
   }
 
-  // void FindPatchCorners(const int &IndexP) {
-
-  //   if (PData.SubPatchFaces[IndexP].size() == 0)
-  //     return;
-  //   // get the Adjacency of the submesh
-  //   std::vector<std::vector<int>> NextFPatch;
-  //   std::vector<std::vector<int>> NextEPatch;
-  //   getFFAdjacency(PData.SubPatchFaces[IndexP], NextFPatch, NextEPatch);
-
-  //   // compute the angle on the vertices to cech convex/concave
-  //   std::vector<ScalarType> VertAngle;
-  //   ComputePerVertAngleDeg(PData.SubPatchVertPos[IndexP],
-  //                          PData.SubPatchFaces[IndexP], VertAngle);
-
-  //   // get the border sequences
-  //   std::vector<std::vector<int>> BorderVIdx;
-  //   getBorderSequncesVert(PData.SubPatchFaces[IndexP], NextFPatch,
-  //   NextEPatch,
-  //                         BorderVIdx);
-
-  //   std::set<int> CornerSet;
-  //   assert(IndexP < PData.PatchCorners.size());
-  //   assert(IndexP < PData.TypeOfCorner.size());
-  //   // assert(IndexP<PData.PatchSideVert.size());
-
-  //   PData.PatchCorners[IndexP].clear();
-  //   PData.TypeOfCorner[IndexP].clear();
-  //   // PData.PatchSideVert[IndexP].clear();
-
-  //   // allocate for each loop
-  //   //(usually is one in the usual patch decompositions but can handle
-  //   general
-  //   //cases)
-  //   PData.PatchCorners[IndexP].resize(BorderVIdx.size());
-  //   PData.TypeOfCorner[IndexP].resize(BorderVIdx.size());
-
-  //   // for each loop
-  //   for (size_t i = 0; i < BorderVIdx.size(); i++) {
-  //     // borders are always loops that close on itself
-  //     //  so need also to check last with first
-  //     int sizeL = BorderVIdx[i].size();
-
-  //     for (size_t j = 0; j < BorderVIdx[i].size(); j++) {
-  //       // get local vertices
-  //       int IndexV_Prev = BorderVIdx[i][(j + sizeL - 1) % sizeL];
-  //       int IndexV_Curr = BorderVIdx[i][j];
-  //       int IndexV_Next = BorderVIdx[i][(j + 1) % sizeL];
-
-  //       // then map to original
-  //       int IndexV_Prev_Or = MapToOriginal(IndexP, IndexV_Prev);
-  //       int IndexV_Curr_Or = MapToOriginal(IndexP, IndexV_Curr);
-  //       int IndexV_Next_Or = MapToOriginal(IndexP, IndexV_Next);
-
-  //       // get the two edges as emanating from the current node
-  //       std::pair<int, int> key_prev(IndexV_Curr_Or, IndexV_Prev_Or);
-  //       //std::pair<int, int> key_prev( IndexV_Prev_Or,IndexV_Curr_Or);
-  //       std::pair<int, int> key_next(IndexV_Curr_Or, IndexV_Next_Or);
-
-  //       // check they shoudl exhist
-  //       assert(PData.PathsEdges.count(key_prev) > 0);
-  //       assert(PData.PathsEdges.count(key_next) > 0);
-
-  //       // get the direction of all nodes inciding on considered vertex
-  //       // considering that edge
-  //       std::vector<int> NodesV_prev = PData.PathsEdges[key_prev];
-  //       std::vector<int> NodesV_next = PData.PathsEdges[key_next];
-
-  //       // add direction per each of the previously found nodes
-  //       std::vector<int> DirV_prev;
-  //       Field::CrossFieldGraph::DirOfNodes(NodesV_prev, DirV_prev);
-  //       std::vector<int> DirV_next;
-  //       Field::CrossFieldGraph::DirOfNodes(NodesV_next, DirV_next);
-  //       std::vector<int> AllDirsV = DirV_prev;
-  //       AllDirsV.insert(AllDirsV.end(), DirV_next.begin(), DirV_next.end());
-  //       int CountDir[4] = {0, 0, 0, 0};
-  //       for (size_t k = 0; k < AllDirsV.size(); k++) {
-  //         int IndexD = AllDirsV[k];
-  //         CountDir[IndexD]++;
-  //       }
-
-  //       int startDir = DirV_prev[0];
-  //       // then check the kind of vertex
-  //       ScalarType currAVert = VertAngle[IndexV_Curr];
-  //       CornerType CType = GetCornerType(startDir, CountDir, currAVert);
-  //       if (CType != CTypeFlat) {
-  //         PData.PatchCorners[IndexP][i].push_back(IndexV_Curr);
-  //         PData.TypeOfCorner[IndexP][i].push_back(CType);
-  //         CornerSet.insert(IndexV_Curr);
-  //       }
-  //     }
-  //   }
-
-  //   // then sort with respect to
-  //   // std::cout<<"CornerSet size:"<<CornerSet.size()<<std::endl;
-  //   assert(IndexP < PData.EdgePatchSides.size());
-  //   PData.EdgePatchSides[IndexP].resize(BorderVIdx.size());
-  //   for (size_t i = 0; i < BorderVIdx.size(); i++) {
-  //     int IndexCorner = -1;
-  //     for (int j = 0; j < (int)BorderVIdx[i].size(); j++) {
-  //       if (CornerSet.count(BorderVIdx[i][j]) > 0) {
-  //         IndexCorner = j;
-  //         assert(CornerSet.count(BorderVIdx[i][IndexCorner]) > 0);
-  //         break;
-  //       }
-  //     }
-  //     if (IndexCorner != -1) {
-  //       std::rotate(BorderVIdx[i].begin(),
-  //                   BorderVIdx[i].begin() + IndexCorner,
-  //                   BorderVIdx[i].end());
-  //       assert(CornerSet.count(BorderVIdx[i][0]) > 0);
-  //     }
-
-  //     // retrieve the side vertices
-  //     std::vector<std::vector<std::pair<int, int>>> SideEdges;
-  //     SideEdges.resize(1);
-
-  //     // makes no sense a border with lenght 1
-  //     // retrieve edge sequences
-  //     assert(BorderVIdx[i].size() > 1);
-  //     int BorderL = (int)BorderVIdx[i].size();
-  //     for (int j = 0; j < BorderL; j++) {
-  //       int IndexV0 = BorderVIdx[i][j];
-  //       int IndexV1 = BorderVIdx[i][(j + 1) % BorderL];
-  //       std::pair<int, int> EdgeV(IndexV0, IndexV1);
-  //       SideEdges.back().push_back(EdgeV);
-  //       if ((CornerSet.count(IndexV1) > 0) && (j != (BorderL - 1)))
-  //         SideEdges.resize(SideEdges.size() + 1);
-  //     }
-  //     PData.EdgePatchSides[IndexP][i] = SideEdges;
-  //   }
-  // }
-
   void FindPatchCorners(const int &IndexP) {
 
     if (PData.SubPatchFaces[IndexP].size() == 0)
@@ -1028,12 +577,6 @@ private:
     std::vector<std::vector<int>> NextFPatch;
     std::vector<std::vector<int>> NextEPatch;
     getFFAdjacency(PData.SubPatchFaces[IndexP], NextFPatch, NextEPatch);
-
-    // std::vector<Geo::Point3<ScalarType>> FaceNormals,VerteNormals;
-    // ComputeNormals<ScalarType>(PData.SubPatchVertPos[IndexP],
-    //                             PData.SubPatchFaces[IndexP],
-    //                             FaceNormals,
-    //                             VerteNormals);
 
     // compute the angle on the vertices to cech convex/concave
     std::vector<ScalarType> VertAngle;
@@ -1261,7 +804,8 @@ private:
     ComponentsF.clear();
 
     // find partitions
-    std::set<int> Explored;
+    // std::set<int> Explored;
+    std::unordered_set<int> Explored;
 
     for (size_t i = 0; i < IndexF.size(); i++) {
       if (Explored.count(IndexF[i]) > 0)
@@ -1346,68 +890,12 @@ private:
     }
   }
 
-  // void SplitSubMeshWithInternalEdges(int IndexPatch) {
-  //   std::vector<std::vector<int>> NextFPatch, NextEPatch;
-  //   getFFAdjacency(PData.SubPatchFaces[IndexPatch], NextFPatch, NextEPatch);
-  //   std::set<std::pair<int, int>> SplitEdgeSet;
-  //   for (size_t i = 0; i < PData.SubPatchFaces[IndexPatch].size(); i++) {
-  //     int sizeF = PData.SubPatchFaces[IndexPatch][i].size();
-  //     assert(sizeF == 3);
-  //     for (size_t j = 0; j < 3; j++) {
-  //       if (NextFPatch[i][j] == -1)
-  //         continue;
-
-  //       // get the two vertices and maps to the original
-  //       int IndexV0 = PData.SubPatchFaces[IndexPatch][i][j];
-  //       assert(IndexV0 < PData.SubPatchVertToOriginal[IndexPatch].size());
-  //       int IndexV0Or = PData.SubPatchVertToOriginal[IndexPatch][IndexV0];
-
-  //       int IndexV1 = PData.SubPatchFaces[IndexPatch][i][(j + 1) % 3];
-  //       assert(IndexV1 < PData.SubPatchVertToOriginal[IndexPatch].size());
-  //       int IndexV1Or = PData.SubPatchVertToOriginal[IndexPatch][IndexV1];
-
-  //       std::pair<int, int> EdgeKOr(std::min(IndexV0Or, IndexV1Or),
-  //                                   std::max(IndexV0Or, IndexV1Or));
-  //       // if (PData.PathsEdges.count(EdgeKOr) == 0)
-  //       //   continue;
-  //       if (PData.PathsEdges2.count(EdgeKOr) == 0)
-  //         continue;
-
-  //       std::pair<int, int> EdgeK(std::min(IndexV0, IndexV1),
-  //                                 std::max(IndexV0, IndexV1));
-  //       SplitEdgeSet.insert(EdgeK);
-  //     }
-  //   }
-  //   std::vector<std::pair<int, int>> SplitEdges(SplitEdgeSet.begin(),
-  //                                               SplitEdgeSet.end());
-
-  //   if (SplitEdges.size() > 0) {
-  //     // save the original vertex mapping
-  //     std::map<Geo::Point3<ScalarType>, int> PosToIDX;
-  //     for (size_t i = 0; i < PData.SubPatchVertPos[IndexPatch].size(); i++) {
-  //       Geo::Point3<ScalarType> Pos = PData.SubPatchVertPos[IndexPatch][i];
-  //       PosToIDX[Pos] = PData.SubPatchVertToOriginal[IndexPatch][i];
-  //     }
-
-  //     // split the mesh
-  //     SplitMeshFromEdges(PData.SubPatchVertPos[IndexPatch],
-  //                        PData.SubPatchFaces[IndexPatch], NextFPatch,
-  //                        NextEPatch, SplitEdges);
-
-  //     // restore the right mapping
-  //     PData.SubPatchVertToOriginal[IndexPatch].clear();
-  //     for (size_t i = 0; i < PData.SubPatchVertPos[IndexPatch].size(); i++) {
-  //       Geo::Point3<ScalarType> Pos = PData.SubPatchVertPos[IndexPatch][i];
-  //       assert(PosToIDX.count(Pos) > 0);
-  //       PData.SubPatchVertToOriginal[IndexPatch].push_back(PosToIDX[Pos]);
-  //     }
-  //   }
-  // }
-
   void SplitSubMeshWithInternalEdges(int IndexPatch) {
     std::vector<std::vector<int>> NextFPatch, NextEPatch;
     getFFAdjacency(PData.SubPatchFaces[IndexPatch], NextFPatch, NextEPatch);
     std::set<std::pair<int, int>> SplitEdgeSet;
+    // std::unordered_set<std::pair<int, int>, hashPairIntFunction>
+    // SplitEdgeSet;
     for (size_t i = 0; i < PData.SubPatchFaces[IndexPatch].size(); i++) {
       int sizeF = PData.SubPatchFaces[IndexPatch][i].size();
       assert(sizeF == 3);
@@ -1439,7 +927,12 @@ private:
     std::vector<std::pair<int, int>> SplitEdges(SplitEdgeSet.begin(),
                                                 SplitEdgeSet.end());
 
-    std::map<Geo::Point3<ScalarType>, int> PosToIDX;
+    // std::map<Geo::Point3<ScalarType>, int> PosToIDX;
+    std::unordered_map<Geo::Point3<ScalarType>, int,
+                       Geo::Point3Hash<ScalarType>,
+                       Geo::Point3Equal<ScalarType>>
+        PosToIDX;
+
     for (size_t i = 0; i < PData.SubPatchVertPos[IndexPatch].size(); i++) {
       Geo::Point3<ScalarType> Pos = PData.SubPatchVertPos[IndexPatch][i];
       PosToIDX[Pos] = PData.SubPatchVertToOriginal[IndexPatch][i];
@@ -1453,8 +946,7 @@ private:
                          NextEPatch, SplitEdges);
       has_changed = true;
       // split non manif edges (might happens in case of original borders)
-      getFFAdjacency(PData.SubPatchFaces[IndexPatch], NextFPatch,
-      NextEPatch);
+      getFFAdjacency(PData.SubPatchFaces[IndexPatch], NextFPatch, NextEPatch);
     }
     has_changed |= SplitNonManifoldBorderV(PData.SubPatchVertPos[IndexPatch],
                                            PData.SubPatchFaces[IndexPatch],
@@ -1472,7 +964,8 @@ private:
 
   void UpdateSubMesh(int IndexPatch) {
     assert(IndexPatch >= 0);
-    std::map<int, int> VertMap;
+    // std::map<int, int> VertMap;
+    std::unordered_map<int, int> VertMap;
 
     assert(IndexPatch < (int)PData.SubPatchVertPos.size());
     assert(IndexPatch < (int)PData.SubPatchFaces.size());
@@ -1514,16 +1007,60 @@ private:
     SplitSubMeshWithInternalEdges(IndexPatch);
   }
 
+#ifndef PARALLEL_PATCH_UPDATE
   void UpdateSubMeshes(const std::vector<int> &IndexPatches) {
     for (size_t i = 0; i < IndexPatches.size(); i++)
       UpdateSubMesh(IndexPatches[i]);
   }
+#else
+  void UpdateSubMeshes(const std::vector<int> &IndexPatches) {
 
+    const size_t num_threads = 8;
+    const size_t N = IndexPatches.size();
+
+    std::vector<std::thread> threads;
+
+    for (size_t t = 0; t < num_threads; ++t) {
+      threads.emplace_back([&, t]() {
+        for (size_t i = t; i < N; i += num_threads) {
+          UpdateSubMesh(IndexPatches[i]);
+        }
+      });
+    }
+
+    // Wait for all threads to complete
+    for (auto &th : threads)
+      th.join();
+  }
+
+#endif
+
+#ifndef PARALLEL_PATCH_UPDATE
   void FindPatchCorners(const std::vector<int> &IndexPatches) {
+#pragma omp parallel for num_threads(8)
     for (size_t i = 0; i < IndexPatches.size(); i++)
       FindPatchCorners(IndexPatches[i]);
   }
+#else
+  void FindPatchCorners(const std::vector<int> &IndexPatches) {
+    const size_t num_threads = 8;
+    const size_t N = IndexPatches.size();
 
+    std::vector<std::thread> threads;
+
+    for (size_t t = 0; t < num_threads; ++t) {
+      threads.emplace_back([&, t]() {
+        for (size_t i = t; i < N; i += num_threads) {
+          FindPatchCorners(IndexPatches[i]);
+        }
+      });
+    }
+
+    // Wait for all threads to complete
+    for (auto &th : threads)
+      th.join();
+  }
+#endif
   void ClearDataForPatch(const int &IndexPatch) {
     assert(IndexPatch >= 0);
     assert(IndexPatch < (int)PData.SideLenghts.size());
@@ -1610,45 +1147,6 @@ private:
     return true;
   }
 
-  // // get the sequence from the first corner found
-  // bool GetGlobalSeqFromCorner(const int &IndexPatch,
-  //                             std::vector<int> &BoundVIdx)
-  // {
-  //     if (NumSides(IndexPatch)==0)return false;
-  //     for (size_t i=0;i<NumSides(IndexPatch);i++)
-  //     {
-  //         std::vector<int> SideVert;
-  //         GetAllSideVert(IndexPatch,SideVert);
-  //         MapToOriginal(IndexPatch,SideVert);
-
-  //     }
-  //     // std::vector<int> PatchCornerGlobal;
-  //     // GetAllCorners(IndexPatch,PatchCornerGlobal);
-  //     // std::set<int>
-  //     PatchCornerGlobalSet(PatchCornerGlobal.begin(),PatchCornerGlobal.end());
-  //     // BoundVIdx.clear();
-
-  //     // // sort with respect to one vertex
-  //     // for (size_t i = 0; i < BoundVIdx.size(); i++)
-  //     // {
-  //     //     bool found = false;
-  //     //     for (size_t j = 0; j < BoundVIdx[i].size(); j++)
-  //     //     {
-  //     //         int CurrV = BoundVIdx[i][j];
-  //     //         if (CornerSet.count(CurrV) > 0)
-  //     //         {
-  //     //             std::rotate(BoundVIdx[i].begin(), BoundVIdx[i].begin()
-  //     + j, BoundVIdx[i].end());
-  //     //             found = true;
-  //     //             break;
-  //     //         }
-  //     //     }
-  //     //     if (!found)
-  //     //         return false;
-  //     // }
-  //     // return true;
-  // }
-
   // reorganise the sequence from the first corner found
   bool SortFromCorner(std::vector<int> &BoundVIdx, const int &IndexC) {
 
@@ -1662,129 +1160,6 @@ private:
     }
     return false;
   }
-
-  // bool GetGlobalSubsides1(const int IndexPatch,
-  //                         const std::set<int> &AllCornersSet,
-  //                         std::vector<std::vector<int> > &SidesVert)
-  // {
-  //     if (NumBorders(IndexPatch)!=1)return false;
-  //     // get boundary
-  //     std::vector<std::vector<int>> BoundVIdx;
-  //     getBorderSequncesVert(PData.SubPatchFaces[IndexPatch], NextF, NextE,
-  //     BoundVIdx); if (BoundVIdx.size()!=1)return false; if
-  //     (BoundVIdx[0].size() == 0) return false; std::vector<int>
-  //     GlobalBound=BoundVIdx[0];
-
-  //     //map it to global
-  //     MapToOriginal(IndexPatch,GlobalBound);
-
-  //     //get corners of the patch
-  //     assert(PData.PatchCorners[IndexPatch].size()==1);
-  //     std::vector<int> PatchCorner=PData.PatchCorners[IndexPatch][0];
-  //     MapToOriginal(IndexPatch,PatchCorner);
-
-  //     //sort with respect to first corner
-  //     std::set<int> PatchCornersSet(PatchCorner.begin(),PatchCorner.end());
-  //     bool has_sorted = SortFromCorner(GlobalBound, PatchCorner[0]);
-  //     if (!has_sorted)
-  //         return false;
-
-  //     // allocate first side
-  //     SidesVert.resize(1);
-  //     // add first sub sequence
-  //     SidesVert[0].resize(1);
-
-  //     // add first vert
-  //     int FirstV=GlobalBound[0];
-  //     SidesVert.back().back().push_back(FirstV);
-
-  //     for (size_t i = 1; i < GlobalBound.size(); i++)
-  //     {
-  //         //get the vertex
-  //         int IndexV = GlobalBound[i];
-  //         //add to current subside
-  //         SidesVert.back().back().push_back(GlobalBound);
-  //         bool IsGlobalCorner=(AllCornersSet.count(IndexV)>0);
-  //         bool IsPatchCorner=(PatchCornersSet.count(IndexV)>0);
-  //         // then check if need to allocate a new edge
-  //         if (IsPatchCorner)
-  //         {
-  //             assert(IsGlobalCorner);
-  //             // then add a new side
-  //             SidesVert.resize(SidesVert.size() + 1);
-  //             //add a new subside
-  //             SidesVert.back().resize(SidesVert.back().size()+1);
-  //             // add this as the first of the new edge
-  //             SidesVertt.back().back().push_back(IndexV);
-  //             continue;
-  //         }
-  //         if (IsGlobalCorner)
-  //         {
-  //             //managed in previous branch
-  //             assert(!IsPatchCorner);
-  //             //add a new subside
-  //             SidesVert.back().resize(SidesVert.back().size()+1);
-  //             // add this as the first of the new edge
-  //             SidesVertt.back().back().push_back(IndexV);
-  //             continue;
-  //         }
-  //     }
-  //      // add the first one
-  //     SidesVert[i].back().back().push_back(FirstV);
-
-  //     //sanity check
-  //     assert(SidesVert.size()>0);
-
-  //     // //for each side
-  //     // for (size_t i=0;i<SidesVert.size();i++)
-  //     // {
-  //     //     for (size_t j=0;j<SidesVert[i].size();j++)
-  //     //     {
-  //     //         //at least 2 vertices for each side
-  //     //         assert(SidesVert[i][j].size()>=2);
-  //     //         int IndexV0=SidesVert[i][0][0];
-  //     //         int IndexV1=SidesVert[i].back().back();
-  //     //         bool IsGlobalCorner=(AllCornersSet.count(IndexV0)>0);
-  //     //         bool IsPatchCorner=(PatchCornersSet.count(IndexV0)>0);
-
-  //     //         assert(IsGlobalCorner);
-  //     //         assert(IsPatchCorner);
-
-  //     //         IsGlobalCorner=(AllCornersSet.count(IndexV1)>0);
-  //     //         IsPatchCorner=(PatchCornersSet.count(IndexV1)>0);
-
-  //     //         assert(IsGlobalCorner);
-  //     //         assert(IsPatchCorner);
-
-  //     //         for (size_t k=1;k<SidesVert[i].size()-1;j++)
-  //     //         {
-  //     //             int IndexV=SidesVert[i][j];
-  //     //             IsGlobalCorner=(AllCornersSet.count(IndexV)>0);
-  //     //             IsPatchCorner=(PatchCornersSet.count(IndexV)>0);
-  //     //             assert(IsGlobalCorner);
-  //     //             assert(!IsPatchCorner);
-  //     //         }
-  //     //     }
-  //     // }
-  //     return true;
-  // }
-
-  // bool GetGlobalSubsides1(std::vector<std::vector<std::vector<int>> >
-  // &SidesVert)
-  // {
-  //      // first get all corners
-
-  //     std::vector<int> AllCorners;
-  //     GetAllCorners(AllCorners);
-  //     std::set<int> CornerSet(AllCorners.begin(),AllCorners.end());
-
-  //     SidesVert.resize(NumPatches());
-  //     for (int i = 0; i < NumPatches(); i++)
-  //     {
-  //         if (isEmpty(i))continue;
-  //         GetGlobalSubsides1(i,AllCorners,SidesVert)
-  //     }
-  // }
 
   // return sides considering global indexes
   bool
@@ -1860,8 +1235,23 @@ private:
               std::back_inserter(CornNum));
   }
 
-
 public:
+  void ReservePatch(int Size = 1000) {
+    PData.SideLenghts.reserve(Size);
+    PData.PatchOriginalFaces.reserve(Size);
+    PData.SubPatchVertPos.reserve(Size);
+    PData.SubPatchFaces.reserve(Size);
+    PData.SubPatchVertToOriginal.reserve(Size);
+    PData.SubPatchFacesToOriginal.reserve(Size);
+    PData.PatchCorners.reserve(Size);
+    PData.TypeOfCorner.reserve(Size);
+    // PData.PatchSideVert.resize(PData.TypeOfCorner.size()+1);
+    PData.EdgePatchSides.reserve(Size);
+    PData.VisualCorners.reserve(Size);
+    PData.VisualCornerType.reserve(Size);
+    PData.VisualPaths.reserve(Size);
+  }
+
   // this function set for each face the patch it belongs
   void UpdateFaceToPatch() {
     // then update the correspondence
@@ -1960,51 +1350,6 @@ public:
       VIndexes[i] = MapToOriginal(IndexPatch, IndexLocalV);
     }
   }
-
-  // // return the midpoint for each side
-  // bool GetSideMidpoints(const int IndexPatch,
-  //                       const std::set<int> &CornerSet,
-  //                       std::vector<std::pair<int, int>> &CornersExtremes,
-  //                       std::vector<std::pair<int, int>> &EdgeInt,
-  //                       std::vector<ScalarType> &Alpha)
-  // {
-  //     CornersExtremes.clear();
-  //     EdgeInt.clear();
-  //     Alpha.clear();
-  //     // MidPoint.clear();
-
-  //     // get subsides
-  //     std::vector<std::vector<std::vector<int>>> SidesVert;
-  //     bool isOK = GetGlobalSubsides(IndexPatch, CornerSet, SidesVert);
-  //     if (!isOK)
-  //         return false;
-  //     for (size_t i = 0; i < SidesVert.size(); i++)
-  //     {
-  //         for (size_t j = 0; j < SidesVert[i].size(); j++)
-  //         {
-  //             assert(SidesVert[i][j].size() >= 2);
-  //             int indexAvg0 = floor(SidesVert[i][j].size() / 2) - 1;
-  //             indexAvg0 = std::max(indexAvg0, 0);
-  //             int indexAvg1 = indexAvg0 + 1;
-  //             assert(indexAvg0 >= 0);
-  //             assert(indexAvg0 < SidesVert[i][j].size());
-  //             assert(indexAvg1 >= 0);
-  //             assert(indexAvg1 < SidesVert[i][j].size());
-  //             int IndexV0 = (SidesVert[i][j][indexAvg0]);
-  //             int IndexV1 = (SidesVert[i][j][indexAvg1]);
-  //             if (IndexV0 > IndexV1)
-  //                 std::swap(IndexV0, IndexV1);
-
-  //             EdgeInt.push_back(std::pair<int, int>(IndexV0, IndexV1));
-  //             Alpha.push_back(0.5);
-  //             //                EdgeInt EInt(IndexV0,IndexV1,0.5);
-  //             //                MidPoint.push_back(EInt);
-  //             std::pair<int, int> SideE(SidesVert[i][j][0],
-  //             SidesVert[i][j].back()); CornersExtremes.push_back(SideE);
-  //         }
-  //     }
-  //     return isOK;
-  // }
 
   void GetAllCorners(int IndexP, std::vector<int> &CornerVert,
                      std::vector<CornerType> &CurrType) const {
@@ -2334,13 +1679,14 @@ public:
 
   bool HasSingleSingularities(int IndexPatch) const {
     int numSing = 0;
-    for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();i++) {
+    for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();
+         i++) {
       int IndexVOr = PData.SubPatchVertToOriginal[IndexPatch][i];
       if (SingValence.count(IndexVOr) == 0)
         continue;
       numSing++;
     }
-    return (numSing==1);
+    return (numSing == 1);
   }
 
   void PatchSingularities(const int IndexPatch,
@@ -2355,21 +1701,6 @@ public:
     }
   }
 
-  // bool MatchSingularity(int IndexPatch) const {
-  //   assert(IndexPatch >= 0);
-  //   assert(IndexPatch < PData.SubPatchVertToOriginal.size());
-
-  //   int TargetValence = -1;
-  //   for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();
-  //        i++) {
-  //     int IndexVOr = PData.SubPatchVertToOriginal[IndexPatch][i];
-  //     if (SingValence.count(IndexVOr) == 0)
-  //       continue;
-  //     if (TargetValence != -1)
-  //       return false; // multiple singularities
-  //     TargetValence = SingValence.at(IndexVOr);
-  //   }
-  
   bool MatchSingularity(int IndexPatch) const {
     assert(IndexPatch >= 0);
     assert(IndexPatch < PData.SubPatchVertToOriginal.size());
@@ -2480,6 +1811,7 @@ public:
   }
 
   void InitVisualCornersEdges() {
+#pragma omp parallel for num_threads(8)
     for (size_t i = 0; i < NumPatches(); i++) {
       InitVisualCorners(i);
       InitVisualSides(i);
@@ -2507,97 +1839,6 @@ public:
     for (size_t i = 0; i < NumPatches(); i++)
       UpdateSubPatchPos(i);
   }
-
-  //    bool SavePatchesLayout(const std::string meshFile)
-  //    {
-  //        CompactEmptyPatches();
-  //        std::ofstream fout(meshFile.c_str());
-  //        if(!fout) return false;
-
-  //        //first set the number of patches
-  //        fout<<"#p"<<EdgePatchSides.size()<<"\n";
-
-  //        //for each patch
-  //        for (size_t pi=0;pi<EdgePatchSides.size();pi++)
-  //        {
-  //            //write patch index
-  //            fout<<"p "<<pi<<"\n";
-
-  //            //for each loops
-  //            fout<<"#l "<<EdgePatchSides[pi].size()<<"\n";
-  //            assert(EdgePatchSides[pi].size()==PatchCorners[pi].size());
-
-  //            //for each loop
-  //            for (size_t li=0;li<PatchCorners[pi].size();li++)
-  //            {
-  //                fout<<"l "<<li<<"\n";
-  //                //number of sides equal nummber of corners
-  //                assert(PatchCorners[pi][li].size()==EdgePatchSides[pi][li].size());
-
-  //                //write corners
-  //                fout<<"#c "<<PatchCorners[pi][li].size()<<"\n";
-
-  //                for (size_t ci=0;ci<PatchCorners[pi][li].size();ci++)
-  //                {
-  //                    int IndexC=PatchCorners[pi][li][ci];
-  //                    assert(IndexC>=0);
-  //                    assert(IndexC<VertPos.size());
-  //                    fout<<"c "<<IndexC<<"\n";
-  //                }
-
-  //                //write number of sides
-  //                fout<<"#s "<<EdgePatchSides[pi][li].size()<<"\n";
-  //                for (size_t si=0;si<EdgePatchSides[pi][li].size();si++)
-  //                {
-  //                    fout<<"s "<<si<<"\n";
-  //                    int sizeL=EdgePatchSides[pi][li][si].size();
-  //                    fout<<"#e "<<sizeL<<"\n";
-
-  //                    //for each edge
-  //                    for (size_t
-  //                    ei=0;ei<EdgePatchSides[pi][li][si].size();ei++)
-  //                    {
-  //                        int IndexV0=EdgePatchSides[pi][li][si][ei].first;
-  //                        int IndexV1=EdgePatchSides[pi][li][si][ei].second;
-  //                        assert(IndexV0>=0);
-  //                        assert(IndexV0<VertPos.size());
-  //                        assert(IndexV1>=0);
-  //                        assert(IndexV1<VertPos.size());
-  //                        fout<<"e "<<IndexV0<<" "<<IndexV1<<"\n";
-  //                    }
-  //                }
-  //            }
-  //        }
-  //        fout.close();
-  //        return true;
-  //    }
-
-  //    void SaveSubMeshes(const std::string PathSave)
-  //    {
-  //        UpdateSubPatchPos();
-
-  //        std::vector<Geo::Point3<ScalarType> > PosVect;
-  //        std::vector<std::vector<int> >  FaceVect;
-  //        assert(SubPatchVertPos.size()==SubPatchFaces.size());
-
-  //        for (size_t i=0;i<SubPatchVertPos.size();i++)
-  //        {
-  //            int baseIdx=PosVect.size();
-  //            PosVect.insert(PosVect.end(),SubPatchVertPos[i].begin(),SubPatchVertPos[i].end());
-
-  //            for (size_t j=0;j<SubPatchFaces[i].size();j++)
-  //            {
-  //                FaceVect.push_back(std::vector<int>(3,-1));
-  //                assert(SubPatchFaces[i][j].size()==3);
-  //                for (size_t k=0;k<3;k++)
-  //                {
-  //                    int IndexV=SubPatchFaces[i][j][k];
-  //                    FaceVect.back()[k]=IndexV+baseIdx;
-  //                }
-  //            }
-  //        }
-  //        WriteOBJ(PathSave.c_str(),PosVect,FaceVect);
-  //    }
 
   void FindPatchCorners() {
     for (size_t i = 0; i < NumPatches(); i++)
@@ -2763,7 +2004,7 @@ public:
 
     CheckConsistentData();
 
-    //UpdateOrthoDartNodeTypeIfNeeded();
+    // UpdateOrthoDartNodeTypeIfNeeded();
 
     assert(PData.SideLenghts.size() == NumPatches());
     assert(PData.PatchOriginalFaces.size() == NumPatches());
@@ -2901,17 +2142,7 @@ public:
     // }
   }
 
-  //    void UpdateAll()
-  //    {
-  //        std::vector<int> toUpdPatch;
-  //        for (size_t i=0;i<NumPatches();i++)
-  //            toUpdPatch.push_back(i);
-
-  //        UpdatePatches(toUpdPatch);
-  //    }
-
   // the old nodes used to check if need to update
-  // std::vector<std::vector<int> > OLDPathNodes;
   void Reset() {
     PData.PatchCorners.clear();
     PData.TypeOfCorner.clear();
@@ -3089,8 +2320,6 @@ public:
       : VertPos(_VertPos), Faces(_Faces), Cross(_Cross), TGraph(_TGraph),
         PathNodes(_PathNodes) {
     UpdateVisual = true;
-    //        UpdateCorners=true;
-    //        UpdateSubMeshes=true;
   }
 };
 

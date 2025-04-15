@@ -24,6 +24,8 @@
 #include <set>
 #include <unordered_set>
 
+#define PARALLEL_SAMPLE
+
 namespace Geo {
 
 template <class ScalarType> class CrossPathSampling {
@@ -657,8 +659,8 @@ public:
     std::vector<int> StartN;
 
     // first add singularities
-     if (distanceSingularities)
-       StartN.insert(StartN.end(), SingNodes.begin(), SingNodes.end());
+    if (distanceSingularities)
+      StartN.insert(StartN.end(), SingNodes.begin(), SingNodes.end());
 
     std::vector<int> BorderNodes;
     TGraph.GetNodeType(Geo::TangentDomain, BorderNodes);
@@ -787,9 +789,8 @@ private:
     }
   }
 
-  bool TraceCandidate(Geo::TracingGraph<ScalarType> &TGraph, 
-                      const int &IndexCandidate,
-                      std::vector<int> &ArrivalNodes,
+  bool TraceCandidate(Geo::TracingGraph<ScalarType> &TGraph,
+                      const int &IndexCandidate, std::vector<int> &ArrivalNodes,
                       std::vector<int> &TracedPath, ScalarType &PathL) {
     assert(IndexCandidate >= 0);
     assert(IndexCandidate < StartingNodes.size());
@@ -1097,7 +1098,8 @@ private:
 
           std::vector<int> TracedPath;
           ScalarType PathL;
-          bool has_traced = TraceCandidate(GraphInstances[t], i, ArrivalNodes,
+          bool has_traced = TraceCandidate(GraphInstances[t], i,
+          ArrivalNodes,
                                            TracedPath, PathL);
 
           if (!has_traced)
@@ -1109,23 +1111,11 @@ private:
         }
       });
     }
-    
+
     // Join threads
     for (auto &th : threads)
       th.join();
 
-    // Merge thread-local results
-    // int CurrIdx=0;
-    // for (int t = 0; t < parallel_proc; ++t) {
-    //   SampledPaths.insert(SampledPaths.end(), thread_paths[t].begin(),
-    //                       thread_paths[t].end());
-    //   SampledPathsLenghtW.insert(SampledPathsLenghtW.end(),
-    //                              thread_lengths[t].begin(),
-    //                              thread_lengths[t].end());
-    //   NewStartingNodes.insert(NewStartingNodes.end(),
-    //                           thread_start_nodes[t].begin(),
-    //                           thread_start_nodes[t].end());
-    // }
     int CurrIdx=0;
     bool added=false;
     do{
@@ -1140,7 +1130,11 @@ private:
     }
     CurrIdx++;
     }while (added);
+
+    for (size_t i=0;i<GraphInstances.size();i++)
+        Geo::PathFunctions<ScalarType>::CopyNonEnabledConnections(GraphInstances[i],TGraph);
   }
+
 
   void SampleNormal(std::vector<int> &ArrivalNodes,
                     std::vector<int> &NewStartingNodes) {
@@ -1151,7 +1145,8 @@ private:
 
       std::vector<int> TracedPath;
       ScalarType PathL;
-      bool has_traced = TraceCandidate(TGraph,i, ArrivalNodes, TracedPath, PathL);
+      bool has_traced =
+          TraceCandidate(TGraph, i, ArrivalNodes, TracedPath, PathL);
 
       if (!has_traced)
         continue;
@@ -1232,13 +1227,15 @@ private:
     }
     TGraph.DisableNodes(FilterDisableN);
 
-    //int parallel_proc = 8;
-    
-    if (StartingNodes.size()>=2*MIN_PARALLEL)
-      SampleParallel(ArrivalNodes,NewStartingNodes);
+    // int parallel_proc = 8;
+  #ifdef PARALLEL_SAMPLE
+    if (StartingNodes.size() >= 2 * MIN_PARALLEL)
+      SampleParallel(ArrivalNodes, NewStartingNodes);
     else
-      SampleNormal(ArrivalNodes,NewStartingNodes);
-
+      SampleNormal(ArrivalNodes, NewStartingNodes);
+  #else
+    SampleNormal(ArrivalNodes, NewStartingNodes);
+  #endif
     StartingNodes = NewStartingNodes;
     SampledPaths_Status.clear();
     SampledPaths_Status.resize(SampledPaths.size(), SP_Evaluate);
@@ -1743,7 +1740,6 @@ private:
         continue;
       }
 
-      
       if (MaxCrossJump != -1) {
         int TestNum = NumCrossPaths(SampledPaths[i]);
         // std::cout<<"Num Jump: "<<TestNum<<std::endl;
@@ -2764,7 +2760,7 @@ public:
 
     // NumSamples = 1000;
 
-    distanceSingularities =false;
+    distanceSingularities = false;
     dynamicUpdates = true;
     SelectedPaths.clear();
     CanEmit.clear();
@@ -2786,7 +2782,7 @@ public:
       : VertPos(_VertPos), Connectivity(_Connectivity), TGraph(_TGraph),
         VertCurv(_VertCurv), SingIndex(_SingIndex), SingValue(_SingValue) {
     avoidSingularities = true;
-    distanceSingularities =false;
+    distanceSingularities = false;
     dynamicUpdates = true;
     updatePatches = true;
     // orthoBorderDist=true;

@@ -913,6 +913,7 @@ public:
   // int time_rem2;
   // int time_rem3;
   // int time_rem4;
+//#define SAVE_STATUS
 
   bool RemoveIfPossible(int &Path_To_remove, bool remove_unsolved = false,
                         int minGain = 0, bool debug_msg = false) {
@@ -949,15 +950,15 @@ public:
 
 // SAVING STATUS
 #ifdef SAVE_STATUS
-    auto timesave_0 = std::chrono::high_resolution_clock::now();
+    //auto timesave_0 = std::chrono::high_resolution_clock::now();
     for (size_t i = 0; i < PConditions.size(); i++)
       PConditions[i]->SaveStatus();
     PatchMan.SaveStatus();
 
-    auto timesave_1 = std::chrono::high_resolution_clock::now();
-    time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
-                       timesave_1 - timesave_0))
-                      .count();
+    // auto timesave_1 = std::chrono::high_resolution_clock::now();
+    // time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
+    //                    timesave_1 - timesave_0))
+    //                   .count();
 // END SAVING STATUS
 #endif
 
@@ -1079,14 +1080,14 @@ public:
 
 // // RESTORING STATUS
 #ifdef SAVE_STATUS
-      auto timesave_0 = std::chrono::high_resolution_clock::now();
+      //auto timesave_0 = std::chrono::high_resolution_clock::now();
       for (size_t i = 0; i < PConditions.size(); i++)
         PConditions[i]->RestoreStatus();
       PatchMan.RestoreStatus();
-      auto timesave_1 = std::chrono::high_resolution_clock::now();
-      time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
-                         timesave_1 - timesave_0))
-                        .count();
+      //auto timesave_1 = std::chrono::high_resolution_clock::now();
+      // time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
+      //                    timesave_1 - timesave_0))
+      //                   .count();
 // END RESTORING STATUS
 #else
       auto timesave_0 = std::chrono::high_resolution_clock::now();
@@ -2324,7 +2325,7 @@ public:
   // }
 
   void BatchDecompose(bool Do_remove) {
-
+    PatchMan.ReservePatch();
     TimeInit=0;
     TimeTracing = 0;
     TimeUpdateConditions = 0;

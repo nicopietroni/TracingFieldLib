@@ -30,10 +30,11 @@ public:
 
   enum solveMode { SM_Base, SM_Base_Regular, SM_Iterative, SM_GlobalSolve };
 
+  typename Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::FixOrderType FixType;
+
 private:
   energyMode EM;
   ScalarType RegVsIso;
-
   struct PatchSide {
     std::vector<std::vector<Geo::Point3<ScalarType>>> SubSides;
     std::vector<std::array<int, 3>> PPAdj;
@@ -68,12 +69,20 @@ private:
   std::vector<std::vector<int>> PatchFacesIdx;
   std::vector<std::vector<int>> PatchCornersIdx;
 
-  std::set<std::pair<int, int>> FeatureSet;
-
 public:
-  ScalarType MinRatio,MaxRatio;
-  // std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
-  //     GeoFeatures;
+  std::vector<bool> HasFeature;
+
+  ScalarType MinRatio, MaxRatio;
+
+  // weight regularity on face proportions
+  // square might be less regular
+  bool WeightRegFaceRatio;
+
+  // weight regularity the fact
+  // that a patch has or not feature
+  // has features must be regular
+  bool WeightFeatures;
+
   std::vector<std::vector<Geo::Point3<ScalarType>>> SampleSidePoints;
   std::vector<typeMatching> VarMatching;
 
@@ -132,6 +141,17 @@ public:
       PatchesSide.push_back(Entry);
     }
     return (PatchesSide);
+  }
+
+  std::vector<Geo::Point3<ScalarType>>
+  PointsOfVariable(const int &IndexVariable) {
+    std::vector<std::array<int, 3>> PatchSides;
+    SideOfVariable(IndexVariable, PatchSides);
+    assert(PatchSides.size() > 0);
+    std::array<int, 3> CurrPSide = PatchSides[0];
+    std::vector<Geo::Point3<ScalarType>> SubSide;
+    GetSubSidePoints(CurrPSide[0], CurrPSide[1], CurrPSide[2], SubSide);
+    return SubSide;
   }
 
   void SideOfVariable(const int &VarIndex,
@@ -342,22 +362,8 @@ private:
     VarTargetValue = VarValue;
   }
 
-  void InitOppEquivalencesW() {
-    // VarWeight.clear();
-    // VarWeight.resize(VarTargetValue.size(), 0);
-    // std::vector<int> VarNum(VarTargetValue.size(), 0);
-    // ScalarType AvgSub = 0;
-    // for (size_t i = 0; i < VarTargetValue.size(); i++)
-    //   AvgSub += (ScalarType)VarTargetValue[i];
-
-    // AvgSub /= VarTargetValue.size();
-
-    // // add a penaly depending on the size
-    // for (size_t i = 0; i < VarTargetValue.size(); i++)
-    //   VarWeigh[i] = VarTargetValue[i] / AvgSub;
-
-    std::vector<ScalarType> PatchVariance;
-
+  void GetPatchVariances(std::vector<ScalarType> &PatchVariance) {
+    PatchVariance.clear();
     for (size_t i = 0; i < PatchSides.size(); i++) {
       ScalarType maxS = 0;
       ScalarType minS = std::numeric_limits<ScalarType>::max();
@@ -378,49 +384,43 @@ private:
       ScalarType Ratio = maxS / minS;
       PatchVariance.push_back(Ratio);
     }
-    
-    assert((PatchVariance.size()*2)== OppEquivalences.size());
+  }
+
+  void InitOppEquivalencesW() {
+
+    std::vector<ScalarType> PatchVariance;
+
+    GetPatchVariances(PatchVariance);
+
+    assert((PatchVariance.size() * 2) == OppEquivalences.size());
     OppEquivalencesW.clear();
-    for (size_t j = 0; j < PatchVariance.size(); j++) {
-      OppEquivalencesW.push_back(PatchVariance[j]);
-      OppEquivalencesW.push_back(PatchVariance[j]);
+
+    // square might be less regular
+    if (WeightRegFaceRatio) {
+      for (size_t j = 0; j < PatchVariance.size(); j++) {
+        OppEquivalencesW.push_back(PatchVariance[j]);
+        OppEquivalencesW.push_back(PatchVariance[j]);
+      }
+    } else
+      OppEquivalencesW.resize(OppEquivalences.size(), 1);
+
+    assert(OppEquivalencesW.size() == OppEquivalences.size());
+
+    if (WeightFeatures) {
+      for (size_t i = 0; i < OppEquivalences.size(); i++) {
+        std::vector<int> Variables;
+        Variables = OppEquivalences[i].first;
+        Variables.insert(Variables.end(), OppEquivalences[i].second.begin(),
+                         OppEquivalences[i].second.end());
+        bool HasSideV = false;
+        for (size_t j = 0; j < Variables.size(); j++) {
+          int IndexVar = Variables[j];
+          HasSideV |= HasFeature[IndexVar];
+        }
+        if (HasSideV)
+          OppEquivalencesW[i] += 1;
+      }
     }
-
-    // ScalarType AvgVal = 0;
-    // for (size_t i = 0; i < VarTargetValue.size(); i++)
-    // AvgVal += (ScalarType)VarTargetValue[i];
-    // AvgVal /= VarTargetValue.size();
-    
-    // ScalarType MaxVal = 0;
-    // for (size_t i = 0; i < VarTargetValue.size(); i++)
-    // MaxVal = std::max(MaxVal,(ScalarType)VarTargetValue[i]);
-
-    // VarTargetValueW.clear();
-    // VarTargetValueW.resize(VarTargetValue.size(),0);
-    // for (size_t i=0;i<OppEquivalences.size();i++)
-    // {
-    //   int size0=OppEquivalences[i].first.size();
-    //   int size1=OppEquivalences[i].second.size();
-    //   if (size0>1)
-    //   {
-    //     for (size_t j=0;j<OppEquivalences[i].first.size();j++)
-    //     {
-    //       int IndexVar=OppEquivalences[i].first[j];
-    //       VarTargetValueW[IndexVar]=0.5;//(size0-1);
-    //     }
-    //   }
-    //   if (size1>1)
-    //   {
-    //     for (size_t j=0;j<OppEquivalences[i].second.size();j++)
-    //     {
-    //       int IndexVar=OppEquivalences[i].second[j];
-    //       VarTargetValueW[IndexVar]=0.5;//(size1-1);
-    //     }
-    //   }
-    // }
-    // for (size_t i=0;i<VarTargetValue.size();i++)
-    //   VarTargetValueW.push_back((ScalarType)1/(ScalarType)VarTargetValue[i]);
-
   }
 
   void InitVariables() {
@@ -451,6 +451,35 @@ private:
       }
     NumVariables = CurrVar;
     std::cout << "There are " << NumVariables << " Variables" << std::endl;
+  }
+
+  void InitFeatureVariables(const std::vector<Geo::Point3<ScalarType>> &Vert,
+                            const std::vector<std::pair<int, int>> &Features) {
+    HasFeature.clear();
+    HasFeature.resize(NumVariables, false);
+
+    typedef std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> PairPos;
+    std::set<PairPos> FeaturePos;
+    for (size_t i = 0; i < Features.size(); i++) {
+      int IndexV0 = Features[i].first;
+      int IndexV1 = Features[i].second;
+      Geo::Point3<ScalarType> P0 = Vert[IndexV0];
+      Geo::Point3<ScalarType> P1 = Vert[IndexV1];
+      PairPos PairP(std::min(P0, P1), std::max(P0, P1));
+      FeaturePos.insert(PairP);
+    }
+
+    for (size_t i = 0; i < NumVariables; i++) {
+      std::vector<Geo::Point3<ScalarType>> SideV = PointsOfVariable(i);
+      for (size_t j = 0; j < SideV.size() - 1; j++) {
+        Geo::Point3<ScalarType> P0 = SideV[j];
+        Geo::Point3<ScalarType> P1 = SideV[j + 1];
+        PairPos PairP(std::min(P0, P1), std::max(P0, P1));
+        if (FeaturePos.count(PairP) == 0)
+          continue;
+        HasFeature[i] = true;
+      }
+    }
   }
 
   void FindDiscretizationPoint(const int IndexVariable) {
@@ -619,24 +648,22 @@ private:
       OppEquivalences.push_back(Entry1);
     }
 
-    //write some stats
-    int MaxSize=0;
-    ScalarType AvgSize=0;
-    for (size_t i=0;i<OppEquivalences.size();i++)
-    {
-      int size0=OppEquivalences[i].first.size();
-      int size1=OppEquivalences[i].second.size();
-      AvgSize+=size0;
-      AvgSize+=size1;
-      MaxSize=std::max(MaxSize,size0);
-      MaxSize=std::max(MaxSize,size1);
+    // write some stats
+    int MaxSize = 0;
+    ScalarType AvgSize = 0;
+    for (size_t i = 0; i < OppEquivalences.size(); i++) {
+      int size0 = OppEquivalences[i].first.size();
+      int size1 = OppEquivalences[i].second.size();
+      AvgSize += size0;
+      AvgSize += size1;
+      MaxSize = std::max(MaxSize, size0);
+      MaxSize = std::max(MaxSize, size1);
     }
-    AvgSize/=(OppEquivalences.size()*2);
-    std::cout<<"AVG Size "<<AvgSize<<std::endl;
-    std::cout<<"MAX Size "<<MaxSize<<std::endl;
-    std::cout<<"NUM Constr "<<OppEquivalences.size()<<std::endl;
-    std::cout<<"NUM Variable "<<NumVariables<<std::endl;
-
+    AvgSize /= (OppEquivalences.size() * 2);
+    std::cout << "AVG Size " << AvgSize << std::endl;
+    std::cout << "MAX Size " << MaxSize << std::endl;
+    std::cout << "NUM Constr " << OppEquivalences.size() << std::endl;
+    std::cout << "NUM Variable " << NumVariables << std::endl;
   }
 
   void InitVarEqSets() {
@@ -1170,9 +1197,11 @@ private:
     if (EM == EM_ForceRegular) {
       std::cout << "* SIZE STATISTICS *" << std::endl;
       std::cout << "- Num Odd " << Odd0 << " - > " << Odd1 << std::endl;
-      std::cout << "- Num MMatch " << MMatch0 << " - > " << MMatch1 << std::endl;
+      std::cout << "- Num MMatch " << MMatch0 << " - > " << MMatch1
+                << std::endl;
       std::cout << "- Val MMatch " << MMVal0 << " - > " << MMVal1 << std::endl;
-      std::cout << "- Diff Value " << DiffVal0 << " - > " << DiffVal1<< std::endl;
+      std::cout << "- Diff Value " << DiffVal0 << " - > " << DiffVal1
+                << std::endl;
     } else {
       std::cout << "* ENERGY STATISTICS *" << std::endl;
       std::cout << "- Energy " << En0 << " - > " << En1 << std::endl;
@@ -1189,36 +1218,32 @@ private:
   //   RegVsIso = _RegVsIso;
   //   SolveIntegerValues();
   // }
-  void InitMinMaxVectors(std::vector<int> &MinVal,
-                         std::vector<int> &MaxVal)
-  {
-    MinVal=VarTargetValue;
-    MaxVal=VarTargetValue;
-    for (size_t i=0;i<MinVal.size();i++)
-    {
-      MinVal[i]=floor(0.5+ScalarType(MinVal[i])/ScalarType(MinRatio));
-      MinVal[i]=std::max(MinVal[i],1);
+  void InitMinMaxVectors(std::vector<int> &MinVal, std::vector<int> &MaxVal) {
+    MinVal = VarTargetValue;
+    MaxVal = VarTargetValue;
+    for (size_t i = 0; i < MinVal.size(); i++) {
+      MinVal[i] = floor(0.5 + ScalarType(MinVal[i]) / ScalarType(MinRatio));
+      MinVal[i] = std::max(MinVal[i], 1);
     }
-    for (size_t i=0;i<MaxVal.size();i++)
-    {
-      MaxVal[i]=floor(0.5+ScalarType(MaxVal[i])*ScalarType(MaxRatio));
-      MaxVal[i]=std::max(MaxVal[i],1);
+    for (size_t i = 0; i < MaxVal.size(); i++) {
+      MaxVal[i] = floor(0.5 + ScalarType(MaxVal[i]) * ScalarType(MaxRatio));
+      MaxVal[i] = std::max(MaxVal[i], 1);
     }
   }
 
   void SolveGlobal() {
     std::vector<LinearConstraint<ScalarType>> LSQCostr;
 
-    std::vector<int> OldTarget=VarTargetValue;
+    std::vector<int> OldTarget = VarTargetValue;
     if (force_parity) {
       for (size_t i = 0; i < VarValue.size(); i++) {
         assert(VarValue[i] % 2 == 0);
         VarValue[i] /= 2;
-        if (VarTargetValue[i]%2==0)
+        if (VarTargetValue[i] % 2 == 0)
           VarTargetValue[i] /= 2;
         else
-          VarTargetValue[i] = (VarTargetValue[i]/2)+1;
-        VarTargetValue[i]=std::max(VarTargetValue[i],1);
+          VarTargetValue[i] = (VarTargetValue[i] / 2) + 1;
+        VarTargetValue[i] = std::max(VarTargetValue[i], 1);
       }
     }
     // add equality constraints
@@ -1230,7 +1255,7 @@ private:
       LinearConstraint<ScalarType> EqConstr;
       EqConstr.RHSide = 0;
       EqConstr.Weight = RegVsIso;
-      EqConstr.Weight *=OppEquivalencesW[i]; 
+      EqConstr.Weight *= OppEquivalencesW[i];
       for (size_t j = 0; j < Var0.size(); j++) {
         EqConstr.LHSide.push_back(VarTerm<ScalarType>(Var0[j], 0, 1));
         // MaxVal=std::max(MaxVal,Var0[j]);
@@ -1244,131 +1269,125 @@ private:
     }
 
     // add isotropy constraint
-    //ScalarType delta_val = 0.00001;
+    // ScalarType delta_val = 0.00001;
     ScalarType delta_val = 0.00001;
     for (size_t i = 0; i < VarTargetValue.size(); i++) {
       LinearConstraint<ScalarType> IsoConstr;
       IsoConstr.RHSide = VarTargetValue[i];
-      IsoConstr.Weight = (delta_val + (1 - RegVsIso)+VarTargetValueW[i]);
-      //std::cout<<"IsoConstr.Weight:"<<IsoConstr.Weight<<std::endl;
+      IsoConstr.Weight = (delta_val + (1 - RegVsIso) + VarTargetValueW[i]);
+      // std::cout<<"IsoConstr.Weight:"<<IsoConstr.Weight<<std::endl;
       IsoConstr.LHSide.push_back(VarTerm<ScalarType>(i, 0, 1));
       LSQCostr.push_back(IsoConstr);
     }
 
     Geo::IntegerLinearConstraintLeastSQSolver<ScalarType> IntLSQ;
-    std::vector<int> MinVal(NumVariables,1);
-    std::vector<int> MaxVal(NumVariables,1000);
+    IntLSQ.FOrdType=FixType;
 
-    std::vector<int> SoftLow,SoftHigh,SoftOptimal;
+    std::vector<int> MinVal(NumVariables, 1);
+    std::vector<int> MaxVal(NumVariables, 1000);
 
-    for (size_t i=0;i<VarTargetValue.size();i++)
-    {
-      SoftLow.push_back(floor(0.5+VarTargetValue[i]/MinRatio));
-      SoftLow.back()=std::max(SoftLow.back(),MinVal[i]);
-      SoftLow.back()=std::min(SoftLow.back(),MaxVal[i]);
+    std::vector<int> SoftLow, SoftHigh, SoftOptimal;
 
-      SoftHigh.push_back(floor(0.5+VarTargetValue[i]*MaxRatio));
-      SoftHigh.back()=std::max(SoftHigh.back(),MinVal[i]);
-      SoftHigh.back()=std::min(SoftHigh.back(),MaxVal[i]);
+    for (size_t i = 0; i < VarTargetValue.size(); i++) {
+      SoftLow.push_back(floor(0.5 + VarTargetValue[i] / MinRatio));
+      SoftLow.back() = std::max(SoftLow.back(), MinVal[i]);
+      SoftLow.back() = std::min(SoftLow.back(), MaxVal[i]);
+
+      SoftHigh.push_back(floor(0.5 + VarTargetValue[i] * MaxRatio));
+      SoftHigh.back() = std::max(SoftHigh.back(), MinVal[i]);
+      SoftHigh.back() = std::min(SoftHigh.back(), MaxVal[i]);
 
       SoftOptimal.push_back(VarTargetValue[i]);
     }
-   
-    //InitMinMaxVectors(MinVal,MaxVal);
-    IntLSQ.Init(LSQCostr, MinVal,MaxVal,
-                SoftLow,SoftHigh,SoftOptimal);
+
+    // InitMinMaxVectors(MinVal,MaxVal);
+    IntLSQ.Init(LSQCostr, MinVal, MaxVal, SoftLow, SoftHigh, SoftOptimal);
     // std::cout<<"DE 1 "<<VarTargetValue.size()<<std::endl;
     IntLSQ.Solve(VarValue);
     if (force_parity) {
       for (size_t i = 0; i < VarValue.size(); i++)
         VarValue[i] *= 2;
     }
-   VarTargetValue= OldTarget;
+    VarTargetValue = OldTarget;
   }
 
-  bool IsMatchOppEquivalence(const int &IndexEq)const
-  {
-    assert(IndexEq>=0);
-    assert(IndexEq<OppEquivalences.size());
-    std::vector<int> Eq0=OppEquivalences[IndexEq].first;
-    std::vector<int> Eq1=OppEquivalences[IndexEq].second;
+  bool IsMatchOppEquivalence(const int &IndexEq) const {
+    assert(IndexEq >= 0);
+    assert(IndexEq < OppEquivalences.size());
+    std::vector<int> Eq0 = OppEquivalences[IndexEq].first;
+    std::vector<int> Eq1 = OppEquivalences[IndexEq].second;
 
-    int Sum0=0;
-    for (size_t i=0;i<Eq0.size();i++)
-      Sum0+=VarValue[Eq0[i]];
+    int Sum0 = 0;
+    for (size_t i = 0; i < Eq0.size(); i++)
+      Sum0 += VarValue[Eq0[i]];
 
-    int Sum1=0;
-    for (size_t i=0;i<Eq1.size();i++)
-        Sum1+=VarValue[Eq1[i]];
-      
-    return (Sum0==Sum1);
+    int Sum1 = 0;
+    for (size_t i = 0; i < Eq1.size(); i++)
+      Sum1 += VarValue[Eq1[i]];
+
+    return (Sum0 == Sum1);
   }
 
   void SolveGlobalIterative() {
-    bool all_solved=false;
+    bool all_solved = false;
     do {
       SolveGlobal();
-      all_solved=true;
-      int NonRatio=0;
-      for (size_t i=0;i<NumVariables;i++)
-      {
-        if (LessThanRatio(i))//||MoreThanRatio(i))
-        {
+      all_solved = true;
+      int NonRatio = 0;
+      for (size_t i = 0; i < NumVariables; i++) {
+        if (LessThanRatio(i) || MoreThanRatio(i)) {
           // if (VarTargetValueW[i]==0)
           //   VarTargetValueW[i]=0.1;
           // else
           //   VarTargetValueW[i]*=2;
-          VarTargetValueW[i]+=1;
-          all_solved=false;
+          VarTargetValueW[i] += 1;
+          all_solved = false;
           NonRatio++;
         }
         // else
         //   VarTargetValueW[i]-=1;
-          //VarTargetValueW[i]/=2;
-        //VarTargetValueW[i]=std::max(VarTargetValueW[i],(ScalarType)0);
+        // VarTargetValueW[i]/=2;
+        // VarTargetValueW[i]=std::max(VarTargetValueW[i],(ScalarType)0);
       }
-      for (size_t i=0;i<OppEquivalences.size();i++)
-      {
-        // if (IsMatchOppEquivalence(i))
-        //   OppEquivalencesW[i]/=2;
-        // else
-        if (!IsMatchOppEquivalence(i))
-        {
-          //OppEquivalencesW[i]*=2;
-          OppEquivalencesW[i]+=1;
-          //std::cout<<"Value:"<<OppEquivalencesW[i]<<std::endl;
-        }
-      }
-      std::cout<<"Step Non Ratio:"<<NonRatio<<std::endl;
-    }while (!all_solved);
+      // for (size_t i=0;i<OppEquivalences.size();i++)
+      // {
+      //   // if (IsMatchOppEquivalence(i))
+      //   //   OppEquivalencesW[i]/=2;
+      //   // else
+      //   if (!IsMatchOppEquivalence(i))
+      //   {
+      //     //OppEquivalencesW[i]*=2;
+      //     OppEquivalencesW[i]+=1;
+      //     //std::cout<<"Value:"<<OppEquivalencesW[i]<<std::endl;
+      //   }
+      // }
+      std::cout << "Step Non Ratio:" << NonRatio << std::endl;
+    } while (!all_solved);
   }
 
 public:
-
-  bool LessThanRatio(const int IndexVar)const
-  {
-    assert(VarValue.size()==VarTargetValue.size());
-    assert(IndexVar>=0);
-    assert(IndexVar<VarValue.size());
-    assert(IndexVar<VarTargetValue.size());
-    ScalarType LowLimit=(ScalarType)VarTargetValue[IndexVar]/MinRatio;
-    //std::cout<<"Test Lim:"<<LowLimit<<std::endl;
-    LowLimit=std::max(LowLimit,(ScalarType)1);
-    assert(VarValue.size()==VarTargetValue.size());
-    //std::cout<<"Curr Lim:"<<LowLimit<<std::endl;
-    //std::cout<<"Curr Val:"<<VarValue[IndexVar]<<std::endl;
-    return(VarValue[IndexVar]<LowLimit);
+  bool LessThanRatio(const int IndexVar) const {
+    assert(VarValue.size() == VarTargetValue.size());
+    assert(IndexVar >= 0);
+    assert(IndexVar < VarValue.size());
+    assert(IndexVar < VarTargetValue.size());
+    ScalarType LowLimit = (ScalarType)VarTargetValue[IndexVar] / MinRatio;
+    // std::cout<<"Test Lim:"<<LowLimit<<std::endl;
+    LowLimit = std::max(LowLimit, (ScalarType)1);
+    assert(VarValue.size() == VarTargetValue.size());
+    // std::cout<<"Curr Lim:"<<LowLimit<<std::endl;
+    // std::cout<<"Curr Val:"<<VarValue[IndexVar]<<std::endl;
+    return (VarValue[IndexVar] < LowLimit);
   }
 
-  bool MoreThanRatio(const int IndexVar)const
-  {
-    assert(VarValue.size()==VarTargetValue.size());
-    assert(IndexVar>=0);
-    assert(IndexVar<VarValue.size());
-    assert(IndexVar<VarTargetValue.size());
-    ScalarType UpLimit=VarTargetValue[IndexVar]*MaxRatio;
-    assert(VarValue.size()==VarTargetValue.size());
-    return(VarValue[IndexVar]>UpLimit);
+  bool MoreThanRatio(const int IndexVar) const {
+    assert(VarValue.size() == VarTargetValue.size());
+    assert(IndexVar >= 0);
+    assert(IndexVar < VarValue.size());
+    assert(IndexVar < VarTargetValue.size());
+    ScalarType UpLimit = VarTargetValue[IndexVar] * MaxRatio;
+    assert(VarValue.size() == VarTargetValue.size());
+    return (VarValue[IndexVar] > UpLimit);
   }
 
   void InitFromLabels(const std::vector<Geo::Point3<ScalarType>> &Vert,
@@ -1465,15 +1484,14 @@ public:
     std::cout << "Num TJunctions: " << NuMTJunctions << std::endl;
     InitVariables();
 
-    FeatureSet =
-        std::set<std::pair<int, int>>(Features.begin(), Features.end());
-
     // VarFeature.resize(NumVariables, false);
 
     InitPatchAdj();
 
-    //InitVariableW();
-    // InitVarFeatures(Vert,_Features);
+    InitFeatureVariables(Vert, Features);
+
+    // InitVariableW();
+    //  InitVarFeatures(Vert,_Features);
   }
 
   void GetSubSideExtremes(const int IndexP, const int IndexS,
@@ -1662,10 +1680,9 @@ public:
       InitTargetValue(_TargetL);
       InitOppositeEquivalences();
       InitOppEquivalencesW();
-      VarTargetValueW=std::vector<ScalarType>(VarTargetValue.size(),0);
-      //SolveGlobal();
-      SolveGlobalIterative();
-      
+      VarTargetValueW = std::vector<ScalarType>(VarTargetValue.size(), 0);
+      //SolveGlobalIterative();
+      SolveGlobal();
       // code block
     }
     InitMatchingType();
@@ -1679,8 +1696,15 @@ public:
     current_doubleVal = false;
     check_parity = true;
     EM = EM_ForceRegular;
-    MinRatio=3;
-    MaxRatio=4;
+    MinRatio = 3;
+    MaxRatio = 4;
+
+    WeightFeatures=true;
+    WeightRegFaceRatio=true;
+
+    //ST_ClosestInt, ST_LowError, StQRPivoting
+    //FixType=Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
+    FixType=Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
   }
 };
 

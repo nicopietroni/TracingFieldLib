@@ -4,6 +4,7 @@
 #include "linear_constraint.h"
 #include <Eigen/Sparse>
 #include <cassert>
+#include <cstdio>
 #include <eigen_interface.h>
 #include <iostream>
 
@@ -101,7 +102,15 @@ public:
     // {std::cout<<"Error on A0 in Init!!!!"<<std::endl;exit(0);}
 
     solver = new Eigen::SimplicialCholesky<Eigen::SparseMatrix<ScalarType>>(A);
-    assert(solver->info() == Eigen::Success);
+   
+    if(solver->info() != Eigen::Success)
+    {
+      std::cout<<A<<std::endl;
+      //std::fflush;
+      std::cout<<"Error Not Success Eigen!!!!"<<std::endl;
+      assert(0);
+    }
+  
     // if (solver->info() != Eigen::Success)
     // {std::cout<<"Error Not Success Eigen!!!!"<<std::endl;exit(0);}
   }

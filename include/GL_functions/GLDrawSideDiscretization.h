@@ -71,7 +71,10 @@ public:
       if (SideD.MoreThanRatio(i))
         pointCol = Geo::Point3<ScalarType>(0, 0, 1);
 
-      GLDraw::DrawPoints(SideD.SampleSidePoints[i], pointCol);
+      int sizeP=20;
+      if (SideD.HasFeature[i])
+        sizeP=40;
+      GLDraw::DrawPoints(SideD.SampleSidePoints[i], pointCol,sizeP);
     }
   }
 

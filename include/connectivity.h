@@ -228,7 +228,11 @@ void getFFAdjacency(const std::vector<std::vector<int>> &Faces,
   NextF.resize(Faces.size());
   NextE.resize(Faces.size());
 
-  std::map<sizeTPair, std::vector<sizeTPair>> EdgeVToFaceE;
+  //std::map<sizeTPair, std::vector<sizeTPair>> EdgeVToFaceE;
+  std::unordered_map<sizeTPair, 
+                     std::vector<sizeTPair>, 
+                     hashPairSizeTFunction> EdgeVToFaceE;
+
   for (size_t i = 0; i < Faces.size(); i++) {
     size_t sizeF = Faces[i].size();
     NextF[i].resize(sizeF, -1);

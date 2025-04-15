@@ -67,7 +67,7 @@ namespace GLDraw
         glDisable(GL_LIGHTING);
         glDepthRange(0.0, 0.9999);
 
-        glPointSize(30);
+        glPointSize(size);
 
         glBegin(GL_POINTS);
         for (size_t i = 0; i < Samples.size(); i++)
@@ -92,7 +92,7 @@ namespace GLDraw
         glDisable(GL_LIGHTING);
         glDepthRange(0.0, 0.9999);
 
-        glPointSize(30);
+        glPointSize(size);
 
         glBegin(GL_POINTS);
         for (size_t i = 0; i < Samples.size(); i++)

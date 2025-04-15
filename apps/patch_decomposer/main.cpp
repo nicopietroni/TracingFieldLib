@@ -337,6 +337,9 @@ void InitGraph() {
   Geo::TragingGraphFunctions<ScalarType>::InitFromVertCrossField(
       TGraph, VertPos, Connectivity, VertCurv, drift_penalty, maxAngle,
       diffuse_step);
+  
+  Geo::PathFunctions<ScalarType>::DisableNonDirectableConnections(TGraph);
+
   // TGraph.DeSelectAll(0);
   //  TGraph.SelectNoteType(Geo::ExitDomain, 0);
   //  TGraph.SelectNoteType(Geo::TangentDomain, 0);
@@ -1041,14 +1044,15 @@ void BatchProcessMinPatch() {
   double total_elapsed_seconds5 =
       total_elapsed.count() * 1e-6; // Convert microseconds to seconds
 
-  std::cout << std::endl << std::endl;
-  std::cout << "*** FINAL TIMINGS (sec) *** " << std::endl;
-  std::cout << "* Remeshing time: " << elapsed_seconds0 << std::endl;
-  std::cout << "* Init Graph Elapsed time: " << elapsed_seconds1 << std::endl;
-  std::cout << "* Init Patches: " << elapsed_seconds2 << std::endl;
-  std::cout << "* Adding Paths: " << elapsed_seconds3 << std::endl;
-  std::cout << "* Smooth Patches: " << elapsed_seconds4 << std::endl;
-  std::cout << "* TOTAL TIME: " << total_elapsed_seconds5 << std::endl;
+  // std::cout << std::endl << std::endl;
+  // std::cout << "*** FINAL TIMINGS (sec) *** " << std::endl;
+  // std::cout << "* Remeshing time: " << elapsed_seconds0 << std::endl;
+  // std::cout << "* Init Graph Elapsed time: " << elapsed_seconds1 <<
+  // std::endl; std::cout << "* Init Patches: " << elapsed_seconds2 <<
+  // std::endl; std::cout << "* Adding Paths: " << elapsed_seconds3 <<
+  // std::endl; std::cout << "* Smooth Patches: " << elapsed_seconds4 <<
+  // std::endl; std::cout << "* TOTAL TIME: " << total_elapsed_seconds5 <<
+  // std::endl;
 
   std::cout << std::endl << std::endl;
   std::cout << "*** STATISTICS *** " << std::endl;
@@ -1155,45 +1159,15 @@ void SetDecomposeBar() {
     UpdateColor();
   }
 
-  if (ImGui::Button("MAX PATHS")) {
-    // PDeco.add_only_where_needed = false;
-    // PDeco.stop_when_solved = false;
-    // PDeco.dynamic_smooth = true;
-    // remove_batch = false;
-    BatchProcessMaxPaths();
-    PathColors.resize(PathSampl.SelectedPaths.size());
-    Geo::ScatterColor<ScalarType>(PathColors);
-    UpdateColor();
-  }
-
-  // if (ImGui::Button("Add Features as paths")) {
-  //    std::cout<<"INIT GRAPH"<<std::endl;
-  //    InitGraph();
-  //    InitPatches();
-  //    std::cout<<"DONE!"<<std::endl;
-  //    //InitPatches();
-  //    PDeco.AddFeaturesAsPaths(Features);
-  //    PathColors.resize(PathSampl.SelectedPaths.size());
-  //    Geo::ScatterColor<ScalarType>(PathColors);
-  //    UpdateColor();
+  // if (ImGui::Button("MAX PATHS")) {
+  //   BatchProcessMaxPaths();
+  //   PathColors.resize(PathSampl.SelectedPaths.size());
+  //   Geo::ScatterColor<ScalarType>(PathColors);
+  //   UpdateColor();
   // }
 
-  // ImGui::SameLine();
-  // ImGui::Checkbox("Remove", &remove_batch);
-  // ImGui::SameLine();
-  // ImGui::Checkbox("Split", &remove_split);
-
-  if (ImGui::Button("Solve Remaining Spike/Concave")) {
-    PDeco.ForceSolveSpikeConcave();
-    PathColors.resize(PathSampl.SelectedPaths.size());
-    Geo::ScatterColor<ScalarType>(PathColors);
-    UpdateColor();
-    PatchM.WriteStats();
-    PDeco.WriteStats();
-  }
-
-  // if (ImGui::Button("Solve Remaining Topology")) {
-  //   PDeco.ForceSolveTopology();
+  // if (ImGui::Button("Solve Remaining Spike/Concave")) {
+  //   PDeco.ForceSolveSpikeConcave();
   //   PathColors.resize(PathSampl.SelectedPaths.size());
   //   Geo::ScatterColor<ScalarType>(PathColors);
   //   UpdateColor();
@@ -1203,142 +1177,136 @@ void SetDecomposeBar() {
 
   ImGui::Separator();
 
-  ImGui::TextColored(ImVec4(1, 0, 1, 1), "PREPROCESS");
+  if (ImGui::CollapsingHeader("PREPROCESS")) {
+    // ImGui::TextColored(ImVec4(1, 0, 1, 1), "PREPROCESS");
 
-  if (ImGui::Button("Refine Sing")) {
-    Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(
-        VertPos, Connectivity, FaceCurv, Features, SingIndex,
-        min_sing_distance);
-    MeshBox.Init(VertPos);
-    UpdateAfterRemesh();
-    // WriteOBJ("refined_test.obj",VertPos,Connectivity);
+    if (ImGui::Button("Refine Sing")) {
+      Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(
+          VertPos, Connectivity, FaceCurv, Features, SingIndex,
+          min_sing_distance);
+      MeshBox.Init(VertPos);
+      UpdateAfterRemesh();
+      // WriteOBJ("refined_test.obj",VertPos,Connectivity);
+    }
+
+    if (ImGui::Button("Split Corners")) {
+      RemainingF.clear();
+      Geo::TracingPreprocess<ScalarType>::SplitCornerFeatures(
+          VertPos, Connectivity, VertCurv, FaceCurv, Features, RemainingF,
+          SingIndex, SingValue, FeatureSingIndex, FeatureSingValue, NewBorder);
+
+      Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
+          VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
+
+      UpdateAfterRemesh();
+    }
+
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80);
+    ImGui::InputInt("Sing Dist", &min_sing_distance);
+    // if (ImGui::Button("Test"))
+    // {
+    //     TestSampling();
+    // }
   }
 
-  if (ImGui::Button("Split Corners")) {
-    RemainingF.clear();
-    Geo::TracingPreprocess<ScalarType>::SplitCornerFeatures(
-        VertPos, Connectivity, VertCurv, FaceCurv, Features, RemainingF,
-        SingIndex, SingValue, FeatureSingIndex, FeatureSingValue, NewBorder);
+  if (ImGui::CollapsingHeader("INIT GRAPH")) {
 
-    Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
-        VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
+    // ImGui::TextColored(ImVec4(1, 0, 1, 1), "INIT");
+    ImGui::SetNextItemWidth(150);
+    ImGui::SliderFloat("Drift", &drift_penalty, 0, 1000);
+    ImGui::SetNextItemWidth(150);
+    ImGui::SliderFloat("Max Angle", &maxAngle, 0, 90);
+    ImGui::SetNextItemWidth(150);
+    ImGui::InputInt("Diffuse", &diffuse_step);
+    ImGui::SetNextItemWidth(150);
+    if (ImGui::Button("Init Graph")) {
 
-    UpdateAfterRemesh();
-  }
+      std::cout << "INIT GRAPH" << std::endl;
+      InitGraph();
+      std::cout << "INIT PATCHES" << std::endl;
+      InitPatches();
 
-  // if (ImGui::Button("Split Features")) {
-  //   // Geo::TracingPreprocess<ScalarType>::SplitFeatures(
-  //   //     VertPos, Connectivity, VertCurv, SingIndex, SingValue, Features);
-  //   Geo::TracingPreprocess<ScalarType>::SplitFeatures(
-  //       VertPos, Connectivity, VertCurv, FaceCurv, Features, SingIndex,
-  //       SingValue, FeatureSingIndex, FeatureSingValue);
-  //   UpdateFeatureSing();
-  //   Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
-  //       VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
-
-  //   UpdateAfterRemesh();
-  // }
-
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(80);
-  ImGui::InputInt("Sing Dist", &min_sing_distance);
-  // if (ImGui::Button("Test"))
-  // {
-  //     TestSampling();
-  // }
-
-  ImGui::TextColored(ImVec4(1, 0, 1, 1), "INIT");
-  ImGui::SetNextItemWidth(150);
-  ImGui::SliderFloat("Drift", &drift_penalty, 0, 1000);
-  ImGui::SetNextItemWidth(150);
-  ImGui::SliderFloat("Max Angle", &maxAngle, 0, 90);
-  ImGui::SetNextItemWidth(150);
-  ImGui::InputInt("Diffuse", &diffuse_step);
-  ImGui::SetNextItemWidth(150);
-  if (ImGui::Button("Init Graph")) {
-
-    std::cout << "INIT GRAPH" << std::endl;
-    InitGraph();
-    std::cout << "INIT PATCHES" << std::endl;
-    InitPatches();
-
-    has_graph = true;
-    showCross = false;
+      has_graph = true;
+      showCross = false;
+    }
   }
   ImGui::Separator();
-  ImGui::TextColored(ImVec4(1, 0, 1, 1), "CONDITIONS");
-  ImGui::TextColored(ImVec4(0, 0, 1, 1), "structure");
-  // ImGui::Checkbox("Darts", &PDeco.allow_darts);
-  // ImGui::SameLine();
-  // ImGui::Checkbox("Concave", &PDeco.allow_concave);
+  if (ImGui::CollapsingHeader("CONDITIONS")) {
 
-  ImGui::TextColored(ImVec4(0, 0, 1, 1), "topology");
-  ImGui::Checkbox("1 Boundary", &single_boundary_cond);
-  ImGui::SameLine();
-  ImGui::Checkbox("Disk Like", &disk_like_cond);
-  ImGui::SameLine();
-  ImGui::Checkbox("Not Self Connection ", &self_connection_cond);
+    // ImGui::TextColored(ImVec4(1, 0, 1, 1), "CONDITIONS");
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "structure");
+    // ImGui::Checkbox("Darts", &PDeco.allow_darts);
+    // ImGui::SameLine();
+    // ImGui::Checkbox("Concave", &PDeco.allow_concave);
 
-  ImGui::TextColored(ImVec4(0, 0, 1, 1), "singularity");
-  ImGui::Checkbox("1 Sing Patch", &single_sing_cond);
-  ImGui::SameLine();
-  ImGui::Checkbox("Sing Match", &match_sing_cond);
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "topology");
+    ImGui::Checkbox("1 Boundary", &single_boundary_cond);
+    ImGui::SameLine();
+    ImGui::Checkbox("Disk Like", &disk_like_cond);
+    ImGui::SameLine();
+    ImGui::Checkbox("Not Self Connection ", &self_connection_cond);
 
-  ImGui::TextColored(ImVec4(0, 0, 1, 1), "sides");
-  ImGui::SetNextItemWidth(50);
-  ImGui::InputInt("Min Sides", &MinSides, 0);
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(50);
-  ImGui::InputInt("Max Sides", &MaxSides, 0);
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "singularity");
+    ImGui::Checkbox("1 Sing Patch", &single_sing_cond);
+    ImGui::SameLine();
+    ImGui::Checkbox("Sing Match", &match_sing_cond);
 
-  ImGui::TextColored(ImVec4(0, 0, 1, 1), "shape");
-  ImGui::SetNextItemWidth(100);
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "sides");
+    ImGui::SetNextItemWidth(50);
+    ImGui::InputInt("Min Sides", &MinSides, 0);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(50);
+    ImGui::InputInt("Max Sides", &MaxSides, 0);
 
-  ImGui::Checkbox("CCAbility", &cc_ability_cond);
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "shape");
+    ImGui::SetNextItemWidth(100);
 
-  float CCAbilityf = CCability;
-  ImGui::InputFloat("CC Tolerance", &CCAbilityf);
-  CCAbilityf = std::min(CCAbilityf, 1.f);
-  CCAbilityf = std::max(CCAbilityf, 0.f);
-  CCability = (ScalarType)CCAbilityf;
+    ImGui::Checkbox("CCAbility", &cc_ability_cond);
 
-  ImGui::Checkbox("Equal Side", &equal_side_cond);
+    float CCAbilityf = CCability;
+    ImGui::InputFloat("CC Tolerance", &CCAbilityf);
+    CCAbilityf = std::min(CCAbilityf, 1.f);
+    CCAbilityf = std::max(CCAbilityf, 0.f);
+    CCability = (ScalarType)CCAbilityf;
 
-  float EqSideThrf = EqSideThr;
-  ImGui::InputFloat("EQSide Tolerance", &EqSideThrf);
-  EqSideThrf = std::min(EqSideThrf, 1.f);
-  EqSideThrf = std::max(EqSideThrf, 0.f);
-  EqSideThr = (ScalarType)EqSideThrf;
+    ImGui::Checkbox("Equal Side", &equal_side_cond);
 
-  ImGui::TextColored(ImVec4(0, 0, 1, 1), "UV");
+    float EqSideThrf = EqSideThr;
+    ImGui::InputFloat("EQSide Tolerance", &EqSideThrf);
+    EqSideThrf = std::min(EqSideThrf, 1.f);
+    EqSideThrf = std::max(EqSideThrf, 0.f);
+    EqSideThr = (ScalarType)EqSideThrf;
 
-  // Use ImGui::RadioButton for each option
-  ImGui::Checkbox("UV", &use_uv);
-  if (!use_uv) {
-    isometric_uv = false;
-    conformal_uv = false;
+    ImGui::TextColored(ImVec4(0, 0, 1, 1), "UV");
+
+    // Use ImGui::RadioButton for each option
+    ImGui::Checkbox("UV", &use_uv);
+    if (!use_uv) {
+      isometric_uv = false;
+      conformal_uv = false;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Isometric", isometric_uv)) {
+      isometric_uv = true;
+      conformal_uv = false;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Conformal", conformal_uv)) {
+      isometric_uv = false;
+      conformal_uv = true;
+    }
+    float max_uvDistf = max_uvDist;
+    ImGui::SetNextItemWidth(100);
+    ImGui::InputFloat("Max UV Distortion", &max_uvDistf);
+    max_uvDist = max_uvDistf;
+
+    bool needUpdate = UpdateConditions();
+    if (needUpdate) {
+      InitConditions();
+      PDeco.UpdateAllUnsolvedPatches();
+    }
   }
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Isometric", isometric_uv)) {
-    isometric_uv = true;
-    conformal_uv = false;
-  }
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Conformal", conformal_uv)) {
-    isometric_uv = false;
-    conformal_uv = true;
-  }
-  float max_uvDistf = max_uvDist;
-  ImGui::SetNextItemWidth(100);
-  ImGui::InputFloat("Max UV Distortion", &max_uvDistf);
-  max_uvDist = max_uvDistf;
-
-  bool needUpdate = UpdateConditions();
-  if (needUpdate) {
-    InitConditions();
-    PDeco.UpdateAllUnsolvedPatches();
-  }
-
   if (!has_graph) {
     ImGui::End();
     return;
@@ -1577,14 +1545,14 @@ void SaveDualPatches() {
 Geo::SmoothParam<ScalarType> SParamQuadSmooth;
 Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
 
-void InitTangentSmooth()
-{
+void InitTangentSmooth() {
   std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
       FeatureData;
   SideD.GetFeaturesQuadrData(DualVertPos, DualFeatures, FeatureData);
 
-   bool has_mapped = FindEdgePosCorrespondences(QuadVert, QuadFaces, FeatureData, UVP.FeatureLines);
-   assert(has_mapped);
+  bool has_mapped = FindEdgePosCorrespondences(QuadVert, QuadFaces, FeatureData,
+                                               UVP.FeatureLines);
+  assert(has_mapped);
 
   std::set<Geo::Point3<ScalarType>> CornerPosSet;
   for (size_t i = 0; i < CornersIdx.size(); i++)
@@ -1597,15 +1565,13 @@ void InitTangentSmooth()
   UVP.Damp = 0.5;
   UVP.Steps = 10;
   UVP.fixBorder = true;
-  UVP.post_project=true;
+  UVP.post_project = true;
   UVP.ReprojVert = &VertPos;
   UVP.ReprojFaces = &Connectivity;
-  UVP.ReprojFeatureLines=Features;
-
+  UVP.ReprojFeatureLines = Features;
 }
 
-void Init3DSmooth()
-{
+void Init3DSmooth() {
   SParamQuadSmooth.Clear();
 
   // 3D SPACE SMOOTH
@@ -1613,9 +1579,7 @@ void Init3DSmooth()
       FeatureData;
   SideD.GetFeaturesQuadrData(DualVertPos, DualFeatures, FeatureData);
 
-
-  bool has_mapped = FindEdgePosCorrespondences(QuadVert, QuadFaces, 
-                                               FeatureData, 
+  bool has_mapped = FindEdgePosCorrespondences(QuadVert, QuadFaces, FeatureData,
                                                SParamQuadSmooth.Features);
   assert(has_mapped);
 
@@ -1632,7 +1596,7 @@ void Init3DSmooth()
 
   for (size_t i = 0; i < QuadVert.size(); i++) {
     if (CornerPosSet.count(QuadVert[i]) > 0)
-    SParamQuadSmooth.FixedVert.push_back(i);
+      SParamQuadSmooth.FixedVert.push_back(i);
   }
 
   SParamQuadSmooth.ReprojVert = &VertPos;
@@ -1644,21 +1608,27 @@ void Init3DSmooth()
 void SmoothQuadMesh3D() {
 
   SParamQuadSmooth.NumIte = QuadSmoothSteps;
-  SParamQuadSmooth.SType=Geo::SMLaplacian;
+  SParamQuadSmooth.SType = Geo::SMLaplacian;
 
   Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
 
-  Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,QuadVertNormals);
+  Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
+                                  QuadVertNormals);
 }
 
 void SmoothQuadMeshTangent() {
 
   UVP.Damp = 0;
   UVP.Steps = QuadSmoothSteps;
-  
-  Geo::Local_Param_Smooth<ScalarType>::Smooth(QuadVert, QuadFaces,UVP);
-  Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,QuadVertNormals);
+
+  Geo::Local_Param_Smooth<ScalarType>::Smooth(QuadVert, QuadFaces, UVP);
+  Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
+                                  QuadVertNormals);
 }
+
+// void SmoothQuadGreedy() {
+
+// }
 
 Geo::DualPatch<ScalarType>::DualParameter DualParam;
 
@@ -1673,45 +1643,68 @@ void SetExportBar() {
                                           // world!" and append into it.
 
   ImGui::Separator();
-  ImGui::TextColored(ImVec4(1, 0, 1, 1), "SMOOTH");
+  // ImGui::TextColored(ImVec4(1, 0, 1, 1), "SMOOTH");
+  if (ImGui::CollapsingHeader("PREPROCESS")) {
 
-  ImGui::SetNextItemWidth(80);
-  ImGui::InputInt("Smooth Steps", &smooth_steps);
-  ImGui::SameLine();
-  if (ImGui::Button("Smooth"))
-    SmoothPaths();
+    ImGui::SetNextItemWidth(80);
+    ImGui::InputInt("Smooth Steps", &smooth_steps);
+    ImGui::SameLine();
+    if (ImGui::Button("Smooth"))
+      SmoothPaths();
+  }
 
   ImGui::Separator();
-  ImGui::TextColored(ImVec4(1, 0, 1, 1), "DUALIZE");
+  // ImGui::TextColored(ImVec4(1, 0, 1, 1), "DUALIZE");
 
-  ImGui::Checkbox("Only Non-Quad", &DualParam.OnlyNonQuad);
-  ImGui::Checkbox("Init Sing Pos", &DualParam.InitSingPos);
-  ImGui::Checkbox("Fix Sing Pos", &DualParam.FixSingPos);
-  ImGui::Checkbox("Joint Border", &DualParam.JointBorder);
+  if (ImGui::CollapsingHeader("DUAL")) {
 
-  if (DualParam.RType == Geo::DualPatch<ScalarType>::RTypeOrtho)
-    EvenMode = 1;
-  else
-    EvenMode = 0;
+    ImGui::Checkbox("Only Non-Quad", &DualParam.OnlyNonQuad);
+    ImGui::Checkbox("Init Sing Pos", &DualParam.InitSingPos);
+    ImGui::Checkbox("Fix Sing Pos", &DualParam.FixSingPos);
+    ImGui::Checkbox("Joint Border", &DualParam.JointBorder);
 
-  static const char *itemsEvenMode[] = {"Even", "Ortho"};
+    if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_UVDist_Tutte)
+      EvenMode = 0;
+    if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_UVDist_LSC)
+      EvenMode = 1;
+    if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_UVDist_ARAP)
+      EvenMode = 2;
+    if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_CCability)
+      EvenMode = 3;
 
-  ImGui::Combo("Dual Mode", &EvenMode, itemsEvenMode,
-               IM_ARRAYSIZE(itemsEvenMode));
+    static const char *itemsEvenMode[] = {"UV_Tutte", "UV_LSC", "UV_Arap",
+                                          "UV_CCability"};
 
-  if (EvenMode == 1)
-    DualParam.RType = Geo::DualPatch<ScalarType>::RTypeOrtho;
-  else
-    DualParam.RType = Geo::DualPatch<ScalarType>::RTypeEven;
+    ImGui::Combo("Dual Mode", &EvenMode, itemsEvenMode,
+                 IM_ARRAYSIZE(itemsEvenMode));
 
-  ImGui::InputInt("Only Patch", &OnlyDualP);
-  DualParam.OnlyPatch.clear();
-  if (OnlyDualP < -1)
-    OnlyDualP = -1;
-  OnlyDualP = std::min(OnlyDualP, PatchM.NumPatches() - 1);
+    if (EvenMode == 0)
+      DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_Tutte;
+    if (EvenMode == 1)
+      DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_LSC;
+    if (EvenMode == 2)
+      DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_ARAP;
+    if (EvenMode == 3)
+      DualParam.RType = Geo::DualPatch<ScalarType>::RT_CCability;
 
-  if (OnlyDualP >= 0)
-    DualParam.OnlyPatch.push_back(OnlyDualP);
+    ImGui::InputInt("Only Patch", &OnlyDualP);
+    DualParam.OnlyPatch.clear();
+    if (OnlyDualP < -1)
+      OnlyDualP = -1;
+    OnlyDualP = std::min(OnlyDualP, PatchM.NumPatches() - 1);
+
+    if (OnlyDualP >= 0)
+      DualParam.OnlyPatch.push_back(OnlyDualP);
+
+    if (ImGui::Button("Smooth Dual Patches")) {
+      Geo::PatchOptimize<ScalarType>::DualMeshSmooth(
+          VertPos, Connectivity, Features, DualVertPos, DualConnectivity);
+
+      Geo::DualPatch<ScalarType>::ExtractCornerVisPos(
+          DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+          PerDualPatchCornerIDX, VisDualCornerPos);
+    }
+  }
 
   if (ImGui::Button("Extract Dual")) {
 
@@ -1787,82 +1780,105 @@ void SetExportBar() {
                          PerDualPatchCornerIDX, DualFeatures);
   }
 
-  if (ImGui::Button("Smooth Dual Patches")) {
-    Geo::PatchOptimize<ScalarType>::DualMeshSmooth(
-        VertPos, Connectivity, Features, DualVertPos, DualConnectivity);
-
-    Geo::DualPatch<ScalarType>::ExtractCornerVisPos(
-        DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
-        PerDualPatchCornerIDX, VisDualCornerPos);
-  }
-
   // PatchM.ExtractDual();
   if (has_dual_mesh) {
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(1, 0, 1, 1), "QUADRANGULATE");
+    // ImGui::TextColored(ImVec4(1, 0, 1, 1), "QUADRANGULATE");
 
-    ScalarType minValue = 0.001;
-    ScalarType maxValue = 0.1;
+    if (ImGui::CollapsingHeader("SUBDIVISION")) {
 
-    ImGui::SliderScalar("Quad Size", ImGuiDataType_Double, &QuadSize, &minValue,
-                        &maxValue, "%.3f");
+      ScalarType minValue = 0.001;
+      ScalarType maxValue = 0.1;
 
-    ScalarType minValueRvsIso = 0;
-    ScalarType maxValueRvsIso = 1;
-    ImGui::SliderScalar("Reg Vs Iso", ImGuiDataType_Double, &RegVsIso,
-                        &minValueRvsIso, &maxValueRvsIso, "%.2f");
+      ImGui::SliderScalar("Quad Size", ImGuiDataType_Double, &QuadSize,
+                          &minValue, &maxValue, "%.3f");
 
-    ScalarType minRatio = 2;
-    ScalarType maxRatio = 8;
-    ImGui::SetNextItemWidth(80);
-    ImGui::SliderScalar("Min Rt", ImGuiDataType_Double, &SideD.MinRatio,
-                        &minRatio, &maxRatio, "%.1f");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(80);
-    ImGui::SliderScalar("Max Rt", ImGuiDataType_Double, &SideD.MaxRatio,
-                        &minRatio, &maxRatio, "%.1f");
+      ScalarType minValueRvsIso = 0;
+      ScalarType maxValueRvsIso = 1;
+      ImGui::SliderScalar("Reg Vs Iso", ImGuiDataType_Double, &RegVsIso,
+                          &minValueRvsIso, &maxValueRvsIso, "%.2f");
 
-    ImGui::Checkbox("Force Parity", &force_parity);
+      ScalarType minRatio = 2;
+      ScalarType maxRatio = 8;
+      ImGui::SetNextItemWidth(80);
+      ImGui::SliderScalar("Min Rt", ImGuiDataType_Double, &SideD.MinRatio,
+                          &minRatio, &maxRatio, "%.1f");
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(80);
+      ImGui::SliderScalar("Max Rt", ImGuiDataType_Double, &SideD.MaxRatio,
+                          &minRatio, &maxRatio, "%.1f");
 
-    // if (ImGui::RadioButton("Base Init", SubdBase)) {
-    //   SubdBase = true;
-    //   SubdBaseRegular = false;
-    //   // SubdIteForceRegular = false;
-    //   // SubdIteBlend = false;
-    //   SubdIterative = false;
-    //   SubdGlobal = false;
-    // }
-    // if (ImGui::RadioButton("Base Regular", SubdBaseRegular)) {
-    //   SubdBase = false;
-    //   SubdBaseRegular = true;
-    //   // SubdIteForceRegular = false;
-    //   // SubdIteBlend = false;
-    //   SubdIterative = false;
-    //   SubdGlobal = false;
-    // }
-    // if (ImGui::RadioButton("Iterative", SubdIterative)) {
-    //   SubdBase = false;
-    //   SubdBaseRegular = false;
-    //   // SubdIteForceRegular = false;
-    //   // SubdIteBlend = false;
-    //   SubdIterative = true;
-    //   SubdGlobal = false;
-    // }
-    // // if (ImGui::RadioButton("Ite Blend", SubdIteBlend)) {
-    // //   SubdBase = false;
-    // //   SubdBaseRegular = false;
-    // //   SubdIteForceRegular = false;
-    // //   SubdIteBlend = true;
-    // //   SubdGlobal = false;
-    // // }
-    // if (ImGui::RadioButton("Global", SubdGlobal)) {
-    //   SubdBase = false;
-    //   SubdBaseRegular = false;
-    //   // SubdIteForceRegular = false;
-    //   // SubdIteBlend = false;
-    //   SubdIterative = false;
-    //   SubdGlobal = true;
-    // }
+      ImGui::Checkbox("Force Parity", &force_parity);
+
+      // if (ImGui::RadioButton("Base Init", SubdBase)) {
+      //   SubdBase = true;
+      //   SubdBaseRegular = false;
+      //   // SubdIteForceRegular = false;
+      //   // SubdIteBlend = false;
+      //   SubdIterative = false;
+      //   SubdGlobal = false;
+      // }
+      // if (ImGui::RadioButton("Base Regular", SubdBaseRegular)) {
+      //   SubdBase = false;
+      //   SubdBaseRegular = true;
+      //   // SubdIteForceRegular = false;
+      //   // SubdIteBlend = false;
+      //   SubdIterative = false;
+      //   SubdGlobal = false;
+      // }
+      // if (ImGui::RadioButton("Iterative", SubdIterative)) {
+      //   SubdBase = false;
+      //   SubdBaseRegular = false;
+      //   // SubdIteForceRegular = false;
+      //   // SubdIteBlend = false;
+      //   SubdIterative = true;
+      //   SubdGlobal = false;
+      // }
+      // // if (ImGui::RadioButton("Ite Blend", SubdIteBlend)) {
+      // //   SubdBase = false;
+      // //   SubdBaseRegular = false;
+      // //   SubdIteForceRegular = false;
+      // //   SubdIteBlend = true;
+      // //   SubdGlobal = false;
+      // // }
+      // if (ImGui::RadioButton("Global", SubdGlobal)) {
+      //   SubdBase = false;
+      //   SubdBaseRegular = false;
+      //   // SubdIteForceRegular = false;
+      //   // SubdIteBlend = false;
+      //   SubdIterative = false;
+      //   SubdGlobal = true;
+      // }
+
+      ImGui::Checkbox("Weight FaceRatio", &SideD.WeightRegFaceRatio);
+      ImGui::Checkbox("Weight Features", &SideD.WeightFeatures);
+
+      bool useClosestInt =
+          (SideD.FixType == Geo::IntegerLinearConstraintLeastSQSolver<
+                                ScalarType>::ST_ClosestInt);
+      bool useLowError =
+          (SideD.FixType ==
+           Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_LowError);
+      bool useStQRPivoting =
+          (SideD.FixType == Geo::IntegerLinearConstraintLeastSQSolver<
+                                ScalarType>::ST_StQRPivoting);
+
+      if (ImGui::RadioButton("Closest", useClosestInt)) {
+        SideD.FixType = Geo::IntegerLinearConstraintLeastSQSolver<
+            ScalarType>::ST_ClosestInt;
+      }
+      ImGui::SameLine();
+      if (ImGui::RadioButton("Low Err", useLowError)) {
+        SideD.FixType =
+            Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_LowError;
+      }
+      ImGui::SameLine();
+      if (ImGui::RadioButton("SQR Piv", useStQRPivoting)) {
+        SideD.FixType = Geo::IntegerLinearConstraintLeastSQSolver<
+            ScalarType>::ST_StQRPivoting;
+      }
+    }
+
     if (ImGui::Button("Solve Subdivision")) {
       DrawSubdivision = true;
       DrawQuadMesh = false;
@@ -1881,6 +1897,13 @@ void SetExportBar() {
       // //   SM = Geo::SideDiscretization<ScalarType>::SM_Ite_Blend;
       // if (SubdGlobal)
       SM = Geo::SideDiscretization<ScalarType>::SM_GlobalSolve;
+
+      //     enum FixOrderType { ST_ClosestInt, ST_LowError, ST_StQRPivoting };
+      // // SolveType SType;
+      // FixOrderType FOrdType;
+
+      // ST_ClosestInt, ST_LowError, StQRPivoting
+      // FixType=Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
 
       SideD.Solve(EdgeS, SM, force_parity, RegVsIso);
     }
@@ -1951,38 +1974,42 @@ void SetExportBar() {
     SmoothQuadMesh3D();
   }
 
+  ImGui::SameLine();
+
   if (ImGui::Button("Smooth Tangent")) {
     SmoothQuadMeshTangent();
   }
 
   ImGui::Separator();
-  ImGui::TextColored(ImVec4(1, 0, 1, 1), "SAVE");
+  // ImGui::TextColored(ImVec4(1, 0, 1, 1), "SAVE");
+  if (ImGui::Button("SAVE")) {
 
-  if (ImGui::Button("Mesh"))
-    SaveMesh();
-  ImGui::SameLine();
-  if (ImGui::Button("Field"))
-    SaveField();
+    if (ImGui::Button("Mesh"))
+      SaveMesh();
+    ImGui::SameLine();
+    if (ImGui::Button("Field"))
+      SaveField();
 
-  if (ImGui::Button("SubMeshes"))
-    SaveSubMeshes();
+    if (ImGui::Button("SubMeshes"))
+      SaveSubMeshes();
 
-  ImGui::SameLine();
-  if (ImGui::Button("Patches"))
-    SavePatches();
+    ImGui::SameLine();
+    if (ImGui::Button("Patches"))
+      SavePatches();
 
-  if (ImGui::Button("Dual Patches")) {
-    SaveDualPatches();
+    if (ImGui::Button("Dual Patches")) {
+      SaveDualPatches();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Dual Mesh")) {
+      std::string FinalMFilename = ProjectName;
+      FinalMFilename.append("_dual.obj");
+      WriteOBJ(FinalMFilename.c_str(), DualVertPos, DualConnectivity);
+    }
+
+    if (ImGui::Button("Save ALL"))
+      SaveAll();
   }
-  ImGui::SameLine();
-  if (ImGui::Button("Dual Mesh")) {
-    std::string FinalMFilename = ProjectName;
-    FinalMFilename.append("_dual.obj");
-    WriteOBJ(FinalMFilename.c_str(), DualVertPos, DualConnectivity);
-  }
-
-  if (ImGui::Button("Save ALL"))
-    SaveAll();
 
   ImGui::End();
 }

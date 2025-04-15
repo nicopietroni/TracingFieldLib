@@ -242,14 +242,14 @@ public:
     EnabledN.resize(NumNodes, true);
   }
 
-  int NeighSize(const int &IndexN0) {
+  int NeighSize(const int &IndexN0)const {
     assert(IndexN0 >= 0);
     assert(IndexN0 < (int)N.size());
     return ((int)N[IndexN0].size());
   }
 
   int NeighSize(const int &IndexN0, const bool OnlyActive,
-                const bool OnlyVisible, const bool OnlyDirect) {
+                const bool OnlyVisible, const bool OnlyDirect) const {
     assert(IndexN0 >= 0);
     assert(IndexN0 < (int)N.size());
     int countN = 0;

@@ -7,7 +7,7 @@
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
 #include "graph_tracing.h"
-//#include "path_sampling.h"
+// #include "path_sampling.h"
 #include "point3.h"
 #include "t_junction.h"
 #include <algorithm>
@@ -50,7 +50,7 @@ public:
     // non enabled but still used to trace
     for (size_t i = startIDX; i < endIDX; i++) {
       if (!TGraph.IsEnabled(PathN[i])) {
-        //std::cout << "Non Enabled Node" << std::endl;
+        // std::cout << "Non Enabled Node" << std::endl;
         return false;
       }
     }
@@ -60,11 +60,11 @@ public:
       int IndexN1 = PathN[(i + 1)];
 
       if (TGraph.WhichConnection(IndexN0, IndexN1) == -1) {
-        //std::cout << "Non Symmetric Arc" << std::endl;
+        // std::cout << "Non Symmetric Arc" << std::endl;
         return false;
       }
       if (!TGraph.ActiveArcNodes(IndexN0, IndexN1)) {
-        //std::cout << "Non Active Arc" << std::endl;
+        // std::cout << "Non Active Arc" << std::endl;
         return false;
       }
     }
@@ -170,7 +170,7 @@ public:
   static bool MakeDirectConnection(TracingGraph<ScalarType> &TGraph,
                                    std::vector<int> &PathN,
                                    bool UpdateArc = true) {
-    //TGraph.CurrDistIndex() = 1;
+    // TGraph.CurrDistIndex() = 1;
     assert(IsProperPath(PathN));
     std::vector<int> NewPath;
     bool IsLoop = PathFunctions<ScalarType>::IsLoop(PathN);
@@ -226,6 +226,56 @@ public:
     NewPath.push_back(PathN.back());
     PathN = NewPath;
     return true;
+  }
+
+  static void
+  DisableNonDirectableConnections(Geo::TracingGraph<ScalarType> &TGraph) {
+    for (size_t i = 0; i < TGraph.NumNodes(); i++) {
+      int IndexN0 = i;
+      if (!TGraph.EnabledN[IndexN0])
+        continue;
+      for (size_t j = 0; j < TGraph.NeighSize(IndexN0); j++) {
+        // check if the link is enabled
+        if (!TGraph.ActiveLink(IndexN0, j))
+          continue;
+        // if direct does not matters
+        if (TGraph.DirectLink(IndexN0, j))
+          continue;
+
+        // size_t NextN=TGraph.N[CurrN][i];
+        size_t IndexN1 = TGraph.NodeLink(IndexN0, j);
+        // if not enable does not matters
+        if (!TGraph.EnabledN[IndexN1])
+          continue;
+
+        std::vector<int> DirectPath;
+        bool connected = ConnectDirect(TGraph, IndexN0, IndexN1, DirectPath);
+        if (!connected) {
+          TGraph.DectivateArc(IndexN0, IndexN1);
+          int OppN1 = Field::CrossFieldGraph::OppositeNodeCrossField(IndexN1);
+          int OppN0 = Field::CrossFieldGraph::OppositeNodeCrossField(IndexN0);
+          TGraph.DectivateArc(OppN1, OppN0);
+        }
+      }
+    }
+  }
+
+  static void
+  CopyNonEnabledConnections(const Geo::TracingGraph<ScalarType> &Source,
+                            Geo::TracingGraph<ScalarType> &Destination) {
+    for (size_t i = 0; i < Source.NumNodes(); i++) {
+      int IndexN0 = i;
+      if (!Source.EnabledN[IndexN0])
+        continue;
+      for (size_t j = 0; j < Source.NeighSize(IndexN0); j++) {
+        // check if the link is enabled
+        if (Source.ActiveLink(IndexN0, j))
+          continue;
+        if (!Destination.ActiveLink(IndexN0, j))
+          continue;
+        Destination.DisableArc(IndexN0, j);
+      }
+    }
   }
 
   static int OppositeNode(const Geo::TracingGraph<ScalarType> &TGraph,
@@ -429,18 +479,16 @@ public:
   }
 
   static ScalarType PathWeight(const TracingGraph<ScalarType> &Tgraph,
-                               const std::vector<int> &Nodes)
-  {
-    ScalarType TotW=0;
-    for (size_t i=0;i<Nodes.size()-1;i++)
-    {
-      int NodeIdx0,NodeIdx1;
-      NodeIdx0=Nodes[i];
-      NodeIdx1=Nodes[i+1];
-      int LocalConn=Tgraph.WhichConnection(NodeIdx0,NodeIdx1);
-      assert(LocalConn!=-1);
-      ScalarType CurrW=Tgraph.WeightLink(NodeIdx0,LocalConn);
-      TotW+=CurrW;
+                               const std::vector<int> &Nodes) {
+    ScalarType TotW = 0;
+    for (size_t i = 0; i < Nodes.size() - 1; i++) {
+      int NodeIdx0, NodeIdx1;
+      NodeIdx0 = Nodes[i];
+      NodeIdx1 = Nodes[i + 1];
+      int LocalConn = Tgraph.WhichConnection(NodeIdx0, NodeIdx1);
+      assert(LocalConn != -1);
+      ScalarType CurrW = Tgraph.WeightLink(NodeIdx0, LocalConn);
+      TotW += CurrW;
     }
     return TotW;
   }
@@ -477,8 +525,7 @@ public:
   static bool ReconstructPathsFromElem(const TracingGraph<ScalarType> &Tgraph,
                                        const std::vector<int> &Elems,
                                        std::vector<std::vector<int>> &Nodes) {
-    if (Elems.size() < 2)
-    {
+    if (Elems.size() < 2) {
       return false;
     }
     Nodes.clear();
@@ -490,14 +537,14 @@ public:
       int E1 = Elems[i + 1];
 
       int NodeIdx0, NodeIdx1;
-      //std::cout<<"Testing "<<i<<std::endl;
+      // std::cout<<"Testing "<<i<<std::endl;
       bool found = BestConnectionNodePair(Tgraph, E0, E1, NodeIdx0, NodeIdx1);
       if (!found) {
         // std::cout<<"Vert0:"<<E0<<std::endl;
         // std::cout<<"Vert1:"<<E1<<std::endl;
         return false;
       }
-      //std::cout<<"OK"<<E0<<std::endl;
+      // std::cout<<"OK"<<E0<<std::endl;
       NodesE.push_back(std::pair<int, int>(NodeIdx0, NodeIdx1));
     }
 

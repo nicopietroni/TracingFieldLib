@@ -483,6 +483,24 @@ template <class ScalarType> struct Point3Hash {
   }
 };
 
+// struct Point3Hash {
+//   template <typename T>
+//   std::size_t operator()(const Geo::Point3<T>& p) const {
+//       std::size_t h1 = std::hash<T>()(std::round(p.X * 1e6));
+//       std::size_t h2 = std::hash<T>()(std::round(p.Y * 1e6));
+//       std::size_t h3 = std::hash<T>()(std::round(p.Z * 1e6));
+//       return h1 ^ (h2 << 1) ^ (h3 << 2);
+//   }
+// };
+
+template <class ScalarType>  struct Point3Equal {
+  bool operator()(const Geo::Point3<ScalarType>& a, const Geo::Point3<ScalarType>& b) const {
+      return ((a.X == b.X) &&
+              (a.Y == b.Y) &&
+              (a.Z == b.Z));
+  }
+};
+
 } // namespace Geo
 
 #endif

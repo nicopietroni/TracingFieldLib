@@ -19,7 +19,14 @@ struct hashPairIntFunction {
   size_t operator()(const std::pair<int, int> &x) const {
     int h1 = std::hash<int>{}(x.first);
     int h2 = std::hash<int>{}(x.second);
-    return h1 ^ h2;
+    //return h1 ^ h2;
+    return h1 ^ (h2 << 1);
+  }
+};
+
+struct hashPairSizeTFunction {
+  std::size_t operator()(const std::pair<size_t, size_t>& p) const {
+      return std::hash<size_t>()(p.first) ^ (std::hash<size_t>()(p.second) << 1);
   }
 };
 
