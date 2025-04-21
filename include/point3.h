@@ -493,13 +493,19 @@ template <class ScalarType> struct Point3Hash {
 //   }
 // };
 
-template <class ScalarType>  struct Point3Equal {
-  bool operator()(const Geo::Point3<ScalarType>& a, const Geo::Point3<ScalarType>& b) const {
-      return ((a.X == b.X) &&
-              (a.Y == b.Y) &&
-              (a.Z == b.Z));
+template <class ScalarType> struct Point3Equal {
+  bool operator()(const Geo::Point3<ScalarType> &a,
+                  const Geo::Point3<ScalarType> &b) const {
+    return ((a.X == b.X) && (a.Y == b.Y) && (a.Z == b.Z));
   }
 };
+
+// Overload the << operator
+template <class ScalarType>
+std::ostream &operator<<(std::ostream &os, const Point3<ScalarType> &p) {
+  os << "(" << p.X << ", " << p.Y << ", " << p.Z << ")";
+  return os;
+}
 
 } // namespace Geo
 

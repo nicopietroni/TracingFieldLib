@@ -210,7 +210,7 @@ public:
 
     //avoid to go to valence 2 and 6
     virtual int Score(const PatchManaging<ScalarType> &PatchM,
-                     const int &IndexPatch)const
+                     const int &IndexPatch)const override
     {
         int SideN=PatchM.NumSides(IndexPatch);
         if ((SideN==2)||(SideN==6))return -1;

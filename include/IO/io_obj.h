@@ -313,4 +313,30 @@ bool WriteOBJ(std::string meshFile,
     return (WriteOBJ(meshFile,VertPosVect,Connectivity));
 }
 
+// template <class ScalarType>
+// bool WriteOFF(std::string meshFile,
+//               const std::vector<Geo::Point3<ScalarType> > &VertPos,
+//               const std::vector<std::vector<int> > &Connectivity)
+// {
+//     std::ofstream out(meshFile);
+//     if (!out.is_open())
+//         return false;
+
+//     out << "OFF\n";
+//     out << VertPos.size() << " " << Connectivity.size() << " 0\n";
+
+//     for (const auto& p : VertPos)
+//         out << p.X << " " << p.Y << " " << p.Z << "\n";
+
+//     for (const auto& face : Connectivity) {
+//         out << face.size();
+//         for (int idx : face)
+//             out << " " << idx;
+//         out << "\n";
+//     }
+
+//     out.close();
+//     return true;
+// }
+
 #endif

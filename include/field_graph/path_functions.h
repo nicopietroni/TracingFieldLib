@@ -204,9 +204,11 @@ public:
       bool connected = ConnectDirect(TGraph, IndexN0, IndexN1, DirectPath);
       if (!connected) {
         if (UpdateArc) {
-          TGraph.DectivateArc(IndexN0, IndexN1);
+          if (TGraph.ActiveArcNodes(IndexN0,IndexN1))
+            TGraph.DectivateArc(IndexN0, IndexN1);
           int OppN1 = Field::CrossFieldGraph::OppositeNodeCrossField(IndexN1);
           int OppN0 = Field::CrossFieldGraph::OppositeNodeCrossField(IndexN0);
+          if (TGraph.ActiveArcNodes(OppN1,OppN0))
           TGraph.DectivateArc(OppN1, OppN0);
         }
         return false;

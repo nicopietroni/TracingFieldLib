@@ -11,6 +11,7 @@
 #include <iterator>
 #include <ostream>
 #include <set>
+#include <string>
 #include <sys/_types/_size_t.h>
 #include <utility>
 #define SMOOTH_KERNEL 2
@@ -21,6 +22,8 @@
 #include "patch_managing.h"
 #include "path_sampling.h"
 #include "segment2.h"
+#include "IO/io_off.h"
+#include "IO/io_obj.h"
 #include "tangent_space_smooth.h"
 #include <vector>
 
@@ -474,14 +477,13 @@ public:
   int ScoreConditions(const int &IndexPatch) {
     assert(!PatchMan.isEmpty(IndexPatch));
 
-    int currScore=0;
+    int currScore = 0;
 
     for (size_t i = 0; i < PConditions.size(); i++)
-      currScore+=PConditions[i]->Score(PatchMan, IndexPatch);
-    
+      currScore += PConditions[i]->Score(PatchMan, IndexPatch);
+
     return currScore;
   }
-
 
   bool SatisfyConditionsAfterGlobalUpdate(const int &IndexPatch) {
     assert(!PatchMan.isEmpty(IndexPatch));
@@ -627,11 +629,10 @@ public:
     auto t1 = std::chrono::high_resolution_clock::now();
 
     auto elapsed0 =
-    std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     TimeInit += elapsed0.count() * 1e-6;
 
     PathSampl.SampleCandidates(to_init_distance);
-    
 
     auto t2 = std::chrono::high_resolution_clock::now();
     auto elapsed1 =
@@ -913,7 +914,7 @@ public:
   // int time_rem2;
   // int time_rem3;
   // int time_rem4;
-//#define SAVE_STATUS
+  // #define SAVE_STATUS
 
   bool RemoveIfPossible(int &Path_To_remove, bool remove_unsolved = false,
                         int minGain = 0, bool debug_msg = false) {
@@ -950,7 +951,7 @@ public:
 
 // SAVING STATUS
 #ifdef SAVE_STATUS
-    //auto timesave_0 = std::chrono::high_resolution_clock::now();
+    // auto timesave_0 = std::chrono::high_resolution_clock::now();
     for (size_t i = 0; i < PConditions.size(); i++)
       PConditions[i]->SaveStatus();
     PatchMan.SaveStatus();
@@ -963,7 +964,7 @@ public:
 #endif
 
     int UnsolvedBefore = 0;
-    int ScoreBefore =0;
+    int ScoreBefore = 0;
     if (remove_unsolved) {
       // get the touched patch
       std::set<int> PatchIdx;
@@ -981,14 +982,14 @@ public:
         if (!SatisfyConditions(PatchIdxVect[i]))
           UnsolvedBefore++;
 
-        ScoreBefore+=ScoreConditions(PatchIdxVect[i]);
+        ScoreBefore += ScoreConditions(PatchIdxVect[i]);
       }
     }
 
     PathSampl.SelectedPaths[Path_To_remove].clear();
 
     // Get the current time point before the first instruction
-    //auto time0 = std::chrono::high_resolution_clock::now();
+    // auto time0 = std::chrono::high_resolution_clock::now();
 
     std::vector<int> UpdatedPatches;
     PatchMan.Update(UpdatedPatches);
@@ -997,7 +998,7 @@ public:
     bool is_removable = true;
 
     // Get the current time point before the first instruction
-    //auto time1 = std::chrono::high_resolution_clock::now();
+    // auto time1 = std::chrono::high_resolution_clock::now();
 
     // LOCAL UPDATE
     for (size_t i = 0; i < UpdatedPatches.size(); i++) {
@@ -1015,7 +1016,7 @@ public:
     // check correctness locally
     bool IsOkLocally = true;
     int UnsolvedAfter = 0;
-    int ScoreAfter=0;
+    int ScoreAfter = 0;
     int MandatoryUnsolvedAfter = 0;
     for (size_t i = 0; i < UpdatedPatches.size(); i++) {
       if (PatchMan.isEmpty(UpdatedPatches[i]))
@@ -1032,11 +1033,11 @@ public:
       if (!IsOkLocally)
         UnsolvedAfter++;
 
-      ScoreAfter+=ScoreConditions(UpdatedPatches[i]);
+      ScoreAfter += ScoreConditions(UpdatedPatches[i]);
     }
 
     // Get the current time point before the first instruction
-    //auto time2 = std::chrono::high_resolution_clock::now();
+    // auto time2 = std::chrono::high_resolution_clock::now();
 
     if (remove_unsolved) {
       // std::cout << "Unsolved Before: " << UnsolvedBefore << std::endl;
@@ -1052,7 +1053,7 @@ public:
     }
 
     // Get the current time point before the first instruction
-    //auto time3 = std::chrono::high_resolution_clock::now();
+    // auto time3 = std::chrono::high_resolution_clock::now();
 
     // CHECK GLOBAL CONDITIONS
     if (!IsOkLocally)
@@ -1073,21 +1074,21 @@ public:
     // else
     //   std::cout<<"Not Removeable"<<std::endl;
     // Get the current time point before the first instruction
-    //auto time4 = std::chrono::high_resolution_clock::now();
+    // auto time4 = std::chrono::high_resolution_clock::now();
 
     if (!is_removable) {
       PathSampl.SelectedPaths[Path_To_remove] = TestPath;
 
 // // RESTORING STATUS
 #ifdef SAVE_STATUS
-      //auto timesave_0 = std::chrono::high_resolution_clock::now();
+      // auto timesave_0 = std::chrono::high_resolution_clock::now();
       for (size_t i = 0; i < PConditions.size(); i++)
         PConditions[i]->RestoreStatus();
       PatchMan.RestoreStatus();
-      //auto timesave_1 = std::chrono::high_resolution_clock::now();
-      // time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
-      //                    timesave_1 - timesave_0))
-      //                   .count();
+      // auto timesave_1 = std::chrono::high_resolution_clock::now();
+      //  time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
+      //                     timesave_1 - timesave_0))
+      //                    .count();
 // END RESTORING STATUS
 #else
       auto timesave_0 = std::chrono::high_resolution_clock::now();
@@ -1098,10 +1099,11 @@ public:
       for (size_t i = 0; i < UpdatedPatches.size(); i++)
         UpdateCondition(UpdatedPatches[i]);
 
-      //auto timesave_1 = std::chrono::high_resolution_clock::now();
-      // time_savSt += (std::chrono::duration_cast<std::chrono::milliseconds>(
-      //                    timesave_1 - timesave_0))
-      //                   .count();
+        // auto timesave_1 = std::chrono::high_resolution_clock::now();
+        //  time_savSt +=
+        //  (std::chrono::duration_cast<std::chrono::milliseconds>(
+        //                     timesave_1 - timesave_0))
+        //                    .count();
 #endif
     }
 
@@ -1183,7 +1185,8 @@ public:
         current_rem_cand--;
         continue;
       }
-      has_removed |= RemoveIfPossible(current_rem_cand, remove_unsolved, minimal_gain);
+      has_removed |=
+          RemoveIfPossible(current_rem_cand, remove_unsolved, minimal_gain);
 
       // TestedRemovedPath.insert(current_rem_cand);
       current_rem_cand--;
@@ -1780,7 +1783,7 @@ public:
     }
   }
 
-  double TimeInit,TimeTracing, TimeUpdateConditions, TimeUpdateUpdatePatches,
+  double TimeInit, TimeTracing, TimeUpdateConditions, TimeUpdateUpdatePatches,
       TimeUpdateDistances, TimeCheckConflicts, TimeRemovePaths;
 
   bool ForceSolveSpikeConcave(int IndexP) // bool Do_features,
@@ -1921,8 +1924,8 @@ private:
     auto t0 = std::chrono::high_resolution_clock::now();
     PathSampl.InitWithSelected();
     auto t1 = std::chrono::high_resolution_clock::now();
-      auto elapsed =
-          std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    auto elapsed =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     TimeInit += elapsed.count() * 1e-6;
 
     bool has_added = false;
@@ -2326,7 +2329,7 @@ public:
 
   void BatchDecompose(bool Do_remove) {
     PatchMan.ReservePatch();
-    TimeInit=0;
+    TimeInit = 0;
     TimeTracing = 0;
     TimeUpdateConditions = 0;
     TimeUpdateDistances = 0;
@@ -2373,9 +2376,11 @@ public:
     std::cout << "* Updating Distances: " << TimeUpdateDistances << std::endl;
     std::cout << "* Check Conflicts: " << TimeCheckConflicts << std::endl;
     std::cout << "* Removing: " << TimeRemovePaths << std::endl;
-    std::cout << "TOTAL : " << TimeInit+TimeTracing+TimeUpdateConditions+
-                               TimeUpdateUpdatePatches + TimeUpdateDistances +
-                               TimeCheckConflicts + TimeRemovePaths<< std::endl;
+    std::cout << "TOTAL : "
+              << TimeInit + TimeTracing + TimeUpdateConditions +
+                     TimeUpdateUpdatePatches + TimeUpdateDistances +
+                     TimeCheckConflicts + TimeRemovePaths
+              << std::endl;
   }
 
   void BatchMaxDecompose(std::vector<int> &RankPaths,
@@ -2627,6 +2632,316 @@ public:
       }
     }
     WriteOBJ(PathSave.c_str(), PosVect, FaceVect);
+  }
+
+  void SaveSeparateSubMeshes(const std::string &PathSave,
+                             const std::string Format=std::string("obj")) 
+  {
+    CompactData();
+
+    for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
+      std::string CurrPath=PathSave;
+      CurrPath+=std::to_string(i);
+
+      std::vector<Geo::Point3<ScalarType>> CurrVertPos=PatchMan.PData.SubPatchVertPos[i];
+      std::vector<std::vector<int>> CurrFaceIDX=PatchMan.PData.SubPatchFaces[i];
+
+      if (Format==std::string("obj"))
+      {
+        CurrPath+=std::string(".obj");
+        WriteOBJ(CurrPath.c_str(), CurrVertPos, CurrFaceIDX);
+      }
+      else {
+        CurrPath+=std::string(".off");
+        WriteOFF<ScalarType>(CurrPath.c_str(), CurrVertPos, CurrFaceIDX);
+      }
+    }
+   
+  }
+
+  struct CurveData {
+    std::vector<Geo::Point3<ScalarType>> Pos;
+    int NumPatches;
+    typedef typename std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>
+        PosPair;
+
+    PosPair Extremes() const {
+      Geo::Point3<ScalarType> Pos0 = Pos[0];
+      Geo::Point3<ScalarType> Pos1 = Pos.back();
+      PosPair CurrExtr(Pos0, Pos1);
+      return CurrExtr;
+    }
+
+    inline bool operator==(const CurveData &CData) const {
+
+      if (Pos.size() != CData.Pos.size())
+        return false;
+
+      // Check normal equality
+      if (Pos == CData.Pos)
+        return true;
+
+      // Check reversed equality
+      return std::equal(Pos.begin(), Pos.end(), CData.Pos.rbegin());
+
+      // PosPair PosP0 = Extremes();
+      // PosPair PosP1 = CData.Extremes();
+
+      // if (PosP0.second < PosP0.first)
+      //   std::swap(PosP0.first, PosP0.second);
+
+      // if (PosP1.second < PosP1.first)
+      //   std::swap(PosP1.first, PosP1.second);
+
+      // return (PosP0 == PosP1);
+    }
+
+    inline bool operator<(const CurveData &CData) const {
+      PosPair PosP0 = Extremes();
+      PosPair PosP1 = CData.Extremes();
+
+      if (PosP0.second < PosP0.first)
+        std::swap(PosP0.first, PosP0.second);
+
+      if (PosP1.second < PosP1.first)
+        std::swap(PosP1.first, PosP1.second);
+
+      return (PosP0 < PosP1);
+    }
+
+    CurveData(const std::vector<Geo::Point3<ScalarType>> &_Pos) { Pos = _Pos; }
+  };
+
+  struct CycleData {
+    std::vector<std::array<int, 3>> CurveSeq;
+  };
+
+  // void GetCurveCycleData(std::vector<CurveData> &Curves,
+  //                        std::vector<CycleData> &Cycles) {
+  //   Curves.clear();
+  //   Cycles.clear();
+
+  //   CompactData();
+
+  //   // get all patch subside
+  //   std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+  //       PatchSubsides;
+  //   PatchMan.GetPerPatchSubSidesWithSplitTJunction(PatchSubsides);
+
+  //   // for each patch
+  //   for (size_t i = 0; i < PatchSubsides.size(); i++) {
+  //     Cycles.resize(Cycles.size() + 1);
+  //     // for each subside
+  //     for (size_t j = 0; j < PatchSubsides[i].size(); j++) {
+  //       std::vector<Geo::Point3<ScalarType>> CurrSubSd = PatchSubsides[i][j];
+  //       CurveData TestC(CurrSubSd);
+
+  //       // add the new curve
+  //       int CurvIdx = -1;
+  //       int IndexP = -1;
+  //       int Verse = -1;
+  //       for (size_t k = 0; k < Curves.size(); k++) {
+  //         if (Curves[k] == TestC) {
+  //           CurvIdx = k;
+  //           Verse = 2;
+  //           IndexP = 1;
+
+  //           typename CurveData::PosPair PPair0 = Curves[k].Extremes();
+  //           typename CurveData::PosPair PPair1 = TestC.Extremes();
+
+  //           std::cout<<"PP0:"<<PPair0.first<<" --
+  //           "<<PPair0.second<<std::endl; std::cout<<"PP1:"<<PPair1.first<<"
+  //           -- "<<PPair1.second<<std::endl;
+  //           // should have inverted order
+  //           assert(PPair0.first == PPair1.second);
+  //           assert(PPair0.second == PPair1.first);
+  //           break;
+  //         }
+  //       }
+  //       // in such a case add a new one
+  //       if (CurvIdx == -1) {
+  //         Curves.push_back(TestC);
+  //         CurvIdx = Curves.size() - 1;
+  //         Verse = 1;
+  //         IndexP = 0;
+  //       }
+
+  //       assert(IndexP >= 0);
+  //       assert(CurvIdx >= 0);
+  //       assert(CurvIdx < Curves.size());
+  //       std::array<int, 3> Entry{CurvIdx, Verse, IndexP};
+  //       Cycles.back().CurveSeq.push_back(Entry);
+  //     }
+  //    }
+  // }
+
+  void GetCurveCycleData(std::vector<CurveData> &Curves,
+                         std::vector<CycleData> &Cycles) {
+    Curves.clear();
+    Cycles.clear();
+
+    CompactData();
+
+    // get all corner Pos
+    std::vector<Geo::Point3<ScalarType>> CornerPos;
+    PatchMan.GetAllCornerPos(CornerPos);
+    std::set<Geo::Point3<ScalarType>> CornerPosSet(CornerPos.begin(),
+                                                   CornerPos.end());
+
+    // std::cout << "There are " << CornerPos.size() << " corners" << std::endl;
+    std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+        PatchSubsides;
+    // PatchMan.GetPerPatchSubSidesWithSplitTJunction(PatchSubsides);
+    for (size_t i = 0; i < PatchMan.PData.SubPatchVertPos.size(); i++) {
+      std::vector<Geo::Point3<ScalarType>> SubPVert =
+          PatchMan.PData.SubPatchVertPos[i];
+      std::vector<std::vector<int>> SubPFace = PatchMan.PData.SubPatchFaces[i];
+
+      // then get the outer loops
+      std::vector<std::vector<int>> BorderVIdxL;
+      getBorderSequncesVert(SubPFace, BorderVIdxL);
+      assert(BorderVIdxL.size() == 1);
+      std::vector<int> BorderVIdx = BorderVIdxL[0];
+
+      // then convert into positions
+      std::vector<Geo::Point3<ScalarType>> BorderPos;
+      for (size_t j = 0; j < BorderVIdx.size(); j++) {
+        int IndexV = BorderVIdx[j];
+        BorderPos.push_back(SubPVert[IndexV]);
+      }
+
+      // sort from a corner
+      int CornFirstIdx = -1;
+      for (size_t j = 0; j < BorderPos.size(); j++)
+        if (CornerPosSet.count(BorderPos[j]) > 0) {
+          CornFirstIdx = j;
+          break;
+        }
+      assert(CornFirstIdx >= 0);
+      std::rotate(BorderPos.begin(), BorderPos.begin() + CornFirstIdx,
+                  BorderPos.end());
+
+      // then split into sub portions
+      std::vector<std::vector<Geo::Point3<ScalarType>>> SubBorderPos;
+      assert(CornerPosSet.count(BorderPos[0]) > 0);
+      std::vector<Geo::Point3<ScalarType>> segment;
+      segment.push_back(BorderPos[0]);
+      for (size_t j = 1; j < BorderPos.size(); j++) {
+        if (CornerPosSet.count(BorderPos[j]) > 0) {
+          // add last one
+          segment.push_back(BorderPos[j]);
+          // push the segment
+          SubBorderPos.push_back(segment);
+          // clear and add to the beginning
+          segment.clear();
+          segment.push_back(BorderPos[j]);
+        } else {
+          // simply add the element
+          segment.push_back(BorderPos[j]);
+        }
+      }
+      // add the first one to last segment
+      segment.push_back(BorderPos[0]);
+      SubBorderPos.push_back(segment);
+      // std::cout << "There are " << SubBorderPos.size() << " subsegments"
+      //           << std::endl;
+
+      // then add to per patch
+      PatchSubsides.push_back(SubBorderPos);
+    }
+
+    // std::cout << "There are " << PatchSubsides.size() << " subcurves"
+    //           << std::endl;
+    // for each patch
+    for (size_t i = 0; i < PatchSubsides.size(); i++) {
+      Cycles.resize(Cycles.size() + 1);
+      // for each subside
+      for (size_t j = 0; j < PatchSubsides[i].size(); j++) {
+        std::vector<Geo::Point3<ScalarType>> CurrSubSd = PatchSubsides[i][j];
+        CurveData TestC(CurrSubSd);
+
+        // add the new curve
+        int CurvIdx = -1;
+        int IndexP = -1;
+        int Verse = -1;
+        for (size_t k = 0; k < Curves.size(); k++) {
+          if (Curves[k] == TestC) {
+            CurvIdx = k;
+            Verse = 2;
+            IndexP = 1;
+            Curves[k].NumPatches++;
+            typename CurveData::PosPair PPair0 = Curves[k].Extremes();
+            typename CurveData::PosPair PPair1 = TestC.Extremes();
+            // should have inverted order
+            assert(PPair0.first == PPair1.second);
+            assert(PPair0.second == PPair1.first);
+            break;
+          }
+        }
+        // in such a case add a new one
+        if (CurvIdx == -1) {
+          TestC.NumPatches = 1;
+          Curves.push_back(TestC);
+          CurvIdx = Curves.size() - 1;
+          Verse = 1;
+          IndexP = 0;
+        }
+
+        assert(IndexP >= 0);
+        assert(CurvIdx >= 0);
+        assert(CurvIdx < Curves.size());
+        std::array<int, 3> Entry{CurvIdx, Verse, IndexP};
+        Cycles.back().CurveSeq.push_back(Entry);
+      }
+    }
+  }
+
+  bool SaveCurveCycleData(const std::string PathSave) {
+    std::vector<CurveData> Curves;
+    std::vector<CycleData> Cycles;
+    GetCurveCycleData(Curves, Cycles);
+
+    // first save the curves
+    std::string CurveF = PathSave;
+    CurveF += std::string(".curve");
+
+    std::ofstream fout(CurveF.c_str());
+    if (!fout)
+      return false;
+
+    fout << Curves.size() << "\n";
+
+    for (size_t i = 0; i < Curves.size(); i++) {
+      int NumPos = Curves[i].Pos.size();
+      int NumPatches = Curves[i].NumPatches;
+      fout << NumPos << " 0 " << NumPatches << "\n";
+      for (size_t j = 0; j < NumPos; j++) {
+        Geo::Point3<ScalarType> CurrP = Curves[i].Pos[j];
+        fout << CurrP.X << " " << CurrP.Y << " " << CurrP.Z << "\n";
+      }
+    }
+    fout.close();
+
+    // then save the cycles
+    std::string CycleF = PathSave;
+    CycleF += std::string(".cycle");
+
+    std::ofstream fout_2(CycleF.c_str());
+    if (!fout_2)
+      return false;
+
+    fout_2 << Cycles.size() << "\n";
+    for (size_t i = 0; i < Cycles.size(); i++) {
+      fout_2 << Cycles[i].CurveSeq.size() << "\n";
+      for (size_t j = 0; j < Cycles[i].CurveSeq.size(); j++) {
+        int IndexCurv = Cycles[i].CurveSeq[j][0];
+        int VerseCurv = Cycles[i].CurveSeq[j][1];
+        int IndexP = Cycles[i].CurveSeq[j][2];
+        fout_2 << IndexCurv << " " << VerseCurv << " " << IndexP << "\n";
+      }
+    }
+    fout_2.close();
+    return true;
   }
 
   //    ~PatchDecomposer()

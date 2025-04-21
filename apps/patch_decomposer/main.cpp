@@ -1982,7 +1982,7 @@ void SetExportBar() {
 
   ImGui::Separator();
   // ImGui::TextColored(ImVec4(1, 0, 1, 1), "SAVE");
-  if (ImGui::Button("SAVE")) {
+  if (ImGui::CollapsingHeader("SAVE")) {
 
     if (ImGui::Button("Mesh"))
       SaveMesh();
@@ -2009,6 +2009,11 @@ void SetExportBar() {
 
     if (ImGui::Button("Save ALL"))
       SaveAll();
+    if (ImGui::Button("Save Cycles"))
+    {
+      PDeco.SaveCurveCycleData(std::string("test")); 
+      PDeco.SaveSeparateSubMeshes(std::string("test"),std::string("off"));
+    }
   }
 
   ImGui::End();

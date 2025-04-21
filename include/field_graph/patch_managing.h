@@ -1469,6 +1469,57 @@ public:
     }
   }
 
+  void
+  GetPatchSidePos(int IndexPatch,
+                  std::vector<std::vector<Geo::Point3<ScalarType>>> &SidePos) {
+    assert(IndexPatch >= 0);
+    assert(IndexPatch < NumPatches());
+    assert(this->PData.EdgePatchSides[IndexPatch].size() == 1);
+    for (size_t i = 0; i < NumSides(IndexPatch); i++) {
+      std::vector<Geo::Point3<ScalarType>> CurrSidePos;
+      GetPatchSidePos(IndexPatch, i, CurrSidePos);
+      SidePos.push_back(CurrSidePos);
+    }
+  }
+
+  void GetPerPatchSubSidesWithSplitTJunction(std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> &PatchSubsides) 
+  {
+    PatchSubsides.clear();
+
+    // get all corner positions
+    std::vector<Geo::Point3<ScalarType>> CornerPos;
+    GetAllCornerPos(CornerPos);
+    std::set<Geo::Point3<ScalarType>> CornerPosSet(CornerPos.begin(),
+                                                   CornerPos.end());
+
+    PatchSubsides.resize(NumPatches());
+
+    for (size_t i = 0; i < NumPatches(); i++) {
+      assert(NumBorders(i) == 1);
+
+      std::vector<std::vector<Geo::Point3<ScalarType>>> SidePos;
+      GetPatchSidePos(i, SidePos);
+
+      // then split in subpatch if there are T-junctions
+      for (size_t s = 0; s < SidePos.size(); ++s) {
+        std::vector<Geo::Point3<ScalarType>> currentSegment;
+        // start and always end with a corner
+        assert(CornerPosSet.count(SidePos[s][0]) > 0);
+        assert(CornerPosSet.count(SidePos[s].back()) > 0);
+        for (size_t j = 0; j < SidePos.size(); ++j) {
+          Geo::Point3<ScalarType> Curr_p = SidePos[s][j];
+          currentSegment.push_back(Curr_p);
+
+          if (CornerPosSet.count(Curr_p) > 0 && currentSegment.size() > 1) {
+            PatchSubsides[i].push_back(currentSegment);
+            currentSegment.clear();
+            currentSegment.push_back(Curr_p); // start next segment with current corner
+          }
+        }
+      }
+    }
+  }
+
   void CornersOfType(const int &IndexPatch, const CornerType &CType,
                      std::vector<int> &SelectCorn) const {
     SelectCorn.clear();
