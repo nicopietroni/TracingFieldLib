@@ -1,7 +1,7 @@
 #include "Space_Query/triangle_grid_3D.h"
 #include "field_graph/graph.h"
-#ifndef SMOOTH_ TETRA_MESH
-#define SMOOTH_ TETRA_MESH
+#ifndef SMOOTH_TETRA_MESH
+#define SMOOTH_TETRA_MESH
 
 #include "./Space_Query/segment_grid_3D.h"
 #include "./Space_Query/triangle_grid_3D.h"

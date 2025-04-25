@@ -1236,6 +1236,34 @@ private:
   }
 
 public:
+  void GetAllSideGlobalEdges(int IndexP,
+                             std::vector<std::pair<int, int>> &Boundaries) {
+    Boundaries.clear();
+    for (size_t i = 0; i < PData.EdgePatchSides[IndexP].size(); i++)
+      for (size_t j = 0; j < PData.EdgePatchSides[IndexP][i].size(); j++)
+        for (size_t k = 0; k < PData.EdgePatchSides[IndexP][i][j].size(); k++) {
+          int IndexV0 = PData.EdgePatchSides[IndexP][i][j][k].first;
+          IndexV0 = MapToOriginal(IndexP, IndexV0);
+          int IndexV1 = PData.EdgePatchSides[IndexP][i][j][k].second;
+          IndexV1 = MapToOriginal(IndexP, IndexV1);
+          Boundaries.push_back(std::pair<int, int>(std::min(IndexV0, IndexV1),
+                                                   std::max(IndexV0, IndexV1)));
+        }
+  }
+
+  void GetAllSideGlobalEdges(std::vector<std::pair<int, int>> &Boundaries) {
+    Boundaries.clear();
+    for (size_t i = 0; i < NumPatches(); i++) {
+      std::vector<std::pair<int, int>> Patch_Boundaries;
+      GetAllSideGlobalEdges(i, Patch_Boundaries);
+      Boundaries.insert(Boundaries.end(), Patch_Boundaries.begin(),
+                        Patch_Boundaries.end());
+    }
+    std::sort(Boundaries.begin(), Boundaries.end());
+    Boundaries.erase(std::unique(Boundaries.begin(), Boundaries.end()),
+                     Boundaries.end());
+  }
+
   void ReservePatch(int Size = 1000) {
     PData.SideLenghts.reserve(Size);
     PData.PatchOriginalFaces.reserve(Size);
@@ -1482,8 +1510,9 @@ public:
     }
   }
 
-  void GetPerPatchSubSidesWithSplitTJunction(std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> &PatchSubsides) 
-  {
+  void GetPerPatchSubSidesWithSplitTJunction(
+      std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+          &PatchSubsides) {
     PatchSubsides.clear();
 
     // get all corner positions
@@ -1513,7 +1542,8 @@ public:
           if (CornerPosSet.count(Curr_p) > 0 && currentSegment.size() > 1) {
             PatchSubsides[i].push_back(currentSegment);
             currentSegment.clear();
-            currentSegment.push_back(Curr_p); // start next segment with current corner
+            currentSegment.push_back(
+                Curr_p); // start next segment with current corner
           }
         }
       }

@@ -185,7 +185,7 @@ void AddBorderConstraints(
 
       // set the constrained directions
       FaceCurv[i].D[0] = Dir;
-      FaceCurv[i].D[1] = Cross(FacesNormals[i], Dir);
+      FaceCurv[i].D[1] = Geo::Cross(FacesNormals[i], Dir);
       FaceCurv[i].D[0].Normalize();
       FaceCurv[i].D[1].Normalize();
 
@@ -232,7 +232,7 @@ void AddFeatureConstraints(
       Dir.Normalize();
 
       FaceCurv[i].D[0] = Dir;
-      FaceCurv[i].D[1] = Cross(FacesNormals[i], Dir);
+      FaceCurv[i].D[1] = Geo::Cross(FacesNormals[i], Dir);
       FaceCurv[i].D[0].Normalize();
       FaceCurv[i].D[1].Normalize();
 
@@ -492,7 +492,7 @@ void SmoothGlobalPolyvector(
     dir1.Z = rawOutField(i, 2);
 
     dir1.Normalize();
-    Geo::Point3<ScalarType> dir2 = Cross(FacesNormals[i], dir1);
+    Geo::Point3<ScalarType> dir2 = Geo::Cross(FacesNormals[i], dir1);
     dir2.Normalize();
 
     assert(fabs(dir1.Norm() - 1) < eps);
