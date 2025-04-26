@@ -9,10 +9,10 @@
 #include "point2.h"
 #include "point3.h"
 #include "segment2.h"
-//#include "smooth_mesh.h"
-//#include "triangle3.h"
-//#include "normal.h"
-// #include "surface_cluster/cluster_operations.h"
+// #include "smooth_mesh.h"
+// #include "triangle3.h"
+// #include "normal.h"
+//  #include "surface_cluster/cluster_operations.h"
 #include <cassert>
 #include <cstddef>
 #include <fstream>
@@ -22,26 +22,27 @@
 #include <queue>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
-#include <unordered_set>
-//#include "triangle3.h"
-// #include <igl/is_vertex_manifold.h>
-// #include <igl/is_edge_manifold.h>
-// //#include "eigen_interface.h"
-// #include "Space_Query/triangle_grid_2D.h"
+// #include "triangle3.h"
+//  #include <igl/is_vertex_manifold.h>
+//  #include <igl/is_edge_manifold.h>
+//  //#include "eigen_interface.h"
+//  #include "Space_Query/triangle_grid_2D.h"
 
 // Main function: returns true if there's at least one duplicate
 template <class ScalarType>
-bool HasDuplicateVert(const std::vector<Geo::Point3<ScalarType>>& points) {
-    std::unordered_set<Geo::Point3<ScalarType>, Geo::Point3Hash<ScalarType>> pointSet;
-    for (const auto& p : points) {
-        if (!pointSet.insert(p).second) {
-            // insert() returns .second == false if already existed
-            return true;
-        }
+bool HasDuplicateVert(const std::vector<Geo::Point3<ScalarType>> &points) {
+  std::unordered_set<Geo::Point3<ScalarType>, Geo::Point3Hash<ScalarType>>
+      pointSet;
+  for (const auto &p : points) {
+    if (!pointSet.insert(p).second) {
+      // insert() returns .second == false if already existed
+      return true;
     }
-    return false;
+  }
+  return false;
 }
 
 template <class ScalarType>
@@ -717,20 +718,20 @@ void ComputeFaceBarycenters(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 
 template <class ScalarType>
 void SplitQuadInto4Tris(const std::vector<Geo::Point3<ScalarType>> &QuadPos,
-                       const std::vector<std::vector<int>> &QuadsFaces,
-                       std::vector<Geo::Point3<ScalarType>> &TriPos,
-                       std::vector<std::vector<int>> &TrisFaces) {
+                        const std::vector<std::vector<int>> &QuadsFaces,
+                        std::vector<Geo::Point3<ScalarType>> &TriPos,
+                        std::vector<std::vector<int>> &TrisFaces) {
   TrisFaces.clear();
   TriPos.clear();
 
   // 2 triangles for each quad
   TrisFaces.resize((int)QuadsFaces.size() * 4, std::vector<int>(3, -1));
 
-  TriPos=QuadPos;
+  TriPos = QuadPos;
   std::vector<Geo::Point3<ScalarType>> BaryF;
-  //add new central vertex
-  ComputeFaceBarycenters<ScalarType>(QuadPos,QuadsFaces,BaryF);
-  TriPos.insert(TriPos.end(),BaryF.begin(),BaryF.end());
+  // add new central vertex
+  ComputeFaceBarycenters<ScalarType>(QuadPos, QuadsFaces, BaryF);
+  TriPos.insert(TriPos.end(), BaryF.begin(), BaryF.end());
 
   for (size_t i = 0; i < QuadsFaces.size(); i++) {
     assert(QuadsFaces[i].size() == 4);
@@ -738,7 +739,7 @@ void SplitQuadInto4Tris(const std::vector<Geo::Point3<ScalarType>> &QuadPos,
     int IndexV1 = QuadsFaces[i][1];
     int IndexV2 = QuadsFaces[i][2];
     int IndexV3 = QuadsFaces[i][3];
-    int IndexMid = QuadPos.size()+i;
+    int IndexMid = QuadPos.size() + i;
 
     int IndexTriF0 = i * 4;
     int IndexTriF1 = IndexTriF0 + 1;
@@ -748,7 +749,7 @@ void SplitQuadInto4Tris(const std::vector<Geo::Point3<ScalarType>> &QuadPos,
     TrisFaces[IndexTriF0][0] = IndexV0;
     TrisFaces[IndexTriF0][1] = IndexV1;
     TrisFaces[IndexTriF0][2] = IndexMid;
-    
+
     TrisFaces[IndexTriF1][0] = IndexV1;
     TrisFaces[IndexTriF1][1] = IndexV2;
     TrisFaces[IndexTriF1][2] = IndexMid;
@@ -962,14 +963,10 @@ void CopySubMesh(const std::vector<Geo::Point3<ScalarType>> &Vert,
                  const std::vector<std::vector<int>> &Elements,
                  const std::vector<int> &ToCopyEl,
                  std::vector<Geo::Point3<ScalarType>> &CopiedMeshesVert,
-                 std::vector<std::vector<int>> &CopiedMeshesElem)
-{
-  std::vector<int> OriginalVert,OriginalElem;
-  CopySubMesh<ScalarType>(Vert,Elements,ToCopyEl,
-                          CopiedMeshesVert,
-                          CopiedMeshesElem,
-                          OriginalVert,
-                          OriginalElem);
+                 std::vector<std::vector<int>> &CopiedMeshesElem) {
+  std::vector<int> OriginalVert, OriginalElem;
+  CopySubMesh<ScalarType>(Vert, Elements, ToCopyEl, CopiedMeshesVert,
+                          CopiedMeshesElem, OriginalVert, OriginalElem);
 }
 
 template <class ScalarType>
@@ -1058,10 +1055,10 @@ int PolyMeshGenus(int NVert, int nEdges, int NFaces, int NHoles,
 //   return EdgeSet.size();
 // }
 
-int NumEdges(const std::vector<std::vector<int>>& Connectivity) {
+int NumEdges(const std::vector<std::vector<int>> &Connectivity) {
   std::unordered_set<uint64_t> EdgeSet;
 
-  for (const auto& face : Connectivity) {
+  for (const auto &face : Connectivity) {
     int sizeF = static_cast<int>(face.size());
     for (int j = 0; j < sizeF; ++j) {
       int v0 = face[j];
@@ -1069,7 +1066,8 @@ int NumEdges(const std::vector<std::vector<int>>& Connectivity) {
       int minV = std::min(v0, v1);
       int maxV = std::max(v0, v1);
 
-      uint64_t edgeKey = (static_cast<uint64_t>(minV) << 32) | static_cast<uint32_t>(maxV);
+      uint64_t edgeKey =
+          (static_cast<uint64_t>(minV) << 32) | static_cast<uint32_t>(maxV);
       EdgeSet.insert(edgeKey);
     }
   }
@@ -1669,7 +1667,6 @@ GetDegenerateTriangles(const std::vector<Geo::Point3<ScalarType>> &VertPos,
   }
 }
 
-
 // template <class ScalarType>
 // static void
 // SmoothDegerateTriangles(std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -1703,7 +1700,8 @@ GetDegenerateTriangles(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 // }
 // // if (cleanF)
 // // {
-// //     std::vector<bool> IsFix = std::vector<bool>(SubMeshesV[i].size(), true);
+// //     std::vector<bool> IsFix = std::vector<bool>(SubMeshesV[i].size(),
+// true);
 // //     ScalarType delta = AvgEdgeLen(SubMeshesV[i], SubMeshesF[i]) * 0.0001;
 // //     for (size_t j = 0; j < SubMeshesF[i].size(); j++)
 // //     {
@@ -1769,8 +1767,10 @@ GetDegenerateTriangles(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 // }
 
 // // template <class ScalarType>
-// // void DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>> &Pos3D,
-// //                                  const std::vector<std::vector<int>> &Faces,
+// // void DesambiguateSamePosVertices(std::vector<Geo::Point3<ScalarType>>
+// &Pos3D,
+// //                                  const std::vector<std::vector<int>>
+// &Faces,
 // //                                  ScalarType delta)
 // // {
 // //     // first find vertices with double positions
@@ -1897,6 +1897,21 @@ GetDegenerateTriangles(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 //     }
 //   }
 // }
-
+template <class ScalarType>
+static void GetAllMeshEdges(const std::vector<std::vector<int>> &Connectivity,
+                            std::vector<std::pair<int, int>> &MeshE) {
+  MeshE.clear();
+  for (size_t i = 0; i < Connectivity.size(); i++)
+    for (size_t j = 0; j < Connectivity[i].size(); j++) {
+      int SizeF = Connectivity[i].size();
+      int IndexV0 = Connectivity[i][j];
+      int IndexV1 = Connectivity[i][(j + 1) % SizeF];
+      std::pair<int, int> EdgeK(std::min(IndexV0, IndexV1),
+                                std::max(IndexV0, IndexV1));
+      MeshE.push_back(EdgeK);
+    }
+  std::sort(MeshE.begin(), MeshE.end());
+  MeshE.erase(std::unique(MeshE.begin(), MeshE.end()), MeshE.end());
+}
 
 #endif

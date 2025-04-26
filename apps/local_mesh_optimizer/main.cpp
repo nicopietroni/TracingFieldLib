@@ -23,9 +23,12 @@
 #include <hausdorff.h>
 #include <local_operations/edge_flip.h>
 #include <local_operations/iterative_optimizer.h>
+#include <mesh_subdivide.h>
 #include <normal.h>
 #include <point3.h>
 #include <triangular_remesh.h>
+#include <color_functions.h>
+#include "tangent_space_smooth.h"
 
 typedef double ScalarType;
 
@@ -74,10 +77,22 @@ ScalarType AVGL = 0;
 ScalarType BBDiag = 0;
 // int NextV0 = 0, NextV1 = 0;
 std::vector<Geo::Point3<ScalarType>> VertCol;
+std::vector<Geo::Point3<ScalarType>> FaceCol;
 
 void InitConstantColor() {
   VertCol.clear();
   VertCol.resize(VertPos.size(), Geo::Point3<ScalarType>(0.9, 0.9, 0.9));
+}
+
+void ColorByIndex(std::vector<int> &Index) {
+  assert(Index.size()==Connectivity.size());
+  FaceCol.clear();
+  int MaxIdx=0;
+  for (size_t i=0;i<Index.size();i++)
+  MaxIdx=std::max(MaxIdx,Index[i]);
+
+  for (size_t i=0;i<Index.size();i++)
+    FaceCol.push_back(Geo::ScatterColor<ScalarType>(MaxIdx,Index[i]));
 }
 
 Geo::TriRemParam<ScalarType> RemP;
@@ -116,7 +131,7 @@ void UpdateRenderCorners() {
 //   std::vector<std::vector<int>> StarF;
 //   FindFaceStar(Connectivity, KernelF, StarF, SelKernelSize);
 
-//   //add the faces to 
+//   //add the faces to
 //   RemP.Exclude= std::vector<bool>(Connectivity.size(), true);
 
 //   //then update selection
@@ -160,7 +175,7 @@ void LoadMesh(const std::string &path) {
     Connectivity0 = Connectivity;
     // IteOpt.NextCollapseTest(NextV0, NextV1);
     InitConstantColor();
-    //RemP.Exclude = std::vector<bool>(Connectivity.size(), false);
+    // RemP.Exclude = std::vector<bool>(Connectivity.size(), false);
   } else
     std::cout << "Mesh not loaded" << std::endl;
 }
@@ -379,6 +394,26 @@ void SetRenderBar() {
     WriteOBJ("test.obj", VertPos, Connectivity);
   }
 
+  if (ImGui::Button("REPROJECT")) {
+    std::vector<int> OldF;
+    Geo::SubdivideMesh<ScalarType>::MidPointReproject(
+        VertPos0, Connectivity0, VertPos, Connectivity, OldF, 2);
+    ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
+    InitConstantColor();
+    ColorByIndex(OldF);
+    // UpdateRenderCorners();
+    RenderVertFeatures.clear();
+    RenderVertCorners.clear();
+  }
+  if (ImGui::Button("SMOOTH")) {
+    Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam SMParam;
+    SMParam.ReprojVert=&VertPos0;
+    SMParam.ReprojFaces=&Connectivity0;
+    SMParam.post_project=true;
+    SMParam.Steps=10;
+    Geo::Local_Param_Smooth<ScalarType>::Smooth(VertPos,Connectivity,SMParam);
+    ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
+  }
   ImGui::End();
 }
 
@@ -425,9 +460,16 @@ void GLDrawMesh() {
 
     GLDraw::glColor(Geo::Point3<ScalarType>(0.8, 0.8, 0.8));
 
-    GLDraw::DrawSurfaceMesh<ScalarType>(
-        VertPos, Connectivity, FaceNormals, VertNormals, DrawSurface, true,
-        false, false, GLDraw::TRTriangle, NULL, &VertCol); //,&FaceColor);
+    if (FaceCol.size() == Connectivity.size())
+      GLDraw::DrawSurfaceMesh<ScalarType>(
+          VertPos, Connectivity, FaceNormals, VertNormals, DrawSurface, true,
+          false, false, GLDraw::TRTriangle, &FaceCol, NULL); //,&FaceColor);
+    else {
+      if (VertCol.size() == VertPos.size())
+        GLDraw::DrawSurfaceMesh<ScalarType>(
+            VertPos, Connectivity, FaceNormals, VertNormals, DrawSurface, true,
+            false, false, GLDraw::TRTriangle, NULL, &VertCol); //,&FaceColor);
+    }
 
     glPopAttrib();
   }

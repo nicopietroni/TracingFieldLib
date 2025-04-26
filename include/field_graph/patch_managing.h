@@ -1618,6 +1618,17 @@ public:
     Faces = NewFaces;
   }
 
+  // void getMeshOfPatches(
+  //   std::vector<std::vector<Geo::Point3<ScalarType>> > &SubMeshV,
+  //   std::vector<std::vector<std::vector<int>>> &SubMeshF,
+  //   std::vector<std::vector<int> > &OriginalVert,
+  //   std::vector<std::vector<int> > &OriginalF) {
+  //     SubMeshV=PData.SubPatchVertPos;
+  //     SubMeshF=PData.SubPatchFaces;
+  //     OriginalVert=PData.SubPatchVertToOriginal;
+  //     OriginalF=PData.SubPatchFacesToOriginal;
+  //   }
+
   void AddTouchedPatchesToSet(const std::vector<int> &PathN,
                               std::set<int> &PatchIdx) {
     if (PathN.size() == 0)

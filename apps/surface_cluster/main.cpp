@@ -18,14 +18,15 @@
 #endif
 #include "IO/file_path_functions.h"
 #include "IO/io_obj.h"
+#include "field_graph/dual_patches.h"
 #include <GLFW/glfw3.h>
 #include <GL_functions/GLDrawField.h>
 #include <GL_functions/GLDrawMesh.h>
+#include <IO/file_path_functions.h>
 #include <box3.h>
 #include <color_functions.h>
 #include <point3.h>
 #include <surface_cluster/face_cluster.h>
-#include <IO/file_path_functions.h>
 
 GLFWwindow *window;
 std::string PathMesh;
@@ -68,7 +69,6 @@ std::vector<std::vector<int>> NextF, NextE;
 std::vector<std::vector<int>> VF, VFIndex;
 Geo::Box3<ScalarType> MeshBox;
 
-
 std::vector<std::vector<int>> ClusterFaces;
 std::vector<int> FacesCluster;
 std::vector<int> AllCorners;
@@ -78,7 +78,8 @@ std::string ProjectPath;
 //   // assert(!PathMesh.empty());
 //   // std::string PathRemMesh = RemoveExtension(PathMesh);
 //   // PathRemMesh += std::string("_remesh.obj");
-//   // std::cout << "Saving Field on file " << PathRemMesh.c_str() << std::endl;
+//   // std::cout << "Saving Field on file " << PathRemMesh.c_str() <<
+//   std::endl;
 //   // bool Saved = WriteOBJ(PathRemMesh, VertPos, Connectivity);
 //   // if (!Saved) {
 //   //   std::cout << "ERROR SAVING FIELD FILE " << std::endl;
@@ -90,7 +91,8 @@ std::string ProjectPath;
 //   // assert(!PathMesh.empty());
 //   // std::string PathRemMesh = RemoveExtension(PathMesh);
 //   // PathRemMesh += std::string("_remesh.obj");
-//   // std::cout << "Saving Field on file " << PathRemMesh.c_str() << std::endl;
+//   // std::cout << "Saving Field on file " << PathRemMesh.c_str() <<
+//   std::endl;
 //   // bool Saved = WriteOBJ(PathRemMesh, VertPos, Connectivity);
 //   // if (!Saved) {
 //   //   std::cout << "ERROR SAVING FIELD FILE " << std::endl;
@@ -98,16 +100,18 @@ std::string ProjectPath;
 //   // }
 // }
 
-void UpdateCorners()
-{
-  std::vector<std::vector<int> > ClusterCorners;
-  Geo::ClusterOperations<ScalarType>::FindCorners(VertPos,Faces,ClusterFaces,ClusterCorners);
+void UpdateCorners() {
+  std::vector<std::vector<int>> ClusterCorners;
+  Geo::ClusterOperations<ScalarType>::FindCorners(VertPos, Faces, ClusterFaces,
+                                                  ClusterCorners);
   AllCorners.clear();
-  for (size_t i=0;i<ClusterCorners.size();i++)
-    AllCorners.insert(AllCorners.end(),ClusterCorners[i].begin(),ClusterCorners[i].end());
+  for (size_t i = 0; i < ClusterCorners.size(); i++)
+    AllCorners.insert(AllCorners.end(), ClusterCorners[i].begin(),
+                      ClusterCorners[i].end());
 
   std::sort(AllCorners.begin(), AllCorners.end());
-  std::vector<int>::iterator last = std::unique(AllCorners.begin(), AllCorners.end());
+  std::vector<int>::iterator last =
+      std::unique(AllCorners.begin(), AllCorners.end());
   AllCorners.erase(last, AllCorners.end());
 }
 
@@ -134,7 +138,7 @@ void ColorByPartition() {
 }
 
 int EnergyPerc = 20;
-int TargetCl=-1;
+int TargetCl = -1;
 
 bool LoadMesh(const std::string &path) {
   //    oss<<"Loading "<<path.c_str()<<std::endl;
@@ -257,7 +261,7 @@ void InitIMGui() {
 
 // bool lineF = (SParam.NDir == 2);
 // bool crossF = (SParam.NDir == 4);
-int RelaxIte=20;
+int RelaxIte = 20;
 
 void SetRenderBar() {
   ImGui::Begin("Mesh Cluster", NULL, ImGuiWindowFlags_AlwaysAutoResize);
@@ -277,7 +281,8 @@ void SetRenderBar() {
   if (ImGui::Button("Voro Cluster")) {
     VertPos = VertPos0;
     Faces = Faces0;
-    FindVoronoiClusters(VertPos,Faces,ClusterFaces,TargetCl,(ScalarType)EnergyPerc,(ScalarType)-1,RelaxIte);
+    FindVoronoiClusters(VertPos, Faces, ClusterFaces, TargetCl,
+                        (ScalarType)EnergyPerc, (ScalarType)-1, RelaxIte);
     ColorByPartition();
     UpdateCorners();
   }
@@ -285,22 +290,44 @@ void SetRenderBar() {
   if (ImGui::Button("VSA Decomposition")) {
     VertPos = VertPos0;
     Faces = Faces0;
-    FindVSAClusters(VertPos,Faces,ClusterFaces,TargetCl,(ScalarType)EnergyPerc,(ScalarType)-1,RelaxIte);
+    FindVSAClusters(VertPos, Faces, ClusterFaces, TargetCl,
+                    (ScalarType)EnergyPerc, (ScalarType)-1, RelaxIte);
     ColorByPartition();
     UpdateCorners();
   }
 
   if (ImGui::Button("Dualize")) {
-    // VertPos = VertPos0;
-    // Faces = Faces0;
-    // FindVSAClusters(VertPos,Faces,ClusterFaces,TargetCl,(ScalarType)EnergyPerc,(ScalarType)-1,RelaxIte);
-    // ColorByPartition();
-    // UpdateCorners();
+    std::vector<std::vector<Geo::Point3<ScalarType>>> PerClusterMeshVert;
+    std::vector<std::vector<std::vector<int>>> PerClusterMeshFaces;
+    std::vector<std::vector<int>> PerClusterCorners;
+    Geo::ClusterOperations<ScalarType>::AllClusterMeshes(
+        VertPos, Faces, ClusterFaces, AllCorners, 
+        PerClusterMeshVert,PerClusterMeshFaces, 
+        PerClusterCorners);
+
+    std::vector<std::vector<int> > CentridsV;
+    CentridsV.resize(PerClusterMeshFaces.size());
+    for (size_t i=0;i<PerClusterMeshFaces.size();i++)
+    {
+      int CurrCentroidV=Geo::Centroids<ScalarType>::FindCentroidsVertUV(PerClusterMeshVert[i],PerClusterMeshFaces[i]);
+      CentridsV[i].push_back(CurrCentroidV);
+    }
+
+    Geo::DualPatch<ScalarType>::PrimalPatchData PData;
+    PData.PatchVertPos=PerClusterMeshVert;
+    PData.PatchFaces=PerClusterMeshFaces;
+    PData.PatchSingularities=CentridsV;
+    assert(0);
+    // TO BE COMPLETED
+
+    // Geo::DualPatch<ScalarType>::ExtractDual(
+    //     PData, DualParam, DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+    //     PerDualPatchCornerIDX);
   }
 
   if (ImGui::Button("Save Patch Layout")) {
-    std::string patch_path=ProjectPath+std::string(".patch");
-    SaveCornerEdges(VertPos,Faces,ClusterFaces,patch_path);
+    std::string patch_path = ProjectPath + std::string(".patch");
+    SaveCornerEdges(VertPos, Faces, ClusterFaces, patch_path);
     // SaveMesh();
     // SaveField();
     // SaveFeatures();
@@ -364,7 +391,7 @@ void GLDrawMesh() {
     GLDraw::GLDrawEdges<ScalarType>(VertPos, BorderE, 15,
                                     Geo::Point3<ScalarType>(0, 0, 0));
 
-    GLDraw::DrawVertices(VertPos,AllCorners);
+    GLDraw::DrawVertices(VertPos, AllCorners);
 
     glPopAttrib();
   }
@@ -382,8 +409,8 @@ int main(int argc, char *argv[]) {
   has_load_mesh = LoadMesh(PathMesh);
   if (!has_load_mesh)
     exit(0);
-  
-  ProjectPath=RemoveExtension(PathMesh);
+
+  ProjectPath = RemoveExtension(PathMesh);
   InitGLFW_Window();
 
   InitIMGui();

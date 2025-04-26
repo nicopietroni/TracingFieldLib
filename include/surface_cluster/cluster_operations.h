@@ -202,6 +202,42 @@ public:
                             OriginalFace);
   }
 
+  static void AllClusterMeshes(
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &Faces,
+      const std::vector<std::vector<int>> &ClusterFaces,
+      const std::vector<int> &AllCorners,
+      std::vector<std::vector<Geo::Point3<ScalarType>>> &PerClusterMeshVert,
+      std::vector<std::vector<std::vector<int>>> &PerClusterMeshFaces,
+      std::vector<std::vector<int>> &PerClusterCorners) {
+    int NumClusters = ClusterFaces.size();
+    PerClusterMeshVert.clear();
+    PerClusterMeshVert.resize(NumClusters);
+
+    PerClusterMeshFaces.clear();
+    PerClusterMeshFaces.resize(NumClusters);
+
+    PerClusterCorners.clear();
+    PerClusterCorners.resize(NumClusters);
+
+    std::set<Geo::Point3<ScalarType>> AllCornersPos;
+    for (size_t i = 0; i < AllCorners.size(); i++)
+      AllCornersPos.insert(VertPos[AllCorners[i]]);
+
+    for (size_t i = 0; i < NumClusters; i++) {
+
+      std::vector<int> OriginalVert, OriginalFace;
+
+      MeshOfCluster(i, VertPos, Faces, ClusterFaces, PerClusterMeshVert[i],
+                    PerClusterMeshFaces[i], OriginalVert, OriginalFace);
+
+      for (size_t j = 0; j < PerClusterMeshVert[i].size(); j++) {
+        if ((AllCornersPos.count(PerClusterMeshVert[i][j])) > 0)
+          PerClusterCorners[i].push_back(j);
+      }
+    }
+  }
+
   static bool
   IsProperCluster(std::vector<int> ClusterF,
                   const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -307,8 +343,7 @@ public:
   // FindSides(const std::vector<Geo::Point3<ScalarType>> VertPos,
   //           const std::vector<std::vector<int>> &Faces,
   //           const std::vector<std::vector<int> > ClusterFaces,
-  //           std::vector<std::vector<std::vector<std::pair<int,int> > > >
-  //           &ClusterSides)
+  //           std::vector<std::vector<std::vector<std::pair<int,int> > > > &ClusterSides)
   // {
   //   //find the corners
   //   std::vector<std::vector<int> > ClusterCorners;
@@ -366,7 +401,8 @@ public:
   //       int IndexV0=CurrB[j];
   //       int IndexV1=CurrB[(j+1)%CurrB.size()];
   //       std::pair<int,int> BorderE(IndexV0,IndexV1);
-  //       //ClusterSides.back().back().push_back()
+  //       ClusterSides.back().back().push_back(BorderE);
+  //       if ()
   //     }
   //   }
   // }
