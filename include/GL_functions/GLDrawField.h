@@ -7,6 +7,7 @@
 #include <box3.h>
 #include <frame_field.h>
 #include <cross_field.h>
+#include "GLDrawBase.h"
 #include "../color_functions.h"
 
 namespace GLDraw

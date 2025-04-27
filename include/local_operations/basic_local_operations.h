@@ -404,8 +404,13 @@ public:
     Geo::FeatureCorners<ScalarType>(this->Vert, this->Faces, this->NextF,
                                     involved_f, this->feature_angle,
                                     TestVertPairFeatures, CornersIdx);
+    
+    
 
     if (IsFaceEFeature != NULL) {
+      assert((*IsFaceEFeature).size()==Faces.size());
+      assert((*IsVertCorner).size()==Vert.size());
+      
       assert(IsVertCorner != NULL);
       for (size_t i = 0; i < involved_f.size(); i++) {
         int IndexF = involved_f[i];
@@ -425,6 +430,7 @@ public:
         }
       }
     }
+
     std::sort(TestVertPairFeatures.begin(), TestVertPairFeatures.end());
     std::vector<std::pair<int, int>>::iterator last_0 = std::unique(TestVertPairFeatures.begin(), TestVertPairFeatures.end());
     TestVertPairFeatures.erase(last_0, TestVertPairFeatures.end());
@@ -479,6 +485,7 @@ public:
       if (CornersIdx[i] == V1)
         isCornerV1 = true;
     }
+
   }
 
   // Geo::Point3<ScalarType> ReprojectFeatures(const Geo::Point3<ScalarType>

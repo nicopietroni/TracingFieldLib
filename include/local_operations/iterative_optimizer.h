@@ -249,11 +249,12 @@ template <class ScalarType> class IterativeOptimizer {
     }
     ScalarType CurrTargetL = AdaptiveLen(pos, abs_target_l);
 
+
     AllocateLocalOperations(OpType, pos, Faces, Vert, DeletedV, DeletedF, VF,
                             VFIndex, NextF, NextE, VertQ, CurrTargetL,
                             MaxNormFlipVariation, VertSizePTR, IsFaceEFeature,
                             IsVertCorner, Lop);
-
+    
     assert(Lop.size() > 0);
 
     for (size_t i = 0; i < Lop.size(); i++) {
@@ -268,7 +269,9 @@ template <class ScalarType> class IterativeOptimizer {
       // Lop[i]->reproject = reproject_pos;
 
       Lop[i]->PrecomputeConnectivity();
+
       Lop[i]->UpdateFeatureReprojectInfo();
+
       Lop[i]->PrecomputeGeometry();
 
       HEntryType HEntry(&FaceMark, TMark, Lop[i], OpType);
@@ -426,17 +429,24 @@ template <class ScalarType> class IterativeOptimizer {
 
         Pos3 Pos(i, j, IndexV0);
 
-        if (addSmooth)
+        if (addSmooth){
           AddOperation(Pos, OpSmooth);
-        if (addFlip)
+        }
+        if (addFlip){
           AddOperation(Pos, OpFlip);
+        }
         if (addRefine)
+        {
           AddOperation(Pos, OpRefine);
+        }
         if (addEdgeColl)
+        {
           AddOperation(Pos, OpEdgeCollapse);
+        }
         // insertedE.insert(Key);
       }
     }
+
     // then check
     for (size_t i = 0; i < HeapOperations.size(); i++) {
       assert(HeapOperations[i].Priority >= min_gain);
@@ -571,9 +581,9 @@ template <class ScalarType> class IterativeOptimizer {
                      bool _addEdgeColl = false) {
 
     abs_target_l = _target_l; // AvgEdgeLen(Vert,Faces)*_target_l;
-
+    
     InitSupportStructures();
-
+    
     min_gain = _min_gain;
     min_acceptable = _min_acceptable;
     addSmooth = _addSmooth;
@@ -592,6 +602,7 @@ template <class ScalarType> class IterativeOptimizer {
     assert(VFIndex0 == VFIndex);
     assert(NextF0 == NextF);
     assert(NextE0 == NextE);
+
   }
 
   BasicPriorityFunction<ScalarType> *IPrio;
@@ -707,7 +718,9 @@ public:
       assert((*VertSize).size() == Vert.size());
     }
 
+
     OptimizeStep(true); // OParam.update_stack);
+
     RemoveDeletedQuadrics();
     RemoveDeletedVSize();
     RemoveDeletedFeatures();
@@ -949,7 +962,9 @@ int CollapseSmallEdges(
     Geo::IterativeOptimizer<ScalarType> IteOpt(
         VertPos, Faces, &SmallPrio, VertQ, VertSize, &TRemP.IsFaceEFeature,
         &TRemP.IsVertCorner);
+
     steps = IteOpt.GlobalOptimize(Oparam, false);
+
   } else {
 
     Geo::IterativeOptimizer<ScalarType> IteOpt(

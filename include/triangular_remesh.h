@@ -11,6 +11,7 @@
 #include "quadric.h"
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 #include <vector>
 
 namespace Geo {
@@ -32,6 +33,12 @@ void CorrectDefaultValues(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 
   if (RemP.TargetL <= 0)
     RemP.TargetL = AvgEdgeLen(VertPos, Faces) * 1.5;
+
+  if (RemP.IsFaceEFeature.size()==0)
+    RemP.IsFaceEFeature.resize(Faces.size(),std::vector<bool>(3,false));
+  
+  if (RemP.IsVertCorner.size()==0)
+    RemP.IsVertCorner.resize(VertPos.size(),false);
 }
 
 template <class ScalarType>
@@ -84,7 +91,6 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
     durationComputeAdaptLen +=
         std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
   }
-
   for (int s = 0; s < TRemParam.steps; s++) {
 
     int stepsCollapseSmall = 0;
@@ -95,8 +101,10 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
     // COLLAPSE SMALL EDGES
     if (TRemParam.collapse_small) {
       t0 = std::chrono::high_resolution_clock::now();
+
       stepsCollapseSmall =
           CollapseSmallEdges(VertPos, Faces, VertQ, TRemParam, &VertDens);
+
       t1 = std::chrono::high_resolution_clock::now();
       durationCollapseSmall +=
           std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0)
