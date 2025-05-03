@@ -89,6 +89,28 @@ public:
     }
   }
 
+  static void
+  GetTriMeshData(const Eigen::MatrixXi &faces, 
+                 const MatrixXm &vert,
+                 std::vector<Geo::Point2<ScalarType>> &VertPos,
+                 std::vector<std::vector<int>> &Faces) {
+    
+   VertPos.resize(vert.rows());
+    // copy vertices
+    for (int i = 0; i < (int)vert.rows(); i++)
+      for (int j = 0; j < 2; j++)
+        VertPos[i].V(j)=vert(i, j);
+
+    Faces=std::vector<std::vector<int>>(faces.rows(),
+                                     std::vector<int>(3,-1));          
+    // copy faces
+    for (int i = 0; i < (int)faces.rows(); i++) {
+      assert(Faces[i].size() == 3);
+      for (int j = 0; j < 3; j++)
+        Faces[i][j]=faces(i, j);
+    }
+  }
+
   static void GetTriMeshData(const Eigen::MatrixXi &eigen_f,
                              const MatrixXm &eigen_v,
                              std::vector<Geo::Point3<ScalarType>> &VertPos,

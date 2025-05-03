@@ -908,6 +908,23 @@ void AppendMesh(std::vector<Geo::Point3<ScalarType>> &Vert,
 }
 
 template <class ScalarType>
+void AppendMesh(std::vector<Geo::Point2<ScalarType>> &Vert,
+                std::vector<std::vector<int>> &Elements,
+                const std::vector<Geo::Point2<ScalarType>> &To_append_Vert,
+                const std::vector<std::vector<int>> &To_append_Elements) {
+  int NumV0 = Vert.size();
+  Vert.insert(Vert.end(), To_append_Vert.begin(), To_append_Vert.end());
+
+  int NumF0 = Elements.size();
+  Elements.insert(Elements.end(), To_append_Elements.begin(),
+                  To_append_Elements.end());
+
+  for (size_t i = NumF0; i < Elements.size(); i++)
+    for (size_t j = 0; j < Elements[i].size(); j++)
+      Elements[i][j] += NumV0;
+}
+
+template <class ScalarType>
 void AppendMeshes(
     std::vector<Geo::Point3<ScalarType>> &Vert,
     std::vector<std::vector<int>> &Elements,
