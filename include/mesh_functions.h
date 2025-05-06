@@ -1052,6 +1052,30 @@ void SplitByFFConnectedComponenent(
     }
 }
 
+template <class ScalarType>
+void SplitByFFConnectedComponenent(
+    const std::vector<Geo::Point2<ScalarType>> &Vert,
+    const std::vector<std::vector<int>> &Elements,
+    std::vector<std::vector<Geo::Point2<ScalarType>>> &SubMeshesV,
+    std::vector<std::vector<std::vector<int>>> &SubMeshesF) {
+    
+    std::vector<std::vector<int>> OriginalV,OriginalF;
+    SplitByFFConnectedComponenent(Vert,Elements,SubMeshesV,
+                                  SubMeshesF,OriginalV,OriginalF);
+}
+
+template <class ScalarType>
+void SplitByFFConnectedComponenent(
+    const std::vector<Geo::Point3<ScalarType>> &Vert,
+    const std::vector<std::vector<int>> &Elements,
+    std::vector<std::vector<Geo::Point3<ScalarType>>> &SubMeshesV,
+    std::vector<std::vector<std::vector<int>>> &SubMeshesF) {
+    
+    std::vector<std::vector<int>> OriginalV,OriginalF;
+    SplitByFFConnectedComponenent(Vert,Elements,SubMeshesV,
+                                  SubMeshesF,OriginalV,OriginalF);
+}
+
 int PolyMeshGenus(int NVert, int nEdges, int NFaces, int NHoles,
                   int NComponents) {
   return -((NVert + NFaces - nEdges + NHoles - 2 * NComponents) / 2);
