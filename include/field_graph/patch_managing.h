@@ -1237,7 +1237,7 @@ private:
 
 public:
   void GetAllSideGlobalEdges(int IndexP,
-                             std::vector<std::pair<int, int>> &Boundaries) {
+                             std::vector<std::pair<int, int>> &Boundaries)const {
     Boundaries.clear();
     for (size_t i = 0; i < PData.EdgePatchSides[IndexP].size(); i++)
       for (size_t j = 0; j < PData.EdgePatchSides[IndexP][i].size(); j++)
@@ -1251,7 +1251,7 @@ public:
         }
   }
 
-  void GetAllSideGlobalEdges(std::vector<std::pair<int, int>> &Boundaries) {
+  void GetAllSideGlobalEdges(std::vector<std::pair<int, int>> &Boundaries)const {
     Boundaries.clear();
     for (size_t i = 0; i < NumPatches(); i++) {
       std::vector<std::pair<int, int>> Patch_Boundaries;
