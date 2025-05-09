@@ -242,7 +242,7 @@ public:
   bool end_spike;
 
   int sing_dist_interval_step;
-
+  int dynamics_smooth_steps;
   std::set<int> FixedPaths;
 
   void ClearConditions() { PConditions.clear(); }
@@ -679,7 +679,8 @@ public:
   }
 
   void SmoothAround(const std::vector<int> &PathsIDX,
-                    const std::set<int> InvolvedPatches, int smooth_steps = 5) {
+                    const std::set<int> InvolvedPatches, 
+                    int smooth_steps = 5) {
     // initialize the kernel if needed
     if (SmoothKernel.size() != PatchMan.VertPos.size())
       Geo::FindVertexStar(PatchMan.Faces, PatchMan.VertPos.size(), SmoothKernel,
@@ -845,7 +846,7 @@ public:
 
       std::set<int> TouchedPatches;
       PatchMan.GetTouchedPatchesFromPathIndex(PathsIDX, TouchedPatches);
-      SmoothAround(PathsIDX, TouchedPatches);
+      SmoothAround(PathsIDX, TouchedPatches,dynamics_smooth_steps);
     }
 
     PatchMan.Update(ToAdd, ToRemove, UpdatedPatches);
@@ -1270,7 +1271,8 @@ public:
     first_ite = true;
     update_dart = true;
     force_all_features = false;
-
+    
+    dynamics_smooth_steps=5;
     sing_dist_interval_step = 0;
   }
 
