@@ -7,6 +7,7 @@
 #include "GLDrawGraph.h"
 #include <GL/glew.h>
 #include "GLDrawMesh.h"
+#include <cassert>
 #include <iostream>
 #include <vector>
 
@@ -124,21 +125,41 @@ public:
   static void
   DrawCandidates(const Geo::CrossPathSampling<ScalarType> &PathSampl,
                  ScalarType ScaleSize, int curr_cant = -1) {
+    if (PathSampl.Candidates.size()==0)return;
+    ScalarType MaxD=0;
+    ScalarType MinD=PathSampl.Candidates[0].first;
+    for (size_t i = 0; i < PathSampl.Candidates.size(); i++)
+    {
+        MaxD=std::max(MaxD, PathSampl.Candidates[i].first);
+        MinD=std::min(MinD, PathSampl.Candidates[i].first);
+    }
+
     for (size_t i = 0; i < PathSampl.Candidates.size(); i++) {
       if ((curr_cant != -1) && (curr_cant != i))
         continue;
       int IndexC = PathSampl.Candidates[i].second;
       assert(IndexC < PathSampl.SampledPaths.size());
       assert(IndexC < PathSampl.SampledPaths_Status.size());
-      Geo::Point3<ScalarType> PathColors = Geo::ColorRGBRamp(
-          (ScalarType)0, (ScalarType)PathSampl.Candidates.size(),
-          (ScalarType)i);
+      
+      // Geo::Point3<ScalarType> PathColors = Geo::ColorRGBRamp(
+      //     (ScalarType)0, (ScalarType)PathSampl.Candidates.size(),
+      //     (ScalarType)i);
+      ScalarType CurrD=PathSampl.Candidates[i].first;
+       Geo::Point3<ScalarType> PathColors = Geo::ColorRGBRamp(
+          MinD, MaxD,CurrD);
       typename GLGraphDraw::GLCrossFieldGraph<ScalarType>::PathDrawParam PDparam;
-      PDparam.lineSize=10;
-      PDparam.pointSize=20;
+
+      ScalarType LineS=10*(1-(MaxD-CurrD)/MaxD);
+      PDparam.lineSize=LineS;
+      PDparam.pointSize=LineS*2;
+      assert(PDparam.lineSize>=0);
+      assert(PDparam.pointSize>=0);
+      assert((glGetError()) == GL_NO_ERROR);
       GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodes(
-          PathSampl.Graph(), PathSampl.CrossF(), PathSampl.SampledPaths[IndexC],
+          PathSampl.Graph(), PathSampl.CrossF(), 
+          PathSampl.SampledPaths[IndexC],
           ScaleSize, PDparam, PathColors);
+      assert((glGetError()) == GL_NO_ERROR);
     }
   }
 };

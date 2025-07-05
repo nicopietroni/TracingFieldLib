@@ -645,6 +645,7 @@ private:
   //    }
 
 public:
+
   void InitializeDistance() {
 
     // save the enabled
@@ -697,11 +698,11 @@ public:
       }
     }
 
-    int enabled = 0;
-    for (size_t i = 0; i < StartN.size(); i++) {
-      if (TGraph.IsEnabled(StartN[i]))
-        enabled++;
-    }
+    // int enabled = 0;
+    // for (size_t i = 0; i < StartN.size(); i++) {
+    //   if (TGraph.IsEnabled(StartN[i]))
+    //     enabled++;
+    // }
 
     // std::cout << "#### ENABLED:" << enabled << std::endl;
     // std::cout << "out of:" << StartN.size() << std::endl;
@@ -725,6 +726,9 @@ public:
 
     ScalarType MaxVal = TGraph.MaxDistance();
     TGraph.SetUnMarkedToDistance(MaxVal);
+
+    //  ScalarType AvgVal = TGraph.AvgDistance();
+    //  std::cout<<"AVERAGE DIST:"<<AvgVal<<std::endl;
   }
 
 private:
@@ -738,6 +742,7 @@ private:
     for (size_t i = 0; i < EndIdx; i++) {
       int N0 = TestPath[i];
       int N1 = Field::CrossFieldGraph::OppositeNodeCrossField(N0);
+      assert(N0!=N1);
       assert(N0 >= 0);
       assert(N1 >= 0);
       assert(N0 < (int)TGraph.NumNodes());
@@ -1271,6 +1276,8 @@ public:
       if (PType == PrioDist) {
         // std::cout<<"Using Distance"<<std::endl;
         Prio = Distance(SampledPaths[IndexPath]);
+        // if (PathFunctions<ScalarType>::IsLoop(SampledPaths[IndexPath]))
+        // Prio/=2;
       }
       if (PType == PrioLen) {
         // std::cout<<"Using Lenght"<<std::endl;
@@ -1282,6 +1289,18 @@ public:
         ScalarType PathL = SampledPathsLenghtW[IndexPath];
         Prio = ((ScalarType)1) / PathL;
       }
+
+      // if (start_features) {
+      //   std::vector<int> FeaturesPath(FixedPaths.begin(), FixedPaths.end());
+      //   for (size_t i = 0; i < FeaturesPath.size(); i++) {
+      //     int IndexP = FeaturesPath[i];
+      //     std::vector<int> VertFeatures;
+      //     Field::CrossFieldGraph::ElemsOfNode(PathSampl.SelectedPaths[IndexP],VertFeatures);
+      //     for (size_t j = 0; j < VertFeatures.size(); j++)
+      //       PathSampl.force_sample[VertFeatures[j]] = true;
+      //   }
+      // }
+      
       // Prio = 1 / (ScalarType)SampledPaths[IndexPath].size();
 
       Candidates[i].first = Prio;
@@ -1637,6 +1656,12 @@ public:
 
 private:
   void UpdateDistancesWithLastInsertedPath() {
+    
+    TGraph.SaveEnabledNodes();
+    TGraph.SaveEnabledArcs();
+    TGraph.EnableAllNodes();
+    TGraph.EnableAllArcs();
+
     std::vector<int> StartN;
     StartN.insert(StartN.end(), SelectedPaths.back().begin(),
                   SelectedPaths.back().end());
@@ -1655,17 +1680,20 @@ private:
     SParam.stopAtPrevDist = true;
     SParam.uniformW = UniformWDist;
     int StopNode;
-    std::vector<int> SwapDisable;
-    for (size_t i = 0; i < StartN.size(); i++) {
-      if (!TGraph.IsEnabled(StartN[i])) {
-        TGraph.EnableNode(StartN[i]);
-        SwapDisable.push_back(StartN[i]);
-      }
-    }
+    // std::vector<int> SwapDisable;
+    // for (size_t i = 0; i < StartN.size(); i++) {
+    //   if (!TGraph.IsEnabled(StartN[i])) {
+    //     TGraph.EnableNode(StartN[i]);
+    //     SwapDisable.push_back(StartN[i]);
+    //   }
+    // }
+   
     TGraph.CurrDistIndex() = 0;
     Geo::GraphQuery<ScalarType>::Dijkstra(TGraph, StartN, SParam, StopNode);
 
-    TGraph.DisableNodes(SwapDisable);
+    TGraph.RestoreEnabledNodes();
+    TGraph.RestoreEnabledArcs();
+    //TGraph.DisableNodes(SwapDisable);
   }
 
   void RetraceCandidatesConflictWithSelected(bool check_start = true) {
@@ -2198,6 +2226,7 @@ public:
         EnableSingularities();
 
       TGraph.CurrDistIndex() = 0;
+      //InitializeDistance();
       UpdateDistancesWithLastInsertedPath();
 
       if (avoidSingularities)
@@ -2249,12 +2278,12 @@ public:
   //         if (IsMarkedVert(i,IndexMark))MarkedV.push_back(i);
   // }
 
-  void InsertAllPaths() {
-    while (AddNextPath()) {
-    };
-    WriteStats();
-    WriteTiming();
-  }
+  // void InsertAllPaths() {
+  //   while (AddNextPath()) {
+  //   };
+  //   WriteStats();
+  //   WriteTiming();
+  // }
 
   //    void SampleCandidates(bool Init_Distances=true)
   //    {
@@ -2376,10 +2405,7 @@ public:
       EnableSingularities();
 
     if (Init_Distances) {
-      // TGraph.SaveEnabledNodes();
-      // TGraph.EnableAllNodes();
       InitializeDistance();
-      // TGraph.RestoreEnabledNodes();
     }
 
     InitCandidates();
@@ -2760,8 +2786,8 @@ public:
 
     // NumSamples = 1000;
 
-    distanceSingularities = false;
-    dynamicUpdates = true;
+    distanceSingularities = true;
+    dynamicUpdates = false;
     SelectedPaths.clear();
     CanEmit.clear();
     CanReceive.clear();
@@ -2792,7 +2818,7 @@ public:
     only_visible = true;
     force_direct = false;
     PType = PrioDist;
-    UniformWDist = false;
+    UniformWDist = true;
     MaxCrossJump = -1;
 
     non_traced = 0;

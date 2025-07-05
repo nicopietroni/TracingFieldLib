@@ -1,6 +1,8 @@
 #ifndef GL_DRAW_FIELD
 #define GL_DRAW_FIELD
 
+#include <cassert>
+#include <iostream>
 #include <vector>
 #include <GL/glew.h>
 #include <point3.h>
@@ -40,6 +42,7 @@ void DrawDirectionVect(const Geo::Point3<ScalarType> &P0,
     if(lineSize>0)
     {
         glLineWidth(lineSize);
+        assert((glGetError()) == GL_NO_ERROR);
         glColor3f((float)Col1.X,(float)Col1.Y,(float)Col1.Z);
         glBegin(GL_LINES);
         glVertex(P_0);
@@ -98,8 +101,17 @@ void DrawDirectionSimple(const Field::CrossF<ScalarType> &F,
     Geo::Point3<ScalarType> P1=P0+CurrDir*lineLen;
 
     //        std::cout<<"Norm"<<(P0-P1).Norm()<<std::endl;
+    
+    assert((glGetError()) == GL_NO_ERROR);
+
     glDisable(GL_LIGHTING);
-    glLineWidth(lineWidth);
+
+    assert((glGetError()) == GL_NO_ERROR);
+
+    //std::cout<<"Sise :"<<lineWidth<<std::endl;
+    glLineWidth((GLfloat) lineWidth);
+
+    assert((glGetError()) == GL_NO_ERROR);
 
     //        std::cout<<"P0:"<<P0.X<<","<<P0.Y<<","<<P0.Z<<std::endl;
     //        std::cout<<"P1:"<<P1.X<<","<<P1.Y<<","<<P1.Z<<std::endl;
@@ -108,7 +120,59 @@ void DrawDirectionSimple(const Field::CrossF<ScalarType> &F,
     glVertex(P0);
     glVertex(P1);
     glEnd();
+    assert((glGetError()) == GL_NO_ERROR);
+
 }
+
+// ///draw the cross field of a given face
+// template <class ScalarType>
+// void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
+//                       ScalarType scaleVal,
+//                       ScalarType MaxQ,
+//                       ScalarType MinQ,
+//                       ScalarType MaxW=6,
+//                       ScalarType MinW=0.5)
+// {
+//     //Geo::Point3<ScalarType> center=F.Pos;
+
+//     ScalarType K0=F.K[0];
+//     ScalarType K1=F.K[1];
+
+// //    size_t drawOnly=0;
+// //    if (K1>K0)drawOnly=1;
+
+//     ScalarType RatioK0=K0/std::max(K0,K1);
+//     ScalarType RatioK1=K1/std::max(K0,K1);
+
+//     for (size_t dir=0;dir<4;dir++)
+//     {
+//         //if (dir!=drawOnly)continue;
+//         ScalarType lineWidth=1;
+//         Geo::Point3<ScalarType> Col(0,0,0);
+//         if (MaxQ>MinQ)
+//         {
+//             ScalarType Qval=(F.Q);
+//             Qval=std::min(Qval,MaxQ);
+//             Qval=std::max(Qval,MinQ);
+
+//             //ratio for color
+//             ScalarType ratioVal=(Qval-MinQ)/(MaxQ-MinQ);
+
+//             if (dir%2==0)
+//                 ratioVal*=RatioK0;
+//             else
+//                 ratioVal*=RatioK1;
+
+//             Col=Geo::ColorRGBRamp((ScalarType)1,(ScalarType)0,ratioVal);
+//             //Col.InitColorRamp(ratioVal);
+
+//             //ratio for width
+//             ScalarType IntervW=MaxW-MinW;
+//             lineWidth=ratioVal*(fabs(Qval)/MaxQ)*IntervW+MinW;
+//         }
+//         DrawDirectionSimple(F,dir,scaleVal,lineWidth,Col);
+//     }
+// }
 
 ///draw the cross field of a given face
 template <class ScalarType>
@@ -127,8 +191,8 @@ void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
 //    size_t drawOnly=0;
 //    if (K1>K0)drawOnly=1;
 
-    ScalarType RatioK0=K0/std::max(K0,K1);
-    ScalarType RatioK1=K1/std::max(K0,K1);
+    ScalarType RatioK0=fabs(K0/std::max(K0,K1));
+    ScalarType RatioK1=fabs(K1/std::max(K0,K1));
 
     for (size_t dir=0;dir<4;dir++)
     {
@@ -138,11 +202,16 @@ void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
         if (MaxQ>MinQ)
         {
             ScalarType Qval=F.Q;
+            Qval=std::max(Qval,MinQ);
+            assert(Qval>=MinQ);
+
             Qval=std::min(Qval,MaxQ);
             Qval=std::max(Qval,MinQ);
 
             //ratio for color
             ScalarType ratioVal=(Qval-MinQ)/(MaxQ-MinQ);
+            
+            assert(ratioVal>=0);
 
             if (dir%2==0)
                 ratioVal*=RatioK0;
@@ -150,12 +219,16 @@ void GLDrawCrossField(const Field::CrossF<ScalarType> &F,
                 ratioVal*=RatioK1;
 
             Col=Geo::ColorRGBRamp((ScalarType)1,(ScalarType)0,ratioVal);
+            
+            assert(ratioVal>=0);
+
             //Col.InitColorRamp(ratioVal);
 
             //ratio for width
             ScalarType IntervW=MaxW-MinW;
             lineWidth=ratioVal*(fabs(Qval)/MaxQ)*IntervW+MinW;
         }
+        assert(lineWidth>-0);
         DrawDirectionSimple(F,dir,scaleVal,lineWidth,Col);
     }
 }
@@ -254,7 +327,6 @@ void DrawCrossFields(const std::vector<Field::CrossF<ScalarType> > &Crosses,
                      ScalarType MaxW=10,
                      ScalarType MinW=1)
 {
-
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     for (size_t i=0;i<Crosses.size();i++)
         GLDrawCrossField(Crosses[i],scaleVal,MaxQ,MinQ,MaxW,MinW);

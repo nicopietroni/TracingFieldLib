@@ -3,7 +3,9 @@
 
 #include "graph.h"
 #include "graph_cross_field.h"
+#include "mesh_functions.h"
 #include "patch_basic.h"
+#include "point3.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -17,13 +19,13 @@
 #define SMOOTH_KERNEL 2
 #include "../edge_mesh_functions.h"
 #include "../surface_cluster/face_cluster.h"
+#include "IO/io_obj.h"
+#include "IO/io_off.h"
 #include "basic_decomposition_conditions.h"
 #include "connectivity.h"
 #include "patch_managing.h"
 #include "path_sampling.h"
 #include "segment2.h"
-#include "IO/io_off.h"
-#include "IO/io_obj.h"
 #include "tangent_space_smooth.h"
 #include <vector>
 
@@ -184,6 +186,17 @@ public:
           PathSampl.force_sample[currSel[j]] = true;
       }
 
+      // if (start_features) {
+      //   std::vector<int> FeaturesPath(FixedPaths.begin(), FixedPaths.end());
+      //   for (size_t i = 0; i < FeaturesPath.size(); i++) {
+      //     int IndexP = FeaturesPath[i];
+      //     std::vector<int> VertFeatures;
+      //     Field::CrossFieldGraph::ElemsOfNode(PathSampl.SelectedPaths[IndexP],VertFeatures);
+      //     for (size_t j = 0; j < VertFeatures.size(); j++)
+      //       PathSampl.force_sample[VertFeatures[j]] = true;
+      //   }
+      // }
+
       if (start_spike) {
         std::vector<int> currSel;
         PatchMan.GetPatchGlobalVertOfType(i, CTypeSpike, currSel);
@@ -234,6 +247,7 @@ public:
   bool start_orginal_border;
   bool start_concave;
   bool start_spike;
+  bool start_features;
 
   // bool end_internal;
   bool end_original_border;
@@ -291,68 +305,85 @@ public:
     }
   }
 
-  // init the space where sampling the paths
-  // the flag use_previous is used to check if
-  // the sample set must AND (intersect) with previous one
-  void InitSamplingSpace(bool use_previous) {
-    bool allStart = (start_internal && start_orginal_border && start_concave &&
-                     start_spike);
+  // // init the space where sampling the paths
+  // // the flag use_previous is used to check if
+  // // the sample set must AND (intersect) with previous one
+  // void InitSamplingSpace(bool use_previous) {
+  //   bool allStart = (start_internal && start_orginal_border && start_concave
+  //   &&
+  //                    start_spike && start_features);
 
-    if (allStart) {
-      if (use_previous)
-        return;
-      std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(), true);
-    }
+  //   if (allStart) {
+  //     if (use_previous)
+  //       return;
+  //     std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(),
+  //     true);
+  //   }
 
-    std::vector<int> to_Mark;
-    if (start_internal) {
-      std::vector<int> currSel;
-      PatchMan.GetAllGlobalVertOfType(CTypeNone, currSel);
-      to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
-    }
-    if (start_orginal_border) {
-      std::vector<int> currSel;
-      PatchMan.GetAllGlobalVertOfType(CTypeFlat, currSel);
-      // remove the one that have been inserted
-      for (size_t i = 0; i < currSel.size(); i++) {
-        if (VertSplitForFeatures.count(currSel[i]))
-          continue;
-        to_Mark.push_back(currSel[i]);
-      }
-    }
-    if (start_concave) {
-      std::vector<int> currSel;
-      PatchMan.GetAllGlobalVertOfType(CTypeConcave, currSel);
-      to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
-    }
-    if (start_spike) {
-      std::vector<int> currSel;
-      PatchMan.GetAllGlobalVertOfType(CTypeSpike, currSel);
-      to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
-    }
+  //   std::vector<int> to_Mark;
+  //   if (start_internal) {
+  //     std::vector<int> currSel;
+  //     PatchMan.GetAllGlobalVertOfType(CTypeNone, currSel);
+  //     to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
+  //   }
+  //   if (start_orginal_border) {
+  //     std::vector<int> currSel;
+  //     PatchMan.GetAllGlobalVertOfType(CTypeFlat, currSel);
+  //     // remove the one that have been inserted
+  //     for (size_t i = 0; i < currSel.size(); i++) {
+  //       if (VertSplitForFeatures.count(currSel[i]))
+  //         continue;
+  //       to_Mark.push_back(currSel[i]);
+  //     }
+  //   }
+  //   if (start_features) {
+  //    std::vector<int> FeaturesPath(FixedPaths.begin(),FixedPaths.end());
+  //    int size0=to_Mark.size();
+  //    for (size_t i=0;i<FeaturesPath.size();i++)
+  //    {
+  //     int IndexP=FeaturesPath[i];
+  //     std::vector<int> CurrP=PathSampl.SelectedPaths[IndexP];
+  //     std::vector<int> OrthoP;
+  //     Field::CrossFieldGraph::OrthoNodesCrossField(CurrP,OrthoP);
+  //     to_Mark.insert(to_Mark.end(),OrthoP.begin(),OrthoP.end());
+  //    }
+  //    int size1=to_Mark.size();
+  //    exit(0);
+  //   }
 
-    if (!use_previous) {
-      std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(), false);
-      for (size_t i = 0; i < to_Mark.size(); i++) {
-        int IndexV = to_Mark[i];
-        assert(IndexV >= 0);
-        assert(IndexV < PatchMan.VertPos.size());
-        assert(IndexV < PathSampl.sample_on.size());
-        PathSampl.sample_on[IndexV] = true;
-      }
-    } else {
-      std::vector<bool> new_sample_on =
-          std::vector<bool>(PathSampl.sample_on.size(), false);
-      for (size_t i = 0; i < to_Mark.size(); i++) {
-        int IndexV = to_Mark[i];
-        assert(IndexV >= 0);
-        assert(IndexV < new_sample_on.size());
-        new_sample_on[IndexV] = true;
-      }
-      for (size_t i = 0; i < PathSampl.sample_on.size(); i++)
-        PathSampl.sample_on[i] = PathSampl.sample_on[i] && new_sample_on[i];
-    }
-  }
+  //   if (start_concave) {
+  //     std::vector<int> currSel;
+  //     PatchMan.GetAllGlobalVertOfType(CTypeConcave, currSel);
+  //     to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
+  //   }
+  //   if (start_spike) {
+  //     std::vector<int> currSel;
+  //     PatchMan.GetAllGlobalVertOfType(CTypeSpike, currSel);
+  //     to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
+  //   }
+
+  //   if (!use_previous) {
+  //     std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(),
+  //     false); for (size_t i = 0; i < to_Mark.size(); i++) {
+  //       int IndexV = to_Mark[i];
+  //       assert(IndexV >= 0);
+  //       assert(IndexV < PatchMan.VertPos.size());
+  //       assert(IndexV < PathSampl.sample_on.size());
+  //       PathSampl.sample_on[IndexV] = true;
+  //     }
+  //   } else {
+  //     std::vector<bool> new_sample_on =
+  //         std::vector<bool>(PathSampl.sample_on.size(), false);
+  //     for (size_t i = 0; i < to_Mark.size(); i++) {
+  //       int IndexV = to_Mark[i];
+  //       assert(IndexV >= 0);
+  //       assert(IndexV < new_sample_on.size());
+  //       new_sample_on[IndexV] = true;
+  //     }
+  //     for (size_t i = 0; i < PathSampl.sample_on.size(); i++)
+  //       PathSampl.sample_on[i] = PathSampl.sample_on[i] && new_sample_on[i];
+  //   }
+  // }
 
   // this one
   void InitArrivalPoint(bool and_allow_pass) {
@@ -528,7 +559,9 @@ public:
 
     GetUnsolvedMesh(CopiedMeshesVert, CopiedMeshesElem, OriginalVert,
                     OriginalElem); //, OnlyMandatory);
-
+    // if (CopiedMeshesVert.size()>0)
+    // WriteOBJ("test.obj",CopiedMeshesVert, CopiedMeshesElem);
+    // exit(0);
     // get BORDER VERTICES
     std::vector<std::vector<int>> NextF;
     std::vector<std::vector<int>> NextE;
@@ -536,6 +569,30 @@ public:
     std::vector<size_t> BorderV;
     getBorderVert(CopiedMeshesElem, NextF, BorderV);
 
+    // //then filter out the one that are duplicate
+    // std::map<Geo::Point3<ScalarType>,int> PosIstance;
+    // for (size_t i = 0; i < BorderV.size(); i++)
+    // {
+    //   Geo::Point3<ScalarType> Pos=CopiedMeshesVert[BorderV[i]];
+    //   if (PosIstance.count(Pos)==0)
+    //     PosIstance[Pos]=1;
+    //   else
+    //     PosIstance[Pos]++;
+    // }
+
+    // std::vector<size_t> NewBorderV;
+    // for (size_t i = 0; i < BorderV.size(); i++)
+    // {
+    //   Geo::Point3<ScalarType> Pos=CopiedMeshesVert[BorderV[i]];
+    //   if (PosIstance.count(Pos)!=1)continue;
+    //   NewBorderV.push_back(BorderV[i]);
+    // }
+    // std::cout<<"Old Border V "<<BorderV.size();
+    // std::cout<<"New Border V "<<NewBorderV.size();
+    // BorderV=NewBorderV;
+    // if (CopiedMeshesVert.size()>0)
+    // WriteOBJ("test.obj",CopiedMeshesVert, CopiedMeshesElem);
+    // exit(0);
     for (size_t i = 0; i < BorderV.size(); i++) {
       int IndexLoc = BorderV[i];
       assert(IndexLoc < OriginalVert.size());
@@ -600,6 +657,8 @@ public:
 
   void RetraceCandidates() {
 
+    // PathSampl.InitializeDistance();
+
     auto t0 = std::chrono::high_resolution_clock::now();
 
     CompactData();
@@ -609,8 +668,11 @@ public:
 
     InitArrivalPoint(true);
 
-    /// this one stops to previously found borders, useful for
-    /// recursive call
+    // /// this one stops to previously found borders, useful for
+    // /// recursive call
+    // if (end_features) {
+    //   //PathSampl.set
+    // }
     if (end_patch_border && add_only_where_needed) {
       // get the non solved subpatches
       std::vector<int> BorderUnsolved;
@@ -619,20 +681,13 @@ public:
       PathSampl.SetBorderCanPassToExit(BorderUnsolved);
     }
 
-    // if ((start_concave || start_spike)&&(!start_internal)&&(!start_border)
-    if (IsSolvingFeatures())
-      // PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioLen;
-      PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioLenW;
-    else
-      PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioDist;
-
     auto t1 = std::chrono::high_resolution_clock::now();
 
     auto elapsed0 =
         std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     TimeInit += elapsed0.count() * 1e-6;
 
-    PathSampl.SampleCandidates(to_init_distance);
+    PathSampl.SampleCandidates(first_ite);
 
     auto t2 = std::chrono::high_resolution_clock::now();
     auto elapsed1 =
@@ -679,8 +734,7 @@ public:
   }
 
   void SmoothAround(const std::vector<int> &PathsIDX,
-                    const std::set<int> InvolvedPatches, 
-                    int smooth_steps = 5) {
+                    const std::set<int> InvolvedPatches, int smooth_steps = 5) {
     // initialize the kernel if needed
     if (SmoothKernel.size() != PatchMan.VertPos.size())
       Geo::FindVertexStar(PatchMan.Faces, PatchMan.VertPos.size(), SmoothKernel,
@@ -846,7 +900,7 @@ public:
 
       std::set<int> TouchedPatches;
       PatchMan.GetTouchedPatchesFromPathIndex(PathsIDX, TouchedPatches);
-      SmoothAround(PathsIDX, TouchedPatches,dynamics_smooth_steps);
+      SmoothAround(PathsIDX, TouchedPatches, dynamics_smooth_steps);
     }
 
     PatchMan.Update(ToAdd, ToRemove, UpdatedPatches);
@@ -915,8 +969,8 @@ public:
   // int time_rem2;
   // int time_rem3;
   // int time_rem4;
-  
-  #define SAVE_STATUS
+
+  // #define SAVE_STATUS
 
   bool RemoveIfPossible(int &Path_To_remove, bool remove_unsolved = false,
                         int minGain = 0, bool debug_msg = false) {
@@ -1101,11 +1155,6 @@ public:
       for (size_t i = 0; i < UpdatedPatches.size(); i++)
         UpdateCondition(UpdatedPatches[i]);
 
-        // auto timesave_1 = std::chrono::high_resolution_clock::now();
-        //  time_savSt +=
-        //  (std::chrono::duration_cast<std::chrono::milliseconds>(
-        //                     timesave_1 - timesave_0))
-        //                    .count();
 #endif
     }
 
@@ -1260,6 +1309,7 @@ public:
     start_orginal_border = true;
     start_concave = true;
     start_spike = true;
+    start_features = true;
 
     // end_internal = true;
     end_original_border = true;
@@ -1271,8 +1321,8 @@ public:
     first_ite = true;
     update_dart = true;
     force_all_features = false;
-    
-    dynamics_smooth_steps=5;
+
+    dynamics_smooth_steps = 5;
     sing_dist_interval_step = 0;
   }
 
@@ -1284,6 +1334,8 @@ public:
     start_orginal_border = false;
     start_concave = false;
     start_spike = true;
+    start_orginal_border = false;
+    start_features=false;
 
     end_original_border = false;
     end_patch_border = false;
@@ -1296,6 +1348,8 @@ public:
     start_orginal_border = false;
     start_concave = true;
     start_spike = true;
+    start_orginal_border = false;
+    start_features=false;
 
     end_original_border = false;
     end_patch_border = false;
@@ -1308,6 +1362,7 @@ public:
     start_orginal_border = false;
     start_concave = true;
     start_spike = true;
+    start_features=false;
 
     end_original_border = true;
     end_patch_border = true;
@@ -1320,6 +1375,7 @@ public:
     start_orginal_border = true;
     start_concave = false;
     start_spike = false;
+    start_features=true;
 
     end_original_border = true;
     end_patch_border = false;
@@ -1332,6 +1388,7 @@ public:
     start_orginal_border = true;
     start_concave = false;
     start_spike = false;
+    start_features=true;
 
     end_original_border = true;
     end_patch_border = true;
@@ -1653,6 +1710,7 @@ public:
   {
     // std::cout<<"STEP 0"<<std::endl;
     // PathSampl.Graph().PrintData();
+
     PathSampl.MaxCrossJump = -1;
     bool has_added = false;
 
@@ -1667,6 +1725,10 @@ public:
     PathSampl.force_direct = true;
     // first do feature to feature
     SetFeatureFeatureConfiguration();
+    PathSampl.PType = CrossPathSampling<ScalarType>::PrioLenW;
+
+    assert(IsSolvingFeatures());
+
     InitSampling(add_only_where_needed);
     if (add_only_where_needed)
       InitMustPassEdges();
@@ -1752,8 +1814,15 @@ public:
     PathSampl.force_direct = false;
     bool has_added = false;
 
+    //   enum PriorityType { PrioLen, PrioLenW, PrioDist };
+    // PriorityType PType;
+
+    // assert (PathSampl.PType==CrossPathSampling<ScalarType>::PrioDist);
     if (first_ite) {
       SetBaseContinuumConfiguration();
+      assert(!IsSolvingFeatures());
+      PathSampl.PType = CrossPathSampling<ScalarType>::PrioDist;
+
       InitSampling(add_only_where_needed);
       if (add_only_where_needed)
         InitMustPassEdges();
@@ -1764,6 +1833,9 @@ public:
     }
 
     SetBaseSplitConfiguration();
+    assert(!IsSolvingFeatures());
+    PathSampl.PType = CrossPathSampling<ScalarType>::PrioDist;
+
     InitSampling(add_only_where_needed);
     if (add_only_where_needed)
       InitMustPassEdges();
@@ -2638,28 +2710,26 @@ public:
   }
 
   void SaveSeparateSubMeshes(const std::string &PathSave,
-                             const std::string Format=std::string("obj")) 
-  {
+                             const std::string Format = std::string("obj")) {
     CompactData();
 
     for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
-      std::string CurrPath=PathSave;
-      CurrPath+=std::to_string(i);
+      std::string CurrPath = PathSave;
+      CurrPath += std::to_string(i);
 
-      std::vector<Geo::Point3<ScalarType>> CurrVertPos=PatchMan.PData.SubPatchVertPos[i];
-      std::vector<std::vector<int>> CurrFaceIDX=PatchMan.PData.SubPatchFaces[i];
+      std::vector<Geo::Point3<ScalarType>> CurrVertPos =
+          PatchMan.PData.SubPatchVertPos[i];
+      std::vector<std::vector<int>> CurrFaceIDX =
+          PatchMan.PData.SubPatchFaces[i];
 
-      if (Format==std::string("obj"))
-      {
-        CurrPath+=std::string(".obj");
+      if (Format == std::string("obj")) {
+        CurrPath += std::string(".obj");
         WriteOBJ(CurrPath.c_str(), CurrVertPos, CurrFaceIDX);
-      }
-      else {
-        CurrPath+=std::string(".off");
+      } else {
+        CurrPath += std::string(".off");
         WriteOFF<ScalarType>(CurrPath.c_str(), CurrVertPos, CurrFaceIDX);
       }
     }
-   
   }
 
   struct CurveData {

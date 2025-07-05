@@ -9,6 +9,7 @@
 #include <iostream>
 #include <vector>
 #include "hausdorff.h"
+#include "surface_cluster/cluster_operations.h"
 
 namespace Geo {
 
@@ -263,6 +264,15 @@ void ElemColorByCluster(const std::vector<std::vector<int>> &ClusterFaces,
       Color[IndexF] = CurrC;
     }
   }
+}
+
+template <class ScalarType>
+void ElemColorByCluster(const std::vector<int> &FaceCluster,
+                         std::vector<Geo::Point3<ScalarType>> &Color) 
+{
+  std::vector<std::vector<int>> ClusterFaces;
+  Geo::ClusterOperations<ScalarType>::UpdateClusterFacesFromFaceCluster(FaceCluster,ClusterFaces);
+  ElemColorByCluster(ClusterFaces,Color);
 }
 
 template <class ScalarType>

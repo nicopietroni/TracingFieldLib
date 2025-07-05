@@ -175,6 +175,19 @@ void BarycentricCoords(const Traingle3<ScalarType> &T,
 }
 
 template <class ScalarType>
+void BarycentricCoords(const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                       const std::vector<std::vector<int> > &Faces,
+                       const int IndexF,
+                       const Geo::Point3<ScalarType> &TestPos,
+                       ScalarType &alpha, 
+                       ScalarType &beta, 
+                       ScalarType &gamma)
+{
+  Traingle3<ScalarType> T=TriangleOfFace(VertPos,Faces,IndexF);
+  BarycentricCoords(T,TestPos,alpha,beta,gamma);
+}
+
+template <class ScalarType>
 ScalarType QualityRadii(Point3<ScalarType> const &p0,
                         Point3<ScalarType> const &p1,
                         Point3<ScalarType> const &p2) {
@@ -330,6 +343,11 @@ void GetTriangles(const std::vector<int> &IndexF,
 template <class ScalarType>
 Point3<ScalarType> Normal(const Geo::Traingle3<ScalarType> &T) {
   return Normal(T.P(0), T.P(1), T.P(2));
+}
+
+template <class ScalarType>
+Point3<ScalarType> Barycenter(const Geo::Traingle3<ScalarType> &T) {
+  return ((T.P(0)+T.P(1)+T.P(2))/3);
 }
 
 } // namespace Geo

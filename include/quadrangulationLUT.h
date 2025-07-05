@@ -167,15 +167,17 @@ public:
         VertPos[j]=Avg;
       
       
+      //WriteOBJ("Test_LUT_0.obj",VertPos, Connectivity);
+
+      getBorderVert(Connectivity,FixedVert);
+      Geo::SmoothLaplacianImplicit(VertPos,Connectivity,FixedVert);
+      // SmoothParam<ScalarType> SParam;
+      // SParam.FixedVert=FixedVert;
+      // SParam.NumIte=10;
+      // SParam.Damp=0; 
       //Geo::SmoothLaplacian<ScalarType>(VertPos,Connectivity,SParam);
-      //getBorderVert(Connectivity,FixedVert);
-      //Geo::SmoothLaplacianImplicit(VertPos,Connectivity,FixedVert);
-      SmoothParam<ScalarType> SParam;
-      SParam.FixedVert=FixedVert;
-      SParam.NumIte=10;
-      SParam.Damp=0;
-      
-      Geo::SmoothLaplacian<ScalarType>(VertPos,Connectivity,SParam);
+
+      //WriteOBJ("Test_LUT_1.obj",VertPos, Connectivity);
 
       //then invert faces orientation (it is like that in the LUT)
       InvertOrientation(Connectivity);

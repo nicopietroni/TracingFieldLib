@@ -36,6 +36,8 @@ public:
 
   ScalarType Norm() const { return sqrt(X * X + Y * Y + Z * Z); }
 
+  ScalarType Norm2() const { return (X * X + Y * Y + Z * Z); }
+
   ScalarType &V(const size_t i) {
     assert(i < 3);
     if (i == 0)

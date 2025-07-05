@@ -106,6 +106,43 @@ void RemoveUnfererencedVert(std::vector<Geo::Point3<ScalarType>> &VertPos,
     }
 }
 
+template <class ScalarType>
+void RemoveUnfererencedVert(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            std::vector<std::pair<int, int>> &Edges) {
+  std::vector<bool> Referred(VertPos.size(), false);
+  for (size_t i = 0; i < Edges.size(); i++) {
+    Referred[Edges[i].first] = true;
+    Referred[Edges[i].second] = true;
+  }
+
+  std::vector<int> NewIdx(VertPos.size(), -1);
+  std::vector<Geo::Point3<ScalarType>> NewVertPos;
+
+  int currIdx = 0;
+  for (size_t i = 0; i < Referred.size(); i++)
+    if (Referred[i]) {
+      NewIdx[i] = currIdx;
+      currIdx++;
+      NewVertPos.push_back(VertPos[i]);
+    }
+
+  VertPos = NewVertPos;
+  for (size_t i = 0; i < Edges.size(); i++) {
+    int currIdx0 = Edges[i].first;
+    int currIdx1 = Edges[i].second;
+    assert(currIdx0 < NewIdx.size());
+    assert(currIdx1 < NewIdx.size());
+    int newIdx0 = NewIdx[currIdx0];
+    int newIdx1 = NewIdx[currIdx1];
+    assert(newIdx0 >= 0);
+    assert(newIdx0 < VertPos.size());
+    assert(newIdx1 >= 0);
+    assert(newIdx1 < VertPos.size());
+    Edges[i].first = currIdx0;
+    Edges[i].second = currIdx1;
+  }
+}
+
 // template <class ScalarType>
 // void RemoveDeleted(std::vector<Geo::Point3<ScalarType>> &VertPos,
 //                    std::vector<std::vector<int>> &Faces,
@@ -1058,10 +1095,10 @@ void SplitByFFConnectedComponenent(
     const std::vector<std::vector<int>> &Elements,
     std::vector<std::vector<Geo::Point2<ScalarType>>> &SubMeshesV,
     std::vector<std::vector<std::vector<int>>> &SubMeshesF) {
-    
-    std::vector<std::vector<int>> OriginalV,OriginalF;
-    SplitByFFConnectedComponenent(Vert,Elements,SubMeshesV,
-                                  SubMeshesF,OriginalV,OriginalF);
+
+  std::vector<std::vector<int>> OriginalV, OriginalF;
+  SplitByFFConnectedComponenent(Vert, Elements, SubMeshesV, SubMeshesF,
+                                OriginalV, OriginalF);
 }
 
 template <class ScalarType>
@@ -1070,10 +1107,10 @@ void SplitByFFConnectedComponenent(
     const std::vector<std::vector<int>> &Elements,
     std::vector<std::vector<Geo::Point3<ScalarType>>> &SubMeshesV,
     std::vector<std::vector<std::vector<int>>> &SubMeshesF) {
-    
-    std::vector<std::vector<int>> OriginalV,OriginalF;
-    SplitByFFConnectedComponenent(Vert,Elements,SubMeshesV,
-                                  SubMeshesF,OriginalV,OriginalF);
+
+  std::vector<std::vector<int>> OriginalV, OriginalF;
+  SplitByFFConnectedComponenent(Vert, Elements, SubMeshesV, SubMeshesF,
+                                OriginalV, OriginalF);
 }
 
 int PolyMeshGenus(int NVert, int nEdges, int NFaces, int NHoles,

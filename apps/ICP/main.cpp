@@ -13,9 +13,9 @@
 #include <GLFW/glfw3.h>
 #include <GL_functions/GLDrawMesh.h>
 #include <box3.h>
-#include <point3.h>
-#include <icp.h>
 #include <deformable_icp.h>
+#include <icp.h>
+#include <point3.h>
 #include <ransac_align.h>
 
 GLFWwindow *window;
@@ -36,37 +36,63 @@ typedef double ScalarType;
 
 // MESH DATA
 bool loadedMesh = false;
-std::vector<Geo::Point3<ScalarType> > VertPos0, VertPos1;
-std::vector<std::vector<int> > Connectivity0, Connectivity1;
+std::vector<Geo::Point3<ScalarType>> VertPos0, VertPos1;
+std::vector<std::vector<int>> Connectivity0, Connectivity1;
 
 std::vector<Geo::Point3<ScalarType>> FaceNormals0, FaceNormals1;
 std::vector<Geo::Point3<ScalarType>> VertNormals0, VertNormals1;
 
 Geo::Box3<ScalarType> MeshBox0;
 
-Geo::ICP<ScalarType> ICPSolver(VertPos0, VertPos1,Connectivity0, Connectivity1);
-Geo::Deformable_ICP<ScalarType> Deformable_ICPSolver(VertPos0, VertPos1,Connectivity0, Connectivity1);
+Geo::ICP<ScalarType> ICPSolver(VertPos0, VertPos1, Connectivity0,
+                               Connectivity1);
+Geo::Deformable_ICP<ScalarType>
+    Deformable_ICPSolver(VertPos0, VertPos1, Connectivity0, Connectivity1);
 
-Geo::AlignRansac<ScalarType> RansacSolve(VertPos0,VertPos1,Connectivity0,Connectivity1);
+Geo::AlignRansac<ScalarType> RansacSolve(VertPos0, VertPos1, Connectivity0,
+                                         Connectivity1);
 
 void AlignRigid() {
-    ICPSolver.Init();
-    ICPSolver.IterateICP();
-    ComputeNormals(VertPos1, Connectivity1, FaceNormals1, VertNormals1);
+  ICPSolver.Init();
+  ICPSolver.IterateICP();
+  ComputeNormals(VertPos1, Connectivity1, FaceNormals1, VertNormals1);
 }
 
 void AlignDeformable() {
-    Deformable_ICPSolver.Init();
-    Deformable_ICPSolver.DeformableAlignStep();
-    ComputeNormals(VertPos1, Connectivity1, FaceNormals1, VertNormals1);
+  Deformable_ICPSolver.Init();
+  Deformable_ICPSolver.DeformableAlignStep();
+  ComputeNormals(VertPos1, Connectivity1, FaceNormals1, VertNormals1);
+}
+
+// void ColorByDistance() {
+//   std::vector<ScalarType> VertDist0;
+//   Geo::OneWayHausdorff<ScalarType>(VertPos0, Connectivity0, VertPos1,
+//                                    Connectivity1, VertDist0);
+
+//   std::vector<ScalarType> VertDist1;
+//   Geo::OneWayHausdorff<ScalarType>(VertPos1, Connectivity1, 
+//                                    VertPos0,Connectivity0, 
+//                                    VertDist1);
+
+//   ScalarType MaxDistance = MeshBox.Diag() * maxErrRatio;
+//   std::vector<Geo::Point3<ScalarType>> VertColor0, VertColor1;
+//   GetColorByScalar<ScalarType>(VertDist0, MaxDistance, 0, VertColor0);
+//   GetColorByScalar<ScalarType>(VertDist1, MaxDistance, 0, VertColor1);
+
+//   ElemColorFromVert<ScalarType>(Connectivity0, VertColor0, FaceCol0);
+//   ElemColorFromVert<ScalarType>(Connectivity1, VertColor1, FaceCol1);
+// }
+
+void SaveMeshes() {
+  WriteOBJ("./mesh0.obj",VertPos0, Connectivity0);
+  WriteOBJ("./mesh1.obj",VertPos1, Connectivity1);
 }
 
 void AlignRansac() {
-    RansacSolve.Init();
-    RansacSolve.Align(3, 10000) ;
-    ComputeNormals(VertPos1, Connectivity1, FaceNormals1, VertNormals1);
+  RansacSolve.Init();
+  RansacSolve.Align(3, 10000);
+  ComputeNormals(VertPos1, Connectivity1, FaceNormals1, VertNormals1);
 }
-
 
 void LoadMeshes(const std::string &path0, const std::string &path1) {
   //    oss<<"Loading "<<path.c_str()<<std::endl;
@@ -197,14 +223,14 @@ void SetRenderBar() {
       "ICP", NULL,
       ImGuiWindowFlags_AlwaysAutoResize); // Create a window called "Hello,
                                           // world!" and append into it.
-  
+
   // if (ImGui::Button("Init Icp")) {
   //   InitICP();
   // }
-  ImGui::Checkbox("Show Mesh0", &showMesh0);                // Create a checkbox to toggle `my_bool`
-  ImGui::Checkbox("Show Mesh1", &showMesh1);    
+  ImGui::Checkbox("Show Mesh0",
+                  &showMesh0); // Create a checkbox to toggle `my_bool`
+  ImGui::Checkbox("Show Mesh1", &showMesh1);
 
-  
   if (ImGui::Button("Align Ransac Rigid")) {
     AlignRansac();
   }
@@ -220,12 +246,15 @@ void SetRenderBar() {
   if (ImGui::Button("Align Deformable")) {
     AlignDeformable();
   }
-  
+
   if (ImGui::Button("Rigid + Deformable")) {
     AlignRigid();
     AlignDeformable();
   }
 
+  if (ImGui::Button("Save Mesh"))
+    SaveMeshes();
+  
   ImGui::End();
 }
 
@@ -270,10 +299,8 @@ void GLDrawMesh() {
 
   // mesh.GLDrawBox();
   if (showMesh0) {
-    glColor4f(mesh_color0.x * mesh_color0.w, 
-             mesh_color0.y * mesh_color0.w,
-             mesh_color0.z * mesh_color0.w, 
-             mesh_color0.w);
+    glColor4f(mesh_color0.x * mesh_color0.w, mesh_color0.y * mesh_color0.w,
+              mesh_color0.z * mesh_color0.w, mesh_color0.w);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     // glLineWidth(line_thick);
     GLDraw::DrawSurfaceMesh<ScalarType>(VertPos0, Connectivity0, FaceNormals0,
@@ -283,10 +310,8 @@ void GLDrawMesh() {
   }
 
   if (showMesh1) {
-    glColor4f(mesh_color1.x * mesh_color1.w,
-             mesh_color1.y * mesh_color1.w,
-              mesh_color1.z * mesh_color1.w, 
-              mesh_color1.w);
+    glColor4f(mesh_color1.x * mesh_color1.w, mesh_color1.y * mesh_color1.w,
+              mesh_color1.z * mesh_color1.w, mesh_color1.w);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     // glLineWidth(line_thick);
     GLDraw::DrawSurfaceMesh<ScalarType>(VertPos1, Connectivity1, FaceNormals1,

@@ -594,6 +594,13 @@ public:
     return (*maxElement);
   }
 
+  ScalarType AvgDistance() const {
+    ScalarType AvgDist=0;
+    for (size_t i=0;i<D[CurrDIndex].size();i++)
+        AvgDist+=(D[CurrDIndex][i]);
+    return (AvgDist/D[CurrDIndex].size());
+  }
+  
   void SetUnMarkedToDistance(const ScalarType &DefaultDist) {
     // ScalarType MaxVal=MaxDistance();
     int nonMarkedN = 0;

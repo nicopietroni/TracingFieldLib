@@ -163,8 +163,10 @@ public:
         {
           //uniform plus a small value to disambuguate when have the same 
           //number of arcs
-          ScalarType delta=TGraph.AverageWeigth()*0.001;
-          NextStep=1+(delta*NextStep);
+          // ScalarType delta=TGraph.AverageWeigth()*0.001;
+          // NextStep=1+(delta*NextStep);
+          ScalarType delta=0.001;
+          NextStep=TGraph.AverageWeigth()+(delta*NextStep);
         }
         if(NextStep<=0)
         {

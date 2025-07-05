@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <iostream>
 #include <mesh_mapping.h>
+#include <string>
 #include <vector>
 
 namespace Geo {
@@ -361,7 +362,8 @@ public:
         GridUV.FirstTrianglesOverPoint(PatchVertUV, Patch_Faces, IntP, IndexF,
                                        BaryCoords);
         if (IndexF == -1) {
-          IndexF = Geo::UVUtils<ScalarType>::InsideFace(PatchVertUV, Patch_Faces, IntP, BaryCoords);
+          IndexF = Geo::UVUtils<ScalarType>::InsideFace(
+              PatchVertUV, Patch_Faces, IntP, BaryCoords);
         }
 
         assert(IndexF != -1);
@@ -414,6 +416,7 @@ public:
 
     std::vector<Geo::Point2<ScalarType>> QuadVertUV;
     bool found = QLut.GetQuadrangulation(UVSideSubd, QuadVertUV, QuadFaces);
+
     if (!found)
       return false;
 
@@ -502,7 +505,6 @@ public:
     // paremetrize the patch also considering corners
     Geo::UVParam<ScalarType>::TutteEmbedding(PatchVert, Patch_Faces,
                                              PatchCorners, VertUV);
-
     Geo::TriangleSpatialIndex<ScalarType> Grid;
     Grid.Init(PatchVert, Patch_Faces);
     Geo::Box3<ScalarType> BB;
@@ -566,10 +568,12 @@ public:
           &SideSamples3D,
       const QuadrangulationLUT<ScalarType> &QLut,
       std::vector<Geo::Point3<ScalarType>> &QuadVert,
-      std::vector<std::vector<int>> &QuadFaces) {
+      std::vector<std::vector<int>> &QuadFaces, std::vector<int> &QuadPatch,
+      bool save_debug = false) {
 
     QuadVert.clear();
     QuadFaces.clear();
+    QuadPatch.clear();
 
     assert(PatchFacesIdx.size() == PatchCornerIdx.size());
 
@@ -601,9 +605,17 @@ public:
       QuadrangulateQuadPatchWithSubs(CurrPatchVert, CurrPatchFaces,
                                      CurrPatchCorners, SideSamples3D[i], QLut,
                                      Curr_Patch_QuadVert, Curr_Patch_QuadFaces);
-
+      if (save_debug) {
+        std::string out_file = std::string("quad_mesh_") +
+                               std::to_string(i) + 
+                               std::string(".obj");
+        WriteOBJ(out_file.c_str(),Curr_Patch_QuadVert, Curr_Patch_QuadFaces);
+      }
+      
       AppendMesh<ScalarType>(QuadVert, QuadFaces, Curr_Patch_QuadVert,
                              Curr_Patch_QuadFaces);
+
+      QuadPatch.resize(QuadFaces.size(), i);
     }
   }
 };

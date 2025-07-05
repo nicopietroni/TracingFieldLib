@@ -46,6 +46,18 @@ void FindLaplacianForMesh(const std::vector<Point3<ScalarType> > &pos,
     }
 }
 
+// template <class ScalarType>
+// void SetUniformLaplacianWeightForMesh(const std::vector<std::vector<int> > &Kernel,
+//                                       std::vector<std::vector<ScalarType> > &Weight)
+// {
+//     Weight.clear();
+//     Weight.resize(Kernel.size());
+//     for (size_t i=0;i<Weight.size();i++)
+//     {
+//         Weight[i]=std::vector<ScalarType>(Kernel[i].size(),0.5);//((ScalarType)1)/((ScalarType)Kernel[i].size()));
+//     }
+// }
+
 template <class ScalarType>
 void SetUniformLaplacianWeightForMesh(const std::vector<std::vector<int> > &Kernel,
                                       std::vector<std::vector<ScalarType> > &Weight)
@@ -54,7 +66,11 @@ void SetUniformLaplacianWeightForMesh(const std::vector<std::vector<int> > &Kern
     Weight.resize(Kernel.size());
     for (size_t i=0;i<Weight.size();i++)
     {
-        Weight[i]=std::vector<ScalarType>(Kernel[i].size(),0.5);//((ScalarType)1)/((ScalarType)Kernel[i].size()));
+        if (Kernel[i].size()>0)
+        {
+            ScalarType Value=((ScalarType)1)/((ScalarType)Kernel[i].size());
+            Weight[i]=std::vector<ScalarType>(Kernel[i].size(),Value);
+        }
     }
 }
 
@@ -93,6 +109,7 @@ void FindLaplacianCotangentWeightForTriMesh(const std::vector<Point3<ScalarType>
         }
     }
 
+    Weight.clear();
     Weight.resize(Kernel.size());
     for (size_t i=0;i<Kernel.size();i++)
         for (size_t j=0;j<Kernel[i].size();j++)

@@ -4,6 +4,11 @@
 #include "Space_Query/segment_grid_3D.h"
 #include "Space_Query/triangle_grid_3D.h"
 #include "box3.h"
+#include "point3.h"
+#include "segment3.h"
+#include <cassert>
+#include <cstddef>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -110,12 +115,53 @@ void ProjectOn(std::vector<Geo::Point3<ScalarType>> &VertPos,
                           VertPos[i], TriGrid.bbox.Diag(), 
                           closestF, closestPt);
     } else {
-      int closestS;
+      int closestS=-1;
       SegGrid.GridClosest(FeatureSegs, VertPos[i], 
                     SegGrid.bbox.Diag(), closestS,
                           closestPt);
+      // ScalarType minD=std::numeric_limits<ScalarType>::max();
+      // for (size_t j=0;j<FeatureSegs.size();j++)
+      // {
+      //   Geo::Point3<ScalarType> closestTest=ClosestPoint(FeatureSegs[j], VertPos[i]);
+      //   if ((closestTest-VertPos[i]).Norm()>minD)continue;
+      //   minD=(closestTest-VertPos[i]).Norm();
+      //   closestS=j;
+      //   closestPt=closestTest;
+      // }
     }
     VertPos[i] = closestPt;
+  }
+}
+
+
+template <class ScalarType>
+void ReprojectBasis(std::vector<Geo::Point3<ScalarType>> &VertPos,
+               const std::vector<Geo::Point3<ScalarType>> &TargetPos,
+               const std::vector<std::vector<int>> &TargetFaces,
+               std::vector<int> &IndexF,
+               std::vector<Geo::Point3<ScalarType>> &BaryCoord) 
+{
+  Geo::TriangleSpatialIndex<ScalarType> TriGrid;
+  TriGrid.Init(TargetPos,TargetFaces);
+
+  IndexF.clear();
+  BaryCoord.clear();
+
+  for (size_t i = 0; i < VertPos.size(); i++) {
+    int closestF=-1;
+    Geo::Point3<ScalarType> closestPt;
+    TriGrid.GridClosest(TargetPos, TargetFaces,
+                          VertPos[i], TriGrid.bbox.Diag(), 
+                          closestF, closestPt);
+    assert(closestF!=-1);
+    
+    Geo::Point3<ScalarType> CurrBary;
+    BarycentricCoords(TargetPos,TargetFaces,closestF,
+                      closestPt,CurrBary.X,
+                      CurrBary.Y,CurrBary.Z);
+    
+    IndexF.push_back(closestF);
+    BaryCoord.push_back(CurrBary);
   }
 }
 

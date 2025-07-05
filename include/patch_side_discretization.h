@@ -60,6 +60,7 @@ private:
 
   std::vector<std::vector<int>> VarSequences;
   int NumVariables;
+  int NumTJunctions;
 
   bool UseGeoAVG;
 
@@ -1390,6 +1391,12 @@ public:
     return (VarValue[IndexVar] > UpLimit);
   }
 
+  void PrintStats()
+  {
+    std::cout<<"NUM VARIABLES: "<<NumVariables<<std::endl;
+    std::cout << "Num TJunctions: " << NumTJunctions << std::endl;
+  }
+
   void InitFromLabels(const std::vector<Geo::Point3<ScalarType>> &Vert,
                       const std::vector<std::vector<int>> &Faces,
                       const std::vector<std::vector<int>> &_PatchFacesIdx,
@@ -1433,7 +1440,7 @@ public:
     PatchSides.resize(PatchFacesIdx.size());
 
     // then get all boundaries
-    int NuMTJunctions = 0;
+    NumTJunctions = 0;
     for (size_t i = 0; i < PatchFacesIdx.size(); i++) {
       std::vector<std::vector<int>> SubMeshFaces;
       std::vector<Geo::Point3<ScalarType>> SubMeshVert;
@@ -1477,11 +1484,10 @@ public:
         SplitIntoSubSequences(SideSeq[j], AllCornerPos, SubSideSeq, false);
         PatchSides[i].Sides[j].SubSides = SubSideSeq;
         if (SubSideSeq.size() != 1)
-          NuMTJunctions++;
+          NumTJunctions++;
       }
       //   std::cout<<"Seq Size: "<<SideSeq.size()<<std::endl;
     }
-    std::cout << "Num TJunctions: " << NuMTJunctions << std::endl;
     InitVariables();
 
     // VarFeature.resize(NumVariables, false);
@@ -1492,6 +1498,7 @@ public:
 
     // InitVariableW();
     //  InitVarFeatures(Vert,_Features);
+    PrintStats();
   }
 
   void GetSubSideExtremes(const int IndexP, const int IndexS,

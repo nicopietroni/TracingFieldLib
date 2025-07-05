@@ -2,8 +2,10 @@
 #define EDGE_MESH_FUNCTIONS
 
 #include "connectivity.h"
+#include "fitting_points.h"
 #include "mesh_functions.h"
 #include "point3.h"
+#include "segment3.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
@@ -63,6 +65,93 @@ template <class ScalarType> class EdgeMeshFunctions {
   //       }
   //     }
   //   }
+
+  // static ScalarType angle_between(const Point3<ScalarType> &v1,
+  //                                 const Point3<ScalarType> &v2) {
+  //   ScalarType denom = std::sqrt(v1.Norm2() * v2.Norm2());
+  //   if (denom == 0)
+  //     return 0;
+  //   ScalarType cos_theta =
+  //       std::clamp(Dot(v1, v2) / denom, ScalarType(-1), ScalarType(1));
+  //   return std::acos(cos_theta);
+  // }
+
+  // static ScalarType Curvature_Error(const std::vector<Point3<ScalarType>> &P,
+  //                                   int i, int j) {
+  //   ScalarType error = 0;
+  //   for (int k = i + 1; k < j; ++k) {
+  //     if (k > 0 && k < int(P.size()) - 1) {
+  //       Point3<ScalarType> v1 = P[k] - P[k - 1];
+  //       Point3<ScalarType> v2 = P[k + 1] - P[k];
+  //       ScalarType angle = angle_between(v1, v2);
+  //       // ScalarType angle = Geo::AngleDeg(v1, v2);
+  //       error += angle * angle;
+  //     }
+  //   }
+  //   return error;
+  // }
+
+  // static ScalarType Distance_Error(const std::vector<Point3<ScalarType>> &P,
+  // int i,
+  //                           int j) {
+  //   ScalarType error = 0;
+  //   for (int k = i + 1; k < j; ++k) {
+  //     Geo::Segment3<ScalarType> Seg(P[i], P[j]);
+  //     error += pow(Distance(Seg,P[k]), 2);
+  //   }
+  //   return error;
+  // }
+
+  // static ScalarType Curvature(const std::vector<Point3<ScalarType>> &VertPos,
+  //                             bool check_sign = false) {
+  //   ScalarType Curv = 0;
+
+  //   Geo::Plane3<ScalarType> FitPlane;
+  //   FittingPoint<ScalarType>::FitPlaneToPointSet(VertPos, FitPlane);
+  //   Geo::Point3<ScalarType> up = FitPlane.Direction();
+
+  //   for (int j = 1; j < VertPos.size() - 1; j++) {
+  //     int IndexV0 = j - 1;
+  //     int IndexV1 = j;
+  //     int IndexV2 = j + 1;
+
+  //     Geo::Point3<ScalarType> Dir0 = (VertPos[IndexV1] - VertPos[IndexV0]);
+  //     Geo::Point3<ScalarType> Dir1 = (VertPos[IndexV2] - VertPos[IndexV1]);
+  //     Dir0.Normalize();
+  //     Dir1.Normalize();
+
+  //     ScalarType dot = Dot(Dir0, Dir1);
+  //     Geo::Point3<ScalarType> cross = Cross(Dir0, Dir1);
+  //     ScalarType sin_theta = cross.Norm();
+  //     ScalarType angle = fabs(std::atan2(sin_theta, dot));
+  //     angle *= (ScalarType)180.0 / M_PI;
+  //     ScalarType sign = (Dot(cross, up) >= 0) ? 1 : -1;
+  //     Curv += sign * angle;
+  //   }
+  //   return fabs(Curv);
+  // }
+
+  static ScalarType Curvature(const std::vector<Point3<ScalarType>> &VertPos) {
+    ScalarType Curv = 0;
+
+    Geo::Plane3<ScalarType> FitPlane;
+    FittingPoint<ScalarType>::FitPlaneToPointSet(VertPos, FitPlane);
+    Geo::Point3<ScalarType> up = FitPlane.Direction();
+
+    for (int j = 1; j < VertPos.size() - 1; j++) {
+      int IndexV0 = j - 1;
+      int IndexV1 = j;
+      int IndexV2 = j + 1;
+
+      Geo::Point3<ScalarType> Dir0 = (VertPos[IndexV1] - VertPos[IndexV0]);
+      Geo::Point3<ScalarType> Dir1 = (VertPos[IndexV2] - VertPos[IndexV1]);
+      Dir0.Normalize();
+      Dir1.Normalize();
+
+      Curv+=AngleDeg(Dir0,Dir1);
+    }
+    return fabs(Curv);
+  }
 
 public:
   static bool IsProperEdgeM(const std::vector<std::pair<int, int>> &Edges) {
@@ -240,10 +329,12 @@ public:
       if (visited.count(startV) > 0)
         continue;
       // should be already split at this point
-      assert(AdjList[startV].size() <=2); 
+      assert(AdjList[startV].size() <= 2);
       // no disconnected vertices
-      assert(AdjList[startV].size() > 0); 
-      
+      // assert(AdjList[startV].size() > 0);
+      if (AdjList[startV].size() == 0)
+        continue;
+
       //  Start a new sequence if valence == 1
       if (AdjList[startV].size() == 1) {
         std::vector<int> sequence;
@@ -259,7 +350,7 @@ public:
           int next = -1;
           for (int j = 0; j < AdjList[current].size(); j++) {
             int neighbor = AdjList[current][j];
-            if (neighbor != prev){//} && !visited.count(neighbor)) {
+            if (neighbor != prev) { //} && !visited.count(neighbor)) {
               next = neighbor;
               break;
             }
@@ -279,10 +370,13 @@ public:
         subsequences1.push_back(sequence);
       }
     }
-    
+
     // IDENTIFY LOOPS
     for (size_t startV = 0; startV < AdjList.size(); startV++) {
       if (visited.count(startV) > 0)
+        continue;
+
+      if (AdjList[startV].size() == 0)
         continue;
 
       std::vector<int> loop;
@@ -296,7 +390,7 @@ public:
 
         // Find the next vertex in the loop
         int next = -1;
-        assert(AdjList[current].size()==2);
+        assert(AdjList[current].size() == 2);
         for (int j = 0; j < AdjList[current].size(); j++) {
           int neighbor = AdjList[current][j];
           if (neighbor != prev) {
@@ -307,33 +401,223 @@ public:
         prev = current;
         current = next;
       } while (current != startV);
-      //then add back the first one 
+      // then add back the first one
       loop.push_back(startV);
-      //at least 3 elements and the first repeated equal to 4
-      assert(loop.size()>=4);
+      // at least 3 elements and the first repeated equal to 4
+      assert(loop.size() >= 4);
       subsequences1.push_back(loop);
     }
 
-    //report to the original sequence
+    // report to the original sequence
     std::map<Geo::Point3<ScalarType>, int> OrigMap;
-    for (size_t i=0;i<VertPos.size();i++)
-        OrigMap[VertPos[i]]=i;
-    
-    //then update the sequences
+    for (size_t i = 0; i < VertPos.size(); i++)
+      OrigMap[VertPos[i]] = i;
+
+    // then update the sequences
     subsequences.clear();
-    for (size_t i=0;i<subsequences1.size();i++)
-    {
-        subsequences.resize(subsequences.size()+1);
-        for (size_t j=0;j<subsequences1[i].size();j++)
-        {
-            int IndexV1=subsequences1[i][j];
-            Geo::Point3<ScalarType> Pos1=VertPos1[IndexV1];
-            assert(OrigMap.count(Pos1)>0);
-            subsequences.back().push_back(OrigMap[Pos1]);
-        }
+    for (size_t i = 0; i < subsequences1.size(); i++) {
+      subsequences.resize(subsequences.size() + 1);
+      for (size_t j = 0; j < subsequences1[i].size(); j++) {
+        int IndexV1 = subsequences1[i][j];
+        Geo::Point3<ScalarType> Pos1 = VertPos1[IndexV1];
+        assert(OrigMap.count(Pos1) > 0);
+        subsequences.back().push_back(OrigMap[Pos1]);
+      }
     }
   }
-  
+
+  // static bool SampleByCurvature(const std::vector<Point3<ScalarType>>
+  // &Points,
+  //                               const int n_internal,
+  //                               std::vector<int> &Selected) {
+  //   if (n_internal <= 0)
+  //     return false;
+
+  //   int m = Points.size();
+  //   const ScalarType INF = std::numeric_limits<ScalarType>::max();
+
+  //   bool is_closed = (Points.front() == Points.back());
+
+  //   if (is_closed) {
+  //     assert(n_internal > 1);
+  //   }
+
+  //   int total_points =
+  //       n_internal + (is_closed ? 1 : 2); // +1 se chiusa, +2 se aperta
+
+  //   // DP: dp[i][k] = minimo errore per arrivare al punto i usando k+1 punti
+  //   std::vector<std::vector<ScalarType>> dp(
+  //       m, std::vector<ScalarType>(total_points, INF));
+  //   std::vector<std::vector<int>> prev(m, std::vector<int>(total_points,
+  //   -1));
+
+  //   dp[0][0] = 0;
+
+  //   for (int i = 1; i < m; ++i) {
+  //     for (int k = 1; k < total_points; ++k) {
+  //       for (int j = 0; j < i; ++j) {
+  //         if (dp[j][k - 1] < INF) {
+  //           //ScalarType err = Curvature_Error(Points, j, i);
+  //           ScalarType err = Distance_Error(Points, j, i);
+  //           ScalarType total = dp[j][k - 1] + err;
+  //           if (total < dp[i][k]) {
+  //             dp[i][k] = total;
+  //             prev[i][k] = j;
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
+
+  //   // Cerca la fine migliore per total_points vertici
+  //   int best_i = -1;
+  //   ScalarType best_cost = INF;
+  //   for (int i = 0; i < m; ++i) {
+  //     if (dp[i][total_points - 1] < best_cost) {
+  //       best_cost = dp[i][total_points - 1];
+  //       best_i = i;
+  //     }
+  //   }
+
+  //   if (best_i == -1) {
+  //     std::cerr << "Errore: nessuna soluzione trovata.\n";
+  //     return false;
+  //   }
+
+  //   // Ricostruzione percorso
+  //   Selected.clear();
+  //   int curr = best_i;
+  //   int k = total_points - 1;
+  //   while (k >= 0 && curr >= 0) {
+  //     Selected.push_back(curr);
+  //     curr = prev[curr][k];
+  //     --k;
+  //   }
+
+  //   std::reverse(Selected.begin(), Selected.end());
+
+  //   // Se curva chiusa, evita doppione finale
+  //   if (is_closed && Selected.front() == Selected.back()) {
+  //     Selected.pop_back();
+  //   }
+
+  //   return true;
+  // }
+
+  static bool SampleByCurvature(const std::vector<Point3<ScalarType>> &Points,
+                                const int n_internal,
+                                std::vector<int> &Selected) 
+  {
+    if (n_internal <= 0)
+      return false;
+    
+    bool IsCircle=(Points[0]==Points.back());
+
+    ScalarType CurvValue = Curvature(Points);
+    ScalarType CurvInt = CurvValue / n_internal;
+    if (!IsCircle)
+    {
+      CurvInt = CurvValue / (n_internal+1);
+      CurvInt*=1.01;
+    }
+
+    ScalarType CurrA=0;
+    Selected.clear();
+
+    Geo::Plane3<ScalarType> FitPlane;
+    FittingPoint<ScalarType>::FitPlaneToPointSet(Points, FitPlane);
+    Geo::Point3<ScalarType> up = FitPlane.Direction();
+
+    for (size_t i = 1; i < (Points.size() - 1); i++) {
+
+      int IndexV0 = i - 1;
+      int IndexV1 = i;
+      int IndexV2 = i + 1;
+
+      Geo::Point3<ScalarType> Dir0 = (Points[IndexV1] - Points[IndexV0]);
+      Geo::Point3<ScalarType> Dir1 = (Points[IndexV2] - Points[IndexV1]);
+      Dir0.Normalize();
+      Dir1.Normalize();
+
+      // ScalarType dot = Dot(Dir0, Dir1);
+      // Point3<ScalarType> cross = Cross(Dir0, Dir1);
+      // ScalarType sin_theta = cross.Norm();
+      // ScalarType angle = fabs(std::atan2(sin_theta, dot));
+      // angle *= (ScalarType)180.0 / M_PI;
+      // ScalarType sign = (Dot(cross, up) >= 0) ? 1 : -1;
+      // CurrA += (sign * angle);
+      CurrA += AngleDeg(Dir0,Dir1);
+      if (fabs(CurrA) >= CurvInt) {
+        CurrA = 0;
+        Selected.push_back(IndexV1);
+      }
+    }
+
+    //add the last one in case is a circle
+    if (IsCircle && (Selected.size()<n_internal))
+      Selected.push_back(0);
+  }
+
+  static void
+  SubSampleRegularCurvature(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            const std::vector<std::pair<int, int>> &Edges,
+                            const std::vector<int> &Corners,
+                            std::vector<int> &Selected,
+                            const ScalarType &CurvatureIntervalCircle = 80,
+                            const ScalarType &CurvatureIntervalPoly = 40) 
+  {
+    // save indexes
+    std::map<Geo::Point3<ScalarType>, int> PosToIDX;
+    for (size_t i = 0; i < VertPos.size(); i++)
+      PosToIDX[VertPos[i]] = i;
+
+    // split along existing ones
+    std::vector<Geo::Point3<ScalarType>> VertPos1 = VertPos;
+    std::vector<std::pair<int, int>> Edges1 = Edges;
+    SplitAlong(Corners, VertPos1, Edges1);
+
+    // then get the sequences
+    std::vector<std::vector<int>> subsequences;
+    ExtractSortedNodesSequences(VertPos1, Edges1, subsequences);
+
+    // then compute the curvature for each piece
+    std::vector<Geo::Point3<ScalarType>> SelPos;
+    for (size_t i = 0; i < subsequences.size(); i++) {
+      // get the current point sequences
+      std::vector<Point3<ScalarType>> CurrPoly;
+      for (size_t j = 0; j < subsequences[i].size(); j++)
+        CurrPoly.push_back(VertPos1[subsequences[i][j]]);
+
+      ScalarType currCurv = Curvature(CurrPoly);
+      bool isCycle = (CurrPoly[0] == CurrPoly.back());
+      // if (isCycle)
+      //   std::cout << "Cycle Curv:" << currCurv << std::endl;
+
+      int InterValNum =0;
+      if (isCycle)
+        InterValNum =floor(0.5 + (currCurv / CurvatureIntervalCircle));
+      else
+        InterValNum =floor(0.5 + (currCurv / CurvatureIntervalPoly));
+
+      if (InterValNum == 0)
+        continue;
+
+      std::vector<int> Selected;
+      SampleByCurvature(CurrPoly, InterValNum, Selected);
+      // if (isCycle)
+      //   std::cout << "Sel Pos:" << Selected.size() << std::endl;
+
+      for (size_t j = 0; j < Selected.size(); j++)
+        SelPos.push_back(CurrPoly[Selected[j]]);
+    }
+
+    // retrieve pos
+    Selected.clear();
+    for (size_t i = 0; i < SelPos.size(); i++) {
+      assert(PosToIDX.count(SelPos[i]) > 0);
+      Selected.push_back(PosToIDX[SelPos[i]]);
+    }
+  }
 };
 
 }; // namespace Geo

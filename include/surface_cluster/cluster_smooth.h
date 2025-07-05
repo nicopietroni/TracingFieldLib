@@ -209,7 +209,6 @@ public:
     ErodeDilateClusters(NextF,ClusterFaces,FacesCluster,Steps);
     SmoothPClusterAssignment(NextF,ClusterFaces,FacesCluster,Steps);
   }
-
 };
 
 } // namespace Geo

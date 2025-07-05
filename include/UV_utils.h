@@ -3,6 +3,7 @@
 
 #include "Space_Query/triangle_grid_2D.h"
 #include <Space_Query/segment_grid_2D.h>
+#include <cassert>
 #include <cross_field.h>
 #include <point2.h>
 #include <triangle2.h>
@@ -297,22 +298,49 @@ public:
     return true;
   }
 
-  static bool MapBetween(const std::vector<Geo::Point2<ScalarType>> &vert0,
+  static void MapBetween(const std::vector<Geo::Point2<ScalarType>> &vert0,
                          const std::vector<Geo::Point2<ScalarType>> &vert1,
                          const std::vector<std::vector<int>> &face1,
                          std::vector<int> &faceIDx,
-                         std::vector<Geo::Point3<ScalarType>> &bary) {
+                         std::vector<Geo::Point3<ScalarType>> &bary,
+                         bool only_overlap = false) {
+
+    Geo::SegmentSpatialIndex2D<ScalarType> SegIndex2D;
+    std::vector<int> BorderF, BorderE;
+    std::vector<Geo::Segment2<ScalarType>> Segs;
+    if (!only_overlap)
+      InitFromMeshBorders<ScalarType>(vert1, face1, 
+                                      BorderF, BorderE, 
+                                      Segs,SegIndex2D);
+
     Geo::TriangleSpatialIndex2D<ScalarType> Grid_2D;
-    Grid_2D.Init(vert1, face1);
+    Grid_2D.Init(vert1,face1);
+
     faceIDx.resize(vert0.size(), -1);
     bary.resize(vert0.size(), Geo::Point3<ScalarType>(0, 0, 0));
+
     for (size_t i = 0; i < vert0.size(); i++) {
       bool found = Grid_2D.FirstTrianglesOverPoint(vert1, face1, vert0[i],
                                                    faceIDx[i], bary[i]);
-      if (!found)
-        return false;
+      if (found)continue;
+      
+      if ((!found) && (only_overlap))
+        continue;
+
+      int ClosSegIdx = -1;
+      ScalarType lambda = 0;
+      SegIndex2D.ClosestSeg(Segs, vert0[i], ClosSegIdx, lambda);
+      assert(ClosSegIdx >= 0);
+      assert(ClosSegIdx < BorderF.size());
+      assert(ClosSegIdx < BorderE.size());
+
+      int CurrFIdx = BorderF[ClosSegIdx];
+      int CurrEIdx = BorderE[ClosSegIdx];
+
+      faceIDx[i] = BorderF[ClosSegIdx];
+      bary[i].V(CurrEIdx) = lambda;
+      bary[i].V((CurrEIdx + 1) % face1[faceIDx[i]].size()) = 1 - lambda;
     }
-    return true;
   }
 
   // static bool Interpolate3DPosFromUV(const
@@ -601,7 +629,7 @@ public:
 
   static int InsideFace(const std::vector<Geo::Point2<ScalarType>> &VertPos,
                         const std::vector<std::vector<int>> &Connectivity,
-                        const Geo::Point2<ScalarType> &TestP, 
+                        const Geo::Point2<ScalarType> &TestP,
                         Geo::Point3<ScalarType> &Bary,
                         ScalarType inflate = 1.01) {
     for (size_t i = 0; i < Connectivity.size(); i++) {

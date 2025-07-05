@@ -1,0 +1,93 @@
+#ifndef LAPLACIAN_NEIGHBORS
+#define LAPLACIAN_NEIGHBORS
+
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <connectivity.h>
+#include "point3.h"
+#include <cstddef>
+#include <iostream>
+#include <set>
+#include <solve/least_squares_lin_constraint_solver.h>
+#include <stack>
+#include <sys/_types/_size_t.h>
+#include <utility>
+#include <vector>
+
+namespace Geo {
+
+template <class ScalarType>
+void GetLaplacianNeighbours(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            const std::vector<std::vector<int>> &Faces,
+                            std::vector<std::vector<int>> &Neighbors,
+                            const std::vector<std::pair<int, int>> &LineSmooth =
+                                std::vector<std::pair<int, int>>()) {
+  Neighbors.clear();
+  Neighbors.resize(VertPos.size());
+
+  // for (size_t i = 0; i < Faces.size(); i++) {
+  //   for (size_t j = 0; j < Faces[i].size(); j++) {
+  //     int IndexV = Faces[i][j];
+  //     Neighbors[IndexV].insert(Neighbors[IndexV].end(), Faces[i].begin(),
+  //                              Faces[i].end());
+  //   }
+  // }
+  
+  for (size_t i = 0; i < Faces.size(); i++) {
+    for (size_t j = 0; j < Faces[i].size(); j++)
+    {
+      int IndexV0 = Faces[i][j];
+      for (size_t k = 0; k < Faces[i].size(); k++) {
+        if (j==k)continue;
+        int IndexV1 = Faces[i][k];
+        Neighbors[IndexV0].push_back(IndexV1);
+      }
+    }
+  }
+
+  // for (size_t i = 0; i < Faces.size(); i++) {
+  //   for (size_t j = 0; j < Faces[i].size(); j++) {
+  //     int IndexV0 = Faces[i][j];
+  //     int IndexV1 = Faces[i][(j+1)%Faces[i].size()];
+  //     Neighbors[IndexV1].push_back(IndexV0);
+  //     Neighbors[IndexV0].push_back(IndexV1);
+  //   }
+  // }
+
+  // set all features
+  std::set<std::pair<int, int>> LineSmoothSet;
+  std::set<int> FeatureV;
+  for (size_t i = 0; i < LineSmooth.size(); i++) {
+    std::pair<int, int> KeyE = LineSmooth[i];
+    if (KeyE.first > KeyE.second)
+      std::swap(KeyE.first, KeyE.second);
+    LineSmoothSet.insert(KeyE);
+    FeatureV.insert(KeyE.first);
+    FeatureV.insert(KeyE.second);
+  }
+
+  // otherwise filter neighbours
+  for (size_t i = 0; i < Neighbors.size(); i++) {
+    // if not a feature all neighbours
+    if (FeatureV.count(i) == 0)
+      continue;
+
+    // filters with features
+    std::vector<int> CurrN = Neighbors[i];
+    Neighbors[i].clear();
+    for (size_t j = 0; j < CurrN.size(); j++) {
+      int IndexV0 = i;
+      int IndexV1 = CurrN[j];
+      std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
+                               std::max(IndexV0, IndexV1));
+      if (LineSmoothSet.count(KeyE) == 0)
+        continue;
+      Neighbors[i].push_back(IndexV1);
+    }
+  }
+}
+
+
+} // namespace Geo
+#endif

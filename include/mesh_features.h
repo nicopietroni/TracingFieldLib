@@ -55,6 +55,29 @@ bool IsCorner(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 }
 
 template <class ScalarType>
+void CornersByCount(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                    const std::vector<std::pair<int, int>> &VertPair,
+                    std::vector<int> &CornersIdx) {
+  CornersIdx.clear();
+  std::vector<int> VertCount(VertPos.size(),0);
+  for (size_t i = 0; i < VertPair.size(); i++) {
+    int IndexV0 = VertPair[i].first;
+    int IndexV1 = VertPair[i].second;
+    assert(IndexV0 >= 0);
+    assert(IndexV1 >= 0);
+    assert(IndexV0 != IndexV1);
+    VertCount[IndexV0]++;
+    VertCount[IndexV1]++;
+  }
+
+  for (size_t i = 0; i < VertCount.size(); i++)
+  {
+    if ((VertCount[i]==2)||(VertCount[i]==0))continue;
+    CornersIdx.push_back(i);
+  }
+}
+
+template <class ScalarType>
 void Corners(const std::vector<Geo::Point3<ScalarType>> &VertPos,
              const std::vector<std::pair<int, int>> &VertPair,
              const ScalarType feature_angle, std::vector<int> &CornersIdx) {
