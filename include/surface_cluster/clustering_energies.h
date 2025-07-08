@@ -98,15 +98,15 @@ public:
     return BestPl;
   }
 
-  Geo::Plane3<ScalarType> FittingPlaneOnSeed(const std::vector<int> &Cluster,
-                                             const int &FaceSeed) {
-    Geo::Plane3<ScalarType> BestPl = FittingPlaneOnCluster(Cluster);
-    Geo::Point3<ScalarType> PlNorm = BestPl.Direction();
-    Geo::Point3<ScalarType> PlPos =
-        ComputeFaceBarycenter<ScalarType>(this->VertPos, this->Faces, FaceSeed);
-    BestPl.Init(PlPos, PlNorm);
-    return BestPl;
-  }
+  // Geo::Plane3<ScalarType> FittingPlaneOnSeed(const std::vector<int> &Cluster,
+  //                                            const int &FaceSeed) {
+  //   Geo::Plane3<ScalarType> BestPl = FittingPlaneOnCluster(Cluster);
+  //   Geo::Point3<ScalarType> PlNorm = BestPl.Direction();
+  //   Geo::Point3<ScalarType> PlPos =
+  //       ComputeFaceBarycenter<ScalarType>(this->VertPos, this->Faces, FaceSeed);
+  //   BestPl.Init(PlPos, PlNorm);
+  //   return BestPl;
+  // }
 
   virtual void InitSeeds(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                 const std::vector<std::vector<int>> &Faces,
