@@ -178,8 +178,10 @@ template <class ScalarType>
 ScalarType ScaledJacobianQuad(const Quad3<ScalarType> &Q) {
   std::vector<ScalarType> scaledJs(4);
   for (int i = 0; i < 4; ++i)
+  {
     scaledJs[i] = ScaledJacobianForCorner(Q, i);
-
+    assert(scaledJs[i]<=1);
+  }
   return (*std::min_element(scaledJs.begin(), scaledJs.end()));
 }
 

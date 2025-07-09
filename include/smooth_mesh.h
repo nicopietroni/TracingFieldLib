@@ -1133,12 +1133,14 @@ void SetPositionIfBetter(const std::vector<Geo::Point3<ScalarType>> &OldPos,
     ScalarType NewQ = QualityQuadsOnVert(SolvedPos, Faces, VFAdj, IndexV);
     int newFlip = ConcaveQuadsOnVert(SolvedPos, Faces, VFAdj, IndexV);
 
-    if (newFlip > oldFlip) {
-      // std::cout<<"RESTORE BECAUSE OF CONCAVE"<<std::endl;
-      //  restore old pos
-      SolvedPos[IndexV] = OldPos[IndexV];
-      continue;
-    }
+    OldQ-=oldFlip;
+    NewQ-=newFlip;
+    // if (newFlip > oldFlip) {
+    //   // std::cout<<"RESTORE BECAUSE OF CONCAVE"<<std::endl;
+    //   //  restore old pos
+    //   SolvedPos[IndexV] = OldPos[IndexV];
+    //   continue;
+    // }
     //if ((NewQ < 0.25) && (NewQ < OldQ)) {
     if ((OldQ < 0.25) && (NewQ < OldQ)) {
       // restore old pos

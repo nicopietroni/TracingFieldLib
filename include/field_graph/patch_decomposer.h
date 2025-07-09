@@ -970,7 +970,7 @@ public:
   // int time_rem3;
   // int time_rem4;
 
-  #define SAVE_STATUS
+  //#define SAVE_STATUS
 
   bool RemoveIfPossible(int &Path_To_remove, bool remove_unsolved = false,
                         int minGain = 0, bool debug_msg = false) {
