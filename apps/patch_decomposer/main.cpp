@@ -993,16 +993,27 @@ bool remove_batch = true;
 void PreprocessMesh() {
   Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(
       VertPos, Connectivity, FaceCurv, Features, SingIndex, min_sing_distance);
+
   MeshBox.Init(VertPos);
   UpdateAfterRemesh();
+  
+  // WriteOBJ("after_remesh.obj",VertPos, Connectivity);
+  // std::vector<Field::CrossF<ScalarType>> VertCurv0;
+  // WriteField("after_remesh.ffield",VertCurv0,FaceCurv);
+  // WriteFeatures("after_remesh.features",Features);
+  // exit(0);
 
   std::cout << "*** SPLIT FEATURES *** " << std::endl;
 
   RemainingF.clear();
+  
   Geo::TracingPreprocess<ScalarType>::SplitCornerFeatures(
       VertPos, Connectivity, VertCurv, FaceCurv, Features, RemainingF,
       SingIndex, SingValue, FeatureSingIndex, FeatureSingValue, NewBorder);
-
+  
+  // WriteOBJ("Test0.obj",VertPos, Connectivity);
+  // exit(0);
+  
   Field::CrossF<ScalarType>::getMinMaxQ(VertCurv, minQCrossVert, maxQCrossVert);
   Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv, minQCrossFace, maxQCrossFace);
   Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
@@ -1013,13 +1024,16 @@ void PreprocessMesh() {
 
 void BatchProcessMinPatch() {
 
+
   std::cout << "*** REFINE AND SPLIT *** " << std::endl;
   auto start = std::chrono::high_resolution_clock::now();
   PreprocessMesh();
   auto end0 = std::chrono::high_resolution_clock::now();
   auto elapsed0 =
       std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
-
+  
+  //WriteOBJ("testBeforeGraph.obj",VertPos, Connectivity);
+  
   std::cout << "*** INIT GRAPHS *** " << std::endl;
   InitGraph();
   auto end1 = std::chrono::high_resolution_clock::now();

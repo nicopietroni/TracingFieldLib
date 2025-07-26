@@ -451,7 +451,7 @@ public:
     Geo::getBorderVert(Faces, BorderV);
     for (size_t i = 0; i < BorderV.size(); i++)
       BorderPos.insert(Pos[BorderV[i]]);
-
+    
     // save sing vertex position
     std::vector<Geo::Point3<ScalarType>> PosSingOLD;
     std::vector<int> ValuesSingOLD = SingValue;
@@ -473,7 +473,7 @@ public:
       PosFeat.insert(Key);
     }
 
-    // save for each vertex the teature neighbour
+    // save for each vertex the feature neighbour
     std::unordered_map<int, std::vector<int>> FeatureN;
     for (size_t i = 0; i < Features.size(); i++) {
       int IndexV0 = Features[i].first;
@@ -485,6 +485,9 @@ public:
     std::unordered_set<int> SingIndexSet(SingIndex.begin(), SingIndex.end());
     std::unordered_set<int> SplitV;
     std::unordered_map<int, std::vector<int>>::iterator iteV;
+    
+    //std::cout<<"There are "<<FeatureN.size()<<" Feature Neigh"<<std::endl;
+
     for (iteV = FeatureN.begin(); iteV != FeatureN.end(); iteV++) {
       int IndexV = (*iteV).first;
 
@@ -494,6 +497,8 @@ public:
         continue;
       }
       int NumNeigh = (*iteV).second.size();
+
+      assert(NumNeigh>0);
 
       //   //no need to split in this case
       if (NumNeigh == 1)
@@ -526,11 +531,31 @@ public:
 
       // int
       // DirIdx0Follow=VertCurv[IndexN0].FollowDirection(VertCurv[IndexN1],DirIdx1);
+
       int DirIdx0Follow =
           VertCurv[IndexV].FollowDirection(VertCurv[IndexN1], DirIdx1);
+
+      // if (IndexV==6577)
+      // {
+      //   std::cout<<"Dir0 "<<Dir0.X<<","<<Dir0.Y<<","<<Dir0.Z<<std::endl;
+      //   std::cout<<"Dir1 "<<Dir1.X<<","<<Dir1.Y<<","<<Dir1.Z<<std::endl;
+        
+      //   Geo::Point3<ScalarType> DirC0=VertCurv[IndexV].GetDirection(DirIdx0);
+      //   Geo::Point3<ScalarType> DirC1=VertCurv[IndexN1].GetDirection(DirIdx1);
+
+      //   std::cout<<"DirC0 "<<DirC0.X<<","<<DirC0.Y<<","<<DirC0.Z<<std::endl;
+        
+      //   std::cout<<"DirC1 "<<DirC1.X<<","<<DirC1.Y<<","<<DirC1.Z<<std::endl;
+        
+      //   std::cout<<"Dir0 "<<DirIdx0Follow<<" Dir1 "<<DirIdx0<<std::endl;
+      // }
       if ((DirIdx0Follow) != (DirIdx0))
+      {
+        //std::cout<<"Added "<<IndexV<<" Direct Vert"<<std::endl;
         SplitV.insert(IndexV);
+      }
     }
+    //std::cout<<"There are "<<SplitV.size()<<" Split Vert"<<std::endl;
 
     // then split features
     std::vector<std::pair<int, int>> SplitF;
@@ -543,6 +568,7 @@ public:
       else
         RemainingF.push_back(Features[i]);
     }
+    //std::cout<<"There are "<<SplitF.size()<<" Split Feat"<<std::endl;
 
     // then split
     SplitMeshFromEdges<ScalarType>(Pos, Faces, SplitF);

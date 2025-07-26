@@ -86,7 +86,7 @@ void MakeDirectionNormalCoherent(const std::vector<Geo::Point3<ScalarType>> &Tar
 template <typename ScalarType>
 void InitCrossFieldQualityAsAnisotropy(std::vector<Field::CrossF<ScalarType>> &Crosses,
                                        ScalarType filter_percentile = 0.05,
-                                       ScalarType minV = 0.00001)
+                                       ScalarType minV = 0.01)
 {
 
     if (Crosses.size() == 0)
