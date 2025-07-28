@@ -115,14 +115,9 @@ apps/arap_deformer/.qtc_clangd/compile_commands.json
 apps/arap_deformer/arap_deformer.pro.user
 apps/cross_field_visualizer/cross_field_visualizer.pro.user
 apps/patch_decomposer/.qtc_clangd/compile_commands.json
-apps/patch_decomposer/build/dualized.obj
 include/field_graph/OLD/graph_frame_field_sheet_tracing.h
 include/OLD/mesh_functionsOLD.h
 apps/patch_decomposer/.qtc_clangd/compile_commands.json
-*.field
-apps/cross_field_smoother/test_data/aquadom_rem.field
-apps/cross_field_smoother/test_data/bunny.field
-apps/cross_field_smoother/test_data/trebol.obj
 apps/frame_field_smoother/build/CMakeFiles/Progress/1
 apps/frame_field_smoother/build/CMakeFiles/Progress/count.txt
 apps/local_mesh_optimizer/.qmake.stash
@@ -157,11 +152,9 @@ apps/commandline_quadrangulator/.clang-tidy
 /apps/commandline_quadrangulator/test_data/3d
 /apps/commandline_quadrangulator/test_data/other_geometries
 /apps/commandline_tri_remesh/build
-apps/cross_field_smoother/test_data/bunny_2.obj
 /apps/cross_field_smoother/test_data/data_features/511
 /apps/cross_field_smoother/test_data/data_features/511_cut_along_internals
 /apps/cross_field_smoother/test_data/data_features
-apps/cross_field_smoother/test_data/ellipse.obj
 /apps/ICP/build/CMakeFiles/3.23.2
 /apps/ICP/build
 /apps/ICP/test_data/bunny
