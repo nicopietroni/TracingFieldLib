@@ -81,7 +81,7 @@ bool has_load_features = false;
 int Nring = 3;
 ScalarType minQCrossVert, maxQCrossVert;
 std::vector<int> SingIndex, SingValue;
-SmoothParam<ScalarType> SParam;
+FieldSmoothParam<ScalarType> SParam;
 
 // Interface values
 float TopIntevalFix = (float)SParam.TopIntevalFix;

@@ -126,6 +126,11 @@ template <class ScalarType> class MeshQuadrangulator {
     PDeco.AddCondition(new Geo::MathchSingularityCondition<ScalarType>());
     // if ((MinSides > 0) || (MaxSides > 0)) {
     PDeco.AddCondition(new Geo::NumSidesCondition<ScalarType>());
+
+    if (CCAbility>0)
+        PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(CCAbility));
+
+    
   }
 
   void InitPatches() {
@@ -413,6 +418,9 @@ public:
   ScalarType QuadSize;
   int QuadSmoothSteps;
   ScalarType RegVsIso;
+  ScalarType CCAbility;
+  bool dynamicUpdates;
+  int num_samples;
 
   MeshQuadrangulator(std::vector<Geo::Point3<ScalarType>> &_TriVertPos,
                      std::vector<std::vector<int>> &_TriConnectivity,
@@ -429,11 +437,16 @@ public:
         PDeco(PatchM, PathSampl, VertCurv, FaceCurv)
 
   {
+    
     graph_drift_penalty = 100;
     graph_maxAngle = 45;
     graph_diffuse_step = 1;
     min_sing_distance = 1;
-  
+
+    CCAbility=-1;
+    dynamicUpdates=false;
+    num_samples=1000;
+
     feature_corner_angle = 45;
     QuadSize = 0.02;
 
@@ -449,6 +462,9 @@ public:
 
   void ExtractQuad(std::vector<std::pair<int, int>> &_TriFeatures) {
     TriFeatures = _TriFeatures;
+
+    PathSampl.dynamicUpdates=dynamicUpdates;
+    PathSampl.NumSamples=num_samples;
 
     InitializeData();
 

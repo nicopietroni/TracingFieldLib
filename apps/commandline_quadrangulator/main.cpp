@@ -2,6 +2,7 @@
 #include <cassert>
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <vector>
 
 // #include <point2.h>
@@ -10,10 +11,13 @@
 #include <IO/io_obj.h>
 #include <point3.h>
 
+#include <field_graph/refine_for_tracing.h>
+#include <init_cross_field.h>
 #include <mesh_quadrangulation.h>
 
 std::string PathMesh;
 std::string PathField;
+std::string ProjectName;
 
 typedef double ScalarType;
 
@@ -24,7 +28,8 @@ std::vector<std::vector<int>> TriConnectivity;
 std::vector<std::pair<int, int>> TriFeatures;
 
 // // // FIELD DATA
-std::vector<Field::CrossF<ScalarType>> FaceCurv;
+std::vector<Field::CrossF<ScalarType>> FaceCurv; //,VertCurv;
+FieldSmoothParam<ScalarType> SParam;
 
 bool has_loaded_mesh = false;
 bool has_cross_field = false;
@@ -57,8 +62,27 @@ bool LoadField(const std::string &path) {
   return true;
 }
 
+
+void BatchProcessField() {
+  Geo::RefineForTracing<ScalarType>::RefineRequiredEdges(
+      TriVertPos, TriConnectivity, TriFeatures);
+
+   SParam.FixedCross.clear();
+  //  InitFieldByCurvature();
+  //  SmoothGlobal();
+  InitCrossFieldParam<ScalarType> InitFParam;
+  std::vector<Field::CrossF<ScalarType>> VertCurv;
+  InitMeshCrossField<ScalarType>(TriVertPos, TriConnectivity, TriFeatures,
+                                 VertCurv, FaceCurv, InitFParam);
+
+  Geo::RefineForTracing<ScalarType>::RefineForConnection(
+      TriVertPos, TriConnectivity, FaceCurv, TriFeatures);
+}
+
 std::string folderProjectName;
 std::string commandLine;
+
+ScalarType feature_angle = 45;
 
 int main(int argc, char *argv[]) {
   std::stringstream commandLineStr;
@@ -113,15 +137,31 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if (has_cross_field && has_loaded_mesh) {
+  if ((has_loaded_mesh)&&(has_cross_field)) {
     std::cout << "BATCH PROCESSING" << std::endl;
-    //MQuad.QuadSize = 0.1;
-    //MQuad.QuadSmoothSteps=100;
-    //MQuad.RegVsIso=0.1;
+    // if (!has_features) {
+    //   std::vector<int> Corners;
+    //   std::cout << "** COMPUTING FEATURES **" << std::endl;
+    //   Geo::FeatureCorners(TriVertPos, TriConnectivity, feature_angle,
+    //                       TriFeatures, Corners);
 
+    //   // WriteFeatures("test.features", TriFeatures);
+    // }
+    // if (!has_cross_field) {
+    //   std::cout << "** COMPUTING FIELD **" << std::endl;
+    //   BatchProcessField();
+    //   // bool Saved = WriteField("test.field", VertCurv, FaceCurv);
+    // }
+    MQuad.QuadSize = 0.02;
+    MQuad.QuadSmoothSteps=100;
+    // MQuad.RegVsIso=0.1;
+    MQuad.CCAbility=1;
+    //MQuad.num_samples=10000;
     MQuad.ExtractQuad(TriFeatures);
 
-    WriteOBJ("quad_mesh.obj", QuadVert, QuadFaces);
+    ProjectName=GetFilanameNoExtension(PathMesh);
+    ProjectName+=std::string("_quad.obj");
+    WriteOBJ(ProjectName.c_str(), QuadVert, QuadFaces);
   }
 
   return 0;

@@ -122,7 +122,7 @@ void ComputeCurvatureField(
   }
 }
 
-template <class ScalarType> struct SmoothParam {
+template <class ScalarType> struct FieldSmoothParam {
   int NDir;
   ScalarType TopIntevalFix;
   ScalarType GlobalSmoothVal;
@@ -131,7 +131,7 @@ template <class ScalarType> struct SmoothParam {
   bool align_borders;
   int iterations;
 
-  SmoothParam() {
+  FieldSmoothParam() {
     align_borders = true;
     NDir = 4;
     TopIntevalFix = 0;
@@ -252,7 +252,7 @@ GetHardConstraints(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                    const std::vector<std::vector<int>> &Faces,
                    std::vector<Field::CrossF<ScalarType>> &FaceCurv,
                    const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
-                   const SmoothParam<ScalarType> &SParam,
+                   const FieldSmoothParam<ScalarType> &SParam,
                    std::vector<size_t> &IndexF) {
   // clear all selected faces
   IndexF.clear();
@@ -335,7 +335,7 @@ void FixFarFromSingularities(
     const std::vector<std::vector<int>> &Faces,
     const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
     const std::vector<Field::CrossF<ScalarType>> &FaceCurv,
-    SmoothParam<ScalarType> &SParam, int NRing = 2) {
+    FieldSmoothParam<ScalarType> &SParam, int NRing = 2) {
   std::vector<std::vector<int>> NextF, NextE;
   Geo::getFFAdjacency(Faces, NextF, NextE);
 
@@ -440,7 +440,7 @@ void SmoothGlobalPolyvector(
     const std::vector<std::vector<int>> &Faces,
     const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
     std::vector<Field::CrossF<ScalarType>> &FaceCurv,
-    SmoothParam<ScalarType> &SParam) {
+    FieldSmoothParam<ScalarType> &SParam) {
   const ScalarType eps = (ScalarType)0.000000001;
 
   assert(Faces.size() == FaceCurv.size());
@@ -511,7 +511,7 @@ void SmoothCrossIterative(
     const std::vector<std::vector<int>> &Faces,
     const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
     std::vector<Field::CrossF<ScalarType>> &FaceCurv,
-    SmoothParam<ScalarType> &SParam, bool weightByQuality = true) {
+    FieldSmoothParam<ScalarType> &SParam, bool weightByQuality = true) {
   std::vector<size_t> IndexFixed;
   GetHardConstraints<ScalarType>(VertPos, Faces, FaceCurv, FacesNormals, SParam,
                                  IndexFixed);
@@ -525,7 +525,7 @@ void PropagateCrossFromFixed(
     const std::vector<std::vector<int>> &Faces,
     const std::vector<Geo::Point3<ScalarType>> &FacesNormals,
     std::vector<Field::CrossF<ScalarType>> &FaceCurv,
-    SmoothParam<ScalarType> &SParam, bool weightByQuality = true) {
+    FieldSmoothParam<ScalarType> &SParam, bool weightByQuality = true) {
   ScalarType OldTop = SParam.TopIntevalFix;
 
   if ((SParam.TopIntevalFix == 0) && (SParam.FixedCross.size() == 0))

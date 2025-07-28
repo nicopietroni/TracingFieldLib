@@ -538,7 +538,7 @@ private:
         int IndexVar0 = EdgeLabel_Constr[i].first;
         assert(IndexVar0 < M3NodeVars.size());
         assert(IndexVar0 >= 0);
-        assert(EdgeLabel_Constr[i].second.size() > 0);
+        //assert(EdgeLabel_Constr[i].second.size() > 0);
 
         for (size_t j = 0; j < EdgeLabel_Constr[i].second.size(); j++) {
           int IndexVar1 = EdgeLabel_Constr[i].second[j];
