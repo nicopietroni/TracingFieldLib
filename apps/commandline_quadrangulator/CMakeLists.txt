@@ -16,6 +16,9 @@ if(NOT CMAKE_BUILD_TYPE)
    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
 
+set(LUT_PATH "../../../include/Lut.txt")
+add_definitions(-DLUT_PATH=\"${LUT_PATH}\")
+
 # Enable AddressSanitizer and UndefinedBehaviorSanitizer in debug mode
 # set(SANITIZE_FLAGS "-fsanitize=address -fsanitize=undefined")
 # set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${SANITIZE_FLAGS} -g -O1")

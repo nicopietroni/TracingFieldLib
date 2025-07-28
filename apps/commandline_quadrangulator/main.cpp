@@ -14,6 +14,7 @@
 #include <field_graph/refine_for_tracing.h>
 #include <init_cross_field.h>
 #include <mesh_quadrangulation.h>
+#include <remesh_size.h>
 
 std::string PathMesh;
 std::string PathField;
@@ -152,7 +153,17 @@ int main(int argc, char *argv[]) {
     //   BatchProcessField();
     //   // bool Saved = WriteField("test.field", VertCurv, FaceCurv);
     // }
-    MQuad.QuadSize = 0.02;
+    std::cout << "ESTEEM REMESH SIZE" << std::endl;
+    Geo::Box3<ScalarType> MeshBox;
+    MeshBox.Init(TriVertPos);
+    ScalarType MinSize=MeshBox.Diag() * 0.005;
+    ScalarType MaxSize=MeshBox.Diag() * 0.02;
+    ScalarType CurrSize=Geo::RemeshSize<ScalarType>::RemeshSizeNormal(TriVertPos,TriConnectivity, 
+                                                                      MinSize,MaxSize);  
+    MQuad.QuadSize = CurrSize/MeshBox.Diag();//0.02;                                                                 
+    // std::cout << "Size Computed " << CurrSize<<std::endl;
+    // std::cout << "Size Base " << MQuad.QuadSize*MeshBox.Diag()<<std::endl;
+    // exit(0);                       
     MQuad.QuadSmoothSteps=100;
     // MQuad.RegVsIso=0.1;
     MQuad.CCAbility=1;
