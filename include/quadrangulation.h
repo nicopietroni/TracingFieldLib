@@ -13,13 +13,13 @@
 #include "quadrangulationLUT.h"
 #include "segment2.h"
 #include "triangle3.h"
-#include <box3.h>
+#include "box3.h"
 #include <cassert>
 #include <cmath>
-#include <connectivity.h>
+#include "connectivity.h"
 #include <cstddef>
 #include <iostream>
-#include <mesh_mapping.h>
+#include "mesh_mapping.h"
 #include <string>
 #include <vector>
 

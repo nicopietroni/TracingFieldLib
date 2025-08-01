@@ -3,7 +3,7 @@
 
 #include "../frame_field.h"
 #include "../frame_field_functions.h"
-#include "point3.h"
+#include "../point3.h"
 #include <cassert>
 #include <vector>
 

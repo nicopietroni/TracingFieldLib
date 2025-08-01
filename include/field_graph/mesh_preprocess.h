@@ -1,16 +1,16 @@
 #ifndef TRACING_MESH_PREPROCESS
 #define TRACING_MESH_PREPROCESS
 
-#include "field_graph/graph_cross_field.h"
-#include "point3.h"
+#include "graph_cross_field.h"
+#include "../point3.h"
 #include "../smooth_mesh.h"
 #include <cassert>
-#include <connectivity.h>
+#include "../connectivity.h"
 #include <cstddef>
 #include <iostream>
-#include <mesh_refine.h>
+#include "../mesh_refine.h"
 #include <set>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>

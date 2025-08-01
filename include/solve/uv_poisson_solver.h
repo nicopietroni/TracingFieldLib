@@ -1,16 +1,16 @@
 #ifndef UV_POISSON_SOLVER
 #define UV_POISSON_SOLVER
 
-#include <point2.h>
-#include <point3.h>
-#include <eigen_interface.h>
-#include <box3.h>
-#include <box2.h>
-#include <mesh_functions.h>
-#include <connectivity.h>
-#include <UV_utils.h>
-#include <UV_distortion.h>
-#include "normal.h"
+#include "../point2.h"
+#include "../point3.h"
+#include "../eigen_interface.h"
+#include "../box3.h"
+#include "../box2.h"
+#include "../mesh_functions.h"
+#include "../connectivity.h"
+#include "../UV_utils.h"
+#include "../UV_distortion.h"
+#include "../normal.h"
 
 namespace Geo
 {

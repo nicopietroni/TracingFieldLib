@@ -9,7 +9,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
-#include <field_graph/initialize_graph.h>
+#include "field_graph/initialize_graph.h"
 #include <iostream>
 #include <set>
 #include <stdio.h>

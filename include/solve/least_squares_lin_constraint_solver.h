@@ -5,7 +5,7 @@
 #include <Eigen/Sparse>
 #include <cassert>
 #include <cstdio>
-#include <eigen_interface.h>
+#include "../eigen_interface.h"
 #include <iostream>
 
 namespace Geo {

@@ -3,7 +3,7 @@
 
 #include <cstddef>
 #include <vector>
-#include <point3.h>
+#include "point3.h"
 
 namespace Geo
 {

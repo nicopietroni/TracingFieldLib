@@ -12,8 +12,8 @@
 #include <fstream>
 #include <iostream>
 #include <map>
-#include <plane3.h>
-#include <pos3.h>
+#include "plane3.h"
+#include "pos3.h"
 #include <set>
 #include <string>
 #include <unordered_set>

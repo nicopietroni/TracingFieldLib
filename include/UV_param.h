@@ -1,19 +1,19 @@
 #ifndef UV_PARAM
 #define UV_PARAM
 
-#include <UV_utils.h>
-#include <box2.h>
-#include <box3.h>
+#include "UV_utils.h"
+#include "box2.h"
+#include "box3.h"
 #include <cassert>
-#include <connectivity.h>
-#include <eigen_interface.h>
+#include "connectivity.h"
+#include "eigen_interface.h"
 #include <igl/arap.h>
 #include <igl/harmonic.h>
 #include <igl/lscm.h>
-#include <mesh_functions.h>
-#include <point2.h>
-#include <point3.h>
-#include <solve/uv_poisson_solver.h>
+#include "mesh_functions.h"
+#include "point2.h"
+#include "point3.h"
+#include "solve/uv_poisson_solver.h"
 #include <vector>
 
 namespace Geo {

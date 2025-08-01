@@ -8,9 +8,10 @@
 #include <cstddef>
 #include <iostream>
 #include <ostream>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
+#include <mutex>
 #define VERT_MARK_SIZE 2
 
 #include "../mesh_sampling.h"

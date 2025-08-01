@@ -2,11 +2,11 @@
 #define UV_UTILS
 
 #include "Space_Query/triangle_grid_2D.h"
-#include <Space_Query/segment_grid_2D.h>
+#include "Space_Query/segment_grid_2D.h"
 #include <cassert>
-#include <cross_field.h>
-#include <point2.h>
-#include <triangle2.h>
+#include "cross_field.h"
+#include "point2.h"
+#include "triangle2.h"
 
 namespace Geo {
 

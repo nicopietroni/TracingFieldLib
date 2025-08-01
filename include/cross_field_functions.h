@@ -9,7 +9,7 @@
 #include "cross_field.h"
 #include "pos3.h"
 #include <set>
-#include <connectivity.h>
+#include "connectivity.h"
 #include "best_rotation.h"
 #include "mesh_functions.h"
 #include "normal.h"

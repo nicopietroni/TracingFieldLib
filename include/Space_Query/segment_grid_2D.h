@@ -2,10 +2,10 @@
 #define SEGMENT_GRID_2D
 
 #include "grid_basics_2D.h"
-#include <box2.h>
-#include <point2.h>
-#include <point3.h>
-#include <segment2.h>
+#include "../box2.h"
+#include "../point2.h"
+#include "../point3.h"
+#include "../segment2.h"
 #include <vector>
 
 namespace Geo {

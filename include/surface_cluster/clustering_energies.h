@@ -12,7 +12,7 @@
 #include <cstddef>
 #include <iostream>
 #include <limits>
-#include <solve/least_squares_lin_constraint_solver.h>
+#include "../solve/least_squares_lin_constraint_solver.h"
 #include <type_traits>
 #include <utility>
 #include <vector>

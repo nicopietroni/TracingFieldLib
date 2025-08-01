@@ -2,8 +2,8 @@
 #define MESH_ASPECT_RATIO
 
 #include <cassert>
-#include <mesh_functions.h>
-#include <triangle3.h>
+#include "mesh_functions.h"
+#include "triangle3.h"
 
 namespace Geo{
 

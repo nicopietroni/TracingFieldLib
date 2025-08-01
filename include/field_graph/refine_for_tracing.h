@@ -3,18 +3,18 @@
 
 #include "../cross_field.h"
 #include "../mesh_refine.h"
-#include "connectivity.h"
-#include "field_graph/graph.h"
+#include "../connectivity.h"
+#include "graph.h"
 #include "graph_cross_field.h"
 #include "initialize_graph.h"
-#include "point2.h"
-#include "point3.h"
+#include "../point2.h"
+#include "../point3.h"
 #include <cassert>
 #include <cstddef>
 #include <iostream>
 #include <iterator>
 #include <set>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
 

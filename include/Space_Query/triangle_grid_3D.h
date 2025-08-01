@@ -2,9 +2,9 @@
 #define TRIANGLE_GRID
 
 #include "grid_basics_3D.h"
-#include <box3.h>
-#include <point3.h>
-#include <triangle3.h>
+#include "../box3.h"
+#include "../point3.h"
+#include "../triangle3.h"
 #include <vector>
 
 namespace Geo {

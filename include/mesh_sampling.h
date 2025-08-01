@@ -7,14 +7,14 @@
 #include "connectivity.h"
 #include "point2.h"
 #include "point3.h"
-#include <Space_Query/point_grid_2D.h>
-#include <Space_Query/point_grid_3D.h>
+#include "Space_Query/point_grid_2D.h"
+#include "Space_Query/point_grid_3D.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <iostream>
 #include <limits>
-#include <pos3.h>
+#include "pos3.h"
 #include <random>
 #include <set>
 #include <utility>

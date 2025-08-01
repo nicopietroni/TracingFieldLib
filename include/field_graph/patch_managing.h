@@ -12,19 +12,19 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
 
 // #include "../math_utils.h"
 #include "../IO/io_obj.h"
 #include "../tangent_space_smooth.h"
-#include "color_functions.h"
+#include "../color_functions.h"
 #include "graph.h"
-#include "mesh_refine.h"
+#include "../mesh_refine.h"
 #include "patch_basic.h"
-#include <UV_param.h>
-#include <pos3.h>
+#include "../UV_param.h"
+#include "../pos3.h"
 #include <unordered_map>
 
 #define PARALLEL_PATCH_UPDATE
