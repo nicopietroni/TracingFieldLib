@@ -3,8 +3,8 @@
 
 #include "../mesh_functions.h"
 #include "../point3.h"
-#include "connectivity.h"
-#include "field_graph/graph_tracing.h"
+#include "../connectivity.h"
+#include "../field_graph/graph_tracing.h"
 #include "graph_cross_field.h"
 #include <algorithm>
 #include <cassert>
@@ -1904,7 +1904,7 @@ public:
 
   void InitVisualCornersEdges() {
 #pragma omp parallel for num_threads(8)
-    for (size_t i = 0; i < NumPatches(); i++) {
+    for (int i = 0; i < NumPatches(); i++) {
       InitVisualCorners(i);
       InitVisualSides(i);
       // std::cout<<"Patch Corner size:
