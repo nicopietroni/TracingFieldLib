@@ -102,6 +102,15 @@ public:
     return Len;
   }
 
+  /// Bilinear sample at (u,v) in [0,1]^2
+  CoordType Sample(const ScalarType u, const ScalarType v) const {
+    const ScalarType w00 = (1 - u) * (1 - v);
+    const ScalarType w10 = (u) * (1 - v);
+    const ScalarType w11 = (u) * (v);
+    const ScalarType w01 = (1 - u) * (v);
+    return Pos[0] * w00 + Pos[1] * w10 + Pos[2] * w11 + Pos[3] * w01;
+  }
+
   Quad3(const CoordType &P0, const CoordType &P1, const CoordType &P2,
         const CoordType &P3) {
     Pos[0] = P0;
@@ -177,21 +186,47 @@ ScalarType ScaledJacobianForCorner(const Quad3<ScalarType> &Q, int IndexV) {
 template <class ScalarType>
 ScalarType ScaledJacobianQuad(const Quad3<ScalarType> &Q) {
   std::vector<ScalarType> scaledJs(4);
-  for (int i = 0; i < 4; ++i)
-  {
+  for (int i = 0; i < 4; ++i) {
     scaledJs[i] = ScaledJacobianForCorner(Q, i);
-    assert(scaledJs[i]<=1);
+    assert(scaledJs[i] <= 1);
   }
   return (*std::min_element(scaledJs.begin(), scaledJs.end()));
 }
 
 template <class ScalarType>
+void SampleBilinear(const Quad3<ScalarType>& Q,
+                    const int SideSplit,
+                    std::vector<Geo::Point3<ScalarType>>& Samples)
+{
+    using Coord = typename Quad3<ScalarType>::CoordType;
+
+    Samples.clear();
+
+    if (SideSplit <= 0) {  // degenerate request → sample center
+        Samples.push_back(Q.Sample(ScalarType(0.5), ScalarType(0.5)));
+        return;
+    }
+
+    const int n = SideSplit + 1;
+    Samples.reserve(static_cast<size_t>(n) * n);
+
+    const ScalarType denom = ScalarType(SideSplit);
+    for (int j = 0; j <= SideSplit; ++j) {
+        const ScalarType v = ScalarType(j) / denom;      // 0 … 1
+        for (int i = 0; i <= SideSplit; ++i) {
+            const ScalarType u = ScalarType(i) / denom;  // 0 … 1
+            Samples.push_back(Q.Sample(u, v));
+        }
+    }
+}
+
+template <class ScalarType>
 ScalarType
 ScaledJacobianQuad(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                     const std::vector<std::vector<int>> &Faces,
-                     const int &IndexF) {
-Quad3<ScalarType> Q = QuadOfFace(VertPos, Faces, IndexF);
-return (ScaledJacobianQuad(Q));
+                   const std::vector<std::vector<int>> &Faces,
+                   const int &IndexF) {
+  Quad3<ScalarType> Q = QuadOfFace(VertPos, Faces, IndexF);
+  return (ScaledJacobianQuad(Q));
 }
 
 template <class ScalarType>
@@ -213,11 +248,30 @@ void AspectRatioAlignPoly(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 }
 
 template <class ScalarType>
-ScalarType HasConcaveV(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+void AspectRatioScaledJacobian(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                          const std::vector<std::vector<int>> &Faces,
+                          std::vector<ScalarType> &FaceAR) {
+  FaceAR.clear();
+  for (size_t i = 0; i < Faces.size(); i++)
+    FaceAR.push_back(ScaledJacobianQuad(VertPos, Faces, i));
+}
+
+template <class ScalarType>
+bool HasConcaveV(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                        const std::vector<std::vector<int>> &Faces,
                        const int &IndexF) {
   Quad3<ScalarType> Q = QuadOfFace(VertPos, Faces, IndexF);
   return Q.HasConcaveV();
+} // namespace Geo
+
+template <class ScalarType>
+void SampleBilinear(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                    const std::vector<std::vector<int>> &Faces,
+                    const int &IndexF,
+                    const int SideSplit,
+                    std::vector<Geo::Point3<ScalarType>> &Samples) {
+  Quad3<ScalarType> Q = QuadOfFace(VertPos, Faces, IndexF);
+  SampleBilinear(Q,SideSplit,Samples);
 } // namespace Geo
 
 } // namespace Geo

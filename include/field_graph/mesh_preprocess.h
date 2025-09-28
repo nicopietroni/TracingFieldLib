@@ -441,9 +441,12 @@ public:
       std::vector<Field::CrossF<ScalarType>> &VertCurv,
       const std::vector<Field::CrossF<ScalarType>> &FaceCurv,
       std::vector<std::pair<int, int>> &Features,
-      std::vector<std::pair<int, int>> &RemainingF, std::vector<int> &SingIndex,
-      std::vector<int> &SingValue, std::vector<int> &FeatureSingIndex,
-      std::vector<int> &FeatureSingValue, std::vector<int> &NewBorderV) {
+      std::vector<std::pair<int, int>> &RemainingF, 
+      std::vector<int> &SingIndex,
+      std::vector<int> &SingValue, 
+      std::vector<int> &FeatureSingIndex,
+      std::vector<int> &FeatureSingValue, 
+      std::vector<int> &NewBorderV) {
 
     // save the old border Pos
     std::vector<size_t> BorderV;
@@ -503,11 +506,7 @@ public:
       //   //no need to split in this case
       if (NumNeigh == 1)
         continue;
-      // if (NumNeigh == 1) {
-      //   SplitV.insert(IndexV);
-      //   SplitV.insert((*iteV).second[0]);
-      //   continue;
-      // }
+      
       // if more than 2 neighbours than need to split
       // std::cout<<"Neigh: "<<NumNeigh<<std::endl;
       if (NumNeigh > 2) {
@@ -535,23 +534,9 @@ public:
       int DirIdx0Follow =
           VertCurv[IndexV].FollowDirection(VertCurv[IndexN1], DirIdx1);
 
-      // if (IndexV==6577)
-      // {
-      //   std::cout<<"Dir0 "<<Dir0.X<<","<<Dir0.Y<<","<<Dir0.Z<<std::endl;
-      //   std::cout<<"Dir1 "<<Dir1.X<<","<<Dir1.Y<<","<<Dir1.Z<<std::endl;
-        
-      //   Geo::Point3<ScalarType> DirC0=VertCurv[IndexV].GetDirection(DirIdx0);
-      //   Geo::Point3<ScalarType> DirC1=VertCurv[IndexN1].GetDirection(DirIdx1);
-
-      //   std::cout<<"DirC0 "<<DirC0.X<<","<<DirC0.Y<<","<<DirC0.Z<<std::endl;
-        
-      //   std::cout<<"DirC1 "<<DirC1.X<<","<<DirC1.Y<<","<<DirC1.Z<<std::endl;
-        
-      //   std::cout<<"Dir0 "<<DirIdx0Follow<<" Dir1 "<<DirIdx0<<std::endl;
-      // }
+      
       if ((DirIdx0Follow) != (DirIdx0))
       {
-        //std::cout<<"Added "<<IndexV<<" Direct Vert"<<std::endl;
         SplitV.insert(IndexV);
       }
     }
@@ -573,7 +558,6 @@ public:
     // then split
     SplitMeshFromEdges<ScalarType>(Pos, Faces, SplitF);
     RemoveUnfererencedVert<ScalarType>(Pos, Faces);
-
     // reupdate features
     Features.clear();
     for (size_t i = 0; i < Faces.size(); i++)
@@ -601,16 +585,22 @@ public:
     InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv);
 
     // reupdate singularities
+    assert(SingIndex.size()==ValuesSingOLD.size());
+
     std::vector<std::vector<int>> NextF, NextE;
     getFFAdjacency(Faces, NextF, NextE);
     // update singularities
     GetFaceSingularities(FaceCurv, Pos, Faces, NextF, NextE, SingIndex,
                          SingValue);
+    
+    // std::cout<<"Sing Index size:"<<SingIndex.size()<<std::endl;
+    // std::cout<<"ValuesSingOLD  size:"<<ValuesSingOLD.size()<<std::endl;
+    // assert(SingIndex.size()==ValuesSingOLD.size());
 
     // update feature singularities
     FeatureSingIndex.clear();
     FeatureSingValue.clear();
-
+    
     // get the new sing position
     std::set<Geo::Point3<ScalarType>> PosSingNEW;
     for (size_t i = 0; i < SingIndex.size(); i++) {
@@ -619,17 +609,31 @@ public:
       assert(IndexV < Pos.size());
       PosSingNEW.insert(Pos[IndexV]);
     }
-    assert(ValuesSingOLD.size() == PosSingOLD.size());
+
+    std::cout<<"Test 0"<<std::endl;
+
+    // assert(ValuesSingOLD.size() == PosSingOLD.size());
+    // assert(SingIndex.size()==PosSingOLD.size());
+    // assert(SingIndex.size()==ValuesSingOLD.size());
+
+    std::map<Geo::Point3<ScalarType>,int> PosIdx;
+    for (size_t i=0;i<Pos.size();i++)
+      PosIdx[Pos[i]]=i;
+
     for (size_t i = 0; i < PosSingOLD.size(); i++) {
-      int IndexV = SingIndex[i];
-      assert(IndexV >= 0);
-      assert(IndexV < Pos.size());
+      
+      // int IndexV = SingIndex[i];
+      // assert(IndexV >= 0);
+      // assert(IndexV < Pos.size());
       Geo::Point3<ScalarType> TestP = PosSingOLD[i];
       if (PosSingNEW.count(TestP) > 0)
         continue;
+      assert(PosIdx.count(TestP)>0);
+      int IndexV = PosIdx[TestP];
       FeatureSingIndex.push_back(IndexV);
       FeatureSingValue.push_back(ValuesSingOLD[i]);
     }
+    std::cout<<"Test 1"<<std::endl;
 
     NewBorderV.clear();
     Geo::getBorderVert(Faces, BorderV);
@@ -638,6 +642,7 @@ public:
         continue;
       NewBorderV.push_back(BorderV[i]);
     }
+
   }
 };
 } // namespace Geo

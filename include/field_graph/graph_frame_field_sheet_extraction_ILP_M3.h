@@ -232,6 +232,7 @@ private:
 
         std::vector<int> NodesIdxM3;
         Field::FrameFieldM3Graph::NodesOfElem(i, NodesIdxM3);
+        assert(NodesIdxM3.size()==3);
         std::pair<int, int> Key(std::min(IndexV0, IndexV1),
                                 std::max(IndexV0, IndexV1));
 

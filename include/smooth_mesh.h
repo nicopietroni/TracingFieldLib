@@ -133,7 +133,10 @@ template <class ScalarType>
 void SmoothLaplacianlSignal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                             const std::vector<std::vector<int>> &Faces,
                             std::vector<ScalarType> &VertSignal,
-                            int iterations = 3) {
+                            int iterations = 3,
+                            std::vector<int> FixedV=std::vector<int>()) 
+{
+  std::set<int> FixedVSet(FixedV.begin(),FixedV.end());
   for (int s = 0; s < iterations; s++) {
     std::vector<ScalarType> VertSignalNew = VertSignal;
     std::vector<int> VertSignalNum;
@@ -149,7 +152,10 @@ void SmoothLaplacianlSignal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
         VertSignalNew[IndexV1] += VertSignal[IndexV0];
       }
     for (size_t i = 0; i < VertSignalNew.size(); i++)
+    {
+      if (FixedVSet.count(i)>0)continue;
       VertSignal[i] = VertSignalNew[i] / (ScalarType)VertSignalNum[i];
+    }
   }
 }
 
@@ -1374,123 +1380,6 @@ void SmoothLaplacianNonManif(std::vector<Geo::Point3<ScalarType>> &VertPos,
   }
 }
 
-// template <class ScalarType>
-// void SmoothLaplacianImplicit(std::vector<Geo::Point3<ScalarType>> &VertPos,
-//                              const std::vector<std::vector<int>> &Faces,
-//                              const std::vector<int> &FixedVert,
-//                              const std::vector<std::pair<int, int>> &Features
-//                              =
-//                                  std::vector<std::pair<int, int>>(),
-//                              bool smooth_fixed = true,
-//                              bool use_cotangent = false) {
-
-//   ScalarType WeightFixed = 1000000;
-//   ScalarType WeightLap = 1;
-
-//   std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
-//   std::set<int> FixedVertSet(FixedVert.begin(), FixedVert.end());
-
-//   std::vector<std::vector<int>> NeighFeatures;
-//   NeighFeatures.resize(VertPos.size());
-//   for (size_t i = 0; i < Features.size(); i++) {
-//     int IndexV0 = Features[i].first;
-//     int IndexV1 = Features[i].second;
-//     NeighFeatures[IndexV0].push_back(IndexV1);
-//     NeighFeatures[IndexV1].push_back(IndexV0);
-//     // FeaturesV.insert(Features[i].first);
-//     // FeaturesV.insert(Features[i].second);
-//     // std::pair<int,int> EdgeK=Features[i];
-
-//     // if (EdgeK.first>EdgeK.second)
-//     //   std::swap(EdgeK.first,EdgeK.second);
-
-//     // FeaturesSet.insert(EdgeK);
-//   }
-
-//   // std::cout<<"there are "<<FixedVertSet.size()<<" fixed"<<std::endl;
-//   // add fixed velue
-//   for (size_t i = 0; i < VertPos.size(); i++) {
-//     if (FixedVertSet.count((int)i) > 0) {
-//       for (size_t c = 0; c < 3; c++) {
-//         Geo::LinearConstraint<ScalarType> Constr;
-//         Constr.RHSide = VertPos[i].V(c);
-//         Constr.Weight = WeightFixed;
-//         Geo::VarTerm<ScalarType> Var(i, c, 1);
-//         Constr.LHSide.push_back(Var);
-//         LinConstr.push_back(Constr);
-//       }
-//     }
-//   }
-
-//   // add laplacian value
-//   std::vector<std::vector<int>> KernelV;
-//   Geo::FindVertexStar(Faces, VertPos.size(), KernelV);
-
-//   //    std::vector<bool> IsB;
-//   //    getBorderVert(Faces,IsB);
-//   std::set<int> FixedSet(FixedVert.begin(), FixedVert.end());
-
-//   for (size_t i = 0; i < KernelV.size(); i++) {
-//     int IndexV0 = i;
-//     if ((!smooth_fixed) && (FixedSet.count(IndexV0) > 0))
-//       continue;
-//     //        bool IsBV0=IsB[IndexV0];
-//     //        if (IsBV0)continue;
-//     if (NeighFeatures[IndexV0].size() > 0) {
-//       for (size_t c = 0; c < 3; c++) {
-//         Geo::LinearConstraint<ScalarType> Constr;
-//         Constr.Weight = WeightLap;
-//         Constr.RHSide = 0;
-//         Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV0, c, -1));
-//         ScalarType OtherW =
-//             (ScalarType)1 / (ScalarType)NeighFeatures[IndexV0].size();
-
-//         for (size_t j = 0; j < NeighFeatures[IndexV0].size(); j++) {
-//           int IndexV1 = NeighFeatures[IndexV0][j];
-
-//           assert(IndexV0 != IndexV1);
-
-//           Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV1, c,
-//           OtherW));
-//         }
-//         LinConstr.push_back(Constr);
-//       }
-//     } else {
-//       for (size_t c = 0; c < 3; c++) {
-//         Geo::LinearConstraint<ScalarType> Constr;
-//         Constr.Weight = WeightLap;
-//         Constr.RHSide = 0;
-//         Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV0, c, -1));
-//         ScalarType OtherW = (ScalarType)1 / (ScalarType)KernelV[i].size();
-
-//         for (size_t j = 0; j < KernelV[i].size(); j++) {
-//           int IndexV1 = KernelV[i][j];
-
-//           assert(IndexV0 != IndexV1);
-
-//           Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV1, c,
-//           OtherW));
-//         }
-//         LinConstr.push_back(Constr);
-//       }
-//     }
-//   }
-
-//   Geo::LinearConstraintLeastSQSolver<ScalarType> LinSqSolver;
-//   LinSqSolver.Init(LinConstr);
-//   std::vector<ScalarType> Solution;
-//   LinSqSolver.Solve(Solution);
-
-//   for (size_t i = 0; i < VertPos.size(); i++) {
-//     int IndexX = (i * 3);
-//     int IndexY = IndexX + 1;
-//     int IndexZ = IndexX + 2;
-//     ScalarType ValX = Solution[IndexX];
-//     ScalarType ValY = Solution[IndexY];
-//     ScalarType ValZ = Solution[IndexZ];
-//     VertPos[i] = Geo::Point3<ScalarType>(ValX, ValY, ValZ);
-//   }
-// }
 
 template <class ScalarType>
 void SmoothLaplacianImplicit(std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -1557,144 +1446,6 @@ void SmoothLaplacianImplicit(std::vector<Geo::Point3<ScalarType>> &VertPos,
   }
 }
 
-// template <class ScalarType>
-// void SmoothLaplacianImplicit(std::vector<Geo::Point3<ScalarType>> &VertPos,
-//                              const std::vector<std::vector<int>> &Faces,
-//                              const std::vector<int> &FixedVert,
-//                              bool smooth_fixed = true,
-//                              bool linear_border = true,
-//                              bool use_cotangent  = false)
-// {
-
-//   ScalarType WeightFixed = 1000000;
-//   ScalarType WeightLap = 1;
-
-//   std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
-//   std::set<int> FixedVertSet(FixedVert.begin(), FixedVert.end());
-
-//   // std::cout<<"there are "<<FixedVertSet.size()<<" fixed"<<std::endl;
-//   // add fixed velue
-//   for (size_t i = 0; i < VertPos.size(); i++) {
-//     if (FixedVertSet.count((int)i) > 0) {
-//       for (size_t c = 0; c < 3; c++) {
-//         Geo::LinearConstraint<ScalarType> Constr;
-//         Constr.RHSide = VertPos[i].V(c);
-//         Constr.Weight = WeightFixed;
-//         Geo::VarTerm<ScalarType> Var(i, c, 1);
-//         Constr.LHSide.push_back(Var);
-//         LinConstr.push_back(Constr);
-//       }
-//     }
-//   }
-
-//   //ADD THE LAPLACIAN
-
-//   // find vertex star
-//   std::vector<std::vector<int>> KernelV;
-//   Geo::FindVertexStar(Faces, VertPos.size(), KernelV);
-
-//   // find laplacian weights
-//   std::vector<std::vector<ScalarType>> KernelW;
-//   if (use_cotangent)
-//     FindLaplacianCotangentWeightForTriMesh(VertPos,Faces,KernelV,KernelW);
-//   else
-//   {
-//     for (size_t i=0;i<KernelV.size();i++)
-//       KernelW.push_back(KernelV.size(),std::vector<ScalarType>(KernelV[i].size(),1));
-//   }
-
-//   //manage border
-//   if (linear_border)
-//   {
-//     //initialize for the border V
-//     std::vector<int> BorderV;
-//     getBorderVert(Faces,BorderV);
-//     for (size_t i=0;i<BorderV.size();i++)
-//     VertLaplW[BorderV[i]].clear();
-
-//     std::vector<std::pair<int, int>> BorderE;
-//     Geo::getBorderEdges(Faces, BorderE);
-//     for (size_t i = 0; i < BorderE.size(); i++) {
-//       int IndexV0 = BorderE[i].first;
-//       int IndexV1 = BorderE[i].second;
-//       ScalarType EdgeL=(VertPos[IndexV0]-VertPos[IndexV1]).Norm();
-//       VertLaplW[IndexV0].push_back(std::pair<int, ScalarType>(IndexV1,
-//       1/EdgeL)); VertLaplW[IndexV1].push_back(std::pair<int,
-//       ScalarType>(IndexV0, 1/EdgeL));
-//     }
-//   }
-
-//   // find sum of laplacian weights
-//   std::vector<ScalarType> SumW;
-
-//   //    std::vector<bool> IsB;
-//   //    getBorderVert(Faces,IsB);
-//   std::set<int> FixedSet(FixedVert.begin(), FixedVert.end());
-
-//   for (size_t i = 0; i < KernelV.size(); i++) {
-//     int IndexV0 = i;
-//     if ((!smooth_fixed) && (FixedSet.count(IndexV0) > 0))
-//       continue;
-//     //        bool IsBV0=IsB[IndexV0];
-//     //        if (IsBV0)continue;
-//     if (NeighFeatures[IndexV0].size()>0)
-//     {
-//         for (size_t c = 0; c < 3; c++) {
-//           Geo::LinearConstraint<ScalarType> Constr;
-//           Constr.Weight = WeightLap;
-//           Constr.RHSide = 0;
-//           Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV0, c, -1));
-//           ScalarType OtherW =
-//               (ScalarType)1 / (ScalarType)NeighFeatures[IndexV0].size();
-
-//           for (size_t j = 0; j < NeighFeatures[IndexV0].size(); j++) {
-//             int IndexV1 = NeighFeatures[IndexV0][j];
-
-//             assert(IndexV0 != IndexV1);
-
-//             Constr.LHSide.push_back(
-//                 Geo::VarTerm<ScalarType>(IndexV1, c, OtherW));
-//           }
-//           LinConstr.push_back(Constr);
-//         }
-//       }
-//     else {
-//       for (size_t c = 0; c < 3; c++) {
-//         Geo::LinearConstraint<ScalarType> Constr;
-//         Constr.Weight = WeightLap;
-//         Constr.RHSide = 0;
-//         Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV0, c, -1));
-//         ScalarType OtherW = (ScalarType)1 / (ScalarType)KernelV[i].size();
-
-//         for (size_t j = 0; j < KernelV[i].size(); j++) {
-//           int IndexV1 = KernelV[i][j];
-
-//           assert(IndexV0 != IndexV1);
-
-//           Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV1, c,
-//           OtherW));
-//         }
-//         LinConstr.push_back(Constr);
-//       }
-//     }
-//   }
-
-//   Geo::LinearConstraintLeastSQSolver<ScalarType> LinSqSolver;
-//   LinSqSolver.Init(LinConstr);
-//   std::vector<ScalarType> Solution;
-//   LinSqSolver.Solve(Solution);
-
-//   for (size_t i = 0; i < VertPos.size(); i++) {
-//     int IndexX = (i * 3);
-//     int IndexY = IndexX + 1;
-//     int IndexZ = IndexX + 2;
-//     ScalarType ValX = Solution[IndexX];
-//     ScalarType ValY = Solution[IndexY];
-//     ScalarType ValZ = Solution[IndexZ];
-//     VertPos[i] = Geo::Point3<ScalarType>(ValX, ValY, ValZ);
-//   }
-// }
-
 template <class ScalarType>
 void SmoothLaplacianImplicit(std::vector<Geo::Point2<ScalarType>> &VertPos,
                              const std::vector<std::vector<int>> &Faces,
@@ -1709,6 +1460,20 @@ void SmoothLaplacianImplicit(std::vector<Geo::Point2<ScalarType>> &VertPos,
     VertPos[i].X = VertPos3D[i].X;
     VertPos[i].Y = VertPos3D[i].Y;
   }
+}
+
+template <class ScalarType>
+void SmoothLaplacianImplicit(std::vector<ScalarType> &Signal,
+                             const std::vector<std::vector<int>> &Faces,
+                             const std::vector<int> &FixedVert) {
+  std::vector<Geo::Point3<ScalarType>> VertPos3D;
+  for (size_t i = 0; i < Signal.size(); i++)
+    VertPos3D.push_back(Geo::Point3<ScalarType>(Signal[i],0, 0));
+
+  SmoothLaplacianImplicit(VertPos3D, Faces, FixedVert);
+
+  for (size_t i = 0; i < VertPos3D.size(); i++)
+    Signal[i] = VertPos3D[i].X;
 }
 
 template <class ScalarType>

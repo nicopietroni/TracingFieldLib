@@ -1,7 +1,9 @@
 #ifndef PATCH_SIDE_DISCRETIZATION
 #define PATCH_SIDE_DISCRETIZATION
 
+#include "./solve/constraint_graph.h"
 #include "./solve/iterative_integer_lin_constraint_solver.h"
+#include "field_graph/graph.h"
 #include "mesh_functions.h"
 #include "point3.h"
 #include "polyline3.h"
@@ -14,10 +16,13 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <queue>
 #include <set>
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#define MIN_SUBD 1
 
 namespace Geo {
 
@@ -25,16 +30,17 @@ template <class ScalarType> class SideDiscretization {
 
 public:
   enum typeMatching { NoQuad, OddSubd, NoMatch, OkMatch };
+  enum parityMode { NoParity, EvenVar, SolvePost };
 
-  enum energyMode { EM_ForceRegular, EM_Blend };
+  typename Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::FixOrderType
+      FixType;
 
-  enum solveMode { SM_Base, SM_Base_Regular, SM_Iterative, SM_GlobalSolve };
-
-  typename Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::FixOrderType FixType;
+  parityMode PMode;
 
 private:
-  energyMode EM;
+  // energyMode EM;
   ScalarType RegVsIso;
+
   struct PatchSide {
     std::vector<std::vector<Geo::Point3<ScalarType>>> SubSides;
     std::vector<std::array<int, 3>> PPAdj;
@@ -53,7 +59,7 @@ private:
   std::vector<ScalarType> VarTargetValueW;
 
   std::vector<int> VarValue;
-  bool force_parity;
+  // bool force_parity;
   bool check_parity;
   bool current_doubleVal;
   // std::vector<bool> VarFeature;
@@ -62,7 +68,7 @@ private:
   int NumVariables;
   int NumTJunctions;
 
-  bool UseGeoAVG;
+  // bool UseGeoAVG;
 
   std::vector<ScalarType> OppEquivalencesW;
   std::vector<std::pair<std::vector<int>, std::vector<int>>> OppEquivalences;
@@ -71,6 +77,8 @@ private:
   std::vector<std::vector<int>> PatchCornersIdx;
 
 public:
+  bool PrioritizeTJunction;
+
   std::vector<bool> HasFeature;
 
   ScalarType MinRatio, MaxRatio;
@@ -274,7 +282,8 @@ private:
     // // If the first element is a separator, make it circular
     // if (!SplitSeq.empty() && Separator.find(SideSeq.front()) !=
     // Separator.end()) {
-    //     SplitSeq.front().insert(SplitSeq.front().begin(), SideSeq.front());
+    //     SplitSeq.front().insert(SplitSeq.front().begin(),
+    //     SideSeq.front());
     // }
   }
 
@@ -339,12 +348,12 @@ private:
   }
 
   void InitTargetValue(const ScalarType &TargetL) {
-    VarValue.clear();
+    VarTargetValue.clear();
     for (size_t i = 0; i < NumVariables; i++) {
-      std::vector<std::array<int, 3>> PatchSides;
-      SideOfVariable(i, PatchSides);
-      assert(PatchSides.size() > 0);
-      std::array<int, 3> CurrPSide = PatchSides[0];
+      std::vector<std::array<int, 3>> TartPatchSides;
+      SideOfVariable(i, TartPatchSides);
+      assert(TartPatchSides.size() > 0);
+      std::array<int, 3> CurrPSide = TartPatchSides[0];
       std::vector<Geo::Point3<ScalarType>> SubSidePoints;
       GetSubSidePoints(CurrPSide, SubSidePoints);
 
@@ -352,15 +361,17 @@ private:
       Poly3.PolyPos = SubSidePoints;
       ScalarType L = Poly3.Lenght();
       int SubdNum = floor(0.5 + L / TargetL);
-      if (force_parity)
-        SubdNum = floor(0.5 + L / (TargetL * 2));
-      SubdNum = std::max(SubdNum, 1);
-      if (force_parity)
-        VarValue.push_back(SubdNum * 2);
-      else
-        VarValue.push_back(SubdNum);
+      // if (force_parity)
+      //   SubdNum = floor(0.5 + L / (TargetL * 2));
+
+      // CHECK!
+      SubdNum = std::max(SubdNum, MIN_SUBD);
+      // if (force_parity)
+      //   VarValue.push_back(SubdNum * 2);
+      // else
+      VarTargetValue.push_back(SubdNum);
     }
-    VarTargetValue = VarValue;
+    // VarTargetValue = VarValue;
   }
 
   void GetPatchVariances(std::vector<ScalarType> &PatchVariance) {
@@ -381,7 +392,9 @@ private:
         maxS = std::max(maxS, SideSub);
         minS = std::min(minS, SideSub);
       }
-
+      // set minimal value to 1
+      minS = std::max(minS, (ScalarType)1);
+      maxS = std::max(maxS, (ScalarType)1);
       ScalarType Ratio = maxS / minS;
       PatchVariance.push_back(Ratio);
     }
@@ -421,6 +434,10 @@ private:
         if (HasSideV)
           OppEquivalencesW[i] += 1;
       }
+    }
+
+    for (size_t i = 0; i < OppEquivalencesW.size(); i++) {
+      assert(OppEquivalencesW[i] >= 1);
     }
   }
 
@@ -501,7 +518,6 @@ private:
     PolyP.PolyPos = SubSide;
     std::vector<Geo::Point3<ScalarType>> SidePos =
         PolyP.SampleUniformly(VarValue[IndexVariable] + 1);
-    // PolyP.SampleUniformly(VarValue[IndexVariable] - 1);
 
     SampleSidePoints[IndexVariable].push_back(SubSide[0]);
     SampleSidePoints[IndexVariable].insert(
@@ -566,6 +582,35 @@ private:
     for (size_t i = 0; i < NumSides(IndexP); i++)
       for (size_t j = 0; j < NumSubSides(IndexP, i); j++)
         VarList.push_back(Variable(IndexP, i, j));
+  }
+
+  void PatchVariables(const int IndexP,
+                      std::vector<std::vector<int>> &VarList) const {
+    assert(IndexP >= 0);
+    assert(IndexP < PatchSides.size());
+    int SubVal = 0;
+    VarList.clear();
+    for (size_t i = 0; i < NumSides(IndexP); i++) {
+      std::vector<int> SideVarList;
+      PatchSideVariables(IndexP, i, SideVarList);
+      VarList.push_back(SideVarList);
+    }
+  }
+
+  typeMatching PatchMatchingType(const int &IndexP) {
+    if (NumSides(IndexP) != 4)
+      return NoQuad;
+    assert(IndexP >= 0);
+    assert(IndexP < PatchSides.size());
+    int Size0 = SideSize(IndexP, 0);
+    int Size1 = SideSize(IndexP, 1);
+    int Size2 = SideSize(IndexP, 2);
+    int Size3 = SideSize(IndexP, 3);
+    if (((Size0 + Size1 + Size2 + Size3) % 2) == 1)
+      return OddSubd;
+    if ((Size0 != Size2) || (Size1 != Size3))
+      return NoMatch;
+    return OkMatch;
   }
 
   void InitMatchingType() {
@@ -649,606 +694,65 @@ private:
       OppEquivalences.push_back(Entry1);
     }
 
-    // write some stats
-    int MaxSize = 0;
-    ScalarType AvgSize = 0;
-    for (size_t i = 0; i < OppEquivalences.size(); i++) {
-      int size0 = OppEquivalences[i].first.size();
-      int size1 = OppEquivalences[i].second.size();
-      AvgSize += size0;
-      AvgSize += size1;
-      MaxSize = std::max(MaxSize, size0);
-      MaxSize = std::max(MaxSize, size1);
-    }
-    AvgSize /= (OppEquivalences.size() * 2);
-    std::cout << "AVG Size " << AvgSize << std::endl;
-    std::cout << "MAX Size " << MaxSize << std::endl;
     std::cout << "NUM Constr " << OppEquivalences.size() << std::endl;
     std::cout << "NUM Variable " << NumVariables << std::endl;
   }
 
-  void InitVarEqSets() {
-    VarSequences.clear();
-    std::vector<std::vector<int>> EqGraph(NumVariables);
+  std::vector<int> OldTarget;
 
-    for (size_t i = 0; i < OppEquivalences.size(); i++) {
+  void DivideTargetVal() {
+    OldTarget = VarTargetValue;
 
-      int Size0 = OppEquivalences[i].first.size();
-      int Size1 = OppEquivalences[i].second.size();
-
-      if (Size0 != 1)
-        continue;
-      if (Size1 != 1)
-        continue;
-
-      int IndexVar0 = OppEquivalences[i].first[0];
-      int IndexVar1 = OppEquivalences[i].second[0];
-
-      assert(IndexVar0 != IndexVar1);
-      assert(IndexVar0 >= 0);
-      assert(IndexVar1 >= 0);
-      assert(IndexVar0 < NumVariables);
-      assert(IndexVar1 < NumVariables);
-      EqGraph[IndexVar0].push_back(IndexVar1);
-      EqGraph[IndexVar1].push_back(IndexVar0);
-    }
-
-    std::vector<bool> Visited(EqGraph.size(), false);
-    for (size_t i = 0; i < EqGraph.size(); i++) {
-      if (Visited[i])
-        continue;
-      VarSequences.resize(VarSequences.size() + 1);
-      std::vector<int> VertStack;
-      VertStack.push_back(i);
-      do {
-        int IndexVar = VertStack.back();
-        VertStack.pop_back();
-        if (Visited[IndexVar])
-          continue;
-
-        VarSequences.back().push_back(IndexVar);
-        Visited[IndexVar] = true;
-
-        for (size_t j = 0; j < EqGraph[IndexVar].size(); j++) {
-          int IndexNVar = EqGraph[IndexVar][j];
-          if (Visited[IndexNVar])
-            continue;
-          VertStack.push_back(IndexNVar);
-        }
-      } while (!VertStack.empty());
-
-      // std::set<int>
-      // TestSet(VarSequences.back().begin(),VarSequences.back().end());
-      //  if(VarSequences.back().size()!=TestSet.size())
-      //  {
-      //    std::cout<<"DEDE"<<std::endl;
-      //    exit(0);
-      //  }
-    }
-
-    // check non visited
-    // int NonVisited = 0;
-    for (size_t i = 0; i < Visited.size(); i++) {
-      if (!Visited[i]) {
-        // NonVisited++;
-        VarSequences.push_back(std::vector<int>(1, i));
-      }
-    }
-    // std::cout << "Non Visited Num " << NonVisited << std::endl;
-  }
-
-  void UpdateValueEqSet() {
-    for (size_t i = 0; i < VarSequences.size(); i++) {
-      int AvgSum = 0;
-      ScalarType GeoAvg = 1;
-      for (size_t j = 0; j < VarSequences[i].size(); j++) {
-        int IndexVar = VarSequences[i][j];
-        AvgSum += VarTargetValue[IndexVar];
-        GeoAvg *= (ScalarType)VarTargetValue[IndexVar];
-      }
-      int VarNum = VarSequences[i].size();
-      AvgSum = floor(0.5 + ((ScalarType)AvgSum / (ScalarType)VarNum));
-      AvgSum = std::max(AvgSum, 1);
-      GeoAvg = pow(GeoAvg, 1 / (ScalarType)VarNum);
-      int GeoAvgi = floor(GeoAvg + 0.5);
-      GeoAvgi = std::max(GeoAvgi, 1);
-
-      if ((force_parity) && ((GeoAvgi % 2) == 1))
-        GeoAvgi++;
-      if ((force_parity) && ((AvgSum % 2) == 1))
-        AvgSum++;
-      for (size_t j = 0; j < VarSequences[i].size(); j++) {
-        int IndexVar = VarSequences[i][j];
-        if (UseGeoAVG)
-          VarValue[IndexVar] = GeoAvgi;
-        else
-          VarValue[IndexVar] = AvgSum;
-      }
+    for (size_t i = 0; i < VarTargetValue.size(); i++) {
+      VarTargetValue[i] /= 2;
+      VarTargetValue[i] = std::max(VarTargetValue[i], MIN_SUBD);
     }
   }
 
-  struct ChangeSubd {
-    // the variables that are changed
-    std::vector<int> IndexVar;
-
-    // the difference of value
-    int delta;
-
-    // difference of patches that solve the parity
-    int ParitySolve;
-    // difference of patches that solve the matches
-    int MatchSolve;
-    // total missmatch
-    int MissMatchDiff;
-    // difference wth respect to ideal value
-    ScalarType TargetSizeDiff;
-    // difference wth respect to blend enedgy
-    ScalarType BlendEnergyDiff;
-    // use or not blend energy for priority
-    bool UseBlend;
-
-    inline bool operator==(const ChangeSubd &CSub) {
-      if (IndexVar != CSub.IndexVar)
-        return false;
-      if (delta != CSub.delta)
-        return false;
-      return true;
-    }
-
-    inline bool operator<(const ChangeSubd &CSub) const {
-
-      if (UseBlend)
-        return (BlendEnergyDiff < BlendEnergyDiff);
-
-      if (ParitySolve != CSub.ParitySolve)
-        return (ParitySolve < CSub.ParitySolve);
-
-      if (MatchSolve != CSub.MatchSolve)
-        return (MatchSolve < CSub.MatchSolve);
-
-      if (MissMatchDiff != CSub.MissMatchDiff)
-        return (MissMatchDiff > CSub.MissMatchDiff);
-
-      return (TargetSizeDiff > CSub.TargetSizeDiff);
-    }
-
-    ChangeSubd() {
-      delta = 0;
-      ParitySolve = 0;
-      MatchSolve = 0;
-      TargetSizeDiff = -1;
-      BlendEnergyDiff = 0;
-      UseBlend = false;
-    }
-  };
-
-  int MissMatchValue(const int IndexP) const {
-    int Size0 = SideSize(IndexP, 0);
-    int Size1 = SideSize(IndexP, 1);
-    int Size2 = SideSize(IndexP, 2);
-    int Size3 = SideSize(IndexP, 3);
-    int MissMatchVal = 0;
-    MissMatchVal += fabs(Size0 - Size2);
-    MissMatchVal += fabs(Size1 - Size3);
-    return MissMatchVal;
+  void DuplicateSolution() {
+    for (size_t i = 0; i < VarValue.size(); i++)
+      VarValue[i] *= 2;
+    assert(OldTarget.size() == VarTargetValue.size());
+    VarTargetValue = OldTarget;
   }
 
-  int NumMissMatch(const int IndexP) const {
-    int Size0 = SideSize(IndexP, 0);
-    int Size1 = SideSize(IndexP, 1);
-    int Size2 = SideSize(IndexP, 2);
-    int Size3 = SideSize(IndexP, 3);
-    int MissMatchNum = 0;
-    if (Size0 != Size2)
-      MissMatchNum++;
-    if (Size1 != Size3)
-      MissMatchNum++;
-    return MissMatchNum;
-  }
-
-  int SizeDiff(const int IndexP) const {
-    std::vector<int> VarList;
-    PatchVariables(IndexP, VarList);
-    int DiffVar = 0;
-    for (size_t i = 0; i < VarList.size(); i++) {
-      int CurrVar = VarList[i];
-      DiffVar += fabs(VarTargetValue[CurrVar] - VarValue[CurrVar]);
-    }
-    return DiffVar;
-  }
-
-  bool IsOdd(const int IndexP) const {
-    int Size0 = SideSize(IndexP, 0);
-    int Size1 = SideSize(IndexP, 1);
-    int Size2 = SideSize(IndexP, 2);
-    int Size3 = SideSize(IndexP, 3);
-    int SubdNum = Size0 + Size1 + Size2 + Size3;
-    return ((SubdNum % 2) == 1);
-  }
-
-  int NumOdd(const std::vector<int> &Patches) const {
-    int NumOdd = 0;
-    for (size_t i = 0; i < Patches.size(); i++)
-      if (IsOdd(Patches[i]))
-        NumOdd++;
-    return NumOdd;
-  }
-
-  int NumOdd() const {
-    int NumOdd = 0;
-    for (size_t i = 0; i < NumPatches(); i++)
-      if (IsOdd(i))
-        NumOdd++;
-    return NumOdd;
-  }
-
-  int NumMissMatch() const {
-    int NumMMatch = 0;
-    for (size_t i = 0; i < NumPatches(); i++)
-      NumMMatch += NumMissMatch(i);
-    return NumMMatch;
-  }
-
-  int MissMatchValue() const {
-    int MMValue = 0;
-    for (size_t i = 0; i < NumPatches(); i++)
-      MMValue += MissMatchValue(i);
-    return MMValue;
-  }
-
-  int SizeDiff() const {
-    int SizeDVal = 0;
-    for (size_t i = 0; i < NumPatches(); i++)
-      SizeDVal += SizeDiff(i);
-    return SizeDVal;
-  }
-
-  int SizeDiff(const std::vector<int> &Patches) const {
-    int DiffVal = 0;
-    for (size_t i = 0; i < Patches.size(); i++)
-      DiffVal += SizeDiff(Patches[i]);
-    return DiffVal;
-  }
-
-  int NumMissMatch(const std::vector<int> &Patches) const {
-    int NumMMatch = 0;
-    for (size_t i = 0; i < Patches.size(); i++)
-      NumMMatch += NumMissMatch(Patches[i]);
-    return NumMMatch;
-  }
-
-  int MissMatchValue(const std::vector<int> &Patches) const {
-    int MMVal = 0;
-    for (size_t i = 0; i < Patches.size(); i++)
-      MMVal += MissMatchValue(Patches[i]);
-    return MMVal;
-  }
-
-  ScalarType BlendEnergy(const std::vector<int> &Patches) const {
-    ScalarType EVal = 0;
-    for (size_t i = 0; i < Patches.size(); i++)
-      EVal += pow(MissMatchValue(Patches[i]), 2) * RegVsIso;
-
-    for (size_t i = 0; i < Patches.size(); i++)
-      EVal += pow(SizeDiff(Patches[i]), 2) * (1 - RegVsIso);
-
-    return EVal;
-  }
-
-  ScalarType BlendEnergy() const {
-    std::vector<int> PatchesIdx;
-    for (size_t i = 0; i < NumPatches(); i++)
-      PatchesIdx.push_back(i);
-
-    return BlendEnergy(PatchesIdx);
-  }
-
-  std::vector<int> InvolvedPatches(ChangeSubd &ChOp) {
-    std::vector<int> AllPatches;
-    for (size_t i = 0; i < ChOp.IndexVar.size(); i++) {
-      int CurrVar = ChOp.IndexVar[i];
-      std::vector<std::pair<int, int>> PSide = PatchesSideOfVariable(CurrVar);
-      for (size_t j = 0; j < PSide.size(); j++)
-        AllPatches.push_back(PSide[j].first);
-    }
-    std::sort(AllPatches.begin(), AllPatches.end());
-    AllPatches.erase(std::unique(AllPatches.begin(), AllPatches.end()),
-                     AllPatches.end());
-    return AllPatches;
-  }
-
-  void UpdatePriorityRegular(ChangeSubd &ChOp) {
-    // get previous values
-    std::vector<int> PatchIdx = InvolvedPatches(ChOp);
-
-    int Parity0 = 0;
-    if (check_parity)
-      Parity0 = NumOdd(PatchIdx);
-
-    int Match0 = NumMissMatch(PatchIdx);
-    int MMatchDiff0 = MissMatchValue(PatchIdx);
-    int SizeDiff0 = SizeDiff(PatchIdx);
-    // get involved variables
-    std::vector<int> OldVal; //=VarValue;
-    // std::set<int> TestVarSet;
-    for (size_t i = 0; i < ChOp.IndexVar.size(); i++) {
-      int CurrVar = ChOp.IndexVar[i];
-      // if (TestVarSet.count(CurrVar)>0)
-      // {
-      //   std::cout<<"ERROR"<<std::endl;
-      //   exit(0);
-      // }
-      // TestVarSet.insert(CurrVar);
-      OldVal.push_back(VarValue[CurrVar]);
-
-      VarValue[CurrVar] += ChOp.delta;
-      VarValue[CurrVar] = std::max(1, VarValue[CurrVar]);
-    }
-
-    int Parity1 = 0;
-    if (check_parity)
-      Parity1 = NumOdd(PatchIdx);
-    // int Parity1=NumOdd();
-    int Match1 = NumMissMatch(PatchIdx);
-    int MMatchDiff1 = MissMatchValue(PatchIdx);
-    int SizeDiff1 = SizeDiff(PatchIdx);
-
-    // VarValue=OldVal;
-    for (size_t i = 0; i < ChOp.IndexVar.size(); i++) {
-      int CurrVar = ChOp.IndexVar[i];
-      VarValue[CurrVar] = OldVal[i];
-    }
-
-    ChOp.ParitySolve = Parity0 - Parity1;
-    ChOp.MatchSolve = Match0 - Match1;
-    ChOp.MissMatchDiff = MMatchDiff0 - MMatchDiff1;
-    ChOp.TargetSizeDiff = SizeDiff0 - SizeDiff1;
-  }
-
-  void UpdatePriorityBlend(ChangeSubd &ChOp) {
-    // get previous values
-    std::vector<int> PatchIdx = InvolvedPatches(ChOp);
-
-    // int Parity0 = 0;
-    // if (!force_parity)
-    //   Parity0 = NumOdd(PatchIdx);
-
-    ScalarType Energy0 = BlendEnergy(PatchIdx);
-
-    // get involved variables
-    std::vector<int> OldVal; //=VarValue;
-    // std::set<int> TestVarSet;
-    for (size_t i = 0; i < ChOp.IndexVar.size(); i++) {
-      int CurrVar = ChOp.IndexVar[i];
-
-      OldVal.push_back(VarValue[CurrVar]);
-
-      VarValue[CurrVar] += ChOp.delta;
-      VarValue[CurrVar] = std::max(1, VarValue[CurrVar]);
-    }
-
-    // int Parity1 = 0;
-    // if (!force_parity)
-    //   Parity1 = NumOdd(PatchIdx);
-
-    ScalarType Energy1 = BlendEnergy(PatchIdx);
-
-    for (size_t i = 0; i < ChOp.IndexVar.size(); i++) {
-      int CurrVar = ChOp.IndexVar[i];
-      VarValue[CurrVar] = OldVal[i];
-    }
-
-    ChOp.BlendEnergyDiff = Energy0 - Energy1;
-    ChOp.UseBlend = true;
-  }
-
-  bool IsProfitable(ChangeSubd &ChOp) const {
-    if (ChOp.UseBlend)
-      return (ChOp.BlendEnergyDiff > 0);
-
-    if (ChOp.ParitySolve < 0)
-      return false;
-    if (ChOp.ParitySolve > 0)
-      return true;
-
-    if (ChOp.MatchSolve < 0)
-      return false;
-    if (ChOp.MatchSolve > 0)
-      return true;
-
-    if (ChOp.MissMatchDiff < 0)
-      return false;
-    if (ChOp.MissMatchDiff > 0)
-      return true;
-
-    if (ChOp.TargetSizeDiff < 0)
-      return false;
-    if (ChOp.TargetSizeDiff > 0)
-      return true;
-
-    return false;
-  }
-
-  std::vector<ChangeSubd> ChangeOp;
-
-  void DoOperation(const ChangeSubd &ChOp) {
-    // std::cout << "Doing Operation" << std::endl;
-    // std::cout << "Energy Reduction" << ChOp.BlendEnergyDiff<<std::endl;
-
-    // std::cout << "- parity solve:" << ChOp.ParitySolve << std::endl;
-    // std::cout<<"Doing Operation"<<ChOp.MatchSolve<<std::endl;
-    // std::cout<<"Doing Operation"<<std::endl;
-    // std::cout << "Energy 0: " << BlendEnergy() << std::endl;
-
-    for (size_t i = 0; i < ChOp.IndexVar.size(); i++) {
-      int CurrVar = ChOp.IndexVar[i];
-      VarValue[CurrVar] += ChOp.delta;
-      VarValue[CurrVar] = std::max(1, VarValue[CurrVar]);
-    }
-    // std::cout << "Energy 1: " << BlendEnergy() << std::endl;
-  }
-
-  void InitOpStack() {
-    ChangeOp.clear();
-    std::vector<int> DeltaOpt;
-    DeltaOpt.push_back(1);
-    DeltaOpt.push_back(-1);
-    DeltaOpt.push_back(2);
-    DeltaOpt.push_back(-2);
-
-    if (EM == EM_ForceRegular) {
-      for (size_t d = 0; d < DeltaOpt.size(); d++)
-        for (size_t i = 0; i < VarSequences.size(); i++) {
-          ChangeSubd CurrOp;
-          CurrOp.IndexVar = VarSequences[i];
-          CurrOp.delta = DeltaOpt[d];
-
-          UpdatePriorityRegular(CurrOp);
-
-          if (IsProfitable(CurrOp))
-            ChangeOp.push_back(CurrOp);
-        }
-    } else {
-      for (size_t d = 0; d < DeltaOpt.size(); d++)
-        for (size_t i = 0; i < VarValue.size(); i++) {
-          ChangeSubd CurrOp;
-          CurrOp.IndexVar.push_back(i);
-          CurrOp.delta = DeltaOpt[d];
-
-          UpdatePriorityBlend(CurrOp);
-
-          if (IsProfitable(CurrOp))
-            ChangeOp.push_back(CurrOp);
-        }
-    }
-    std::sort(ChangeOp.begin(), ChangeOp.end());
-  }
-
-  // void SetBaseIntegerValues(const ScalarType &TargetL) {
-  //   InitTargetValue(TargetL);
-  //   InitMatchingType();
-  //   FindDiscretizationPoint();
-  // }
-
-  void MatchIntegerValues() {
-
-    InitOppositeEquivalences();
-    InitVarEqSets();
-    UpdateValueEqSet();
-
-    // if (force_parity) {
-    //   for (size_t i = 0; i < VarValue.size(); i++)
-    //     VarValue[i] *= 2;
-    // }
-    // InitMatchingType();
-    // FindDiscretizationPoint();
-  }
-
-  void SolveIntegerValues() {
-    int Odd0 = NumOdd();
-    int MMatch0 = NumMissMatch();
-    int MMVal0 = MissMatchValue();
-    int DiffVal0 = SizeDiff();
-
-    ScalarType En0 = BlendEnergy();
-
-    if (force_parity) {
-      for (size_t i = 0; i < VarValue.size(); i++) {
-        assert(VarValue[i] % 2 == 0);
-        VarValue[i] /= 2;
-        VarTargetValue[i] /= 2;
-      }
-    }
-
-    do {
-      InitOpStack();
-      // UpdatePriority(ChangeOp.back());
-      check_parity = (!force_parity);
-      if (ChangeOp.size() > 0)
-        DoOperation(ChangeOp.back());
-    } while (ChangeOp.size() > 0);
-
-    if (force_parity) {
-      for (size_t i = 0; i < VarValue.size(); i++)
-        VarValue[i] *= 2;
-
-      // force_parity = false;
-      for (size_t i = 0; i < VarTargetValue.size(); i++)
-        VarTargetValue[i] *= 2;
-
-      if (EM == EM_ForceRegular) {
-        // do one last step of optimization with no parity force
-        check_parity = true;
-        do {
-          InitOpStack();
-          // UpdatePriority(ChangeOp.back());
-          if (ChangeOp.size() > 0)
-            DoOperation(ChangeOp.back());
-        } while (ChangeOp.size() > 0);
-      }
-    }
-
-    InitMatchingType();
-    FindDiscretizationPoint();
-    ScalarType En1 = BlendEnergy();
-    int Odd1 = NumOdd();
-    int MMatch1 = NumMissMatch();
-    int MMVal1 = MissMatchValue();
-    int DiffVal1 = SizeDiff();
-    if (EM == EM_ForceRegular) {
-      std::cout << "* SIZE STATISTICS *" << std::endl;
-      std::cout << "- Num Odd " << Odd0 << " - > " << Odd1 << std::endl;
-      std::cout << "- Num MMatch " << MMatch0 << " - > " << MMatch1
-                << std::endl;
-      std::cout << "- Val MMatch " << MMVal0 << " - > " << MMVal1 << std::endl;
-      std::cout << "- Diff Value " << DiffVal0 << " - > " << DiffVal1
-                << std::endl;
-    } else {
-      std::cout << "* ENERGY STATISTICS *" << std::endl;
-      std::cout << "- Energy " << En0 << " - > " << En1 << std::endl;
-    }
-  }
-
-  // void SolveSequencesIntegerValues() {
-  //   EM = EM_ForceRegular;
-  //   SolveIntegerValues();
-  // }
-
-  // void SolveBlendIntegerValues(ScalarType _RegVsIso = 1) {
-  //   EM = EM_Blend;
-  //   RegVsIso = _RegVsIso;
-  //   SolveIntegerValues();
-  // }
-  void InitMinMaxVectors(std::vector<int> &MinVal, std::vector<int> &MaxVal) {
-    MinVal = VarTargetValue;
-    MaxVal = VarTargetValue;
-    for (size_t i = 0; i < MinVal.size(); i++) {
-      MinVal[i] = floor(0.5 + ScalarType(MinVal[i]) / ScalarType(MinRatio));
-      MinVal[i] = std::max(MinVal[i], 1);
-    }
-    for (size_t i = 0; i < MaxVal.size(); i++) {
-      MaxVal[i] = floor(0.5 + ScalarType(MaxVal[i]) * ScalarType(MaxRatio));
-      MaxVal[i] = std::max(MaxVal[i], 1);
-    }
-  }
-
-  void SolveGlobal() {
+  void SolveGlobal(bool pre_divide, bool post_duplicate) {
     std::vector<LinearConstraint<ScalarType>> LSQCostr;
 
-    std::vector<int> OldTarget = VarTargetValue;
-    if (force_parity) {
-      for (size_t i = 0; i < VarValue.size(); i++) {
-        assert(VarValue[i] % 2 == 0);
-        VarValue[i] /= 2;
-        if (VarTargetValue[i] % 2 == 0)
-          VarTargetValue[i] /= 2;
-        else
-          VarTargetValue[i] = (VarTargetValue[i] / 2) + 1;
-        VarTargetValue[i] = std::max(VarTargetValue[i], 1);
+    // std::vector<int> OldTarget = VarTargetValue;
+    if (post_duplicate)
+      assert(pre_divide);
+
+    if (pre_divide)
+      DivideTargetVal();
+
+    // prioritize trt tjunctions or not
+    std::vector<size_t> TJunctNum(NumVariables, 1);
+    std::vector<ScalarType> RoundPrio;
+    if (PrioritizeTJunction) {
+      for (size_t i = 0; i < OppEquivalences.size(); i++) {
+        std::vector<int> Var0 = OppEquivalences[i].first;
+        std::vector<int> Var1 = OppEquivalences[i].second;
+
+        for (size_t j = 0; j < Var0.size(); j++) {
+          int IndexVar = Var0[j];
+          assert(IndexVar >= 0);
+          assert(IndexVar < TJunctNum.size());
+          TJunctNum[IndexVar] = std::max(TJunctNum[IndexVar], Var0.size());
+        }
+
+        for (size_t j = 0; j < Var1.size(); j++) {
+          int IndexVar = Var1[j];
+          assert(IndexVar >= 0);
+          assert(IndexVar < TJunctNum.size());
+          TJunctNum[IndexVar] = std::max(TJunctNum[IndexVar], Var1.size());
+        }
       }
+
+      for (size_t i = 0; i < TJunctNum.size(); i++)
+        RoundPrio.push_back(((ScalarType)1) / ((ScalarType)TJunctNum[i]));
     }
-    // add equality constraints
-    // int MaxVal=0;
+
     for (size_t i = 0; i < OppEquivalences.size(); i++) {
       std::vector<int> Var0 = OppEquivalences[i].first;
       std::vector<int> Var1 = OppEquivalences[i].second;
@@ -1282,7 +786,7 @@ private:
     }
 
     Geo::IntegerLinearConstraintLeastSQSolver<ScalarType> IntLSQ;
-    IntLSQ.FOrdType=FixType;
+    IntLSQ.FOrdType = FixType;
 
     std::vector<int> MinVal(NumVariables, 1);
     std::vector<int> MaxVal(NumVariables, 1000);
@@ -1302,71 +806,91 @@ private:
     }
 
     // InitMinMaxVectors(MinVal,MaxVal);
-    IntLSQ.Init(LSQCostr, MinVal, MaxVal, SoftLow, SoftHigh, SoftOptimal);
+    IntLSQ.Init(LSQCostr, MinVal, MaxVal, SoftLow, SoftHigh, SoftOptimal,
+                RoundPrio);
     // std::cout<<"DE 1 "<<VarTargetValue.size()<<std::endl;
     IntLSQ.Solve(VarValue);
-    if (force_parity) {
-      for (size_t i = 0; i < VarValue.size(); i++)
-        VarValue[i] *= 2;
+
+    if (post_duplicate)
+      DuplicateSolution();
+  }
+
+  void GetPerPatchVars(std::vector<std::vector<std::vector<int>>> &PatchVar) {
+    PatchVar.clear();
+    for (size_t i = 0; i < PatchSides.size(); i++) {
+      std::vector<std::vector<int>> CurrPatchVar;
+      PatchVariables(i, CurrPatchVar);
+      PatchVar.push_back(CurrPatchVar);
     }
-    VarTargetValue = OldTarget;
-  }
-
-  bool IsMatchOppEquivalence(const int &IndexEq) const {
-    assert(IndexEq >= 0);
-    assert(IndexEq < OppEquivalences.size());
-    std::vector<int> Eq0 = OppEquivalences[IndexEq].first;
-    std::vector<int> Eq1 = OppEquivalences[IndexEq].second;
-
-    int Sum0 = 0;
-    for (size_t i = 0; i < Eq0.size(); i++)
-      Sum0 += VarValue[Eq0[i]];
-
-    int Sum1 = 0;
-    for (size_t i = 0; i < Eq1.size(); i++)
-      Sum1 += VarValue[Eq1[i]];
-
-    return (Sum0 == Sum1);
-  }
-
-  void SolveGlobalIterative() {
-    bool all_solved = false;
-    do {
-      SolveGlobal();
-      all_solved = true;
-      int NonRatio = 0;
-      for (size_t i = 0; i < NumVariables; i++) {
-        if (LessThanRatio(i) || MoreThanRatio(i)) {
-          // if (VarTargetValueW[i]==0)
-          //   VarTargetValueW[i]=0.1;
-          // else
-          //   VarTargetValueW[i]*=2;
-          VarTargetValueW[i] += 1;
-          all_solved = false;
-          NonRatio++;
-        }
-        // else
-        //   VarTargetValueW[i]-=1;
-        // VarTargetValueW[i]/=2;
-        // VarTargetValueW[i]=std::max(VarTargetValueW[i],(ScalarType)0);
-      }
-      // for (size_t i=0;i<OppEquivalences.size();i++)
-      // {
-      //   // if (IsMatchOppEquivalence(i))
-      //   //   OppEquivalencesW[i]/=2;
-      //   // else
-      //   if (!IsMatchOppEquivalence(i))
-      //   {
-      //     //OppEquivalencesW[i]*=2;
-      //     OppEquivalencesW[i]+=1;
-      //     //std::cout<<"Value:"<<OppEquivalencesW[i]<<std::endl;
-      //   }
-      // }
-      std::cout << "Step Non Ratio:" << NonRatio << std::endl;
-    } while (!all_solved);
   }
 
 public:
+  void SolveParityViaGraph(bool find_points = true) {
+    std::vector<std::vector<std::vector<int>>> PatchVar;
+
+    //solve first with flow graph
+    GetPerPatchVars(PatchVar);
+    OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
+    FlowG.SolveParity();
+
+    //then the one that allow invert u and v
+    GetPerPatchVars(PatchVar);
+    ConstraintGraph<ScalarType> CostrGraph(VarValue, VarTargetValue);
+    CostrGraph.SolveParity(PatchVar);
+
+    if (find_points) {
+      InitMatchingType();
+      FindDiscretizationPoint();
+      WritePatchStats();
+    }
+  }
+
+  void SolveEqualityViaGraph(bool find_points = true) {
+    std::vector<std::vector<std::vector<int>>> PatchVar;
+    GetPerPatchVars(PatchVar);
+
+    OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
+    FlowG.SolveEquality();
+
+    if (find_points) {
+      InitMatchingType();
+      FindDiscretizationPoint();
+
+      WritePatchStats();
+    }
+  }
+
+  void SolveSizeViaGraphCycles(bool find_points = true) {
+    std::vector<std::vector<std::vector<int>>> PatchVar;
+    GetPerPatchVars(PatchVar);
+
+    OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
+    FlowG.ImproveSize();
+
+    if (find_points) {
+      InitMatchingType();
+      FindDiscretizationPoint();
+      WritePatchStats();
+    }
+  }
+
+  void AutomaticGraphOptimize(bool OptimizeSize,
+                              bool find_points = true) 
+  {
+    SolveEqualityViaGraph(false);
+    if (OptimizeSize)
+      SolveSizeViaGraphCycles(false);
+
+    if (PMode != NoParity)
+      SolveParityViaGraph(false);
+
+    if (find_points) {
+      InitMatchingType();
+      FindDiscretizationPoint();
+      WritePatchStats();
+    }
+  }
+
   bool LessThanRatio(const int IndexVar) const {
     assert(VarValue.size() == VarTargetValue.size());
     assert(IndexVar >= 0);
@@ -1391,9 +915,8 @@ public:
     return (VarValue[IndexVar] > UpLimit);
   }
 
-  void PrintStats()
-  {
-    std::cout<<"NUM VARIABLES: "<<NumVariables<<std::endl;
+  void PrintStats() {
+    std::cout << "NUM VARIABLES: " << NumVariables << std::endl;
     std::cout << "Num TJunctions: " << NumTJunctions << std::endl;
   }
 
@@ -1490,14 +1013,10 @@ public:
     }
     InitVariables();
 
-    // VarFeature.resize(NumVariables, false);
-
     InitPatchAdj();
 
     InitFeatureVariables(Vert, Features);
 
-    // InitVariableW();
-    //  InitVarFeatures(Vert,_Features);
     PrintStats();
   }
 
@@ -1654,64 +1173,108 @@ public:
     //_GeoFeatures = GeoFeatures;
   }
 
-  void Solve(ScalarType _TargetL, const solveMode &_SM,
-             bool _force_parity = true, ScalarType _RegVsIso = 0.9) {
-
-    RegVsIso = _RegVsIso;
-    force_parity = _force_parity;
-
-    switch (_SM) {
-    case SM_Base:
-      InitTargetValue(_TargetL);
-      break;
-    case SM_Base_Regular:
-      InitTargetValue(_TargetL);
-      MatchIntegerValues();
-      break;
-    case SM_Iterative:
-      InitTargetValue(_TargetL);
-      MatchIntegerValues();
-      EM = EM_ForceRegular;
-      if (RegVsIso != 1)
-        EM = EM_Blend;
-      SolveIntegerValues();
-      break;
-    // case SM_Ite_Blend:
-    //   InitTargetValue(_TargetL);
-    //   MatchIntegerValues();
-    //   EM = EM_Blend;
-    //   SolveIntegerValues();
-    //   break;
-    default:
-      assert(_SM == SM_GlobalSolve);
-      InitTargetValue(_TargetL);
-      InitOppositeEquivalences();
-      InitOppEquivalencesW();
-      VarTargetValueW = std::vector<ScalarType>(VarTargetValue.size(), 0);
-      //SolveGlobalIterative();
-      SolveGlobal();
-      // code block
+  void WritePatchStats() {
+    std::cout << "** STATISTICS INTEGER FIND **" << std::endl;
+    std::cout << "* Num Variables: " << NumVariables << std::endl;
+    std::cout << "* Num Patches: " << PatchSides.size() << std::endl;
+    int NumOK = 0;
+    int NumNoQuad = 0;
+    int NumNoMatch = 0;
+    int NumOdd = 0;
+    for (size_t i = 0; i < PatchSides.size(); i++) {
+      typeMatching typeM = PatchMatchingType(i);
+      switch (typeM) {
+      case NoQuad:
+        NumNoQuad++;
+        break;
+      case OddSubd:
+        NumOdd++;
+        break;
+      case NoMatch:
+        NumNoMatch++;
+        break;
+      default:
+        NumOK++;
+        break;
+      }
     }
+    std::cout << "* Num Non Quad: " << NumNoQuad << std::endl;
+    std::cout << "* Num Odd: " << NumOdd << std::endl;
+    std::cout << "* Num No Match: " << NumNoMatch << std::endl;
+    std::cout << "* Num OK Match: " << NumOK << std::endl;
+  }
+
+  void SolveSystem(const ScalarType &_TargetL, const ScalarType _RegVsIso,
+                   bool find_points = true) {
+    RegVsIso = _RegVsIso;
+    // force_parity = _force_parity;
+
+    InitTargetValue(_TargetL);
+    InitOppositeEquivalences();
+    InitOppEquivalencesW();
+    VarTargetValueW = std::vector<ScalarType>(VarTargetValue.size(), 0);
+
+    // NoParity, EvenVar, SolvePost
+    bool pre_divide = false;
+    bool post_duplicate = false;
+
+    if (PMode == EvenVar) {
+      pre_divide = true;
+      post_duplicate = true;
+    }
+
+    SolveGlobal(pre_divide, post_duplicate);
+
+    if (find_points) {
+      InitMatchingType();
+      FindDiscretizationPoint();
+      WritePatchStats();
+    }
+  }
+
+  void FindDiscretization(const ScalarType &_TargetL,
+                          const ScalarType _RegVsIso,
+                          const bool OptimizeSize) {
+    SolveSystem(_TargetL, _RegVsIso, false);
+    AutomaticGraphOptimize(OptimizeSize,false);
+
     InitMatchingType();
     FindDiscretizationPoint();
+    WritePatchStats();
+  }
+
+  void SetToTarget(ScalarType _TargetL) {
+    std::cout << "Size:" << _TargetL << std::endl;
+    InitTargetValue(_TargetL);
+    VarValue = VarTargetValue;
+    std::cout << "discretize:" << std::endl;
+    InitMatchingType();
+    FindDiscretizationPoint();
+    std::cout << "done:" << std::endl;
+
+    WritePatchStats();
   }
 
   SideDiscretization() {
     NumVariables = 0;
-    UseGeoAVG = false;
-    force_parity = true;
+    // UseGeoAVG = false;
+    PrioritizeTJunction = true;
+    // force_parity = true;
     current_doubleVal = false;
     check_parity = true;
-    EM = EM_ForceRegular;
+    // EM = EM_ForceRegular;
     MinRatio = 3;
     MaxRatio = 4;
 
-    WeightFeatures=true;
-    WeightRegFaceRatio=true;
+    WeightFeatures = true;
+    WeightRegFaceRatio = true;
 
-    //ST_ClosestInt, ST_LowError, StQRPivoting
-    //FixType=Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
-    FixType=Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
+    // ST_ClosestInt, ST_LowError, StQRPivoting
+    // FixType=Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
+    FixType =
+        Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
+
+    PMode = EvenVar;
   }
 };
 

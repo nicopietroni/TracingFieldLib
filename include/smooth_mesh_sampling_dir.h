@@ -1,70 +1,197 @@
 #ifndef SMOOTH_MESH_SAMPLING_DIR
 #define SMOOTH_MESH_SAMPLING_DIR
 
-
-#include "point3.h"
+#include "connectivity.h"
 #include "fitting_points.h"
+#include "point3.h"
+#include "quad3.h"
+#include "temp_mark.h"
 #include "triangle3.h"
+#include <algorithm>
+#include <cassert>
+#include <iostream>
 #include <sys/_types/_size_t.h>
 #include <vector>
 
 namespace Geo {
 
-// template <class ScalarType>
-// class SmoothSampleDirections
-// {
+template <class ScalarType> class QuadSmoothSampling {
 
-//   void FindTargetPositions(const int IndexV,
-//                            const std::vector<int> &KernelF,
-//                            const std::vector<Geo::Point3<ScalarType> > &VertPos,
-//                            const std::vector<std::vector<int> > &Faces,
-//                            const Geo::Point3<ScalarType> &StartDir,
-//                            const ScalarType &AngleInt,
-//                            const int SampleStep,
-//                            Geo::Point3<ScalarType> &TargetP)
-//   {
-//     //first collect all triangles to test
-//     std::vector<Geo::Traingle3<ScalarType> > NeighTris;
-//     std::vector<Geo::Point3<ScalarType> > FitPoints;
-//     for (size_t i=0;i<KernelF.size();i++)
-//     {
-//       Geo::Traingle3<ScalarType> T=TriangleOfFace(VertPos,Faces,KernelF[i]);
-//       NeighTris.push_back(T);
-//       FitPoints.push_back(Barycenter(T));
-//     }
-//     FitPoints.push_back(VertPos[IndexV]);
-//     Geo::Plane3<ScalarType> FitPlane;
+  std::vector<Geo::Point3<ScalarType>> &QuadVertPos;
+  const std::vector<std::vector<int>> &QuadFaces;
+  const std::vector<std::pair<int, int>> &Quad_Features;
+  std::vector<std::vector<int>> VF, VFIndex;
+  int SampleDensity;
 
-//     //find the fitting plane
-//     FittingPoint<ScalarType>::FitPlaneToPointSet(FitPoints,FitPlane);
+  std::vector<int> VertTMark;
+  int GlobalMark;
 
-//     //get the normal of the plane
-//     Geo::Point3<ScalarType> N=FitPlane.Direction();
-    
-//     //flatten the direction to the plane
+  struct OptimizationOp {
+    int IndexV;
+    int TMark;
+    Geo::Point3<ScalarType> TargetP;
+    ScalarType Priority;
 
-//     //then rotate on one and other direction
+    inline bool operator<(const OptimizationOp &oth) const {
+      return (Priority > oth.Priority);
+    }
+  };
 
-//     // reproject them on triangles
+  std::vector<OptimizationOp> OpHeap;
 
-//   }
+  ScalarType AspectRatio(const int IndexF) {
+    bool HasConcave = HasConcaveV<ScalarType>(QuadVertPos, QuadFaces, IndexF);
+    ScalarType Q = ScaledJacobianQuad(QuadVertPos, QuadFaces, IndexF);
+    if (HasConcave)
+      Q -= 1;
+    return Q;
+  }
 
-//   public:
+  ScalarType WorstAspect(const int IndexV) {
+    assert(VF[IndexV].size() > 0);
+    ScalarType WorstA = AspectRatio(VF[IndexV][0]);
+    for (size_t i = 1; i < VF[IndexV].size(); i++)
+      WorstA = std::min(WorstA, AspectRatio(VF[IndexV][i]));
 
-//   void Smooth(
-//     std::vector<Geo::Point3<ScalarType> > &VertNorm,
-//     const std::vector<std::vector<int> > &Faces, 
-//     int NumIte,
-//     int SamplingDir=32,
-//     int Level=4,
-//     const std::vector<int> &FixedVert = std::vector<int>(),
-//     const std::vector<std::pair<int, int> > &Features =
-//     std::vector<std::pair<int, int> >()) 
-// {
+    return WorstA;
+  }
+
+  ScalarType BestPosition(const int IndexV, Geo::Point3<ScalarType> &BestPos) {
+    std::vector<Geo::Point3<ScalarType>> SamplePos;
+    assert(IndexV>=0);
+    assert(IndexV<VF.size());
+    for (size_t i = 0; i < VF[IndexV].size(); i++) {
+      int IndexF = VF[IndexV][i];
+      std::vector<Geo::Point3<ScalarType>> CurrSamples;
+      SampleBilinear(QuadVertPos, QuadFaces, IndexF, SampleDensity, CurrSamples);
+                    
+      SamplePos.insert(SamplePos.end(), CurrSamples.begin(), CurrSamples.end());
+    }
+    // then get current aspect ratio
+    ScalarType CurrRatio = WorstAspect(IndexV);
+    Geo::Point3<ScalarType> OldPos = QuadVertPos[IndexV];
+    BestPos = OldPos;
+    ScalarType BestRatio = CurrRatio;
+    for (size_t i = 0; i < SamplePos.size(); i++) {
+      QuadVertPos[IndexV] = SamplePos[i];
+      ScalarType TestRatio = WorstAspect(IndexV);
+      if (TestRatio <= BestRatio)
+        continue;
+      BestRatio = TestRatio;
+      BestPos = SamplePos[i];
+    }
+    QuadVertPos[IndexV] = OldPos;
+    return (BestRatio - CurrRatio);
+  }
+
+  std::vector<int> InvolvedVert(const OptimizationOp &Op)const {
+    std::vector<int> VertKern;
+    int IndexV = Op.IndexV;
+    for (size_t i = 0; i < VF[IndexV].size(); i++) {
+      int CurrF = VF[IndexV][i];
+      for (size_t j = 0; j < QuadFaces[CurrF].size(); j++)
+        VertKern.push_back(QuadFaces[CurrF][j]);
+    }
+    std::sort(VertKern.begin(), VertKern.end());
+    VertKern.erase(std::unique(VertKern.begin(), VertKern.end()),
+                   VertKern.end());
+    return VertKern;
+  }
+
+  bool IsUpToDate(const OptimizationOp &Op) const {
+    std::vector<int> InvolvV = InvolvedVert(Op);
+    for (size_t i = 0; i < InvolvV.size(); i++) {
+      int IndexV = InvolvV[i];
+      assert(IndexV >= 0);
+      assert(IndexV < VertTMark.size());
+      if (VertTMark[IndexV] > Op.TMark)
+        return false;
+    }
+    return true;
+  }
+
+  void Apply(const OptimizationOp &Op) {
+    QuadVertPos[Op.IndexV] = Op.TargetP;
+    std::vector<int> InvolvV = InvolvedVert(Op);
+    GlobalMark++;
+    for (size_t i = 0; i < InvolvV.size(); i++)
+      VertTMark[InvolvV[i]] = GlobalMark;
+  }
+
+  void UpdatePriority(OptimizationOp &Op) {
+    Geo::Point3<ScalarType> BestPos;
+    ScalarType Prio = BestPosition(Op.IndexV, BestPos);
+    Op.Priority = Prio;
+    Op.TargetP = BestPos;
+  }
+
+  std::vector<OptimizationOp> GetNewOp(const OptimizationOp &Op) {
+    std::vector<int> InvolvV = InvolvedVert(Op);
+    std::vector<OptimizationOp> NewOps;
+    for (size_t i = 0; i < InvolvV.size(); i++) {
+      int CurrIndexV = InvolvV[i];
+
+      OptimizationOp Op;
+      Op.IndexV = CurrIndexV;
+      Op.TMark = GlobalMark;
+      UpdatePriority(Op);
+      NewOps.push_back(Op);
+    }
+    return NewOps;
+  }
+
+  void InitHeap() {
+    VertTMark = std::vector<int>(QuadVertPos.size(), 0); 
+    GlobalMark = 0;
+    OpHeap.clear();
+    for (size_t i = 0; i < QuadVertPos.size(); i++) {
+     
+      OptimizationOp Op;
+      Op.IndexV = i;
+      UpdatePriority(Op);
+      if (Op.Priority<=0)continue;
+      OpHeap.push_back(Op);
+    }
+    std::sort(OpHeap.begin(), OpHeap.end());
+    std::cout<<"Initialized "<<OpHeap.size()<<" Operations"<<std::endl;
+  }
+
+public:
+
+  void Optimize() {
+    getVFAdjacency(QuadFaces,VF,VFIndex);
+    InitHeap();
+    do {
+      std::pop_heap(OpHeap.begin(), OpHeap.end());
+      OptimizationOp Op = OpHeap.back();
+
+      OpHeap.pop_back();
+
+      bool isUptoDate = IsUpToDate(Op);
+      if (!isUptoDate)
+        continue;
+
+      Apply(Op);
+
+      std::vector<OptimizationOp> NewOp = GetNewOp(Op);
+      
+      for (size_t i=0;i<NewOp.size();i++)
+      {
+        if (NewOp[i].Priority<=0)continue;
+        OpHeap.push_back(NewOp[i]);
+        std::push_heap(OpHeap.begin(), OpHeap.end());
+      }
+    } while (OpHeap.size() > 0);
+  }
   
-// }
-
-//};
+  QuadSmoothSampling(std::vector<Geo::Point3<ScalarType>> &_QuadVertPos,
+                     const std::vector<std::vector<int>> &_QuadFaces,
+                     const std::vector<std::pair<int, int>> &_Quad_Features)
+      : QuadVertPos(_QuadVertPos), QuadFaces(_QuadFaces),
+        Quad_Features(_Quad_Features) {
+    SampleDensity = 10;
+  }
+};
 
 } // namespace Geo
 #endif

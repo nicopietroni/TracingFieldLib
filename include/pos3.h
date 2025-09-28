@@ -322,12 +322,13 @@ bool IsBorderVertVF(const int &IndexV,
   for (size_t i = 0; i < VF[IndexV].size(); i++) 
   {
     int IndexF = VF[IndexV][i];
+    int SizeF=Faces[IndexF].size();
     int LocalVindex = VFIndex[IndexV][i];
     assert(LocalVindex>=0);
-    assert(LocalVindex<3);
+    assert(LocalVindex<SizeF);
     assert(Faces[IndexF][LocalVindex]==IndexV);
-    int LocalVindex1 = (LocalVindex+1)%3;
-    int LocalVindex2 = (LocalVindex+2)%3;
+    int LocalVindex1 = (LocalVindex+1)%SizeF;//3;
+    int LocalVindex2 = (LocalVindex+2)%SizeF;//3;
     int IndexV1=Faces[IndexF][LocalVindex1];
     int IndexV2=Faces[IndexF][LocalVindex2];
     VertCount[IndexV1]++;

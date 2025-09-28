@@ -58,8 +58,10 @@
 #include <quadrangulation.h>
 #include <quadrangulationLUT.h>
 #include <rectify_features.h>
+#include <remesh_size.h>
 #include <smooth_mesh_sampling_dir.h>
 #include <smooth_with_patches.h>
+// #include <motorcycle_graph.h>
 
 GLFWwindow *window;
 std::string PathMesh;
@@ -175,6 +177,8 @@ int CurrN = 0;
 int OldN = -1;
 // std::vector<int> PathN;
 
+bool OptimizeSize = true;
+
 Geo::CrossPathSampling<ScalarType> PathSampl(VertPos, Connectivity, TGraph,
                                              VertCurv, SingIndex, SingValue);
 
@@ -204,7 +208,7 @@ bool self_connection_cond = true;
 bool disk_like_cond = true;
 bool single_sing_cond = false;
 bool match_sing_cond = true;
-bool cc_ability_cond = false;
+bool cc_ability_cond = true;
 bool equal_side_cond = false;
 bool use_uv = false;
 bool isometric_uv = false;
@@ -213,7 +217,7 @@ ScalarType max_uvDist = 0.05;
 
 int MinSides = 3;
 int MaxSides = 6;
-ScalarType CCability = 1;
+ScalarType CCability = 0.5;
 ScalarType EqSideThr = 1;
 
 bool old_single_boundary_cond = single_boundary_cond;
@@ -267,7 +271,9 @@ std::vector<std::pair<int, int>> DualFeatures;
 std::vector<int> DualCorners;
 
 Geo::SideDiscretization<ScalarType> SideD;
-
+// Geo::SideDiscretization<ScalarType>::parityMode
+// PMode=Geo::SideDiscretization<ScalarType>::EvenVar;
+int ParityMode = 1;
 ScalarType QuadSize = 0.02;
 
 std::vector<Geo::Point3<ScalarType>> QuadVert;
@@ -282,15 +288,30 @@ Geo::QuadrangulationLUT<ScalarType> Q_LUT;
 
 int QuadSmoothSteps = 10;
 
-// subdivision solve mode
-bool force_parity = true;
 ScalarType RegVsIso = 1.0;
-// bool SubdBase = false;
-// bool SubdBaseRegular = false;
-// // bool SubdIteForceRegular = false;
-// // bool SubdIteBlend = false;
-// bool SubdIterative = false;
-// bool SubdGlobal = true;
+ScalarType MinSize=0.005;
+ScalarType MaxSize=0.05;
+
+
+void AutoQuadEdgeSize() {
+  
+  std::vector<ScalarType> VertSize;
+  ScalarType MinAggrSize=MeshBox.Diag()*MinSize;
+  ScalarType MaxAggrSize=MeshBox.Diag()*MaxSize;
+  // ScalarType CurrSize =Geo::RemeshSize<ScalarType>::RemeshSizeAggregated(
+  //      VertPos, Connectivity, Features, MinAggrSize, MaxAggrSize, VertSize);
+   ScalarType CurrSize =Geo::RemeshSize<ScalarType>::RemeshSizeFeatures(
+      VertPos, Connectivity, Features, MinAggrSize, MaxAggrSize, VertSize);
+  //ScalarType CurrSize =Geo::RemeshSize<ScalarType>::RemeshSizeNormal(VertPos,Connectivity,MinAggrSize, MaxAggrSize,VertSize);
+
+  QuadSize = CurrSize / MeshBox.Diag();
+  //std::cout<<"Size "<<QuadSize<<std::endl;
+  
+  // std::vector<Geo::Point3<ScalarType>> VertCol;
+  // Geo::GetColorByScalar<ScalarType>(VertSize, MaxAggrSize, MinAggrSize, VertCol);
+  // Geo::ElemColorFromVert(Connectivity,VertCol,FaceCol);
+
+}
 
 void RestoreOriginalPosOnSplitBorders() {
   assert(ModSameBVert.size() == ModSameBOrigPos.size());
@@ -465,7 +486,7 @@ void SampleTracing() {
 
   // PDeco.SampleInitialCandidates();
   PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioDist;
-  PDeco.InitSampling(false);//PDeco.add_only_where_needed);
+  PDeco.InitSampling(false); // PDeco.add_only_where_needed);
   PathSampl.force_direct = true;
   // if (PDeco.add_only_where_needed)
   //   PDeco.InitMustPassEdges();
@@ -996,7 +1017,7 @@ void PreprocessMesh() {
 
   MeshBox.Init(VertPos);
   UpdateAfterRemesh();
-  
+
   // WriteOBJ("after_remesh.obj",VertPos, Connectivity);
   // std::vector<Field::CrossF<ScalarType>> VertCurv0;
   // WriteField("after_remesh.ffield",VertCurv0,FaceCurv);
@@ -1006,24 +1027,28 @@ void PreprocessMesh() {
   std::cout << "*** SPLIT FEATURES *** " << std::endl;
 
   RemainingF.clear();
-  
+
+  std::cout << "* split corners " << std::endl;
   Geo::TracingPreprocess<ScalarType>::SplitCornerFeatures(
       VertPos, Connectivity, VertCurv, FaceCurv, Features, RemainingF,
       SingIndex, SingValue, FeatureSingIndex, FeatureSingValue, NewBorder);
-  
+
   // WriteOBJ("Test0.obj",VertPos, Connectivity);
   // exit(0);
-  
+
+  std::cout << "* get min max " << std::endl;
   Field::CrossF<ScalarType>::getMinMaxQ(VertCurv, minQCrossVert, maxQCrossVert);
   Field::CrossF<ScalarType>::getMinMaxQ(FaceCurv, minQCrossFace, maxQCrossFace);
+
+  std::cout << "* desambiguate " << std::endl;
   Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
       VertPos, Connectivity, &ModSameBVert, &ModSameBOrigPos);
 
+  std::cout << "* update after remesh " << std::endl;
   UpdateAfterRemesh();
 }
 
 void BatchProcessMinPatch() {
-
 
   std::cout << "*** REFINE AND SPLIT *** " << std::endl;
   auto start = std::chrono::high_resolution_clock::now();
@@ -1031,9 +1056,9 @@ void BatchProcessMinPatch() {
   auto end0 = std::chrono::high_resolution_clock::now();
   auto elapsed0 =
       std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
-  
-  //WriteOBJ("testBeforeGraph.obj",VertPos, Connectivity);
-  
+
+  // WriteOBJ("testBeforeGraph.obj",VertPos, Connectivity);
+
   std::cout << "*** INIT GRAPHS *** " << std::endl;
   InitGraph();
   auto end1 = std::chrono::high_resolution_clock::now();
@@ -1208,12 +1233,12 @@ void SetDecomposeBar() {
     UpdateColor();
   }
 
-  // if (ImGui::Button("MAX PATHS")) {
-  //   BatchProcessMaxPaths();
-  //   PathColors.resize(PathSampl.SelectedPaths.size());
-  //   Geo::ScatterColor<ScalarType>(PathColors);
-  //   UpdateColor();
-  // }
+  if (ImGui::Button("MAX PATHS")) {
+    BatchProcessMaxPaths();
+    PathColors.resize(PathSampl.SelectedPaths.size());
+    Geo::ScatterColor<ScalarType>(PathColors);
+    UpdateColor();
+  }
 
   // if (ImGui::Button("Solve Remaining Spike/Concave")) {
   //   PDeco.ForceSolveSpikeConcave();
@@ -1594,31 +1619,27 @@ void SaveDualPatches() {
 Geo::SmoothParam<ScalarType> SParamQuadSmooth;
 Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
 
-void InitTangentSmooth() {
-  std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
-      FeatureData;
-  SideD.GetFeaturesQuadrData(DualVertPos, DualFeatures, FeatureData);
+// void InitTangentSmooth() {
+  
 
-  bool has_mapped = FindEdgePosCorrespondences(QuadVert, QuadFaces, FeatureData,
-                                               UVP.FeatureLines);
-  assert(has_mapped);
+//   UVP.Clear();
+//   UVP.FeatureLines = QuadFeatures;
+//   UVP.Fixed = QuadCorners;
 
-  std::set<Geo::Point3<ScalarType>> CornerPosSet;
-  for (size_t i = 0; i < CornersIdx.size(); i++)
-    CornerPosSet.insert(VertPos[CornersIdx[i]]);
-
-  for (size_t i = 0; i < QuadVert.size(); i++) {
-    if (CornerPosSet.count(QuadVert[i]) > 0)
-      UVP.Fixed.push_back(i);
-  }
-  UVP.Damp = 0.5;
-  UVP.Steps = 10;
-  UVP.fixBorder = true;
-  UVP.post_project = true;
-  UVP.ReprojVert = &VertPos;
-  UVP.ReprojFaces = &Connectivity;
-  UVP.ReprojFeatureLines = Features;
-}
+//   std::vector<std::pair<int, int>> BorderE;
+//   Geo::getBorderEdges(QuadFaces, BorderE);
+//   for (size_t i = 0; i < BorderE.size(); i++) {
+//     UVP.Fixed.push_back(BorderE[i].first);
+//     UVP.Fixed.push_back(BorderE[i].second);
+//   }
+//   UVP.Damp = 0.5;
+//   UVP.Steps = 10;
+//   UVP.fixBorder = true;
+//   UVP.post_project = true;
+//   UVP.ReprojVert = &VertPos;
+//   UVP.ReprojFaces = &Connectivity;
+//   UVP.ReprojFeatureLines = Features;
+// }
 
 void UpdateQuadFeatures() {
   std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
@@ -1712,7 +1733,7 @@ void SmoothQuadMesh3D() {
 
   SParamQuadSmooth.NumIte = QuadSmoothSteps;
   SParamQuadSmooth.SType = Geo::SMLaplacian;
-  SParamQuadSmooth.check_AspectR = true;
+  SParamQuadSmooth.check_AspectR = false;
 
   Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
 
@@ -1731,37 +1752,47 @@ void SmoothQuadMesh3D() {
 //                                   QuadVertNormals);
 // }
 
-void SmoothCentroidMesh3D() {
+// void SmoothCentroidMesh3D() {
 
-  SParamQuadSmooth.NumIte = QuadSmoothSteps;
-  SParamQuadSmooth.SType = Geo::SMCentroid;
-  SParamQuadSmooth.check_AspectR = true;
-  Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
+//   SParamQuadSmooth.NumIte = QuadSmoothSteps;
+//   SParamQuadSmooth.SType = Geo::SMCentroid;
+//   SParamQuadSmooth.check_AspectR = true;
+//   Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
 
+//   Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
+//                                   QuadVertNormals);
+// }
+void SolveDoublets()
+{
+  Geo::QuadPatchFunctions<ScalarType>::RemoveDoublets(QuadVert, QuadFaces,
+                                                     QuadFeatures,
+                                                     QuadCorners,
+                                                    QuadPatch);
   Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
                                   QuadVertNormals);
+  ElemColorByCluster<ScalarType>(QuadPatch, QuadFaceColors);
 }
 
 void SmoothBestPolyMesh3D() {
 
   SParamQuadSmooth.NumIte = QuadSmoothSteps;
   SParamQuadSmooth.SType = Geo::SMBestPoly;
-  SParamQuadSmooth.check_AspectR = true;
+  SParamQuadSmooth.check_AspectR = false;
   Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
 
   Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
                                   QuadVertNormals);
 }
 
-void SmoothQuadMeshTangent() {
+// void SmoothQuadMeshTangent() {
 
-  UVP.Damp = 0;
-  UVP.Steps = QuadSmoothSteps;
+//   UVP.Damp = 0;
+//   UVP.Steps = QuadSmoothSteps;
 
-  Geo::Local_Param_Smooth<ScalarType>::Smooth(QuadVert, QuadFaces, UVP);
-  Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
-                                  QuadVertNormals);
-}
+//   Geo::Local_Param_Smooth<ScalarType>::Smooth(QuadVert, QuadFaces, UVP);
+//   Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
+//                                   QuadVertNormals);
+// }
 
 // void SmoothQuadGreedy() {
 
@@ -1922,13 +1953,29 @@ void SetExportBar() {
     ImGui::Separator();
     // ImGui::TextColored(ImVec4(1, 0, 1, 1), "QUADRANGULATE");
 
+    ScalarType minValue = 0.001;
+    ScalarType maxValue = 0.2;
+
+//     ScalarType MinSize=0.005;
+// ScalarType MaxSize=0.1;
+    float MinSizef=MinSize;
+    float MaxSizef=MaxSize;
+    ImGui::InputFloat("Min Interval", &MinSizef);
+    ImGui::InputFloat("Max Interval", &MaxSizef);
+    MinSize=MinSizef;
+    MaxSize=MaxSizef;
+    MaxSize=std::min(MaxSize,maxValue);
+    MinSize=std::max(MinSize,minValue);
+    MaxSize=std::max(MaxSize,MinSize);
+
+    if (ImGui::Button("Auto Detect Size")) {
+      AutoQuadEdgeSize();
+    }
+
+    ImGui::SliderScalar("Quad Size", ImGuiDataType_Double, &QuadSize, &minValue,
+                        &maxValue, "%.3f");
+
     if (ImGui::CollapsingHeader("SUBDIVISION")) {
-
-      ScalarType minValue = 0.001;
-      ScalarType maxValue = 0.1;
-
-      ImGui::SliderScalar("Quad Size", ImGuiDataType_Double, &QuadSize,
-                          &minValue, &maxValue, "%.3f");
 
       ScalarType minValueRvsIso = 0;
       ScalarType maxValueRvsIso = 1;
@@ -1944,48 +1991,6 @@ void SetExportBar() {
       ImGui::SetNextItemWidth(80);
       ImGui::SliderScalar("Max Rt", ImGuiDataType_Double, &SideD.MaxRatio,
                           &minRatio, &maxRatio, "%.1f");
-
-      ImGui::Checkbox("Force Parity", &force_parity);
-
-      // if (ImGui::RadioButton("Base Init", SubdBase)) {
-      //   SubdBase = true;
-      //   SubdBaseRegular = false;
-      //   // SubdIteForceRegular = false;
-      //   // SubdIteBlend = false;
-      //   SubdIterative = false;
-      //   SubdGlobal = false;
-      // }
-      // if (ImGui::RadioButton("Base Regular", SubdBaseRegular)) {
-      //   SubdBase = false;
-      //   SubdBaseRegular = true;
-      //   // SubdIteForceRegular = false;
-      //   // SubdIteBlend = false;
-      //   SubdIterative = false;
-      //   SubdGlobal = false;
-      // }
-      // if (ImGui::RadioButton("Iterative", SubdIterative)) {
-      //   SubdBase = false;
-      //   SubdBaseRegular = false;
-      //   // SubdIteForceRegular = false;
-      //   // SubdIteBlend = false;
-      //   SubdIterative = true;
-      //   SubdGlobal = false;
-      // }
-      // // if (ImGui::RadioButton("Ite Blend", SubdIteBlend)) {
-      // //   SubdBase = false;
-      // //   SubdBaseRegular = false;
-      // //   SubdIteForceRegular = false;
-      // //   SubdIteBlend = true;
-      // //   SubdGlobal = false;
-      // // }
-      // if (ImGui::RadioButton("Global", SubdGlobal)) {
-      //   SubdBase = false;
-      //   SubdBaseRegular = false;
-      //   // SubdIteForceRegular = false;
-      //   // SubdIteBlend = false;
-      //   SubdIterative = false;
-      //   SubdGlobal = true;
-      // }
 
       ImGui::Checkbox("Weight FaceRatio", &SideD.WeightRegFaceRatio);
       ImGui::Checkbox("Weight Features", &SideD.WeightFeatures);
@@ -2016,29 +2021,113 @@ void SetExportBar() {
       }
     }
 
-    if (ImGui::Button("Solve Subdivision")) {
+    if (SideD.PMode == Geo::SideDiscretization<ScalarType>::NoParity)
+      EvenMode = 0;
+    if (SideD.PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
+      EvenMode = 1;
+    if (SideD.PMode == Geo::SideDiscretization<ScalarType>::SolvePost)
+      EvenMode = 2;
+
+    static const char *itemsParity[] = {"No Parity", "Even Variable",
+                                        "Fix Parity"};
+
+    ImGui::Combo("Parity Mode", &EvenMode, itemsParity,
+                 IM_ARRAYSIZE(itemsParity));
+
+    Geo::SideDiscretization<ScalarType>::parityMode PMode;
+
+    if (EvenMode == 0)
+      PMode = Geo::SideDiscretization<ScalarType>::NoParity;
+    if (EvenMode == 1)
+      PMode = Geo::SideDiscretization<ScalarType>::EvenVar;
+    if (EvenMode == 2)
+      PMode = Geo::SideDiscretization<ScalarType>::SolvePost;
+
+    SideD.PMode = PMode;
+
+    ImGui::Checkbox("Optimize Size", &OptimizeSize);
+
+    if (ImGui::Button("Find Subdivision")) {
       DrawSubdivision = true;
       DrawQuadMesh = false;
       showMesh = true;
       showDual = true;
       ScalarType EdgeS = MeshBox.Diag() * QuadSize;
 
-      Geo::SideDiscretization<ScalarType>::solveMode SM;
-      // if (SubdBase)
-      //   SM = Geo::SideDiscretization<ScalarType>::SM_Base;
-      // if (SubdBaseRegular)
-      //   SM = Geo::SideDiscretization<ScalarType>::SM_Base_Regular;
-      // if (SubdIterative)
-      //   SM = Geo::SideDiscretization<ScalarType>::SM_Iterative;
-      // // if (SubdIteForceRegular)
-      // //   SM = Geo::SideDiscretization<ScalarType>::SM_Ite_ForceRegular;
-      // // if (SubdIteBlend)
-      // //   SM = Geo::SideDiscretization<ScalarType>::SM_Ite_Blend;
-      // if (SubdGlobal)
-      SM = Geo::SideDiscretization<ScalarType>::SM_GlobalSolve;
+      SideD.PrioritizeTJunction = true;
 
-      SideD.Solve(EdgeS, SM, force_parity, RegVsIso);
+      SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeSize);
+      // SideD.SolveSystem(EdgeS, RegVsIso);
+      // SideD.AutomaticGraphOptimize();
     }
+    // if (ImGui::Button("Solve System")) {
+    //   DrawSubdivision = true;
+    //   DrawQuadMesh = false;
+    //   showMesh = true;
+    //   showDual = true;
+    //   ScalarType EdgeS = MeshBox.Diag() * QuadSize;
+
+    //   SideD.PrioritizeTJunction = true;
+
+    //   SideD.SolveSystem(EdgeS, PMode, RegVsIso);
+    // }
+
+    // if (ImGui::Button("AUTO Graph Optimize")) {
+    //   DrawSubdivision = true;
+    //   DrawQuadMesh = false;
+    //   showMesh = true;
+    //   showDual = true;
+    //   SideD.AutomaticGraphOptimize();
+    // }
+
+    if (ImGui::CollapsingHeader("Solve Steps")) {
+
+      if (ImGui::Button("Solve System")) {
+        DrawSubdivision = true;
+        DrawQuadMesh = false;
+        showMesh = true;
+        showDual = true;
+        ScalarType EdgeS = MeshBox.Diag() * QuadSize;
+
+        SideD.PrioritizeTJunction = true;
+
+        SideD.SolveSystem(EdgeS, RegVsIso);
+      }
+
+      if (ImGui::Button("Set To Target")) {
+        DrawSubdivision = true;
+        DrawQuadMesh = false;
+        showMesh = true;
+        showDual = true;
+        ScalarType EdgeS = MeshBox.Diag() * QuadSize;
+
+        SideD.SetToTarget(EdgeS);
+      }
+
+      if (ImGui::Button("Solve Parity")) {
+        DrawSubdivision = true;
+        DrawQuadMesh = false;
+        showMesh = true;
+        showDual = true;
+        SideD.SolveParityViaGraph();
+      }
+      if (ImGui::Button("Solve Equality")) {
+        DrawSubdivision = true;
+        DrawQuadMesh = false;
+        showMesh = true;
+        showDual = true;
+        SideD.SolveEqualityViaGraph();
+      }
+
+      if (ImGui::Button("Solve Size with Cycle")) {
+        DrawSubdivision = true;
+        DrawQuadMesh = false;
+        showMesh = true;
+        showDual = true;
+        SideD.SolveSizeViaGraphCycles();
+      }
+    }
+
     //  if (ImGui::Button("Iterative Improve")) {
     //   DrawSubdivision = true;
     //   DrawQuadMesh = false;
@@ -2102,17 +2191,19 @@ void SetExportBar() {
 
       // SmoothQuadMesh();
 
-      // ElemColorByCluster<ScalarType>(QuadPatch, QuadFaceColors);
+      ElemColorByCluster<ScalarType>(QuadPatch, QuadFaceColors);
 
-      QuadFaceColors = std::vector<Geo::Point3<ScalarType>>(
-          QuadFaces.size(), Geo::Point3<ScalarType>(0.8, 0.8, 0.8));
+      // QuadFaceColors = std::vector<Geo::Point3<ScalarType>>(
+      //     QuadFaces.size(), Geo::Point3<ScalarType>(0.8, 0.8, 0.8));
 
       Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
                                       QuadVertNormals);
 
-      InitTangentSmooth();
+      
       UpdateQuadFeatures();
+      SolveDoublets();
       Init3DSmooth();
+      //InitTangentSmooth();
       // WriteOBJ("testQuad.obj",QuadVert, QuadFaces);
     }
   }
@@ -2124,13 +2215,26 @@ void SetExportBar() {
   // if (ImGui::Button("Taubin Smooth 3D")) {
   //   SmoothTaubinuadMesh3D();
   // }
-  if (ImGui::Button("Centroid Smooth 3D")) {
-    SmoothCentroidMesh3D();
-  }
+  // if (ImGui::Button("Centroid Smooth 3D")) {
+  //   SmoothCentroidMesh3D();
+  // }
   if (ImGui::Button("Best Poly Smooth 3D")) {
     SmoothBestPolyMesh3D();
   }
-
+  // if (ImGui::Button("Smooth Tangent")) {
+  //   SmoothQuadMeshTangent();
+  // }
+  if (ImGui::Button("Smooth Patches")) {
+    Geo::QuadPatchSmooth<ScalarType> QSmoothP(QuadVert,QuadFaces,
+                                              QuadFeatures,QuadCorners);
+    QSmoothP.InitViaPatch(QuadPatch);
+    QSmoothP.InitPerVertex();
+    // Geo::QuadSmoothSampling<ScalarType> QSmoothSample(QuadVert,QuadFaces,QuadFeatures);
+    // QSmoothSample.Optimize();
+    // Geo::QuadPatchSmooth<ScalarType> QPatchSmooth(QuadVert,QuadFaces,QuadFeatures);
+    // QPatchSmooth.Init();
+    //QuadFeatures=Geo::MotorCycleGraph<ScalarType>::FindMotorcycle(QuadVert,QuadFaces);
+  }
   // if (ImGui::Button("Test Straight")) {
   //   // Geo::RectifyFeatures(VertPos,Connectivity,Features,CornersIdx);
 
@@ -2165,9 +2269,7 @@ void SetExportBar() {
 
   // ImGui::SameLine();
 
-  // if (ImGui::Button("Smooth Tangent")) {
-  //   SmoothQuadMeshTangent();
-  // }
+ 
 
   ImGui::Separator();
   // ImGui::TextColored(ImVec4(1, 0, 1, 1), "SAVE");
@@ -2460,14 +2562,14 @@ void GLDrawMesh() {
   if (Draw_allow_arrive_to) {
     GLDraw::DrawVertices<ScalarType>(VertPos, PathSampl.allow_arrive_to);
   }
-  
+
   assert((glGetError()) == GL_NO_ERROR);
 
   if (DrawCandidates) {
     GLGraphDraw::GLDrawPatchData<ScalarType>::DrawCandidates(
         PathSampl, MeshBox.Diag() * 0.005, curr_cand);
   }
-    assert((glGetError()) == GL_NO_ERROR);
+  assert((glGetError()) == GL_NO_ERROR);
 
   PDParam.lineSize = 5;
   if (DrawExitNode) {
@@ -2537,8 +2639,10 @@ void GLDrawMesh() {
                                         false, GLDraw::TrQuad, &QuadFaceColors);
 
     if (showFeatures)
-      GLDraw::GLDrawEdges<ScalarType>(QuadVert, SParamQuadSmooth.Features, 15,
+      GLDraw::GLDrawEdges<ScalarType>(QuadVert, QuadFeatures, 15,
                                       Geo::Point3<ScalarType>(1, 0, 1));
+      // GLDraw::GLDrawEdges<ScalarType>(QuadVert, SParamQuadSmooth.Features, 15,
+      //                                 Geo::Point3<ScalarType>(1, 0, 1));
   }
   assert((glGetError()) == GL_NO_ERROR);
 
@@ -2630,6 +2734,8 @@ int main(int argc, char *argv[]) {
   // std::cout<<"Faces:"<<Connectivity.size()<<std::endl;
   // std::cout<<"VertCurv:"<<VertCurv.size()<<std::endl;
   // std::cout<<"Pos:"<<VertPos.size()<<std::endl;
+
+  //AutoQuadEdgeSize();
 
   InitGLFW_Window();
 

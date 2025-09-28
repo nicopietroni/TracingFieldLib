@@ -14,9 +14,11 @@
 #include <cstddef>
 #include <iostream>
 #include <limits>
+#include <mesh_functions.h>
 #include <pos3.h>
 #include <random>
 #include <set>
+#include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
 
@@ -211,7 +213,9 @@ public:
   static void
   SampleRadius3D(const std::vector<Geo::Point3<ScalarType>> &Samples,
                  const ScalarType &RadiusStar, std::vector<int> &Selected,
-                 int RandSeed = 0) {
+                 int RandSeed = 0, std::vector<int> *SampleFrom = NULL,
+                 std::vector<int> *SampleConstraintes = NULL) {
+
     Geo::PointSpatialIndex<ScalarType> PointIdx;
     PointIdx.Init(Samples);
 
@@ -221,8 +225,27 @@ public:
 
     // randomly perturb the order
     std::vector<int> Sequence;
-    GetRandomSeq(Samples.size() - 1, Sequence, RandSeed);
+    if (SampleFrom == NULL)
+      GetRandomSeq(Samples.size() - 1, Sequence, RandSeed);
+    else {
+      LinearCongruentialGenerator lcg(RandSeed);
+      std::shuffle((*SampleFrom).begin(), (*SampleFrom).end(), lcg);
+      Sequence = (*SampleFrom);
+    }
+    if (SampleConstraintes != NULL) {
+      for (size_t i = 0; i < (*SampleConstraintes).size(); i++) {
+        int CurrV = (*SampleConstraintes)[i];
 
+        std::vector<int> PosIn;
+        PointIdx.PointsInSphere(Samples, Samples[CurrV], RadiusStar, PosIn);
+
+        for (size_t j = 0; j < PosIn.size(); j++) {
+          int CurrV1 = PosIn[j];
+          if (CurrV1 != CurrV)
+            Valid[CurrV1] = false;
+        }
+      }
+    }
     for (size_t i = 0; i < Sequence.size(); i++) {
       int CurrV = Sequence[i];
       if (!Valid[CurrV])
@@ -242,15 +265,14 @@ public:
 
   static void LLoydRalaxSampleseRadius3D(
       const std::vector<Geo::Point3<ScalarType>> &Samples,
-      const ScalarType &RadiusStar, 
-      std::vector<int> &SelectedSeeds,
+      const ScalarType &RadiusStar, std::vector<int> &SelectedSeeds,
       int numStep) {
 
     Geo::PointSpatialIndex<ScalarType> PointGrid;
     PointGrid.Init(Samples);
     Geo::Box3<ScalarType> BBox;
     BBox.Init(Samples);
-    
+
     for (size_t s = 0; s < numStep; s++) {
       // update clusters
       std::vector<std::vector<int>> Clusters;
@@ -284,38 +306,34 @@ public:
           assert(IndexS < Samples.size());
           AvgPos += Samples[IndexS];
         }
-        assert(Clusters[i].size()>0);
+        assert(Clusters[i].size() > 0);
         AvgPos /= Clusters[i].size();
         ClusterCentroid.push_back(AvgPos);
       }
 
-      //then update new seeds
+      // then update new seeds
       SelectedSeeds.clear();
-      for (size_t i=0;i<ClusterCentroid.size();i++)
-      {
+      for (size_t i = 0; i < ClusterCentroid.size(); i++) {
         int closestP;
-        bool found=PointGrid.GridClosest(Samples,
-                                        ClusterCentroid[i],
-                                        BBox.Diag(),
-                                        closestP);
+        bool found = PointGrid.GridClosest(Samples, ClusterCentroid[i],
+                                           BBox.Diag(), closestP);
         assert(found);
         SelectedSeeds.push_back(closestP);
       }
       std::sort(SelectedSeeds.begin(), SelectedSeeds.end());
-      SelectedSeeds.erase(std::unique(SelectedSeeds.begin(), SelectedSeeds.end()), SelectedSeeds.end());
-
+      SelectedSeeds.erase(
+          std::unique(SelectedSeeds.begin(), SelectedSeeds.end()),
+          SelectedSeeds.end());
     }
   }
 
   static void
   SampleVoronoiRadius3D(const std::vector<Geo::Point3<ScalarType>> &Samples,
                         const ScalarType &RadiusStar,
-                        std::vector<int> &Selected, 
-                        int RelaxStep,
-                        int RandSeed = 0) 
-  {
-    SampleRadius3D(Samples,RadiusStar,Selected,RandSeed);
-    LLoydRalaxSampleseRadius3D(Samples,RadiusStar,Selected,RelaxStep);
+                        std::vector<int> &Selected, int RelaxStep,
+                        int RandSeed = 0) {
+    SampleRadius3D(Samples, RadiusStar, Selected, RandSeed);
+    LLoydRalaxSampleseRadius3D(Samples, RadiusStar, Selected, RelaxStep);
   }
 
   static void SampleBordersRegularly(const std::vector<std::vector<int>> &Faces,
@@ -360,8 +378,10 @@ public:
       const int MinSamplePerBorder, std::vector<int> &Selected,
       std::vector<int> *SampleFrom = NULL, int RandSeed = 0) {
     std::vector<int> BorderConstraints;
+
     SampleBordersRegularly(Faces, NextF, NextE, StepSize, MinSamplePerBorder,
                            BorderConstraints, SampleFrom);
+
     SampleVert(Faces, NumVert, StepSize, Selected, BorderConstraints, RandSeed,
                SampleFrom);
   }
@@ -377,10 +397,135 @@ public:
                             MinSamplePerBorder, Selected, SampleFrom, RandSeed);
   }
 
+  // static void SampleWithBorderFeaturesRegular(
+  //     const  std::vector<Geo::Point3<ScalarType>> VertPos,
+  //     const std::vector<std::vector<int>> &Faces,
+  //     const std::vector<std::pair<int,int>> &Features,
+  //     const int StepSize, const int MinSamplePerBorderFeature,
+  //     std::vector<int> &Selected,
+  //     int RandSeed = 0) {
+
+  //   //open the mesh along features
+  //   std::vector<Geo::Point3<ScalarType>> SplitPos=VertPos;
+  //   std::vector<std::vector<int>> SplitFaces=Faces;
+  //   std::vector<int> OldVindex;
+  //   SplitMeshFromEdges(SplitPos,SplitFaces,Features,OldVindex);
+
+  //   //then sample regular
+  //   std::vector<std::vector<int>> NextF, NextE;
+  //   Geo::getFFAdjacency(SplitFaces, NextF, NextE);
+  //   std::vector<int> SelectedSplit;
+  //   SampleWithBorderRegular(SplitPos.size(), SplitFaces, NextF, NextE,
+  //   StepSize,
+  //                           MinSamplePerBorderFeature, SelectedSplit, NULL,
+  //                           RandSeed);
+
+  //   //retransform to original idx
+  //   Selected.clear();
+  //   for (size_t i=0;i<SelectedSplit.size();i++)
+  //   {
+  //     int IndexV=SelectedSplit[i];
+  //     assert(IndexV>=0);
+  //     assert(IndexV<OldVindex.size());
+  //     assert(OldVindex[IndexV]>=0);
+  //     assert(OldVindex[IndexV]<VertPos.size());
+  //     Selected.push_back(OldVindex[IndexV]);
+  //   }
+  //   std::sort(Selected.begin(), Selected.end());
+  //   Selected.erase(std::unique(Selected.begin(),
+  //   Selected.end()),Selected.end());
+  // }
+
+  static void
+  SampleWithFeatures(const std::vector<Geo::Point3<ScalarType>> VertPos,
+                     const std::vector<std::vector<int>> &Faces,
+                     const std::vector<std::pair<int, int>> &Features,
+                     const int StepSize, const int MinSamplePerBorderFeature,
+                     std::vector<int> &Selected, int RandSeed = 0) {
+
+    std::vector<bool> IsFeatureV(VertPos.size(), false);
+    for (size_t i = 0; i < Features.size(); i++) {
+      IsFeatureV[Features[i].first] = true;
+      IsFeatureV[Features[i].second] = true;
+    }
+
+    std::vector<int> FeatureV, NotFeatureV;
+    for (size_t i = 0; i < VertPos.size(); i++) {
+      if (IsFeatureV[i])
+        FeatureV.push_back(i);
+      else
+        NotFeatureV.push_back(i);
+    }
+
+    // sample the features
+    std::vector<int> Constraints;
+    std::vector<int> SelectedFeature;
+    SampleVert(Faces, VertPos.size(), StepSize, SelectedFeature, Constraints, 0,
+               &FeatureV);
+
+    // then sample the rest
+    Constraints = SelectedFeature;
+    std::vector<int> SelectedNonFeature;
+    SampleVert(Faces, VertPos.size(), StepSize, SelectedNonFeature, Constraints,
+               0, &NotFeatureV);
+
+    Selected = SelectedFeature;
+    Selected.insert(Selected.end(), SelectedNonFeature.begin(),
+                    SelectedNonFeature.end());
+  }
+
+  static void
+  SampleWithFeatures3D(const std::vector<Geo::Point3<ScalarType>> VertPos,
+                       const std::vector<std::vector<int>> &Faces,
+                       const std::vector<std::pair<int, int>> &Features,
+                       const ScalarType &SampleRadius,
+                       std::vector<int> &Selected, int RandSeed = 0) {
+
+    std::vector<bool> IsFeatureV(VertPos.size(), false);
+    for (size_t i = 0; i < Features.size(); i++) {
+      IsFeatureV[Features[i].first] = true;
+      IsFeatureV[Features[i].second] = true;
+    }
+
+    std::vector<int> FeatureV, NotFeatureV;
+    for (size_t i = 0; i < VertPos.size(); i++) {
+      if (IsFeatureV[i])
+        FeatureV.push_back(i);
+      else
+        NotFeatureV.push_back(i);
+    }
+
+    // sample the features
+    std::vector<int> SelectedFeature;
+    SampleRadius3D(VertPos,SampleRadius,
+                  SelectedFeature,RandSeed,
+                  &FeatureV);
+
+    // then sample the rest
+    std::vector<int> Constraints = SelectedFeature;
+    std::vector<int> SelectedNonFeature;
+    SampleRadius3D(VertPos,SampleRadius,
+                  SelectedNonFeature,RandSeed,
+                  &NotFeatureV,&Constraints);
+
+
+    Selected = SelectedFeature;
+    Selected.insert(Selected.end(), SelectedNonFeature.begin(),
+                    SelectedNonFeature.end());
+  }
+
   static int EsteemSamplingRadius(const int NumVer, const int TargetSamples) {
     ScalarType AreaC = (ScalarType)NumVer / (ScalarType)TargetSamples;
     int RadiusStar = floor(sqrt(AreaC) + 0.5);
     RadiusStar = std::max(RadiusStar, 1);
+    return RadiusStar;
+  }
+
+  static ScalarType Esteem3DSamplingRadius(const std::vector<Geo::Point3<ScalarType>> VertPos,
+                       const std::vector<std::vector<int>> &Faces,const int TargetSamples) 
+  {
+    ScalarType AreaM = (ScalarType)Area(VertPos,Faces);
+    ScalarType RadiusStar = sqrt((2*AreaM)/(1.732*TargetSamples));
     return RadiusStar;
   }
 };

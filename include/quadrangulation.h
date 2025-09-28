@@ -602,9 +602,11 @@ public:
       std::vector<Geo::Point3<ScalarType>> Curr_Patch_QuadVert;
       std::vector<std::vector<int>> Curr_Patch_QuadFaces;
 
-      QuadrangulateQuadPatchWithSubs(CurrPatchVert, CurrPatchFaces,
+      bool has_quadrangulated=QuadrangulateQuadPatchWithSubs(CurrPatchVert, CurrPatchFaces,
                                      CurrPatchCorners, SideSamples3D[i], QLut,
                                      Curr_Patch_QuadVert, Curr_Patch_QuadFaces);
+      if (!has_quadrangulated)
+      std::cout<<"WARNING: Problem Quadrangulating patch "<<i<<std::endl;
       if (save_debug) {
         std::string out_file = std::string("quad_mesh_") +
                                std::to_string(i) + 

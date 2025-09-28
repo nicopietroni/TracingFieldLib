@@ -289,6 +289,7 @@ template <class ScalarType> class MeshQuadrangulator {
     DualParam.InitSingPos = true;
     DualParam.FixSingPos = false;
     DualParam.JointBorder = true;
+    //DualParam.RType=Geo::DualPatch<ScalarType>::RT_CCability;
   }
 
   void UpdateQuadFeatures() {
@@ -383,6 +384,7 @@ template <class ScalarType> class MeshQuadrangulator {
   }
 
   void Quadrangulate() {
+    
     ScalarType EdgeS = MeshBox.Diag() * QuadSize;
 
     typename Geo::SideDiscretization<ScalarType>::solveMode SM;

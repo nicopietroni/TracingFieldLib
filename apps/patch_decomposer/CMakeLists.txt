@@ -5,8 +5,9 @@ project(patch_decomposer)
 set(CMAKE_CXX_STANDARD 17)
 
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
+
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -flto" )
 
@@ -54,6 +55,10 @@ add_executable(${PROJECT_NAME} main.cpp
 #               ${GLEWPATH}/src/glew.c
                )
 find_package(Threads REQUIRED)
+
+# target_compile_options(patch_decomposer PRIVATE -fsanitize=address -fsanitize=undefined -g -O1)
+# target_link_options(patch_decomposer PRIVATE -fsanitize=address -fsanitize=undefined)
+
 #target_link_libraries(patch_decomposer PRIVATE Threads::Threads)
                
 target_include_directories(${PROJECT_NAME} PRIVATE ${GLEW_INCLUDE_DIR})
