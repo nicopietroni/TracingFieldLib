@@ -9,15 +9,18 @@
 #include <cassert>
 #include <cstddef>
 #include <limits>
+#include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
+#include <set>
 
 namespace Geo {
 
 template <class ScalarType>
 void AttractProject(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
                     std::vector<Geo::Point3<ScalarType>> &VertProj,
-                    const std::vector<std::vector<int>> &FacesProj) {
+                    const std::vector<std::vector<int>> &FacesProj,
+                    const std::set<int> &FixedV=std::set<int>()) {
 
   std::vector<Geo::Point3<ScalarType>> AvgDiff(
       VertProj.size(), Geo::Point3<ScalarType>(0, 0, 0));
@@ -76,7 +79,10 @@ void AttractProject(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
   }
 
   for (size_t i = 0; i < AvgDiff.size(); i++)
+  {
+    if (FixedV.count(i)>0)continue;
     VertProj[i] += AvgDiff[i];
+  }
 }
 
 template <class ScalarType>
@@ -91,34 +97,60 @@ void InitProjStructures(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 }
 
 template <class ScalarType>
+void GetToReprojectVert(const std::vector<Geo::Point3<ScalarType>> &To_ReprojPos,
+                        std::vector<int> &CandidatesIDX,
+                        std::vector<Geo::Segment3<ScalarType>> &Segs,
+                        Geo::SegmentSpatialIndex<ScalarType> &SegGrid,
+                        const ScalarType Thr=0.000001) 
+{
+  int closestS=-1;
+  std::vector<int> newCandidatesIDX;
+  for (size_t i=0;i<CandidatesIDX.size();i++)
+  {
+    int IndexV=CandidatesIDX[i];
+    Geo::Point3<ScalarType> VertPos=To_ReprojPos[IndexV];
+    Geo::Point3<ScalarType> closestPt;
+    int closestS=-1;
+    SegGrid.GridClosest(Segs, VertPos, Thr, 
+                        closestS,closestPt);
+    if (closestS==-1)continue;
+    newCandidatesIDX.push_back(IndexV);
+  }
+  CandidatesIDX=newCandidatesIDX;
+}
+
+template <class ScalarType>
 void ProjectOn(std::vector<Geo::Point3<ScalarType>> &VertPos,
                const std::vector<std::vector<int>> &Faces,
-               const std::vector<std::pair<int,int>> &Features,
+               const std::vector<int> &FeaturesV,
                const std::vector<Geo::Point3<ScalarType>> &TargetPos,
                const std::vector<std::vector<int>> &TargetFaces,
                Geo::TriangleSpatialIndex<ScalarType> &TriGrid,
                const std::vector<Geo::Segment3<ScalarType>> &FeatureSegs,
                Geo::SegmentSpatialIndex<ScalarType> &SegGrid) {
 
-  std::vector<bool> FeatureVert(VertPos.size(), false);
+  std::vector<bool> FeatureBool(VertPos.size(), false);
 
-  for (size_t i = 0; i < Features.size(); i++) {
-    FeatureVert[Features[i].first] = true;
-    FeatureVert[Features[i].second] = true;
+  for (size_t i = 0; i < FeaturesV.size(); i++) {
+    assert(FeaturesV[i]>=0);
+    assert(FeaturesV[i]<FeatureBool.size());
+    FeatureBool[FeaturesV[i]] = true;
   }
 
   for (size_t i = 0; i < VertPos.size(); i++) {
     int closestF;
-    Geo::Point3<ScalarType> closestPt;
-    if (!FeatureVert[i]) {
+    Geo::Point3<ScalarType> closestPt=VertPos[i];
+    if (!FeatureBool[i]) {
       TriGrid.GridClosest(TargetPos, TargetFaces,
                           VertPos[i], TriGrid.bbox.Diag(), 
                           closestF, closestPt);
     } else {
+
       int closestS=-1;
       SegGrid.GridClosest(FeatureSegs, VertPos[i], 
                     SegGrid.bbox.Diag(), closestS,
                           closestPt);
+
       // ScalarType minD=std::numeric_limits<ScalarType>::max();
       // for (size_t j=0;j<FeatureSegs.size();j++)
       // {

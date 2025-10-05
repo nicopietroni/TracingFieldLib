@@ -731,6 +731,8 @@ private:
 
   static void
   InitGridIfNeeded(UVSmoothParam &UVP,
+                   const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                   std::vector<int> &ReprojectVertIdx,
                    Geo::TriangleSpatialIndex<ScalarType> &TriGrid,
                    std::vector<Geo::Segment3<ScalarType>> &FeatureSegs,
                    Geo::SegmentSpatialIndex<ScalarType> &SegGrid) {
@@ -746,12 +748,22 @@ private:
     Geo::InitProjStructures<ScalarType>(*UVP.ReprojVert, *UVP.ReprojFaces,
                                         UVP.ReprojFeatureLines, TriGrid,
                                         FeatureSegs, SegGrid);
+    
+    ReprojectVertIdx.clear();
+    for (size_t i=0;i<UVP.FeatureLines.size();i++)
+    {
+      ReprojectVertIdx.push_back(UVP.FeatureLines[i].first);
+      ReprojectVertIdx.push_back(UVP.FeatureLines[i].second);
+    }
+    
+    GetToReprojectVert(VertPos,ReprojectVertIdx,FeatureSegs, SegGrid);
   }
 
   static void
   ReprojectIfNeeded(const UVSmoothParam &UVP,
                     std::vector<Geo::Point3<ScalarType>> &VertPos,
                     const std::vector<std::vector<int>> &Faces,
+                    const std::vector<int> &ReprojFeatureV,
                     Geo::TriangleSpatialIndex<ScalarType> &TriGrid,
                     std::vector<Geo::Segment3<ScalarType>> &FeatureSegs,
                     Geo::SegmentSpatialIndex<ScalarType> &SegGrid) {
@@ -763,7 +775,7 @@ private:
       Geo::AttractProject<ScalarType>(*UVP.ReprojVert, VertPos, Faces);
 
     if (do_reproject)
-      Geo::ProjectOn<ScalarType>(VertPos, Faces, UVP.FeatureLines,
+      Geo::ProjectOn<ScalarType>(VertPos, Faces, ReprojFeatureV,
                                  *UVP.ReprojVert, *UVP.ReprojFaces, TriGrid,
                                  FeatureSegs, SegGrid);
   }
@@ -792,7 +804,9 @@ public:
     Geo::TriangleSpatialIndex<ScalarType> TriGrid;
     std::vector<Geo::Segment3<ScalarType>> FeatureSegs;
     Geo::SegmentSpatialIndex<ScalarType> SegGrid;
-    InitGridIfNeeded(UVP, TriGrid, FeatureSegs, SegGrid);
+
+    std::vector<int> ReprojectVertIdx;
+    InitGridIfNeeded(UVP,VertPos,ReprojectVertIdx,TriGrid, FeatureSegs, SegGrid);
 
     // and finally smooth
     for (size_t s = 0; s < UVP.Steps; s++) {
@@ -802,9 +816,9 @@ public:
                  true, true, UVP.Damp, isPoly);
 
       if ((s % UVP.ReprojStep) == 0)
-        ReprojectIfNeeded(UVP, VertPos, Faces, TriGrid, FeatureSegs, SegGrid);
+        ReprojectIfNeeded(UVP, VertPos, Faces, ReprojectVertIdx,TriGrid, FeatureSegs, SegGrid);
     }
-    ReprojectIfNeeded(UVP, VertPos, Faces, TriGrid, FeatureSegs, SegGrid);
+    ReprojectIfNeeded(UVP, VertPos, Faces, ReprojectVertIdx,TriGrid, FeatureSegs, SegGrid);
   }
 
   static void Smooth(std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -833,17 +847,18 @@ public:
     Geo::TriangleSpatialIndex<ScalarType> TriGrid;
     std::vector<Geo::Segment3<ScalarType>> FeatureSegs;
     Geo::SegmentSpatialIndex<ScalarType> SegGrid;
-    InitGridIfNeeded(UVP, TriGrid, FeatureSegs, SegGrid);
+    std::vector<int> ReprojectVertIdx;
+    InitGridIfNeeded(UVP,VertPos,ReprojectVertIdx,TriGrid, FeatureSegs, SegGrid);
 
     for (size_t s = 0; s < UVP.Steps; s++) {
       SmoothStep(VertPos, Faces, FaceNorm, NextF, NextE, SData, BorderVertSeq,
                  true, true, UVP.Damp, isPoly);
 
       // if ((s % UVP.ReprojStep) == 0)
-      ReprojectIfNeeded(UVP, VertPos, Faces, TriGrid, FeatureSegs, SegGrid);
+      ReprojectIfNeeded(UVP, VertPos, Faces,ReprojectVertIdx, TriGrid, FeatureSegs, SegGrid);
     }
 
-    ReprojectIfNeeded(UVP, VertPos, Faces, TriGrid, FeatureSegs, SegGrid);
+    ReprojectIfNeeded(UVP, VertPos, Faces, ReprojectVertIdx,TriGrid, FeatureSegs, SegGrid);
   }
 
   static void Smooth(std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -952,16 +967,23 @@ public:
     std::vector<Geo::Point2<ScalarType>> VertUV;
 
     // split into Tris if needed
+
     std::vector<std::vector<int>> FTris = Faces;
     if (!IsAllTris(Faces))
       SplitQuadIntoTris(VertPos, Faces, FTris);
-
-    // then parametrize
+    
+    
+    //then parametrize
     bool had_param = Geo::UVParam<ScalarType>::TutteEmbedding(VertPos, FTris,
-                                                              Corners, VertUV);
+                                                             Corners, VertUV);
+    //std::cout<<"Test 0"<<std::endl;
+    // WriteOBJ("TestParam.obj", VertPos,FTris);
+    // bool had_param= Geo::UVParam<ScalarType>::LeastSquaresConformal(VertPos,FTris,VertUV);
+    
+    // std::cout<<"Test 1"<<std::endl;
     if (!had_param)
       return false;
-
+    
     // fix border vertices
     std::vector<int> BorderV;
     getBorderVert(Faces, BorderV);
@@ -971,38 +993,50 @@ public:
 
     // save old UV
     std::vector<Geo::Point2<ScalarType>> OriginalUV = VertUV;
+    
+    //std::cout<<"Test 2"<<std::endl;
 
     // then smooth
-    SmoothLaplacianImplicit(VertUV, Faces, FixUV);
-
-    // then resample
-    Geo::TriangleSpatialIndex2D<ScalarType> GridUV;
-    GridUV.Init(OriginalUV, FTris);
-
+   SmoothLaplacianImplicit(VertUV, Faces, FixUV);
+    
     std::vector<Geo::Point3<ScalarType>> NewVertPos;
+
+    std::vector<int> faceIDx;
+    std::vector<Geo::Point3<ScalarType>> bary;
+    UVUtils<ScalarType>::MapBetween(VertUV,OriginalUV,
+                              FTris,faceIDx,
+                                     bary,false);
+
+    for (size_t i = 0; i < faceIDx.size(); i++) 
+      {if (faceIDx[i]==-1)return false;}
 
     for (size_t i = 0; i < VertPos.size(); i++) {
 
       if (FixedUVSet.count(i) > 0)
+      {
+        NewVertPos.push_back(VertPos[i]);
         continue;
-
+      }
       Geo::Point2<ScalarType> UVPos = VertUV[i];
 
-      Geo::Point3<ScalarType> BaryCoords;
-      int IndexF = -1;
-      GridUV.FirstTrianglesOverPoint(OriginalUV, FTris, UVPos, IndexF,
-                                     BaryCoords);
-      if (IndexF == -1) {
-        // std::cout << "DEDE" << std::endl;
-        // WriteOBJ("Test0.obj", PatchVertUV, Patch_Faces);
-        // WriteOBJ("Test1.obj", QuadVertUV, QuadFaces);
-        // // QuadVertUV
-        exit(0);
-      }
+      // Geo::Point3<ScalarType> BaryCoords;
+      // int IndexF = -1;
+      // GridUV.FirstTrianglesOverPoint(OriginalUV, FTris, UVPos, IndexF,
+      //                                BaryCoords);
+      
+      // if (IndexF == -1) {
+      //   std::cout << "DEDE" << std::endl;
+      //   WriteOBJ("Test0.obj", OriginalUV, FTris);
+      //   WriteOBJ("Test1.obj", VertUV, Faces);
+      //   // QuadVertUV
+      //   exit(0);
+      // }
+      int IndexF = faceIDx[i];
+      Geo::Point3<ScalarType> BaryCoords=bary[i];
 
-      int IndexV0 = Faces[IndexF][0];
-      int IndexV1 = Faces[IndexF][1];
-      int IndexV2 = Faces[IndexF][2];
+      int IndexV0 = FTris[IndexF][0];
+      int IndexV1 = FTris[IndexF][1];
+      int IndexV2 = FTris[IndexF][2];
 
       Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
       Geo::Point3<ScalarType> P1 = VertPos[IndexV1];

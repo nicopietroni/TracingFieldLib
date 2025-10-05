@@ -1274,7 +1274,7 @@ public:
     FixType =
         Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
 
-    PMode = EvenVar;
+    PMode = SolvePost;
   }
 };
 

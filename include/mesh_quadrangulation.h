@@ -1,7 +1,13 @@
 #ifndef MESH_QUADRANGULATION
 #define MESH_QUADRANGULATION
 
+#include "IO/io_obj.h"
+#include "IO/io_path.h"
+
 #include <cassert>
+#include <cstdlib>
+#include <iostream>
+#include <set>
 #include <vector>
 
 #include <connectivity.h>
@@ -24,6 +30,9 @@
 
 #include <patch_side_discretization.h>
 
+#include "edge_mesh_functions.h"
+#include <quad_mesh_functions.h>
+#include <quadmesh_smooth_separatrix.h>
 #include <quadrangulation.h>
 #include <quadrangulationLUT.h>
 
@@ -44,15 +53,13 @@ template <class ScalarType> class MeshQuadrangulator {
   // QUAD DATA
   std::vector<Geo::Point3<ScalarType>> &QuadVert;
   std::vector<std::vector<int>> &QuadFaces;
-  //std::vector<Geo::Point3<ScalarType>> QuadFaceNormals, QuadVertNormals;
+  // std::vector<Geo::Point3<ScalarType>> QuadFaceNormals, QuadVertNormals;
   std::vector<std::pair<int, int>> QuadFeatures;
   std::vector<int> QuadCorners;
-
 
   // SETUP DATA
   int min_sing_distance;
 
-  
   // DUAL DATA
   std::vector<Geo::Point3<ScalarType>> DualVertPos;
   std::vector<std::vector<int>> DualConnectivity;
@@ -63,12 +70,13 @@ template <class ScalarType> class MeshQuadrangulator {
   std::vector<std::pair<int, int>> DualFeatures;
   std::vector<int> DualCorners;
 
-  //GRAPH SETUP DATA
+  // GRAPH SETUP DATA
   ScalarType graph_drift_penalty;
   ScalarType graph_maxAngle;
   int graph_diffuse_step;
 
   bool force_parity;
+  bool OptimizeSize;
 
   // OTHER DATA
   std::vector<std::pair<int, int>> TriFeatures;
@@ -91,6 +99,8 @@ template <class ScalarType> class MeshQuadrangulator {
   typename Geo::DualPatch<ScalarType>::DualParameter DualParam;
   Geo::SmoothParam<ScalarType> SParamQuadSmooth;
   Geo::QuadrangulationLUT<ScalarType> Q_LUT;
+  bool has_problematic_patches;
+  std::vector<int> QuadPatch;
 
   void CleanMeshArtifacts() {
     ScalarType AVLen = AvgEdgeLen(TriVertPos, TriConnectivity);
@@ -108,7 +118,7 @@ template <class ScalarType> class MeshQuadrangulator {
     SetVertCrossFromFace(TriVertPos, TriConnectivity, TriVertNormals, FaceCurv,
                          VertCurv);
 
-    Geo::Corners<ScalarType>(TriVertPos, TriFeatures, feature_corner_angle,
+    Geo::MeshFeatures<ScalarType>::Corners(TriVertPos, TriFeatures, feature_corner_angle,
                              TriCornersIdx);
   }
 
@@ -127,10 +137,8 @@ template <class ScalarType> class MeshQuadrangulator {
     // if ((MinSides > 0) || (MaxSides > 0)) {
     PDeco.AddCondition(new Geo::NumSidesCondition<ScalarType>());
 
-    if (CCAbility>0)
-        PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(CCAbility));
-
-    
+    if (CCAbility > 0)
+      PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(CCAbility));
   }
 
   void InitPatches() {
@@ -220,8 +228,14 @@ template <class ScalarType> class MeshQuadrangulator {
     PathSampl.GetVertexSelectedPaths(VertPaths);
     Geo::PathFunctions<ScalarType>::FindTJunctions(VertPaths, TJunctions);
 
+    // std::cout<<"Features size:"<<TriFeatures.size()<<std::endl;
+    // std::cout<<"VertPath size:"<<VertPaths.size()<<std::endl;
+    // WriteFeatures("feature.feat",TriFeatures);
+    // WritePath("path.path",VertPaths);
     Geo::PatchOptimize<ScalarType>::SmoothPaths(TriVertPos, TriConnectivity,
                                                 VertPaths, TriFeatures);
+    // WriteOBJ("Primal.obj",TriVertPos, TriConnectivity);
+    // exit(0);
 
     ComputeNormals(TriVertPos, TriConnectivity, TriFaceNormals, TriVertNormals);
 
@@ -275,7 +289,7 @@ template <class ScalarType> class MeshQuadrangulator {
     // UPDATE MESH DATA
     // ComputeNormals(DualVertPos, DualConnectivity, DualFaceNormals,
     //                DualVertNormals);
-     
+
     std::vector<std::vector<int>> DualNextF, DualNextE;
     Geo::getFFAdjacency(DualConnectivity, DualNextF, DualNextE);
 
@@ -289,7 +303,7 @@ template <class ScalarType> class MeshQuadrangulator {
     DualParam.InitSingPos = true;
     DualParam.FixSingPos = false;
     DualParam.JointBorder = true;
-    //DualParam.RType=Geo::DualPatch<ScalarType>::RT_CCability;
+    // DualParam.RType=Geo::DualPatch<ScalarType>::RT_CCability;
   }
 
   void UpdateQuadFeatures() {
@@ -304,16 +318,29 @@ template <class ScalarType> class MeshQuadrangulator {
 
     // find the corners
     QuadCorners.clear();
+   
+    Geo::MeshFeatures<ScalarType>::CornersByCount(QuadVert, QuadFeatures, QuadCorners,true);
+
+    //add the geometric ones
     std::set<Geo::Point3<ScalarType>> CornerPosSet;
     for (size_t i = 0; i < TriCornersIdx.size(); i++)
       CornerPosSet.insert(TriVertPos[TriCornersIdx[i]]);
 
-    CornersByCount(QuadVert, QuadFeatures, QuadCorners);
-
     for (size_t i = 0; i < QuadVert.size(); i++) {
-      if (CornerPosSet.count(QuadVert[i]) > 0)
-        QuadCorners.push_back(i);
+      if (CornerPosSet.count(QuadVert[i])== 0)continue;  
+      QuadCorners.push_back(i);
     }
+
+    //  //remove valence 1 vertices
+    // std::vector<int> Valence1Idx;
+    // Geo::MeshFeatures<ScalarType>::VerticesWithValence1(QuadFeatures,Valence1Idx);
+    // std::set<int> Valence1IdxSet(Valence1Idx.begin(),Valence1Idx.end());
+    // std::vector<int> NewQuadCorners;
+    // for (size_t i = 0; i < QuadCorners.size(); i++) {
+    //   if (Valence1IdxSet.count(QuadCorners[i])>0)continue;  
+    //   NewQuadCorners.push_back(i);
+    // }
+    // QuadCorners=NewQuadCorners;
   }
 
   void Init3DSmooth() {
@@ -335,16 +362,16 @@ template <class ScalarType> class MeshQuadrangulator {
     SParamQuadSmooth.post_project = true;
   }
 
-  void SmoothCentroidMesh3D() {
+  // void SmoothCentroidMesh3D() {
 
-    SParamQuadSmooth.NumIte = QuadSmoothSteps;
-    SParamQuadSmooth.SType = Geo::SMCentroid;
-    SParamQuadSmooth.check_AspectR = true;
-    Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
+  //   SParamQuadSmooth.NumIte = QuadSmoothSteps;
+  //   SParamQuadSmooth.SType = Geo::SMCentroid;
+  //   SParamQuadSmooth.check_AspectR = true;
+  //   Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
 
-    // Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
-    //                                 QuadVertNormals);
-  }
+  //   // Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
+  //   //                                 QuadVertNormals);
+  // }
 
   void InitializeData() {
     std::cout << "*** INITIALIZATION *** " << std::endl;
@@ -384,39 +411,99 @@ template <class ScalarType> class MeshQuadrangulator {
   }
 
   void Quadrangulate() {
-    
+
     ScalarType EdgeS = MeshBox.Diag() * QuadSize;
 
-    typename Geo::SideDiscretization<ScalarType>::solveMode SM;
+    // typename Geo::SideDiscretization<ScalarType>::solveMode SM;
 
-    SM = Geo::SideDiscretization<ScalarType>::SM_GlobalSolve;
+    // SM = Geo::SideDiscretization<ScalarType>::SM_GlobalSolve;
 
-    SideD.Solve(EdgeS, SM, force_parity, RegVsIso);
+    // SideD.Solve(EdgeS, SM, force_parity, RegVsIso);
+
+    std::cout << "Edge Size:" << EdgeS << std::endl;
+    SideD.PrioritizeTJunction = true;
+
+    SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeSize);
 
     std::vector<std::vector<int>> PatchFaces, PatchCorners;
     std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> SideSamples;
-
     SideD.GetQuadrangulationData(PatchFaces, PatchCorners, SideSamples);
 
-    std::vector<int> QuadPatch;
-    Geo::Quadrangulation<ScalarType>::QuadrangulateQuadPatchsWithSubs(
-        DualVertPos, DualConnectivity, PatchFaces, PatchCorners, SideSamples,
-        Q_LUT, QuadVert, QuadFaces, QuadPatch);
+    int num_problematic_patches =
+        Geo::Quadrangulation<ScalarType>::QuadrangulateQuadPatchsWithSubs(
+            DualVertPos, DualConnectivity, PatchFaces, PatchCorners,
+            SideSamples, Q_LUT, QuadVert, QuadFaces, QuadPatch);
+    
+    has_problematic_patches=(num_problematic_patches>0);
 
     RemoveDuplicatedVert(QuadVert, QuadFaces);
+
     RemoveUnfererencedVert(QuadVert, QuadFaces);
 
     // Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
     //                                 QuadVertNormals);
-
     UpdateQuadFeatures();
     Init3DSmooth();
   }
 
-  void SmoothQuadrangulation() { SmoothCentroidMesh3D(); }
+  void SolveDoublets() {
+    Geo::QuadPatchFunctions<ScalarType>::RemoveDoublets(
+        QuadVert, QuadFaces, QuadFeatures, QuadCorners, QuadPatch);
+  }
+
+  void SmoothQuadMeshSeparatrix() {
+
+    typename Geo::QuadMeshSeparatrixSmooth<ScalarType>::SeparatrixSmoothParam
+        Sep_SParam;
+    Sep_SParam.Fixed = QuadCorners;
+    Sep_SParam.FeatureLines = QuadFeatures;
+    Sep_SParam.Damp = 0.5;
+    Sep_SParam.Steps = QuadSmoothSteps / 2;
+    Sep_SParam.fixBorder = true;
+    Sep_SParam.post_project=!(has_problematic_patches);
+    Sep_SParam.ReprojVert = &TriVertPos;
+    Sep_SParam.ReprojFaces = &TriConnectivity;
+    Sep_SParam.ReprojFeatureLines = TriFeatures;
+    Geo::QuadMeshSeparatrixSmooth<ScalarType>::Smooth(QuadVert, QuadFaces,
+                                                      Sep_SParam);
+  }
+
+  void SmoothLaplacian() {
+    Geo::SmoothParam<ScalarType> SParamQuadSmooth;
+
+    SParamQuadSmooth.Clear();
+
+    SParamQuadSmooth.Features = QuadFeatures;
+    SParamQuadSmooth.FixedVert = QuadCorners;
+
+    std::vector<std::pair<int, int>> BorderE;
+    Geo::getBorderEdges(QuadFaces, BorderE);
+    for (size_t i = 0; i < BorderE.size(); i++) {
+      SParamQuadSmooth.FixedVert.push_back(BorderE[i].first);
+      SParamQuadSmooth.FixedVert.push_back(BorderE[i].second);
+    }
+
+    SParamQuadSmooth.ReprojVert = &TriVertPos;
+    SParamQuadSmooth.ReprojFaces = &TriConnectivity;
+    SParamQuadSmooth.Damp = 0.5;
+    SParamQuadSmooth.post_project = !(has_problematic_patches);
+    SParamQuadSmooth.ReprojFeatures = TriFeatures;
+    SParamQuadSmooth.NumIte = QuadSmoothSteps / 2;
+    SParamQuadSmooth.SType = Geo::SMLaplacian;
+    SParamQuadSmooth.check_AspectR = false;
+
+    Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
+  }
+
+  void SmoothQuadrangulation() {
+    // keep more field
+    //SmoothQuadMeshSeparatrix();
+
+    // laplacian smooth to solve some artifacts
+    SmoothLaplacian();
+  }
 
 public:
-  
   ScalarType QuadSize;
   int QuadSmoothSteps;
   ScalarType RegVsIso;
@@ -439,15 +526,15 @@ public:
         PDeco(PatchM, PathSampl, VertCurv, FaceCurv)
 
   {
-    
+
     graph_drift_penalty = 100;
     graph_maxAngle = 45;
     graph_diffuse_step = 1;
     min_sing_distance = 1;
 
-    CCAbility=-1;
-    dynamicUpdates=false;
-    num_samples=1000;
+    CCAbility = -1;
+    dynamicUpdates = false;
+    num_samples = 1000;
 
     feature_corner_angle = 45;
     QuadSize = 0.02;
@@ -455,24 +542,35 @@ public:
     QuadSmoothSteps = 10;
     force_parity = true;
     RegVsIso = 1.0;
+
+    OptimizeSize = true;
+
+    has_problematic_patches = false;
   }
 
   void Init() {
     Q_LUT.Initialize();
     InitDefaultDualParameters();
+    has_problematic_patches = false;
   }
 
   void ExtractQuad(std::vector<std::pair<int, int>> &_TriFeatures) {
     TriFeatures = _TriFeatures;
 
-    PathSampl.dynamicUpdates=dynamicUpdates;
-    PathSampl.NumSamples=num_samples;
+    std::sort(TriFeatures.begin(), TriFeatures.end());
+    auto last = std::unique(TriFeatures.begin(), TriFeatures.end());
+    TriFeatures.erase(last, TriFeatures.end());
+
+    PathSampl.dynamicUpdates = dynamicUpdates;
+    PathSampl.NumSamples = num_samples;
 
     InitializeData();
 
     DecomposePatches();
 
     Quadrangulate();
+
+    SolveDoublets();
 
     SmoothQuadrangulation();
   }

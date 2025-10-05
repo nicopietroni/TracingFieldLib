@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstddef>
 #include <iostream>
+#include <sys/_types/_size_t.h>
 #include <vector>
 
 #include "best_rotation.h"
@@ -142,6 +143,23 @@ QuadOfFace(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 }
 
 template <class ScalarType>
+ScalarType AspectRatioWorstAngle(const Quad3<ScalarType> &Q) {
+  ScalarType WorstDiff = 0;
+  for (size_t i = 0; i < 4; i++) {
+    Point3<ScalarType> p0 = Q.P((i + 3) % 4);
+    Point3<ScalarType> p1 = Q.P(i);
+    Point3<ScalarType> p2 = Q.P((i + 1) % 4);
+    Point3<ScalarType> Dir0 = p0 - p1;
+    Point3<ScalarType> Dir1 = p2 - p1;
+    Dir0.Normalize();
+    Dir1.Normalize();
+    ScalarType Angle = fabs(AngleDeg(Dir0, Dir1));
+    WorstDiff = std::max(WorstDiff, fabs(Angle - 90));
+  }
+  return (1-WorstDiff/90);
+}
+
+template <class ScalarType>
 ScalarType AspectRatioAlignPoly(const Quad3<ScalarType> &Q) {
   std::vector<Geo::Point3<ScalarType>> FacePos;
   std::vector<Geo::Point3<ScalarType>> bestPoly;
@@ -194,30 +212,28 @@ ScalarType ScaledJacobianQuad(const Quad3<ScalarType> &Q) {
 }
 
 template <class ScalarType>
-void SampleBilinear(const Quad3<ScalarType>& Q,
-                    const int SideSplit,
-                    std::vector<Geo::Point3<ScalarType>>& Samples)
-{
-    using Coord = typename Quad3<ScalarType>::CoordType;
+void SampleBilinear(const Quad3<ScalarType> &Q, const int SideSplit,
+                    std::vector<Geo::Point3<ScalarType>> &Samples) {
+  using Coord = typename Quad3<ScalarType>::CoordType;
 
-    Samples.clear();
+  Samples.clear();
 
-    if (SideSplit <= 0) {  // degenerate request → sample center
-        Samples.push_back(Q.Sample(ScalarType(0.5), ScalarType(0.5)));
-        return;
+  if (SideSplit <= 0) { // degenerate request → sample center
+    Samples.push_back(Q.Sample(ScalarType(0.5), ScalarType(0.5)));
+    return;
+  }
+
+  const int n = SideSplit + 1;
+  Samples.reserve(static_cast<size_t>(n) * n);
+
+  const ScalarType denom = ScalarType(SideSplit);
+  for (int j = 0; j <= SideSplit; ++j) {
+    const ScalarType v = ScalarType(j) / denom; // 0 … 1
+    for (int i = 0; i <= SideSplit; ++i) {
+      const ScalarType u = ScalarType(i) / denom; // 0 … 1
+      Samples.push_back(Q.Sample(u, v));
     }
-
-    const int n = SideSplit + 1;
-    Samples.reserve(static_cast<size_t>(n) * n);
-
-    const ScalarType denom = ScalarType(SideSplit);
-    for (int j = 0; j <= SideSplit; ++j) {
-        const ScalarType v = ScalarType(j) / denom;      // 0 … 1
-        for (int i = 0; i <= SideSplit; ++i) {
-            const ScalarType u = ScalarType(i) / denom;  // 0 … 1
-            Samples.push_back(Q.Sample(u, v));
-        }
-    }
+  }
 }
 
 template <class ScalarType>
@@ -227,6 +243,15 @@ ScaledJacobianQuad(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                    const int &IndexF) {
   Quad3<ScalarType> Q = QuadOfFace(VertPos, Faces, IndexF);
   return (ScaledJacobianQuad(Q));
+}
+
+template <class ScalarType>
+ScalarType
+AspectRatioWorstAngle(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                   const std::vector<std::vector<int>> &Faces,
+                   const int &IndexF) {
+  Quad3<ScalarType> Q = QuadOfFace(VertPos, Faces, IndexF);
+  return (AspectRatioWorstAngle(Q));
 }
 
 template <class ScalarType>
@@ -248,18 +273,29 @@ void AspectRatioAlignPoly(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 }
 
 template <class ScalarType>
-void AspectRatioScaledJacobian(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                          const std::vector<std::vector<int>> &Faces,
-                          std::vector<ScalarType> &FaceAR) {
+void AspectRatioScaledJacobian(
+    const std::vector<Geo::Point3<ScalarType>> &VertPos,
+    const std::vector<std::vector<int>> &Faces,
+    std::vector<ScalarType> &FaceAR) {
   FaceAR.clear();
   for (size_t i = 0; i < Faces.size(); i++)
     FaceAR.push_back(ScaledJacobianQuad(VertPos, Faces, i));
 }
 
 template <class ScalarType>
+void AspectRatioWorstAngle(
+    const std::vector<Geo::Point3<ScalarType>> &VertPos,
+    const std::vector<std::vector<int>> &Faces,
+    std::vector<ScalarType> &FaceAR) {
+  FaceAR.clear();
+  for (size_t i = 0; i < Faces.size(); i++)
+    FaceAR.push_back(AspectRatioWorstAngle(VertPos, Faces, i));
+}
+
+template <class ScalarType>
 bool HasConcaveV(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                       const std::vector<std::vector<int>> &Faces,
-                       const int &IndexF) {
+                 const std::vector<std::vector<int>> &Faces,
+                 const int &IndexF) {
   Quad3<ScalarType> Q = QuadOfFace(VertPos, Faces, IndexF);
   return Q.HasConcaveV();
 } // namespace Geo
@@ -267,11 +303,10 @@ bool HasConcaveV(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 template <class ScalarType>
 void SampleBilinear(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                     const std::vector<std::vector<int>> &Faces,
-                    const int &IndexF,
-                    const int SideSplit,
+                    const int &IndexF, const int SideSplit,
                     std::vector<Geo::Point3<ScalarType>> &Samples) {
   Quad3<ScalarType> Q = QuadOfFace(VertPos, Faces, IndexF);
-  SampleBilinear(Q,SideSplit,Samples);
+  SampleBilinear(Q, SideSplit, Samples);
 } // namespace Geo
 
 } // namespace Geo

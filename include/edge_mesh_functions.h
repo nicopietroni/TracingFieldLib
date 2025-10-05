@@ -16,6 +16,7 @@
 #include <pos3.h>
 #include <set>
 #include <string>
+#include <sys/_types/_size_t.h>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -148,7 +149,7 @@ template <class ScalarType> class EdgeMeshFunctions {
       Dir0.Normalize();
       Dir1.Normalize();
 
-      Curv+=AngleDeg(Dir0,Dir1);
+      Curv += AngleDeg(Dir0, Dir1);
     }
     return fabs(Curv);
   }
@@ -506,22 +507,20 @@ public:
 
   static bool SampleByCurvature(const std::vector<Point3<ScalarType>> &Points,
                                 const int n_internal,
-                                std::vector<int> &Selected) 
-  {
+                                std::vector<int> &Selected) {
     if (n_internal <= 0)
       return false;
-    
-    bool IsCircle=(Points[0]==Points.back());
+
+    bool IsCircle = (Points[0] == Points.back());
 
     ScalarType CurvValue = Curvature(Points);
     ScalarType CurvInt = CurvValue / n_internal;
-    if (!IsCircle)
-    {
-      CurvInt = CurvValue / (n_internal+1);
-      CurvInt*=1.01;
+    if (!IsCircle) {
+      CurvInt = CurvValue / (n_internal + 1);
+      CurvInt *= 1.01;
     }
 
-    ScalarType CurrA=0;
+    ScalarType CurrA = 0;
     Selected.clear();
 
     Geo::Plane3<ScalarType> FitPlane;
@@ -546,15 +545,15 @@ public:
       // angle *= (ScalarType)180.0 / M_PI;
       // ScalarType sign = (Dot(cross, up) >= 0) ? 1 : -1;
       // CurrA += (sign * angle);
-      CurrA += AngleDeg(Dir0,Dir1);
+      CurrA += AngleDeg(Dir0, Dir1);
       if (fabs(CurrA) >= CurvInt) {
         CurrA = 0;
         Selected.push_back(IndexV1);
       }
     }
 
-    //add the last one in case is a circle
-    if (IsCircle && (Selected.size()<n_internal))
+    // add the last one in case is a circle
+    if (IsCircle && (Selected.size() < n_internal))
       Selected.push_back(0);
   }
 
@@ -564,8 +563,7 @@ public:
                             const std::vector<int> &Corners,
                             std::vector<int> &Selected,
                             const ScalarType &CurvatureIntervalCircle = 80,
-                            const ScalarType &CurvatureIntervalPoly = 40) 
-  {
+                            const ScalarType &CurvatureIntervalPoly = 40) {
     // save indexes
     std::map<Geo::Point3<ScalarType>, int> PosToIDX;
     for (size_t i = 0; i < VertPos.size(); i++)
@@ -593,11 +591,11 @@ public:
       // if (isCycle)
       //   std::cout << "Cycle Curv:" << currCurv << std::endl;
 
-      int InterValNum =0;
+      int InterValNum = 0;
       if (isCycle)
-        InterValNum =floor(0.5 + (currCurv / CurvatureIntervalCircle));
+        InterValNum = floor(0.5 + (currCurv / CurvatureIntervalCircle));
       else
-        InterValNum =floor(0.5 + (currCurv / CurvatureIntervalPoly));
+        InterValNum = floor(0.5 + (currCurv / CurvatureIntervalPoly));
 
       if (InterValNum == 0)
         continue;
@@ -616,6 +614,47 @@ public:
     for (size_t i = 0; i < SelPos.size(); i++) {
       assert(PosToIDX.count(SelPos[i]) > 0);
       Selected.push_back(PosToIDX[SelPos[i]]);
+    }
+  }
+
+  static void ExtractEdgeMeshFromVertPairs(
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &Faces,
+      const std::vector<std::pair<int, int>> &Edges,
+      std::vector<Geo::Point3<ScalarType>> &EdgeMeshVertPos,
+      std::vector<std::vector<int>> &ConnectivityEdges) {
+
+    // get the ones touched
+    std::vector<bool> Used(VertPos.size(), false);
+    for (size_t i = 0; i < Edges.size(); i++) {
+      Used[Edges[i].first] = true;
+      Used[Edges[i].second] = true;
+    }
+
+    std::map<int,int> VertMap;
+    EdgeMeshVertPos.clear();
+    for (size_t i = 0; i < VertPos.size(); i++) {
+      if (!Used[i])continue;
+      EdgeMeshVertPos.push_back(VertPos[i]);
+      VertMap[i]=EdgeMeshVertPos.size()-1;
+    }
+
+    ConnectivityEdges.clear();
+    for (size_t i=0;i<Edges.size();i++)
+    {
+      int IndexV0=Edges[i].first;
+      int IndexV1=Edges[i].second;
+      assert(VertMap.count(IndexV0)>0);
+      assert(VertMap.count(IndexV1)>0);
+      IndexV0=VertMap[IndexV0];
+      IndexV1=VertMap[IndexV1];
+      assert(IndexV0>=0);
+      assert(IndexV0<EdgeMeshVertPos.size());
+      assert(IndexV1>=0);
+      assert(IndexV1<EdgeMeshVertPos.size());
+      ConnectivityEdges.resize(ConnectivityEdges.size()+1);
+      ConnectivityEdges.back().push_back(IndexV0);
+      ConnectivityEdges.back().push_back(IndexV1);
     }
   }
 };
