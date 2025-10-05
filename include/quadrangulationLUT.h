@@ -35,7 +35,7 @@ template <class ScalarType> class QuadrangulationLUT {
   }
 
   std::map<std::vector<int>, std::vector<std::vector<int> > > LUT;
-
+  
   // Helper function to parse a quadruple from a formatted string like (x,y,z,w)
   std::vector<int> parseQuadruple(const std::string &str) {
     int a, b, c, d;
@@ -66,6 +66,10 @@ template <class ScalarType> class QuadrangulationLUT {
       // Read the key (four integers)
       int k1, k2, k3, k4;
       file >> k1 >> k2 >> k3 >> k4;
+      MaxSubdVal=std::max(MaxSubdVal,k1);
+      MaxSubdVal=std::max(MaxSubdVal,k2);
+      MaxSubdVal=std::max(MaxSubdVal,k3);
+      MaxSubdVal=std::max(MaxSubdVal,k4);
       //std::cout<<"Read Key "<<k1<<" "<<k2<<" "<<k3<<" "<<k4<<std::endl;
 
       std::vector<int> key{k1, k2, k3, k4};
@@ -99,6 +103,8 @@ template <class ScalarType> class QuadrangulationLUT {
   }
 
 public:
+
+  int MaxSubdVal;
 
   void Initialize()
   {
@@ -187,6 +193,11 @@ public:
     {
       return false;
     }
+  }
+
+  QuadrangulationLUT()
+  {
+    MaxSubdVal=-1;
   }
 };
 

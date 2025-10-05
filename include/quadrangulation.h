@@ -140,6 +140,31 @@ public:
       }
   }
 
+  static bool OutofLUTBounds(const QuadrangulationLUT<ScalarType> &QLut,
+                             const std::vector<std::vector<Geo::Point2<ScalarType>>> &UVSideSubd)
+  {
+    assert(UVSideSubd.size()==4);
+      int size0=UVSideSubd[0].size();
+      int size1=UVSideSubd[1].size();
+      int size2=UVSideSubd[2].size();
+      int size3=UVSideSubd[3].size();
+      assert(size0>=0);
+      assert(size1>=0);
+      assert(size2>=0);
+      assert(size3>=0);
+      return((size0>QLut.MaxSubdVal)||
+             (size1>QLut.MaxSubdVal)||
+             (size2>QLut.MaxSubdVal)||
+             (size3>QLut.MaxSubdVal));
+  }
+
+  // static bool QuadrangulateExtendLUT(const QuadrangulationLUT<ScalarType> &QLut,
+  //                                   const std::vector<std::vector<Geo::Point2<ScalarType>>> &UVSideSubd)
+  // {
+  //   int Diff0_U=UVSideSubd[0].size()-QLut.MaxSubdVal;
+  //   int Diff1_U=UVSideSubd[2].size()-QLut.MaxSubdVal;
+  // }
+
   static bool SampleWithLUT(
       const std::vector<Geo::Point2<ScalarType>> &PatchVertUV,
       const std::vector<Geo::Point3<ScalarType>> &PatchVert3D,
@@ -153,11 +178,19 @@ public:
   {
 
     std::vector<Geo::Point2<ScalarType>> QuadVertUV;
-    bool found = QLut.GetQuadrangulation(UVSideSubd, QuadVertUV, QuadFaces);
+    bool found = false;
 
-    if (!found)
+    if (!OutofLUTBounds(QLut,UVSideSubd))
+       found = QLut.GetQuadrangulation(UVSideSubd, QuadVertUV, QuadFaces);
+    else
+    {
+      std::cout<<"MaxSizd:"<<QLut.MaxSubdVal<<std::endl;
+      std::cout<<"Size 0:"<<UVSideSubd[0].size()<<std::endl;
+      std::cout<<"Size 1:"<<UVSideSubd[1].size()<<std::endl;
+      std::cout<<"Size 2:"<<UVSideSubd[2].size()<<std::endl;
+      std::cout<<"Size 3:"<<UVSideSubd[3].size()<<std::endl;
       return false;
-
+    }
     // std::cout<<"DEDE"<<std::endl;
     //     WriteOBJ("Test0.obj",PatchVertUV, Patch_Faces);
     //     WriteOBJ("Test1.obj",QuadVertUV, QuadFaces);
@@ -179,6 +212,7 @@ public:
     // std::cout<<"Size0 "<<BorderNum<<std::endl;
     // std::cout<<"Size1 "<<QuadVert.size()<<std::endl;
 
+    //the first one will be the one along the border, sorted accordignly
     for (size_t i = 0; i < BorderNum; i++)
       QuadVert[i] = AllSide3D[i];
 
@@ -248,6 +282,7 @@ public:
     Geo::Box3<ScalarType> BB;
     BB.Init(PatchVert);
 
+    //get the UV of side subdivision
     std::vector<std::vector<Geo::Point2<ScalarType>>> UVSideSubd;
     for (size_t i = 0; i < SideSubd.size(); i++) {
       UVSideSubd.resize(UVSideSubd.size() + 1);
@@ -320,15 +355,19 @@ public:
     for (size_t i = 0; i < PatchFacesIdx.size(); i++) {
       // for (size_t i = 0; i <1; i++) {
       assert(PatchCornerIdx[i].size() == SideSamples3D[i].size());
+
+      //only if the patch corner side is 4
       if (PatchCornerIdx[i].size() != 4)
         continue;
 
+      //copy the submesh
       std::vector<Geo::Point3<ScalarType>> CurrPatchVert;
       std::vector<std::vector<int>> CurrPatchFaces;
       std::vector<int> OriginalVert, OriginalElem;
       CopySubMesh<ScalarType>(Vert_3D, Faces, PatchFacesIdx[i], CurrPatchVert,
                               CurrPatchFaces, OriginalVert, OriginalElem);
-
+      
+      //then map the corners on the subpatch
       std::vector<int> CurrPatchCorners;
       for (size_t j = 0; j < OriginalVert.size(); j++) {
         std::vector<int>::const_iterator it =
@@ -342,6 +381,7 @@ public:
       std::vector<Geo::Point3<ScalarType>> Curr_Patch_QuadVert;
       std::vector<std::vector<int>> Curr_Patch_QuadFaces;
 
+      //then quadrangulate returning also the side samples
       bool has_quadrangulated=QuadrangulateQuadPatchWithSubs(CurrPatchVert, CurrPatchFaces,
                                      CurrPatchCorners, SideSamples3D[i], QLut,
                                      Curr_Patch_QuadVert, Curr_Patch_QuadFaces);

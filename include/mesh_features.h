@@ -20,8 +20,7 @@
 namespace Geo {
 
 template <class ScalarType> class MeshFeatures {
-  public:
-
+public:
   static bool IsFeature(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                         const std::vector<std::vector<int>> &Faces,
                         const int &IndexF0, const int &IndexF1,
@@ -36,8 +35,8 @@ template <class ScalarType> class MeshFeatures {
   }
 
   static bool IsCorner(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                const int IndexV0, const int IndexVCentral, const int IndexV1,
-                const ScalarType feature_angle) {
+                       const int IndexV0, const int IndexVCentral,
+                       const int IndexV1, const ScalarType feature_angle) {
     assert(IndexV0 >= 0);
     assert(IndexVCentral >= 0);
     assert(IndexV1 >= 0);
@@ -55,12 +54,11 @@ template <class ScalarType> class MeshFeatures {
       return true;
     return (false);
   }
-  
+
   static void
   CornersByCount(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                  const std::vector<std::pair<int, int>> &VertPair,
-                 std::vector<int> &CornersIdx,
-                 bool remove_valence_1) {
+                 std::vector<int> &CornersIdx, bool remove_valence_1) {
     CornersIdx.clear();
     std::vector<int> VertCount(VertPos.size(), 0);
     for (size_t i = 0; i < VertPair.size(); i++) {
@@ -74,7 +72,8 @@ template <class ScalarType> class MeshFeatures {
     }
 
     for (size_t i = 0; i < VertCount.size(); i++) {
-      if ((remove_valence_1)&&(VertCount[i] == 1))continue;
+      if ((remove_valence_1) && (VertCount[i] == 1))
+        continue;
       if ((VertCount[i] == 2) || (VertCount[i] == 0))
         continue;
       CornersIdx.push_back(i);
@@ -109,7 +108,8 @@ template <class ScalarType> class MeshFeatures {
         int IndexV0 = (*IteMap).second[0];
         int IndexVCentr = (*IteMap).first;
         int IndexV1 = (*IteMap).second[1];
-        bool IsC =IsCorner(VertPos, IndexV0, IndexVCentr, IndexV1, feature_angle);
+        bool IsC =
+            IsCorner(VertPos, IndexV0, IndexVCentr, IndexV1, feature_angle);
         if (IsC)
           CornersIdx.push_back(IndexVCentr);
       }
@@ -160,7 +160,7 @@ template <class ScalarType> class MeshFeatures {
       FaceIDX.push_back(i);
 
     FeatureEdges(VertPos, Faces, NextF, FaceIDX, feature_angle,
-                             VertPairFeatures, add_border);
+                 VertPairFeatures, add_border);
   }
 
   static void
@@ -172,7 +172,7 @@ template <class ScalarType> class MeshFeatures {
                  std::vector<std::pair<int, int>> &VertPairFeatures,
                  std::vector<int> &CornersIdx, bool add_border = true) {
     FeatureEdges(VertPos, Faces, NextF, FaceIDX, feature_angle,
-                             VertPairFeatures, add_border);
+                 VertPairFeatures, add_border);
     Corners(VertPos, VertPairFeatures, feature_angle, CornersIdx);
   }
 
@@ -393,20 +393,21 @@ template <class ScalarType> class MeshFeatures {
 
   static void
   VerticesWithValence1(const std::vector<std::pair<int, int>> &VertPair,
-                      std::vector<int> &Valence1Idx)
-  {
-    const std::vector<bool> Enabled(VertPair.size(),true);
+                       std::vector<int> &Valence1Idx) {
+    const std::vector<bool> Enabled(VertPair.size(), true);
     std::map<int, int> VertVal;
-    ValenceMap(VertPair,Enabled,VertVal);
-    for (size_t i=0;i<VertPair.size();i++)
-    {
-      int IndexV0=VertPair[i].first;
-      int IndexV1=VertPair[i].second;
-      if (VertVal[IndexV0]==1)Valence1Idx.push_back(IndexV0);
-      if (VertVal[IndexV1]==1)Valence1Idx.push_back(IndexV1);
+    ValenceMap(VertPair, Enabled, VertVal);
+    for (size_t i = 0; i < VertPair.size(); i++) {
+      int IndexV0 = VertPair[i].first;
+      int IndexV1 = VertPair[i].second;
+      if (VertVal[IndexV0] == 1)
+        Valence1Idx.push_back(IndexV0);
+      if (VertVal[IndexV1] == 1)
+        Valence1Idx.push_back(IndexV1);
     }
-    std::sort(Valence1Idx.begin(),Valence1Idx.end());
-    Valence1Idx.erase(std::unique(Valence1Idx.begin(), Valence1Idx.end()), Valence1Idx.end());
+    std::sort(Valence1Idx.begin(), Valence1Idx.end());
+    Valence1Idx.erase(std::unique(Valence1Idx.begin(), Valence1Idx.end()),
+                      Valence1Idx.end());
   }
 
   static void
@@ -527,6 +528,26 @@ template <class ScalarType> class MeshFeatures {
       NewEdges.push_back(Edges[i]);
     }
     Edges = NewEdges;
+  }
+
+  static void FeatureCornersClean(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                           const std::vector<std::vector<int>> &Faces,
+                           const ScalarType feature_angle,
+                           std::vector<std::pair<int, int>> &VertPairFeatures,
+                           std::vector<int> &CornersIdx, int ero_steps,
+                           int dil_steps, bool include_border = true) {
+
+    FeatureCorners(VertPos, Faces, feature_angle, VertPairFeatures, CornersIdx);
+
+    Geo::MeshFeatures<ScalarType>::RemoveSingleFaceFeatures(Faces,
+                                                            VertPairFeatures);
+
+    if ((ero_steps > 0) || (dil_steps > 0)) {
+      Geo::MeshFeatures<ScalarType>::ErodeDilateFeatures(ero_steps, dil_steps,
+                                                         VertPairFeatures);
+      Geo::MeshFeatures<ScalarType>::Corners(VertPos, VertPairFeatures, feature_angle,
+                                             CornersIdx);
+    }
   }
 };
 } // namespace Geo

@@ -49,6 +49,8 @@ ScalarType QuadSize;
 std::vector<Geo::Point3<ScalarType>> QuadVert;
 std::vector<std::vector<int>> QuadFaces;
 
+ScalarType SizeMult=1.0;
+
 bool LoadMesh(const std::string &path) {
   //    oss<<"Loading "<<path.c_str()<<std::endl;
   loadedMesh = LoadOBJ(path, TriVertPos, TriConnectivity, false);
@@ -184,41 +186,39 @@ ScalarType MaxSize = 0.05;
 
 Geo::Box3<ScalarType> TriMeshBox;
 
+
+ScalarType initial_feature_angle = 30;
+int ero_steps = 3;
+int dil_steps = 3;
+bool compute_features = true;
+
+std::string folderProjectName;
+std::string commandLine;
+
+// to be consistent with edge size always
+// compute as it use 30 degrees features
 void AutoQuadEdgeSize() {
+
+  std::vector<std::pair<int, int>> TriFeatures_30;
+  std::vector<int> TriCorners_30;
+
+  if (has_features)
+    Geo::MeshFeatures<ScalarType>::FeatureCornersClean(
+        TriVertPos, TriConnectivity, 30, TriFeatures_30, TriCorners_30,
+        ero_steps, dil_steps);
 
   std::vector<ScalarType> VertSize;
   ScalarType MinAggrSize = TriMeshBox.Diag() * MinSize;
   ScalarType MaxAggrSize = TriMeshBox.Diag() * MaxSize;
   ScalarType CurrSize = Geo::RemeshSize<ScalarType>::RemeshSizeFeatures(
-      TriVertPos, TriConnectivity, TriFeatures, MinAggrSize, MaxAggrSize,
+      TriVertPos, TriConnectivity, TriFeatures_30, MinAggrSize, MaxAggrSize,
       VertSize);
   QuadSize = CurrSize / TriMeshBox.Diag();
-  QuadSize /= 4;
+  QuadSize /= 2;
+  QuadSize*=SizeMult;
 
   std::cout << "Quad Size: " << QuadSize << std::endl;
 }
-
-ScalarType initial_feature_angle = 30;
-int ero_steps=3;
-int dil_steps=3;
-bool compute_features=true;
-
-void UpdateFeatureCorners() {
-  Geo::MeshFeatures<ScalarType>::FeatureCorners(TriVertPos, TriConnectivity, initial_feature_angle,
-                      TriFeatures, TriCorners);
-
-  Geo::MeshFeatures<ScalarType>::RemoveSingleFaceFeatures(TriConnectivity,TriFeatures);
-
-  if ((ero_steps>0)||(dil_steps>0))
-  {
-    Geo::MeshFeatures<ScalarType>::ErodeDilateFeatures(ero_steps,dil_steps,TriFeatures) ;
-    Geo::MeshFeatures<ScalarType>::Corners(TriVertPos, TriFeatures, initial_feature_angle, TriCorners);
-  }
-}
-
-std::string folderProjectName;
-std::string commandLine;
-
 
 int main(int argc, char *argv[]) {
   std::stringstream commandLineStr;
@@ -233,7 +233,8 @@ int main(int argc, char *argv[]) {
   commandLine = commandLineStr.str();
 
   if (argc < 2) {
-    std::cout << "You should pass at least a mesh as first argument" << std::endl;
+    std::cout << "You should pass at least a mesh as first argument"
+              << std::endl;
     exit(0);
   }
 
@@ -260,10 +261,17 @@ int main(int argc, char *argv[]) {
       }
       continue;
     }
-    if (std::string(argv[i]) == std::string("-nofeatures"))
-    {
-      compute_features=false;
+    if (std::string(argv[i]) == std::string("-nofeatures")) {
+      compute_features = false;
       continue;
+    }
+
+    if (std::string(argv[i]) == std::string("-angle")) {
+      initial_feature_angle = static_cast<ScalarType>(std::stod(argv[i + 1]));
+    }
+
+    if (std::string(argv[i]) == std::string("-size")) {
+      SizeMult = static_cast<ScalarType>(std::stod(argv[i + 1]));
     }
 
     if (GetFileExtension(std::string(argv[i])) == std::string("features")) {
@@ -284,9 +292,12 @@ int main(int argc, char *argv[]) {
   if (has_loaded_mesh) {
 
     std::cout << "BATCH PROCESSING" << std::endl;
-    if ((!has_features)&&(compute_features)) {
+    if ((!has_features) && (compute_features)) {
       std::cout << "** COMPUTING FEATURES **" << std::endl;
-      UpdateFeatureCorners();
+      Geo::MeshFeatures<ScalarType>::FeatureCornersClean(
+          TriVertPos, TriConnectivity, initial_feature_angle, TriFeatures,
+          TriCorners, ero_steps, dil_steps);
+      has_features = true;
     }
 
     if (!has_cross_field) {
