@@ -794,6 +794,14 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
     }
   }
 
+  //add the laplacian term
+  std::vector<std::vector<int> > Neighbors;
+  GetLaplacianNeighbours(VertPos, Faces, Neighbors, LineSmooth);
+  //get laplaxian values
+  std::vector<Geo::Point3<ScalarType>> LaplVal;
+  GetLaplacianValues(VertPos, Neighbors, LaplVal);
+  
+  ScalarType LaplW=0.5;
   // then average
   for (size_t i = 0; i < AvgW.size(); i++) {
     if (AvgW[i] == 0) {
@@ -802,6 +810,7 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
     }
     // AvgPos[i] /= AvgNum[i];
     AvgPos[i] /= AvgW[i];
+    AvgPos[i]=AvgPos[i]*(1-LaplW)+LaplVal[i]*LaplW;
   }
   for (size_t i = 0; i < AvgPos.size(); i++) {
     Geo::Point3<ScalarType> OldP = VertPos[i];

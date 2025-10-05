@@ -31,6 +31,7 @@
 #include <patch_side_discretization.h>
 
 #include "edge_mesh_functions.h"
+#include "smooth_mesh.h"
 #include <quad_mesh_functions.h>
 #include <quadmesh_smooth_separatrix.h>
 #include <quadrangulation.h>
@@ -489,7 +490,8 @@ template <class ScalarType> class MeshQuadrangulator {
     SParamQuadSmooth.post_project = !(has_problematic_patches);
     SParamQuadSmooth.ReprojFeatures = TriFeatures;
     SParamQuadSmooth.NumIte = QuadSmoothSteps / 2;
-    SParamQuadSmooth.SType = Geo::SMLaplacian;
+    //SParamQuadSmooth.SType = Geo::SMLaplacian;
+    SParamQuadSmooth.SType = Geo::SMBestPoly;
     SParamQuadSmooth.check_AspectR = false;
 
     Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);

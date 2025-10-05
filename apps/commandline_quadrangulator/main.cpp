@@ -191,7 +191,7 @@ ScalarType initial_feature_angle = 30;
 int ero_steps = 3;
 int dil_steps = 3;
 bool compute_features = true;
-
+int smooth_steps=30;
 std::string folderProjectName;
 std::string commandLine;
 
@@ -274,6 +274,11 @@ int main(int argc, char *argv[]) {
       SizeMult = static_cast<ScalarType>(std::stod(argv[i + 1]));
     }
 
+    if (std::string(argv[i]) == std::string("-smooth")) {
+      smooth_steps = std::atoi(argv[i + 1]);
+      std::cout<<"Smooth Steps:"<<smooth_steps<<std::endl;
+    }
+
     if (GetFileExtension(std::string(argv[i])) == std::string("features")) {
       std::string PathFeat = std::string(argv[i]);
       std::cout << "Loading Features" << std::endl;
@@ -317,7 +322,7 @@ int main(int argc, char *argv[]) {
 
     MQuad.QuadSize = QuadSize; /// TriMeshBox.Diag();
 
-    MQuad.QuadSmoothSteps = 100;
+    MQuad.QuadSmoothSteps = smooth_steps;
     // MQuad.RegVsIso=0.1;
     MQuad.CCAbility = 0.5;
     // MQuad.num_samples=10000;
