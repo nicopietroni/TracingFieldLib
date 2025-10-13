@@ -2335,6 +2335,14 @@ public:
     }
   }
 
+  // void FixValence2Patches() 
+  // {
+  //   //for (size_t i=0;i<PD)
+    
+  //   //InitVisualCornersEdges(const std::vector<int> &PatchesIdx)
+  //   //UpdateSideLenghs(const std::vector<int> &PatchesIdx)
+  // }
+
   void Init() {
     Reset();
 

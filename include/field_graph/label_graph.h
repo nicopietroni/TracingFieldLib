@@ -65,14 +65,30 @@ template <class ScalarType> class LabelNeighOrientedGraph {
   };
 
 public:
+  // for each node, for each label (edge 0..2) the set of neightbors
   std::vector<std::vector<std::vector<NeighInfo>>> N;
+
+  //this set if for a node for a label (edge 0..2) 
+  // if can exit (reach surface orthogonally)
   std::vector<std::vector<bool>> IsExit;
+
+  //weight of a node (used only for filtering) 
+  // tells how much the normal of the face
+  //is orthogonal to the M3 plane of that nod 
   std::vector<ScalarType> NodeW;
 
+  //tells if a node falls in the border
   std::vector<bool> NodeBorderF;
+  
+  // for each node for each edge tell if it is border or not
   std::vector<std::array<bool, 3>> NodeBorderE;
+  // for each node for each vertes tell if it is border or not
   std::vector<std::array<bool, 3>> NodeBorderV;
+
+  //for each node the list of faces it is tangent with TB seen
   std::vector<std::vector<int>> InternalTangentConstr;
+  
+  //for each node the list of faces it is tangent with TB seen
   std::vector<std::vector<int>> BorderTangentConstr;
   // std::vector<BorderType> NodeBorderType;
 
@@ -82,10 +98,14 @@ public:
   // set if a node is enabled or not
   std::vector<bool> EnabledN;
 
+  //nodes on convex edges by edge
   std::vector<int> NodesOnConvexE;
+  //nodes on concave edges by edge
   std::vector<int> NodesOnConcaveE;
 
+  //nodes on convex edges by vert
   std::vector<int> NodesOnConvexEByV;
+  //nodes on concave edges by vert
   std::vector<int> NodesOnConcaveEByV;
 
 

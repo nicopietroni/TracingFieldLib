@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -219,27 +220,57 @@ template <class ScalarType> class OrientFLowGraph {
     return resNodes;
   }
 
+  ScalarType Energy(int IndexVar, int TestValue) {
+    assert(TestValue >=
+           0); // in realigy should be at lest 1 need to reorganize code
+    assert(IndexVar >= 0);
+    assert(IndexVar < VarTargetValue.size());
+    ScalarType TargetVal = VarTargetValue[IndexVar];
+    ScalarType Diff = pow((TestValue - TargetVal), 2);
+    return Diff;
+  }
+
+  ScalarType Energy(int IndexVar) {
+    assert(IndexVar >= 0);
+    assert(IndexVar < VarValue.size());
+    int TestValue = VarValue[IndexVar];
+    return Energy(IndexVar, TestValue);
+  }
+  // ScalarType PriorityChange(int IndexN, int Diff, bool testDiff = false) {
+  //   int IndexVar = VarOfNode(IndexN);
+  //   ScalarType CurrVal = VarValue[IndexVar];
+  //   ScalarType NextVal = CurrVal + Diff;
+  //   ScalarType TargetVal = VarTargetValue[IndexVar];
+
+  //   ScalarType Diff0 = pow((CurrVal - TargetVal), 2);
+  //   ScalarType Diff1 = pow((NextVal - TargetVal), 2);
+  //   // ScalarType AvgDiff = (Diff0 + Diff1) / 2;
+
+  //   // if (Diff1 < Diff0)
+  //   //   return -AvgDiff;
+  //   // return AvgDiff;
+  //   return (Diff1-Diff0);
+  // }
+
   ScalarType PriorityChange(int IndexN, int Diff, bool testDiff = false) {
     int IndexVar = VarOfNode(IndexN);
     ScalarType CurrVal = VarValue[IndexVar];
     ScalarType NextVal = CurrVal + Diff;
-    ScalarType TargetVal = VarTargetValue[IndexVar];
 
-    ScalarType Diff0 = pow((CurrVal - TargetVal), 2);
-    ScalarType Diff1 = pow((NextVal - TargetVal), 2);
-    ScalarType AvgDiff = (Diff0 + Diff1) / 2;
-
-    if (Diff1 < Diff0)
-      return -AvgDiff;
-    return AvgDiff;
+    ScalarType Energy0 = Energy(IndexVar, CurrVal);
+    ScalarType Energy1 = Energy(IndexVar, NextVal);
+    return (Energy1 - Energy0);
   }
 
-  void SetupNodeWeightChange(int Diff) {
+  void SetupNodeWeightChange(int Diff, bool make_positive) {
     // compute the change
     GraphNodeWeight = std::vector<ScalarType>(GraphAdj.size(), 0);
     for (size_t i = 0; i < GraphNodeWeight.size(); i++) {
       GraphNodeWeight[i] = PriorityChange(i, Diff);
     }
+    if (!make_positive)
+      return;
+
     ScalarType minValue =
         *std::min_element(GraphNodeWeight.begin(), GraphNodeWeight.end());
 
@@ -251,9 +282,9 @@ template <class ScalarType> class OrientFLowGraph {
     }
   }
 
-  void SetupWeightChange(int Diff) {
+  void SetupWeightChange(int Diff, bool make_positive) {
 
-    SetupNodeWeightChange(Diff);
+    SetupNodeWeightChange(Diff, make_positive);
 
     for (size_t i = 0; i < GraphAdj.size(); i++) {
       int Node0 = i;
@@ -274,7 +305,7 @@ template <class ScalarType> class OrientFLowGraph {
       }
   }
 
-  bool SetupSolve(bool equality,bool parity) {
+  bool SetupSolve(bool equality, bool parity) {
     assert(equality || parity);
     assert(!(equality && parity));
 
@@ -295,15 +326,13 @@ template <class ScalarType> class OrientFLowGraph {
       int Size3 = SideValue(i, 3);
       std::vector<int> DecrVar0, IncrVar0, DecrVar1, IncrVar1;
 
-      if (equality)
-      {
-      if ((Size0 == Size2) && (Size1 == Size3))
-        continue;
+      if (equality) {
+        if ((Size0 == Size2) && (Size1 == Size3))
+          continue;
       }
-      if (parity)
-      {
-         if (((Size0 + Size1 + Size2 + Size3)%2)==0)
-        continue;
+      if (parity) {
+        if (((Size0 + Size1 + Size2 + Size3) % 2) == 0)
+          continue;
       }
 
       has_to_solve = true;
@@ -350,11 +379,13 @@ template <class ScalarType> class OrientFLowGraph {
                         CurrSourceDecr.end());
     }
 
-    //that is the same can increase or decrease
-    SourceParity=SourceIncr;
-    SourceParity.insert(SourceParity.end(),SourceDecr.begin(),SourceDecr.end());
-    TargetParity=TargetIncr;
-    TargetParity.insert(TargetParity.end(),TargetIncr.begin(),TargetIncr.end());
+    // that is the same can increase or decrease
+    SourceParity = SourceIncr;
+    SourceParity.insert(SourceParity.end(), SourceDecr.begin(),
+                        SourceDecr.end());
+    TargetParity = TargetIncr;
+    TargetParity.insert(TargetParity.end(), TargetIncr.begin(),
+                        TargetIncr.end());
 
     for (size_t i = 0; i < SourceIncr.size(); i++) {
       assert(SourceIncr[i] >= 0);
@@ -705,7 +736,7 @@ template <class ScalarType> class OrientFLowGraph {
 
   std::vector<int> AdmissibleTargets(const int SourceN,
                                      const std::vector<int> &TargetCand,
-                                     bool check_common_patch=false) {
+                                     bool check_common_patch = false) {
 
     int var_source = VarOfNode(SourceN);
 
@@ -736,16 +767,19 @@ template <class ScalarType> class OrientFLowGraph {
       if (has_common_sideP)
         continue;
 
-      if (check_common_patch)
-      {
-        int SourceP0=VarPatch[SourceVar].first;
-        int SourceP1=VarPatch[SourceVar].second;
-        int TargetP0=VarPatch[var_test_target].first;
-        int TargetP1=VarPatch[var_test_target].second;
-        if ((SourceP0!=-1)&&(SourceP0==TargetP0))continue;
-        if ((SourceP0!=-1)&&(SourceP0==TargetP1))continue;
-        if ((SourceP1!=-1)&&(SourceP1==TargetP0))continue;
-        if ((SourceP1!=-1)&&(SourceP1==TargetP1))continue;
+      if (check_common_patch) {
+        int SourceP0 = VarPatch[SourceVar].first;
+        int SourceP1 = VarPatch[SourceVar].second;
+        int TargetP0 = VarPatch[var_test_target].first;
+        int TargetP1 = VarPatch[var_test_target].second;
+        if ((SourceP0 != -1) && (SourceP0 == TargetP0))
+          continue;
+        if ((SourceP0 != -1) && (SourceP0 == TargetP1))
+          continue;
+        if ((SourceP1 != -1) && (SourceP1 == TargetP0))
+          continue;
+        if ((SourceP1 != -1) && (SourceP1 == TargetP1))
+          continue;
       }
       curr_target.push_back(test_target);
     }
@@ -774,7 +808,7 @@ template <class ScalarType> class OrientFLowGraph {
   std::vector<ShortestPathResult> FindPaths(const std::vector<int> &SourceN,
                                             const std::vector<int> &TargetN,
                                             bool DisableUnitary,
-                                            bool check_common_patch=false) {
+                                            bool check_common_patch = false) {
 
     EnabledN = std::vector<bool>(GraphAdj.size(), true);
     if (DisableUnitary)
@@ -788,7 +822,8 @@ template <class ScalarType> class OrientFLowGraph {
       assert(curr_sourceN >= 0);
       assert(curr_sourceN < Node_to_VarPatch.size());
 
-      std::vector<int> curt_target = AdmissibleTargets(curr_sourceN, TargetN,check_common_patch);
+      std::vector<int> curt_target =
+          AdmissibleTargets(curr_sourceN, TargetN, check_common_patch);
       std::vector<int> curt_source(1, curr_sourceN);
 
       // std::cout << "Curr Source:" << curr_sourceN << std::endl;
@@ -808,7 +843,7 @@ template <class ScalarType> class OrientFLowGraph {
   bool SolveEqStep() {
     bool HasToSolve = true;
 
-    HasToSolve = SetupSolve(true,false);
+    HasToSolve = SetupSolve(true, false);
 
     if (!HasToSolve)
       return false;
@@ -826,7 +861,7 @@ template <class ScalarType> class OrientFLowGraph {
       assert(curr_sourceN < Node_to_VarPatch.size());
     }
 
-    SetupWeightChange(1);
+    SetupWeightChange(1, true);
 
     // std::cout << "*** FINDING INCREASE PATHS ***" << std::endl;
     IncreasePaths = FindPaths(SourceIncr, TargetIncr, false);
@@ -849,7 +884,7 @@ template <class ScalarType> class OrientFLowGraph {
       BestIdxIncr = i;
     }
 
-    SetupWeightChange(-1);
+    SetupWeightChange(-1, true);
 
     // std::cout << "*** FINDING DECREASE PATHS ***" << std::endl;
     DecreasePaths = FindPaths(SourceDecr, TargetDecr, true);
@@ -895,16 +930,16 @@ template <class ScalarType> class OrientFLowGraph {
   bool SolveParityStep() {
     bool HasToSolve = true;
 
-    HasToSolve = SetupSolve(false,true);
+    HasToSolve = SetupSolve(false, true);
 
     if (!HasToSolve)
       return false;
 
-    //add sinks
+    // add sinks
     TargetParity.insert(TargetParity.end(), BoundarySinks.begin(),
                         BoundarySinks.end());
-   
-    std::vector<ShortestPathResult> IncreasePaths,DecreasePaths;
+
+    std::vector<ShortestPathResult> IncreasePaths, DecreasePaths;
 
     // check
     for (size_t i = 0; i < SourceParity.size(); i++) {
@@ -913,10 +948,10 @@ template <class ScalarType> class OrientFLowGraph {
       assert(curr_sourceN < Node_to_VarPatch.size());
     }
 
-    //find increase candidate
-    SetupNodeWeightChange(1);
-    IncreasePaths = FindPaths(SourceParity, TargetParity, false,true);
-   
+    // find increase candidate
+    SetupNodeWeightChange(1, true);
+    IncreasePaths = FindPaths(SourceParity, TargetParity, false, true);
+
     // find the best path increase
     int BestIdxIncr = -1;
     ScalarType BestWIncr = std::numeric_limits<ScalarType>::max();
@@ -934,8 +969,8 @@ template <class ScalarType> class OrientFLowGraph {
     }
 
     // find the best path decrease
-    SetupWeightChange(-1);
-    DecreasePaths = FindPaths(SourceDecr, TargetDecr, true,true);
+    SetupWeightChange(-1, true);
+    DecreasePaths = FindPaths(SourceDecr, TargetDecr, true, true);
     if ((IncreasePaths.size() == 0) && (DecreasePaths.size() == 0))
       return false;
 
@@ -972,31 +1007,29 @@ template <class ScalarType> class OrientFLowGraph {
     return true;
   }
 
-  // ---------- Results ----------
+
   struct NodeRoute {
     enum Kind { NONE, CYCLE, SRC_TO_SINK } kind = NONE;
     ScalarType cost = std::numeric_limits<ScalarType>::infinity();
-    std::vector<int> nodes; // for cycles: [u, ..., u]
+    std::vector<int> nodes; // cycles: [u, ..., u]
   };
 
   struct PerNodeResult {
     std::vector<std::pair<int, NodeRoute>> results; // (nodeId, NodeRoute)
-
     void Add(const PerNodeResult &other) {
       results.insert(results.end(), other.results.begin(), other.results.end());
     }
   };
 
   // ---------- Helpers ----------
-  static inline bool appears_in_chain_var(const std::vector<int> &parent,
-                                          const std::vector<int> &VarNode,
-                                          int curNode, int varToCheck,
-                                          int allowVarA, // may be -1 if none
-                                          int allowVarB) // may be -1 if none
-  {
+  // Scan the parent-chain and tell if 'varToCheck' already appears (strict: no
+  // exceptions)
+  static inline bool
+  appears_in_chain_var_strict(const std::vector<int> &parent,
+                              const std::vector<int> &VarNode, int curNode,
+                              int varToCheck) {
     for (int x = curNode; x != -1; x = parent[x]) {
-      int vx = VarNode[x];
-      if (vx == varToCheck && vx != allowVarA && vx != allowVarB)
+      if (VarNode[x] == varToCheck)
         return true;
     }
     return false;
@@ -1016,6 +1049,29 @@ template <class ScalarType> class OrientFLowGraph {
     return R;
   }
 
+  // static void findSourcesSinks(const std::vector<std::vector<int>> &G,
+  //                              const std::vector<bool> &EnabledN,
+  //                              std::vector<int> &sources,
+  //                              std::vector<int> &sinks) {
+  //   int n = (int)G.size();
+  //   std::vector<int> indeg(n, 0), outdeg(n, 0);
+  //   for (int u = 0; u < n; ++u)
+  //     if (EnabledN[u]) {
+  //       for (int v : G[u])
+  //         if (v >= 0 && v < n && EnabledN[v]) {
+  //           ++indeg[v];
+  //           ++outdeg[u];
+  //         }
+  //     }
+  //   for (int u = 0; u < n; ++u)
+  //     if (EnabledN[u]) {
+  //       if (indeg[u] == 0)
+  //         sources.push_back(u);
+  //       if (outdeg[u] == 0)
+  //         sinks.push_back(u);
+  //     }
+  // }
+
   static void findSourcesSinks(const std::vector<std::vector<int>> &G,
                                const std::vector<bool> &EnabledN,
                                std::vector<int> &sources,
@@ -1023,12 +1079,12 @@ template <class ScalarType> class OrientFLowGraph {
     int n = (int)G.size();
     std::vector<int> indeg(n, 0), outdeg(n, 0);
     for (int u = 0; u < n; ++u)
-      if (EnabledN[u]) {
-        for (int v : G[u])
-          if (v >= 0 && v < n && EnabledN[v]) {
-            ++indeg[v];
-            ++outdeg[u];
-          }
+      for (int v : G[u]) {
+        assert(v >= 0);
+        assert(v < indeg.size());
+        assert(v < outdeg.size());
+        ++indeg[v];
+        ++outdeg[u];
       }
     for (int u = 0; u < n; ++u)
       if (EnabledN[u]) {
@@ -1049,17 +1105,6 @@ template <class ScalarType> class OrientFLowGraph {
   }
 
   static std::vector<int>
-  rebuild_path_to_sink_from(int s, const std::vector<int> &nextOn) {
-    std::vector<int> path;
-    for (int x = s; x != -1; x = nextOn[x]) {
-      path.push_back(x);
-      if (nextOn[x] == -1)
-        break;
-    }
-    return path;
-  }
-
-  static std::vector<int>
   rebuild_cycle_u_v_u(int u, int v, const std::vector<int> &parentRev) {
     std::vector<int> tail; // v ... u following parentRev toward u
     for (int x = v; x != -1; x = parentRev[x]) {
@@ -1076,17 +1121,49 @@ template <class ScalarType> class OrientFLowGraph {
     return cyc;
   }
 
-  // ---------- Constrained Dijkstra variants ----------
-  // Forward, from a set of sources, STOP when target is settled.
-  // Edge cost a->b = GraphNodeWeight[b]. Unique-by-variable constraint via
-  // parent chain. allowVarA/B: two variable IDs allowed to repeat (e.g.,
-  // Var(target)).
+  // Uniqueness on a path: no variable repeats anywhere.
+  static bool path_vars_unique(const std::vector<int> &seq,
+                               const std::vector<int> &VarNode) {
+    // O(n^2) is fine for short paths; for long paths use a bitset/hashset.
+    for (int i = 0; i < (int)seq.size(); ++i) {
+      int vi = VarNode[seq[i]];
+      for (int j = i + 1; j < (int)seq.size(); ++j) {
+        if (VarNode[seq[j]] == vi)
+          return false;
+      }
+    }
+    return true;
+  }
+
+  // Uniqueness on a cycle [u ... u]: allow only the closing u duplication.
+  static bool cycle_vars_unique_allow_last_u(const std::vector<int> &cyc,
+                                             const std::vector<int> &VarNode) {
+    if (cyc.size() >= 2 && cyc.front() == cyc.back()) {
+      // check [0 .. size-2]
+      for (int i = 0; i + 1 < (int)cyc.size(); ++i) {
+        int vi = VarNode[cyc[i]];
+        for (int j = i + 1; j + 1 < (int)cyc.size(); ++j) {
+          if (VarNode[cyc[j]] == vi)
+            return false;
+        }
+      }
+      return true;
+    } else {
+      return path_vars_unique(cyc, VarNode);
+    }
+  }
+
+  // ---------- Constrained Dijkstra variants (STRICT uniqueness: no exceptions)
+  // ---------- Forward, multi-source -> target (stop when target is settled).
+  // Edge cost a->b = Wnode[b]; include Wnode[source] at init.
   static bool constrained_multi_source_to_target(
       const std::vector<std::vector<int>> &G,
-      const std::vector<ScalarType> &Wnode, const std::vector<bool> &EnabledN,
-      const std::vector<int> &VarNode, const std::vector<int> &sources,
-      int target, int allowVarA, int allowVarB, std::vector<ScalarType> &dist,
-      std::vector<int> &parent) {
+      const std::vector<ScalarType> &Wnode, // >= 0
+      const std::vector<bool> &EnabledN, const std::vector<int> &VarNode,
+      const std::vector<int> &sources, int target,
+      std::vector<ScalarType> &dist, // out
+      std::vector<int> &parent       // out
+  ) {
     const int n = (int)G.size();
     dist.assign(n, std::numeric_limits<ScalarType>::infinity());
     parent.assign(n, -1);
@@ -1096,7 +1173,7 @@ template <class ScalarType> class OrientFLowGraph {
 
     for (int s : sources)
       if (s >= 0 && s < n && EnabledN[s]) {
-        dist[s] = Wnode[s]; // include start node cost
+        dist[s] = Wnode[s];
         parent[s] = -1;
         pq.emplace(dist[s], s);
       }
@@ -1107,16 +1184,13 @@ template <class ScalarType> class OrientFLowGraph {
       if (du > dist[u])
         continue;
       if (u == target)
-        return true; // settled target
+        return true;
 
       for (int v : G[u])
         if (v >= 0 && v < n && EnabledN[v]) {
-          // forbid repeating a variable already in the chain, except allowed
-          // ones
           int varV = VarNode[v];
-          if (appears_in_chain_var(parent, VarNode, u, varV, allowVarA,
-                                   allowVarB))
-            continue;
+          if (appears_in_chain_var_strict(parent, VarNode, u, varV))
+            continue; // strict: no repeats allowed
 
           ScalarType nd = du + Wnode[v];
           if (nd < dist[v]) {
@@ -1129,27 +1203,34 @@ template <class ScalarType> class OrientFLowGraph {
     return false;
   }
 
-  // Forward, single-source from u to ANY sink (choose cheapest), variable
-  // uniqueness w.r.t. Var(u). Returns best sink index (or -1), its distance,
-  // and parent[].
+  // Forward, single-source u -> ANY sink (cheapest). Uniqueness strict.
   static int constrained_single_source_to_any_sink(
       const std::vector<std::vector<int>> &G,
-      const std::vector<ScalarType> &Wnode, const std::vector<bool> &EnabledN,
-      const std::vector<int> &VarNode, int u, const std::vector<int> &sinks,
-      std::vector<ScalarType> &dist, std::vector<int> &parent) {
+      const std::vector<ScalarType> &Wnode, // >= 0
+      const std::vector<bool> &EnabledN, const std::vector<int> &VarNode, int u,
+      const std::vector<int> &sinks,
+      std::vector<ScalarType> &dist, // out
+      std::vector<int> &parent       // out
+  ) {
     const int n = (int)G.size();
     dist.assign(n, std::numeric_limits<ScalarType>::infinity());
     parent.assign(n, -1);
 
+    if (!(u >= 0 && u < n && EnabledN[u]))
+      return -1;
+
+    // (Optional) speed-up: premark sinks to avoid scanning the vector each
+    // time.
+    std::vector<char> isSink(n, 0);
+    for (int t : sinks)
+      if (t >= 0 && t < n && EnabledN[t])
+        isSink[t] = 1;
+
     using Item = std::pair<ScalarType, int>;
     std::priority_queue<Item, std::vector<Item>, std::greater<Item>> pq;
 
-    if (!EnabledN[u])
-      return -1;
-    dist[u] = Wnode[u]; // include u
+    dist[u] = Wnode[u];
     pq.emplace(dist[u], u);
-
-    const int varAllow = VarNode[u];
 
     while (!pq.empty()) {
       auto [du, x] = pq.top();
@@ -1157,23 +1238,15 @@ template <class ScalarType> class OrientFLowGraph {
       if (du > dist[x])
         continue;
 
-      // If x is a sink, we can return the first one settled (cheapest)
-      // NB: sink must be enabled and have out-degree 0 (by construction).
-      // To check membership fast you could pre-mark sinks; here we just scan
-      // vector.
-      if (!G[x].empty()) {
-        // not a sink
-      } else {
-        // confirm x is in sinks (enabled) — optional; we accept any enabled
-        // zero-outdeg
-        return x;
-      }
+      if (isSink[x])
+        return x; // cheapest sink reached
 
       for (int v : G[x])
         if (EnabledN[v]) {
           int varV = VarNode[v];
-          if (appears_in_chain_var(parent, VarNode, x, varV, varAllow, -1))
+          if (appears_in_chain_var_strict(parent, VarNode, x, varV))
             continue;
+
           ScalarType nd = du + Wnode[v];
           if (nd < dist[v]) {
             dist[v] = nd;
@@ -1185,38 +1258,40 @@ template <class ScalarType> class OrientFLowGraph {
     return -1;
   }
 
-  // Reverse, single-source from u on reverse graph to support cycle through u.
-  // Variable uniqueness enforced; allowed duplicate variable is only Var(u).
-  static void constrained_reverse_from_u(const std::vector<std::vector<int>> &R,
-                                         const std::vector<ScalarType> &Wnode,
-                                         const std::vector<bool> &EnabledN,
-                                         const std::vector<int> &VarNode, int u,
-                                         std::vector<ScalarType> &distRev,
-                                         std::vector<int> &parentRev) {
+  // Reverse, single-source from u on reverse graph (for cycle through u).
+  // Uniqueness strict (no exceptions).
+  static void constrained_reverse_from_u(
+      const std::vector<std::vector<int>> &R, // reverse graph
+      const std::vector<ScalarType> &Wnode,   // >= 0
+      const std::vector<bool> &EnabledN, const std::vector<int> &VarNode, int u,
+      std::vector<ScalarType> &distRev, // out
+      std::vector<int> &parentRev       // out
+  ) {
     const int n = (int)R.size();
     distRev.assign(n, std::numeric_limits<ScalarType>::infinity());
     parentRev.assign(n, -1);
 
+    if (!(u >= 0 && u < n && EnabledN[u]))
+      return;
+
     using Item = std::pair<ScalarType, int>;
     std::priority_queue<Item, std::vector<Item>, std::greater<Item>> pq;
 
-    if (!EnabledN[u])
-      return;
-    distRev[u] = Wnode[u]; // include entering u at the tail end
+    distRev[u] = Wnode[u]; // cost to "close" at u includes W[u]
     pq.emplace(distRev[u], u);
-
-    const int varAllow = VarNode[u];
 
     while (!pq.empty()) {
       auto [du, x] = pq.top();
       pq.pop();
       if (du > distRev[x])
         continue;
+
       for (int p : R[x])
         if (EnabledN[p]) {
           int varP = VarNode[p];
-          if (appears_in_chain_var(parentRev, VarNode, x, varP, varAllow, -1))
+          if (appears_in_chain_var_strict(parentRev, VarNode, x, varP))
             continue;
+
           ScalarType nd = du + Wnode[p];
           if (nd < distRev[p]) {
             distRev[p] = nd;
@@ -1228,65 +1303,54 @@ template <class ScalarType> class OrientFLowGraph {
   }
 
   // ---------- Main API ----------
-  // For each u in routeNodes (if enabled), compute the cheaper between:
-  //  (1) shortest cycle through u (with var-uniqueness; Var(u) may repeat
-  //  because of closure) (2) shortest path src→…→u→…→sink (left and right
-  //  halves each enforce var-uniqueness allowing Var(u))
-  // If either half is missing or the merged path has a duplicated variable
-  // (excluding endpoints), that candidate is discarded.
-  PerNodeResult
-  computePerNodeShortestRouteVarUnique(const std::vector<int> &VarNode,
-                                       const std::vector<int> &routeNodes) {
+  // For each u in routeNodes: take min between
+  //  (1) shortest cycle through u    (strict var-uniqueness; only closing u is
+  //  duplicated) (2) shortest src→…→u→…→sink     (strict var-uniqueness on both
+  //  halves and merged path)
+  // If either part missing or uniqueness fails, candidate is discarded.
+  PerNodeResult computePerNodeShortestRouteVarUnique(
+      const std::vector<int> &VarNode, const std::vector<int> &routeNodes,
+      bool incremental_filter = true // if true, skip later u's that share a
+                                     // variable with an accepted best.nodes
+  ) {
     const int n = (int)GraphAdj.size();
     assert((int)GraphNodeWeight.size() == n);
     assert((int)EnabledN.size() == n);
     assert((int)VarNode.size() == n);
 
+    // Precompute reverse graph, sources and sinks
     auto RevAdj = buildReverse(GraphAdj, EnabledN);
-
-    // Precompute sources and sinks (among enabled)
     std::vector<int> sources, sinks;
     findSourcesSinks(GraphAdj, EnabledN, sources, sinks);
 
     PerNodeResult out;
     out.results.reserve(routeNodes.size());
 
-    // Temps reused across nodes
-    std::vector<ScalarType> dist;
-    std::vector<int> parent;
-    std::vector<ScalarType> distRev;
-    std::vector<int> parentRev;
+    // Reusable buffers
+    std::vector<ScalarType> dist, distRev, distL, distR;
+    std::vector<int> parent, parentRev, parentL, parentR;
 
-    // helper to check uniqueness of variables along a path (excluding
-    // first/last by var)
-    auto path_vars_ok = [&](const std::vector<int> &seq, int allowVarA,
-                            int allowVarB) -> bool {
-      // linear scan; expect short paths
-      for (int i = 0; i < (int)seq.size(); ++i) {
-        int vi = VarNode[seq[i]];
-        if (vi == allowVarA || vi == allowVarB)
-          continue;
-        // check if vi appears elsewhere
-        for (int j = i + 1; j < (int)seq.size(); ++j) {
-          int vj = VarNode[seq[j]];
-          if (vj == vi)
-            return false;
-        }
-      }
-      return true;
-    };
+    // Optional: incremental filter so we don't solve two u's sharing the same
+    // variable
+    std::unordered_set<int> exploredVar;
+    exploredVar.reserve(routeNodes.size() * 2);
 
     for (int u : routeNodes) {
       NodeRoute best; // NONE
-
       if (u < 0 || u >= n || !EnabledN[u]) {
         out.results.emplace_back(u, best);
         continue;
       }
 
-      const int varU = VarNode[u];
+      int varU = VarNode[u];
+      if (incremental_filter && exploredVar.count(varU)) {
+        // skip this u because a previous accepted route already used its
+        // variable
+        out.results.emplace_back(u, best);
+        continue;
+      }
 
-      // ----- Candidate 1: cycle through u (constrained) -----
+      // ----- Candidate 1: cycle through u (strict uniqueness) -----
       constrained_reverse_from_u(RevAdj, GraphNodeWeight, EnabledN, VarNode, u,
                                  distRev, parentRev);
 
@@ -1301,52 +1365,38 @@ template <class ScalarType> class OrientFLowGraph {
             bestV = v;
           }
         }
-      if (bestV != -1 &&
-          bestCycleCost < std::numeric_limits<ScalarType>::infinity()) {
+      if (bestV != -1 && std::isfinite(bestCycleCost)) {
         auto cyc = rebuild_cycle_u_v_u(u, bestV, parentRev); // [u ... u]
-        if (path_vars_ok(cyc, /*allowVarA=*/varU, /*allowVarB=*/varU)) {
+        if (cycle_vars_unique_allow_last_u(cyc, VarNode)) {
           best.kind = NodeRoute::CYCLE;
           best.cost = bestCycleCost;
           best.nodes = std::move(cyc);
         }
       }
 
-      // ----- Candidate 2: src→…→u→…→sink path (constrained on both halves)
-      // ----- Left half: sources -> u (stop when u settled), allow Var(u) to
-      // repeat.
-      std::vector<ScalarType> distL;
-      std::vector<int> parentL;
+      // ----- Candidate 2: src→…→u and u→…→sink (strict uniqueness on both
+      // halves) -----
       bool hasLeft = constrained_multi_source_to_target(
-          GraphAdj, GraphNodeWeight, EnabledN, VarNode, sources, u,
-          /*allowVarA=*/varU, /*allowVarB=*/-1, distL, parentL);
+          GraphAdj, GraphNodeWeight, EnabledN, VarNode, sources, u, distL,
+          parentL);
 
-      // Right half: u -> any sink (cheapest), allow Var(u) to repeat.
-      std::vector<ScalarType> distR;
-      std::vector<int> parentR;
       int sink = constrained_single_source_to_any_sink(
           GraphAdj, GraphNodeWeight, EnabledN, VarNode, u, sinks, distR,
           parentR);
 
       if (hasLeft && sink != -1) {
-        auto left = rebuild_path_src_to(u, parentL); // [src ... u]
-        auto right = rebuild_path_src_to(
-            sink, parentR); // [u ... sink] (since parentR is forward parents)
-        // avoid duplicating u
+        auto left = rebuild_path_src_to(u, parentL);     // [src ... u]
+        auto right = rebuild_path_src_to(sink, parentR); // [u ... sink]
         if (!right.empty() && !left.empty() && right.front() == u)
-          right.erase(right.begin());
-
-        // Check combined var-uniqueness; allow endpoints’ variables to repeat
-        int varSrc = VarNode[left.front()];
-        int varSink = VarNode[right.empty() ? left.back() : right.back()];
+          right.erase(right.begin()); // avoid duplicating 'u'
 
         std::vector<int> merged = left;
         merged.insert(merged.end(), right.begin(), right.end());
 
-        if (path_vars_ok(merged, /*allowVarA=*/varSrc, /*allowVarB=*/varSink)) {
+        if (path_vars_unique(merged, VarNode)) {
           ScalarType cost = 0;
-          // compute node-weighted cost for merged path
-          for (int i = 0; i < (int)merged.size(); ++i)
-            cost += GraphNodeWeight[merged[i]];
+          for (int v : merged)
+            cost += GraphNodeWeight[v];
           if (cost < best.cost) {
             best.kind = NodeRoute::SRC_TO_SINK;
             best.cost = cost;
@@ -1355,12 +1405,16 @@ template <class ScalarType> class OrientFLowGraph {
         }
       }
 
+      if (incremental_filter && !best.nodes.empty()) {
+        for (int x : best.nodes)
+          exploredVar.insert(VarNode[x]);
+      }
+
       out.results.emplace_back(u, std::move(best));
     }
 
     return out;
   }
-  //==================  END COPY  ==================
 
   ScalarType Priority(const std::vector<int> &NodeSeq, int Diff) {
 
@@ -1403,6 +1457,33 @@ template <class ScalarType> class OrientFLowGraph {
     return StartN;
   }
 
+  bool UniqueVariable(const std::vector<int> &NodeIdx) {
+    std::set<int> Variables;
+    for (size_t i = 0; i < NodeIdx.size(); i++) {
+      int IndexVar = VarOfNode(NodeIdx[i]);
+      if (Variables.count(IndexVar) > 0)
+        return false;
+      Variables.insert(IndexVar);
+    }
+    return true;
+  }
+
+  void CleanCyclePaths(PerNodeResult &CycleRes) {
+    // clean the cycle so that one
+    // variable is inremented
+    // only once
+    for (size_t i = 0; i < CycleRes.results.size(); i++) {
+      NodeRoute CurrR = CycleRes.results[i].second;
+      assert(CurrR.kind != NodeRoute::SRC_TO_SINK);
+      if (CurrR.kind == NodeRoute::CYCLE) {
+        assert(CurrR.nodes[0] == CurrR.nodes.back());
+        CurrR.nodes.pop_back();
+      }
+      CycleRes.results[i].second = CurrR;
+      assert(UniqueVariable(CurrR.nodes));
+    }
+  }
+
   bool ImproveSizeStep() {
 
     for (size_t i = 0; i < VarValue.size(); i++) {
@@ -1424,24 +1505,33 @@ template <class ScalarType> class OrientFLowGraph {
     }
     // get the increase paths
     EnabledN = std::vector<bool>(GraphAdj.size(), true);
-    SetupNodeWeightChange(1);
+    SetupNodeWeightChange(1, true);
+
+    std::cout << "*** Computing Increment Resizing Cycles.." << std::endl;
     PerNodeResult IncrRes = computePerNodeShortestRouteVarUnique(
         VarNode, StartNIncr); // computePerNodeShortestRoute(StartNIncr);
-
+    std::cout << "Computed " << IncrRes.results.size() << " increments Paths"
+              << std::endl;
     // get the decrease paths
     EnabledN = std::vector<bool>(GraphAdj.size(), true);
     DisableUnitaryNodes();
-    SetupNodeWeightChange(-1);
+    SetupNodeWeightChange(-1, true);
     // PerNodeResult DecrRes = computePerNodeShortestRoute(StartNDecr);
+
+    std::cout << "*** Computing Decrement Resizing Cycles.." << std::endl;
     PerNodeResult DecrRes =
         computePerNodeShortestRouteVarUnique(VarNode, StartNDecr);
-
+    std::cout << "Computed " << DecrRes.results.size() << " decrement Paths"
+              << std::endl;
     PerNodeResult AllRes = IncrRes;
     AllRes.Add(DecrRes);
+
+    CleanCyclePaths(AllRes);
 
     bool modified = false;
     bool one_step = false;
     EnabledN = std::vector<bool>(GraphAdj.size(), true);
+    int steps = 0;
     do {
       // find the best
       int BestModIdx = -1;
@@ -1450,9 +1540,10 @@ template <class ScalarType> class OrientFLowGraph {
       modified = false;
       for (size_t i = 0; i < AllRes.results.size(); i++) {
         std::vector<int> NodeIdx = AllRes.results[i].second.nodes;
-        std::sort(NodeIdx.begin(), NodeIdx.end());
-        NodeIdx.erase(std::unique(NodeIdx.begin(), NodeIdx.end()),
-                      NodeIdx.end());
+        // CheckUniqueVariable(NodeIdx);
+        // std::sort(NodeIdx.begin(), NodeIdx.end());
+        // NodeIdx.erase(std::unique(NodeIdx.begin(), NodeIdx.end()),
+        //               NodeIdx.end());
 
         ScalarType CurrPrioAdd = Priority(NodeIdx, 1);
         ScalarType CurrPrioDec = 0;
@@ -1475,11 +1566,9 @@ template <class ScalarType> class OrientFLowGraph {
       }
 
       if (BestModIdx != -1) {
-        // std::cout << "Doung Step Priority: " << BestPrio << std::endl;
+        steps++;
+
         std::vector<int> NodeIdx = AllRes.results[BestModIdx].second.nodes;
-        std::sort(NodeIdx.begin(), NodeIdx.end());
-        NodeIdx.erase(std::unique(NodeIdx.begin(), NodeIdx.end()),
-                      NodeIdx.end());
 
         if (Increase) {
           ApplyIncrease(NodeIdx);
@@ -1503,6 +1592,13 @@ template <class ScalarType> class OrientFLowGraph {
     return one_step;
   }
 
+  ScalarType CurrentSizeEnergy() {
+    ScalarType CurrE = 0;
+    for (size_t i = 0; i < VarValue.size(); i++)
+      CurrE += Energy(i);
+    return CurrE;
+  }
+
 public:
   void SolveEquality() {
 
@@ -1511,12 +1607,16 @@ public:
     }
 
     InitGraph();
+    std::cout << "*** Solving Equality ***" << std::endl;
     bool changed = false;
+    int steps = 0;
     do {
       changed = SolveEqStep();
-      if (WriteDebug)
-        std::cout << "Performed Equality size step" << std::endl;
+      steps++;
+      // if (WriteDebug)
+      //   std::cout << "Performed Equality size step" << std::endl;
     } while (changed);
+    std::cout << "Performed " << steps << " Equality size step" << std::endl;
 
     for (size_t i = 0; i < VarValue.size(); i++) {
       assert(VarValue[i] >= 1);
@@ -1531,11 +1631,16 @@ public:
 
     InitGraph();
     bool changed = false;
+
+    std::cout << "*** Solving Parity ***" << std::endl;
+    int steps = 0;
     do {
       changed = SolveParityStep();
-      if (WriteDebug)
-        std::cout << "Performed Parity step" << std::endl;
+      steps++;
+      // if (WriteDebug)
+      //   std::cout << "Performed Parity step" << std::endl;
     } while (changed);
+    std::cout << "Performed " << steps << " Parity size step" << std::endl;
 
     for (size_t i = 0; i < VarValue.size(); i++) {
       assert(VarValue[i] >= 1);
@@ -1549,12 +1654,20 @@ public:
     }
 
     InitGraph();
+
     std::vector<ScalarType> GraphNodeW(GraphAdj.size(), 1);
     bool HasImproved = false;
+    if (WriteDebug)
+      std::cout << "Energy Value:" << CurrentSizeEnergy() << std::endl;
     do {
       HasImproved = ImproveSizeStep();
-      if (WriteDebug)
-        std::cout << "Performed Improve size step" << std::endl;
+      // HasImproved = ImproveSizeStep2();
+      if (WriteDebug) {
+        if (HasImproved) {
+          std::cout << "Performed Improve size step" << std::endl;
+          std::cout << "Energy Value:" << CurrentSizeEnergy() << std::endl;
+        }
+      }
     } while (HasImproved);
 
     for (size_t i = 0; i < VarValue.size(); i++) {
@@ -2191,7 +2304,7 @@ template <class ScalarType> class ConstraintGraph {
     }
     std::cout << "Solved constraints Num: " << fixedConstraints.size()
               << std::endl;
-    std::cout << "Unsollved constraints Num:" << unresolvedConstraints.size()
+    std::cout << "Unsolved constraints Num:" << unresolvedConstraints.size()
               << std::endl;
     std::cout << "Change variables Num:" << varsToFlip.size() << std::endl;
   }

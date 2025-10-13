@@ -425,6 +425,15 @@ template <class ScalarType> class MeshQuadrangulator {
     SideD.PrioritizeTJunction = true;
 
     SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeSize);
+    int OddNum=SideD.NumOdd();
+    //then reoptimize making them 
+    if (OddNum>0)
+    {
+      std::cout << "Recompute with Even Variables" << std::endl;
+      SideD.PMode=Geo::SideDiscretization<ScalarType>::EvenVar;
+      SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeSize);
+    }
+    std::cout << "GET QUADRANGULATION DATA" << std::endl;
 
     std::vector<std::vector<int>> PatchFaces, PatchCorners;
     std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> SideSamples;
@@ -435,6 +444,8 @@ template <class ScalarType> class MeshQuadrangulator {
             DualVertPos, DualConnectivity, PatchFaces, PatchCorners,
             SideSamples, Q_LUT, QuadVert, QuadFaces, QuadPatch);
     
+    std::cout << "INIT SMOOTHING" << std::endl;
+
     has_problematic_patches=(num_problematic_patches>0);
 
     RemoveDuplicatedVert(QuadVert, QuadFaces);

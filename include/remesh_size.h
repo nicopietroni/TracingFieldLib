@@ -9,13 +9,14 @@
 #include "smooth_mesh.h"
 #include <algorithm>
 #include <cassert>
-#include <edge_mesh_functions.h>
-#include <geodesic.h>
+#include "edge_mesh_functions.h"
+#include "geodesic.h"
 #include <iostream>
 #include <limits>
-#include <mesh_functions.h>
-#include <mesh_sampling.h>
-#include <smooth_mesh.h>
+#include "mesh_functions.h"
+#include "mesh_sampling.h"
+#include "smooth_mesh.h"
+#include "mesh_features.h"
 #include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
@@ -104,14 +105,17 @@ public:
                      const std::vector<std::vector<int>> &Faces,
                      const std::vector<std::pair<int, int>> &Features,
                      const ScalarType &MinSize, const ScalarType &MaxSize,
-                     std::vector<ScalarType> &VertSize, bool subSample = true,
-                     bool useGeodesic = true) {
+                     std::vector<ScalarType> *VertSize = NULL,
+                     bool subSample = true, bool useGeodesic = true) {
 
     std::vector<int> SelectedSample;
 
     if (subSample) {
-      ScalarType Radius3D= Geo::MeshSampling<ScalarType>::Esteem3DSamplingRadius(VertPos,Faces,500); 
-      Geo::MeshSampling<ScalarType>::SampleWithFeatures3D(VertPos,Faces,Features,Radius3D,SelectedSample);
+      ScalarType Radius3D =
+          Geo::MeshSampling<ScalarType>::Esteem3DSamplingRadius(VertPos, Faces,
+                                                                500);
+      Geo::MeshSampling<ScalarType>::SampleWithFeatures3D(
+          VertPos, Faces, Features, Radius3D, SelectedSample);
       // int Radii = Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(
       //     VertPos.size(), 500);
       // Geo::MeshSampling<ScalarType>::SampleWithFeatures(
@@ -154,13 +158,15 @@ public:
 
     Geo::TMark TempMark;
     std::vector<int> FixedVal;
-    VertSize = std::vector<ScalarType>(VertPos.size(), MaxSize);
+    if (VertSize!=NULL)
+    (*VertSize) = std::vector<ScalarType>(VertPos.size(), MaxSize);
 
     PointSpatialIndex<ScalarType> PIndex;
     if (!useGeodesic) {
       PIndex.Init(VertPos);
     }
-
+    std::cout << "Computing Radiuses" << std::endl;
+    std::vector<ScalarType> SampledVal;
     for (size_t i = 0; i < SelectedSample.size(); i++) {
 
       int CurrV = SelectedSample[i];
@@ -201,12 +207,16 @@ public:
       if (SubEdges.size() == 0) {
         // already set to max and determined
         FixedVal.push_back(CurrV);
+        SampledVal.push_back(MaxSize);
         continue;
       }
-      // not a feature but surrounded by, just need to smooth, so no fix
+      // not a feature but surrounded by, just put the max
       if (!IsFeatureVert)
+      {
+        FixedVal.push_back(CurrV);
+        SampledVal.push_back(MaxSize);
         continue;
-
+      }
       int IndexSeed = -1;
       Geo::Point3<ScalarType> RootPos = VertPos[CurrV];
       for (size_t j = 0; j < SubEdgeVertPos.size(); j++)
@@ -245,30 +255,39 @@ public:
           CurrSize = std::min(CurrSize, Size3D);
       }
       CurrSize = std::max(CurrSize, MinSize);
+      SampledVal.push_back(CurrSize);
       // size determined
-      VertSize[CurrV] = CurrSize;
+      if (VertSize!=NULL)
+        (*VertSize)[CurrV] = CurrSize;
+
       FixedVal.push_back(CurrV);
+      
     }
 
     // smooth on the surface
-    Geo::SmoothLaplacianImplicit(VertSize, Faces, FixedVal);
-
-    return GetPercentile(VertSize, 0.05, MaxSize);
+    //std::cout << "Smoothing" << std::endl;
+    if (VertSize!=NULL)
+    Geo::SmoothLaplacianImplicit((*VertSize), Faces, FixedVal);
+    std::cout<<"Finding Perc Size:"<<SampledVal.size()<<std::endl;
+    return GetPercentile(SampledVal, 0.05, MaxSize);
   }
 
   static ScalarType
   RemeshSizeNormal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                    const std::vector<std::vector<int>> &Faces,
                    const ScalarType &MinSize, const ScalarType &MaxSize,
-                   std::vector<ScalarType> &VertSize,
+                   std::vector<ScalarType> *VertSize = NULL,
                    ScalarType MaxNormVar = 135, bool subSample = true) {
     assert(MaxSize > MinSize);
 
     std::vector<int> SelectedSample;
 
     if (subSample) {
-      ScalarType Radius3D= Geo::MeshSampling<ScalarType>::Esteem3DSamplingRadius(VertPos,Faces,500);
-      Geo::MeshSampling<ScalarType>::SampleRadius3D(VertPos,Radius3D,SelectedSample,0);
+      ScalarType Radius3D =
+          Geo::MeshSampling<ScalarType>::Esteem3DSamplingRadius(VertPos, Faces,
+                                                                500);
+      Geo::MeshSampling<ScalarType>::SampleRadius3D(VertPos, Radius3D,
+                                                    SelectedSample, 0);
       // int Radii = Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(
       //     VertPos.size(), 500);
       // Geo::MeshSampling<ScalarType>::SampleVert(Faces, VertPos.size(), Radii,
@@ -289,9 +308,12 @@ public:
     PointSpatialIndex<ScalarType> PIndex;
     PIndex.Init(VertPos);
 
-    VertSize = std::vector<ScalarType>(VertPos.size(), MinSize);
+    if (VertSize != NULL) {
+      (*VertSize) = std::vector<ScalarType>(VertPos.size(), MinSize);
+    }
 
     std::vector<int> FixedVal;
+    std::vector<ScalarType> SampledVal;
     for (size_t i = 0; i < SelectedSample.size(); i++) {
       int CurrV = SelectedSample[i];
       FixedVal.push_back(CurrV);
@@ -325,14 +347,19 @@ public:
         CurrSize = DistKernel[j].first;
         break;
       }
-      VertSize[CurrV] = std::min(VertSize[CurrV], MaxSize);
-      VertSize[CurrV] = std::max(VertSize[CurrV], CurrSize);
-    }
-    if (subSample)
-      // smooth on the surface
-      Geo::SmoothLaplacianImplicit(VertSize, Faces, FixedVal);
+      CurrSize=std::min(CurrSize,MaxSize);
+      CurrSize=std::max(CurrSize,MinSize);
+      SampledVal.push_back(CurrSize);
 
-    return GetPercentile(VertSize, 0.05, MaxSize);
+      if (VertSize != NULL) 
+        (*VertSize)[CurrV] = CurrSize;
+    }
+    if ((subSample)&&(VertSize != NULL)) {
+      // smooth on the surface
+      Geo::SmoothLaplacianImplicit((*VertSize), Faces, FixedVal);
+    }
+
+    return GetPercentile(SampledVal, 0.05, MaxSize);
     // return RemSize[0];
   }
 
@@ -341,26 +368,60 @@ public:
                        const std::vector<std::vector<int>> &Faces,
                        const std::vector<std::pair<int, int>> &Features,
                        const ScalarType &MinSize, const ScalarType &MaxSize,
-                       std::vector<ScalarType> &VertSize, bool subSample = true,
-                       ScalarType MaxNormVar = 135) {
+                       std::vector<ScalarType> *VertSize = NULL,
+                       bool subSample = true, ScalarType MaxNormVar = 135) {
 
     std::cout << "Finding Remesh Size by Features" << std::endl;
     std::vector<ScalarType> VertSizeFeat;
-    RemeshSizeFeatures(VertPos, Faces, Features, MinSize, MaxSize, VertSizeFeat,
-                       subSample);
+
+    ScalarType SizeFeat = -1;
+    ScalarType SizeNorm = -1;
+
+    if (VertSize != NULL)
+      SizeFeat = RemeshSizeFeatures(VertPos, Faces, Features, MinSize, MaxSize,
+                                    &VertSizeFeat, subSample);
+    else
+      SizeFeat = RemeshSizeFeatures(VertPos, Faces, Features, MinSize, MaxSize,
+                                    NULL, subSample);
 
     std::cout << "Finding Remesh Size by Normal Variation" << std::endl;
     std::vector<ScalarType> VertSizeNorm;
-    RemeshSizeNormal(VertPos, Faces, MinSize, MaxSize, VertSizeNorm, MaxNormVar,
-                     subSample);
+
+    if (VertSize != NULL)
+      SizeNorm = RemeshSizeNormal(VertPos, Faces, MinSize, MaxSize,
+                                  &VertSizeNorm, MaxNormVar, subSample);
+    else
+      SizeNorm = RemeshSizeNormal(VertPos, Faces, MinSize, MaxSize, NULL,
+                                  MaxNormVar, subSample);
 
     std::cout << "Done" << std::endl;
 
-    assert(VertSizeFeat.size() == VertSizeNorm.size());
-    for (size_t i = 0; i < VertSizeFeat.size(); i++)
-      VertSize.push_back(std::min(VertSizeFeat[i], VertSizeNorm[i]));
+    assert(SizeFeat > 0);
+    assert(SizeNorm > 0);
 
-    return GetPercentile(VertSize, 0.05, MaxSize);
+    if (VertSize != NULL) {
+      assert(VertSizeFeat.size() == VertSizeNorm.size());
+      for (size_t i = 0; i < VertSizeFeat.size(); i++)
+        (*VertSize).push_back(std::min(VertSizeFeat[i], VertSizeNorm[i]));
+    }
+
+    // return GetPercentile(VertSize, 0.05, MaxSize);
+    return std::min(SizeFeat, SizeNorm);
+  }
+
+  static ScalarType
+  RemeshSizeAggregated(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                       const std::vector<std::vector<int>> &Faces,
+                       const std::vector<std::vector<bool>> &IsFaceEFeature,
+                       const ScalarType &MinSize, const ScalarType &MaxSize,
+                       std::vector<ScalarType> *VertSize = NULL,
+                       bool subSample = true, ScalarType MaxNormVar = 135) {
+    std::vector<std::pair<int, int>> VertPairFeatures;
+    Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(
+        Faces, IsFaceEFeature, VertPairFeatures);
+    std::cout << "There are Fearures:" << VertPairFeatures.size() << std::endl;
+    return (RemeshSizeAggregated(VertPos, Faces, VertPairFeatures, MinSize,
+                                 MaxSize, VertSize));
   }
 };
 } // namespace Geo

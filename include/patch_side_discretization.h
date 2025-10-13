@@ -874,16 +874,35 @@ public:
     }
   }
 
+  int NumOdd()
+  {
+    int OddPatches=0;
+    for (size_t i = 0; i < PatchSides.size(); i++) {
+      typeMatching typeM = PatchMatchingType(i);
+      if (typeM==OddSubd)
+        OddPatches++;
+    }
+    return OddPatches;
+  }
+
   void AutomaticGraphOptimize(bool OptimizeSize,
                               bool find_points = true) 
   {
+    if (PMode==Geo::SideDiscretization<ScalarType>::EvenVar)
+      DivideTargetVal();
+
     SolveEqualityViaGraph(false);
+
+     if (PMode==Geo::SideDiscretization<ScalarType>::EvenVar)
+      DuplicateSolution();
+
     if (OptimizeSize)
       SolveSizeViaGraphCycles(false);
 
-    if (PMode != NoParity)
+    if (PMode == SolvePost)
       SolveParityViaGraph(false);
 
+   
     if (find_points) {
       InitMatchingType();
       FindDiscretizationPoint();

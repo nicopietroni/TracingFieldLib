@@ -207,12 +207,13 @@ void AutoQuadEdgeSize() {
         TriVertPos, TriConnectivity, 30, TriFeatures_30, TriCorners_30,
         ero_steps, dil_steps);
 
-  std::vector<ScalarType> VertSize;
+  //std::vector<ScalarType> VertSize;
   ScalarType MinAggrSize = TriMeshBox.Diag() * MinSize;
   ScalarType MaxAggrSize = TriMeshBox.Diag() * MaxSize;
-  ScalarType CurrSize = Geo::RemeshSize<ScalarType>::RemeshSizeFeatures(
-      TriVertPos, TriConnectivity, TriFeatures_30, MinAggrSize, MaxAggrSize,
-      VertSize);
+  ScalarType CurrSize =Geo::RemeshSize<ScalarType>::RemeshSizeAggregated(TriVertPos, TriConnectivity, TriFeatures_30, MinAggrSize, MaxAggrSize,NULL);
+  // ScalarType CurrSize = Geo::RemeshSize<ScalarType>::RemeshSizeFeatures(
+  //     TriVertPos, TriConnectivity, TriFeatures_30, MinAggrSize, MaxAggrSize,
+  //     VertSize);
   QuadSize = CurrSize / TriMeshBox.Diag();
   QuadSize /= 2;
   QuadSize*=SizeMult;

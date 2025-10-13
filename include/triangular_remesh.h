@@ -79,17 +79,18 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
   auto t1 = std::chrono::high_resolution_clock::now();
   int all_steps = 0;
 
-  std::vector<ScalarType> VertDens;
+  //std::vector<ScalarType> VertDens;
   if (TRemParam.adaptive) {
-    t0 = std::chrono::high_resolution_clock::now();
-    ScalarType RadSize = 2 * AvgEdgeLen(VertPos, Faces);
-    FindDensityMap(VertPos, Faces, RadSize, VertDens);
-    ScalarType MinLVal = TRemParam.TargetL * TRemParam.minEdgeRatio;
-    ScalarType MaxLVal = TRemParam.TargetL * TRemParam.maxEdgeRatio;
-    LinearMap(VertDens, MinLVal, MaxLVal);
-    t1 = std::chrono::high_resolution_clock::now();
-    durationComputeAdaptLen +=
-        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    assert(TRemParam.VertSize.size()==VertPos.size());
+    // t0 = std::chrono::high_resolution_clock::now();
+    // ScalarType RadSize = 2 * AvgEdgeLen(VertPos, Faces);
+    // FindDensityMap(VertPos, Faces, RadSize, VertDens);
+    // ScalarType MinLVal = TRemParam.TargetL * TRemParam.minEdgeRatio;
+    // ScalarType MaxLVal = TRemParam.TargetL * TRemParam.maxEdgeRatio;
+    // LinearMap(VertDens, MinLVal, MaxLVal);
+    // t1 = std::chrono::high_resolution_clock::now();
+    // durationComputeAdaptLen +=
+    //     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
   }
   for (int s = 0; s < TRemParam.steps; s++) {
 
@@ -103,7 +104,7 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
       t0 = std::chrono::high_resolution_clock::now();
 
       stepsCollapseSmall =
-          CollapseSmallEdges(VertPos, Faces, VertQ, TRemParam, &VertDens);
+          CollapseSmallEdges(VertPos, Faces, VertQ, TRemParam, &TRemParam.VertSize);
 
       t1 = std::chrono::high_resolution_clock::now();
       durationCollapseSmall +=
@@ -112,14 +113,14 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
     }
     
     if (TRemParam.adaptive) {
-      assert(VertDens.size() == VertPos.size());
+      assert(TRemParam.VertSize.size() == VertPos.size());
     }
 
     // REFINE BIG ONES
     if (TRemParam.refine_big) {
       t0 = std::chrono::high_resolution_clock::now();
       stepsRefineBig =
-          RefineBigEdges(VertPos, Faces, VertQ, TRemParam, &VertDens);
+          RefineBigEdges(VertPos, Faces, VertQ, TRemParam, &TRemParam.VertSize);
       t1 = std::chrono::high_resolution_clock::now();
       durationRefineBig +=
           std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0)
@@ -127,7 +128,7 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
     }
 
     if (TRemParam.adaptive) {
-      assert(VertDens.size() == VertPos.size());
+      assert(TRemParam.VertSize.size() == VertPos.size());
     }
 
     // OPTIMIZE VALENCE
@@ -140,7 +141,7 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
               .count();
     }
     if (TRemParam.adaptive) {
-      assert(VertDens.size() == VertPos.size());
+      assert(TRemParam.VertSize.size() == VertPos.size());
     }
 
     // SMOOTH STEP

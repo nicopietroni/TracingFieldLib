@@ -1,5 +1,6 @@
 #include <IO/file_path_functions.h>
 #include <IO/io_obj.h>
+#include <cassert>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -11,13 +12,13 @@
 #include <hausdorff.h>
 #include <mesh_functions.h>
 #include <point3.h>
+#include <remesh_size.h>
 #include <string>
 #include <triangular_remesh.h>
 #include <vector>
-
 // GLFWwindow *window;
 std::string PathMesh;
-//std::string ProjectName;
+// std::string ProjectName;
 
 typedef double ScalarType;
 
@@ -66,8 +67,8 @@ bool LoadMesh(const std::string &path) {
 std::string commandLine;
 
 void SaveMesh() {
-  std::string RemFile=Outfolder;
-  RemFile+=std::string(GetFilanameNoExtension(PathMesh));
+  std::string RemFile = Outfolder;
+  RemFile += std::string(GetFilanameNoExtension(PathMesh));
   RemFile.append("_remesh.obj");
   std::cout << "Saving on:" << RemFile.c_str() << std::endl;
   WriteOBJ(RemFile, VertPos, Connectivity);
@@ -94,7 +95,7 @@ void appendToCSV(const std::string &filename,
 }
 
 void SaveStats() {
-  //std::cout<<"SAVING STATS"<<std::endl;
+  // std::cout<<"SAVING STATS"<<std::endl;
   std::vector<std::string> ToSaveStr;
 
   ToSaveStr.push_back(GetFilaname(PathMesh));
@@ -114,60 +115,65 @@ void SaveStats() {
   ToSaveStr.push_back(std::to_string(RemP.TargetL));
   ToSaveStr.push_back(std::to_string(AvgEdgeLen(VertPos, Connectivity)));
 
-  ScalarType minLen,maxLen;
-  ExtremenEdgeLen(VertPos, Connectivity,minLen,maxLen);
+  ScalarType minLen, maxLen;
+  ExtremenEdgeLen(VertPos, Connectivity, minLen, maxLen);
   ToSaveStr.push_back(std::to_string(minLen));
   ToSaveStr.push_back(std::to_string(maxLen));
-
 
   ToSaveStr.push_back(std::to_string(VertPos.size()));
   ToSaveStr.push_back(std::to_string(Connectivity.size()));
 
-  ScalarType AvgQ=Geo::TriMeshAvgQuality<ScalarType>(VertPos,Connectivity);
-  ScalarType WorstQ=Geo::TriMeshWorstQuality<ScalarType>(VertPos,Connectivity);
-    
+  ScalarType AvgQ = Geo::TriMeshAvgQuality<ScalarType>(VertPos, Connectivity);
+  ScalarType WorstQ =
+      Geo::TriMeshWorstQuality<ScalarType>(VertPos, Connectivity);
+
   ToSaveStr.push_back(std::to_string(AvgQ));
   ToSaveStr.push_back(std::to_string(WorstQ));
 
   ScalarType AvgDist, MaxDist;
-  Geo::Hausdorff(VertPos0, Connectivity0, VertPos, Connectivity, AvgDist,MaxDist);
+  Geo::Hausdorff(VertPos0, Connectivity0, VertPos, Connectivity, AvgDist,
+                 MaxDist);
 
-  ToSaveStr.push_back(std::to_string(100*AvgDist/BBDiag));
-  ToSaveStr.push_back(std::to_string(100*MaxDist/BBDiag));
+  ToSaveStr.push_back(std::to_string(100 * AvgDist / BBDiag));
+  ToSaveStr.push_back(std::to_string(100 * MaxDist / BBDiag));
 
-  std::string StatFile=Outfolder;
-  StatFile+=std::string("statistics.csv");
-  std::cout<<"Saving statistics on "<<StatFile.c_str()<<std::endl;
+  std::string StatFile = Outfolder;
+  StatFile += std::string("statistics.csv");
+  std::cout << "Saving statistics on " << StatFile.c_str() << std::endl;
   appendToCSV(StatFile.c_str(), ToSaveStr);
 }
 
-void CreateOutputFolder()
-{
+void CreateOutputFolder() {
 
-    Outfolder = GetDirectory(PathMesh);
-    Outfolder+=std::string("/remeshed/");
-    //std::cout<<"Creating Folder"<<Outfolder<<std::endl;
-    
-    try
-    {
-        // Check if the folder already exists
-        if (!std::filesystem::exists(Outfolder))
-           std::filesystem::create_directory(Outfolder);
-        //{
-        // Create the folder
-        //     std::cout << "Folder created successfully: " << folderProjectName << std::endl;
-        // }
-        // else
-        // {
-        //     std::cout << "Folder already exists: " << folderProjectName << std::endl;
-        // }
-    }
-    catch (const std::exception &e)
-    {
-        std::cerr << "Error creating folder: " << e.what() << std::endl;
-    }
-   //exit(0);
+  Outfolder = GetDirectory(PathMesh);
+  Outfolder += std::string("/remeshed/");
+  // std::cout<<"Creating Folder"<<Outfolder<<std::endl;
+
+  try {
+    // Check if the folder already exists
+    if (!std::filesystem::exists(Outfolder))
+      std::filesystem::create_directory(Outfolder);
+    //{
+    // Create the folder
+    //     std::cout << "Folder created successfully: " << folderProjectName <<
+    //     std::endl;
+    // }
+    // else
+    // {
+    //     std::cout << "Folder already exists: " << folderProjectName <<
+    //     std::endl;
+    // }
+  } catch (const std::exception &e) {
+    std::cerr << "Error creating folder: " << e.what() << std::endl;
+  }
+  // exit(0);
 }
+
+ScalarType MinSize = 0.005;
+ScalarType MaxSize = 0.02;
+int ero_steps = 3;
+int dil_steps = 3;
+ScalarType ratio = 1;
 
 int main(int argc, char *argv[]) {
 
@@ -196,9 +202,9 @@ int main(int argc, char *argv[]) {
 
     if (std::string(argv[i]) == std::string("-res")) {
       if (argc > i) {
-        ScalarType ratio = (ScalarType)std::stof(argv[i + 1]);
+        ratio = (ScalarType)std::stof(argv[i + 1]);
         //% of bounding box diagonal
-        RemP.TargetL = (BBDiag * ratio) / (ScalarType)100;
+        // RemP.TargetL = (BBDiag * ratio) / (ScalarType)100;
       }
     }
 
@@ -220,7 +226,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (std::string(argv[i]) == std::string("-adapt")) {
-      //RemP.max_error=BBDiag*0.001;
+      // RemP.max_error=BBDiag*0.001;
       RemP.adaptive = true;
     }
 
@@ -234,19 +240,46 @@ int main(int argc, char *argv[]) {
     exit(0);
   }
 
-  //INITIALIZE FEATURES
-  Geo::FeatureCorners(VertPos, Connectivity, RemP.feature_angle,RemP.IsFaceEFeature, RemP.IsVertCorner);
-  // Geo::GetVertPairFromBoolFeatures<ScalarType>(Connectivity,RemP.IsFaceEFeature,RenderVertFeatures);
-  // Geo::GetVertIndexFromBoolCorners<ScalarType>(RemP.IsVertCorner,RenderVertCorners);
-  
-//   Geo::FeatureCorners(VertPos, Connectivity, initial_feature_angle,
-//                       RemP.IsFaceEFeature, RemP.IsVertCorner);
+  // Geo::MeshFeatures<ScalarType>::FeatureCornersClean(
+  //       VertPos, Connectivity, RemP.feature_angle, TriFeatures_30,
+  //       TriCorners_30, ero_steps, dil_steps);
 
-//   UpdateRenderCorners();
-// }
-  std::cout<<"REMESHING"<<std::endl;
+  // INITIALIZE FEATURES
+  if ((RemP.feature_angle > 0) && (RemP.feature_angle < 180)) {
+    Geo::MeshFeatures<ScalarType>::FeatureCornersClean(
+        VertPos, Connectivity, RemP.feature_angle, RemP.IsFaceEFeature,
+        RemP.IsVertCorner, ero_steps, dil_steps);
+  }
+  else {
+     RemP.IsVertCorner=std::vector<bool>(VertPos.size(),false);
+     RemP.IsFaceEFeature=std::vector<std::vector<bool>>(Connectivity.size(),std::vector<bool>(3,false));
+  }
+
+  // FIND REMESHING SIZE
+  ScalarType MinAggrSize = MeshBox.Diag() * MinSize;
+  ScalarType MaxAggrSize = MeshBox.Diag() * MaxSize;
+
+  ScalarType CurrSize = -1;
+  std::cout<<"Finding Size"<<std::endl;
+  if (RemP.adaptive)
+    CurrSize = Geo::RemeshSize<ScalarType>::RemeshSizeAggregated(
+        VertPos, Connectivity, RemP.IsFaceEFeature, MinAggrSize, MaxAggrSize,
+        &RemP.VertSize);
+  else
+    CurrSize = Geo::RemeshSize<ScalarType>::RemeshSizeAggregated(
+        VertPos, Connectivity, RemP.IsFaceEFeature, MinAggrSize, MaxAggrSize,
+        NULL);
+
+  assert(CurrSize > 0);
+  std::cout << "Found Remesh Size of " << CurrSize / MeshBox.Diag()
+            << " BB Diagonal" << std::endl;
+  CurrSize/=2;
+  CurrSize=std::max(CurrSize,MinSize);
+  RemP.TargetL = ratio * CurrSize;
+
+  std::cout << "REMESHING" << std::endl;
   Geo::TriRemesh<ScalarType>(VertPos, Connectivity, RemP);
-  std::cout<<"DONE"<<std::endl;
+  std::cout << "DONE" << std::endl;
   CreateOutputFolder();
 
   SaveMesh();

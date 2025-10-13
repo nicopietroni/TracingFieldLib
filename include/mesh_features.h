@@ -203,18 +203,13 @@ public:
                    CornersIdx, add_border);
   }
 
-  static void
-  FeatureCorners(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                 const std::vector<std::vector<int>> &Faces,
-                 const ScalarType &feature_angle,
-                 std::vector<std::vector<bool>> &IsFaceEFeature,
-                 std::vector<bool> &IsVertCorner, bool add_border = true) {
-
-    std::vector<std::pair<int, int>> VertPairFeatures;
-    std::vector<int> CornersIdx;
-    FeatureCorners(VertPos, Faces, feature_angle, VertPairFeatures, CornersIdx,
-                   add_border);
-
+  static void BoolVariablesFromPairs(
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &Faces,
+      const std::vector<std::pair<int, int>> &VertPairFeatures,
+      const std::vector<int> &CornersIdx,
+      std::vector<std::vector<bool>> &IsFaceEFeature,
+      std::vector<bool> &IsVertCorner) {
     std::set<std::pair<int, int>> VertPairFeaturesMap;
     for (size_t i = 0; i < VertPairFeatures.size(); i++) {
       int IndexV0 = VertPairFeatures[i].first;
@@ -245,6 +240,54 @@ public:
     IsVertCorner.resize(VertPos.size(), false);
     for (size_t i = 0; i < CornersIdx.size(); i++)
       IsVertCorner[CornersIdx[i]] = true;
+  }
+
+
+
+  static void
+  FeatureCorners(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                 const std::vector<std::vector<int>> &Faces,
+                 const ScalarType &feature_angle,
+                 std::vector<std::vector<bool>> &IsFaceEFeature,
+                 std::vector<bool> &IsVertCorner, bool add_border = true) {
+
+    std::vector<std::pair<int, int>> VertPairFeatures;
+    std::vector<int> CornersIdx;
+    FeatureCorners(VertPos, Faces, feature_angle, VertPairFeatures, CornersIdx,
+                   add_border);
+
+    BoolVariablesFromPairs(VertPos, Faces, VertPairFeatures, CornersIdx,
+                           IsFaceEFeature, IsVertCorner);
+    // std::set<std::pair<int, int>> VertPairFeaturesMap;
+    // for (size_t i = 0; i < VertPairFeatures.size(); i++) {
+    //   int IndexV0 = VertPairFeatures[i].first;
+    //   int IndexV1 = VertPairFeatures[i].second;
+    //   std::pair<int, int> Key(std::min(IndexV0, IndexV1),
+    //                           std::max(IndexV0, IndexV1));
+    //   VertPairFeaturesMap.insert(Key);
+    // }
+
+    // IsFaceEFeature.clear();
+    // IsVertCorner.clear();
+
+    // IsFaceEFeature.resize(Faces.size());
+    // for (size_t i = 0; i < Faces.size(); i++) {
+    //   int VertNum = Faces[i].size();
+    //   IsFaceEFeature[i] = std::vector<bool>(VertNum, false);
+    //   for (size_t j = 0; j < Faces[i].size(); j++) {
+    //     int IndexV0 = Faces[i][j];
+    //     int IndexV1 = Faces[i][(j + 1) % VertNum];
+    //     std::pair<int, int> Key(std::min(IndexV0, IndexV1),
+    //                             std::max(IndexV0, IndexV1));
+    //     if (VertPairFeaturesMap.count(Key) == 0)
+    //       continue;
+    //     IsFaceEFeature[i][j] = true;
+    //   }
+    // }
+
+    // IsVertCorner.resize(VertPos.size(), false);
+    // for (size_t i = 0; i < CornersIdx.size(); i++)
+    //   IsVertCorner[CornersIdx[i]] = true;
   }
 
   static void GetVertPairFromBoolFeatures(
@@ -530,12 +573,13 @@ public:
     Edges = NewEdges;
   }
 
-  static void FeatureCornersClean(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                           const std::vector<std::vector<int>> &Faces,
-                           const ScalarType feature_angle,
-                           std::vector<std::pair<int, int>> &VertPairFeatures,
-                           std::vector<int> &CornersIdx, int ero_steps,
-                           int dil_steps, bool include_border = true) {
+  static void
+  FeatureCornersClean(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                      const std::vector<std::vector<int>> &Faces,
+                      const ScalarType feature_angle,
+                      std::vector<std::pair<int, int>> &VertPairFeatures,
+                      std::vector<int> &CornersIdx, int ero_steps,
+                      int dil_steps, bool include_border = true) {
 
     FeatureCorners(VertPos, Faces, feature_angle, VertPairFeatures, CornersIdx);
 
@@ -545,9 +589,26 @@ public:
     if ((ero_steps > 0) || (dil_steps > 0)) {
       Geo::MeshFeatures<ScalarType>::ErodeDilateFeatures(ero_steps, dil_steps,
                                                          VertPairFeatures);
-      Geo::MeshFeatures<ScalarType>::Corners(VertPos, VertPairFeatures, feature_angle,
-                                             CornersIdx);
+      Geo::MeshFeatures<ScalarType>::Corners(VertPos, VertPairFeatures,
+                                             feature_angle, CornersIdx);
     }
+  }
+
+  static void
+  FeatureCornersClean(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                      const std::vector<std::vector<int>> &Faces,
+                      const ScalarType feature_angle,
+                      std::vector<std::vector<bool>> &IsFaceEFeature,
+                      std::vector<bool> &IsVertCorner, int ero_steps,
+                      int dil_steps, bool include_border = true) {
+
+    std::vector<std::pair<int, int>> VertPairFeatures;
+    std::vector<int> CornersIdx;
+    Geo::MeshFeatures<ScalarType>::FeatureCornersClean(VertPos, Faces, feature_angle, VertPairFeatures,
+                        CornersIdx, ero_steps, dil_steps, include_border);
+
+    BoolVariablesFromPairs(VertPos, Faces, VertPairFeatures, CornersIdx,
+                           IsFaceEFeature, IsVertCorner);
   }
 };
 } // namespace Geo

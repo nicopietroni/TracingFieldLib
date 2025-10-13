@@ -1543,6 +1543,72 @@ void SmoothLaplacianImplicit(std::vector<Geo::Point3<ScalarType>> &VertPos,
   }
 }
 
+// template <class ScalarType>
+// void SmoothLaplacianImplicit(std::vector<ScalarType> &Signal,
+//                              const std::vector<std::vector<int>> &Faces,
+//                              const std::vector<int> &FixedVert,
+//                              const std::vector<std::pair<int, int>> &Features =
+//                                  std::vector<std::pair<int, int>>()) {
+
+//   ScalarType WeightFixed = 1000000;
+//   ScalarType WeightLap = 1;
+
+//   std::vector<std::vector<int>> KernelV;
+//   GetLaplacianNeighbours(VertPos, Faces, KernelV, Features);
+
+//   std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
+
+//   std::set<int> FixedSet(FixedVert.begin(), FixedVert.end());
+//   for (size_t i = 0; i < KernelV.size(); i++) {
+//     int IndexV0 = i;
+//     if (FixedSet.count(IndexV0) > 0)
+//       continue;
+//     for (size_t c = 0; c < 3; c++) {
+//       Geo::LinearConstraint<ScalarType> Constr;
+//       Constr.Weight = WeightLap;
+//       Constr.RHSide = 0;
+//       Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV0, c, -1));
+//       ScalarType OtherW = (ScalarType)1 / (ScalarType)KernelV[i].size();
+
+//       for (size_t j = 0; j < KernelV[i].size(); j++) {
+//         int IndexV1 = KernelV[i][j];
+
+//         assert(IndexV0 != IndexV1);
+
+//         Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV1, c, OtherW));
+//       }
+//       LinConstr.push_back(Constr);
+//     }
+//   }
+
+//   for (size_t i = 0; i < FixedVert.size(); i++) {
+//     int IndexV = FixedVert[i];
+//     for (size_t c = 0; c < 3; c++) {
+//       Geo::LinearConstraint<ScalarType> Constr;
+//       Constr.RHSide = VertPos[IndexV].V(c);
+//       Constr.Weight = WeightFixed;
+//       Geo::VarTerm<ScalarType> Var(IndexV, c, 1);
+//       Constr.LHSide.push_back(Var);
+//       LinConstr.push_back(Constr);
+//     }
+//   }
+
+//   Geo::LinearConstraintLeastSQSolver<ScalarType> LinSqSolver;
+//   LinSqSolver.Init(LinConstr);
+//   std::vector<ScalarType> Solution;
+//   LinSqSolver.Solve(Solution);
+
+//   for (size_t i = 0; i < VertPos.size(); i++) {
+//     int IndexX = (i * 3);
+//     int IndexY = IndexX + 1;
+//     int IndexZ = IndexX + 2;
+//     ScalarType ValX = Solution[IndexX];
+//     ScalarType ValY = Solution[IndexY];
+//     ScalarType ValZ = Solution[IndexZ];
+//     VertPos[i] = Geo::Point3<ScalarType>(ValX, ValY, ValZ);
+//   }
+// }
+
 template <class ScalarType>
 void SmoothLaplacianImplicit(std::vector<Geo::Point2<ScalarType>> &VertPos,
                              const std::vector<std::vector<int>> &Faces,

@@ -27,7 +27,6 @@ namespace Geo {
 
 template <class ScalarType> class Quadrangulation {
 public:
-
   static void SampleRegular(
       const std::vector<Geo::Point2<ScalarType>> &PatchVertUV,
       const std::vector<Geo::Point3<ScalarType>> &PatchVert3D,
@@ -140,26 +139,27 @@ public:
       }
   }
 
-  static bool OutofLUTBounds(const QuadrangulationLUT<ScalarType> &QLut,
-                             const std::vector<std::vector<Geo::Point2<ScalarType>>> &UVSideSubd)
-  {
-    assert(UVSideSubd.size()==4);
-      int size0=UVSideSubd[0].size();
-      int size1=UVSideSubd[1].size();
-      int size2=UVSideSubd[2].size();
-      int size3=UVSideSubd[3].size();
-      assert(size0>=0);
-      assert(size1>=0);
-      assert(size2>=0);
-      assert(size3>=0);
-      return((size0>QLut.MaxSubdVal)||
-             (size1>QLut.MaxSubdVal)||
-             (size2>QLut.MaxSubdVal)||
-             (size3>QLut.MaxSubdVal));
+  static bool OutofLUTBounds(
+      const QuadrangulationLUT<ScalarType> &QLut,
+      const std::vector<std::vector<Geo::Point2<ScalarType>>> &UVSideSubd) {
+    assert(UVSideSubd.size() == 4);
+    int size0 = UVSideSubd[0].size();
+    int size1 = UVSideSubd[1].size();
+    int size2 = UVSideSubd[2].size();
+    int size3 = UVSideSubd[3].size();
+    assert(size0 >= 0);
+    assert(size1 >= 0);
+    assert(size2 >= 0);
+    assert(size3 >= 0);
+    return ((size0 > QLut.MaxSubdVal) || (size1 > QLut.MaxSubdVal) ||
+            (size2 > QLut.MaxSubdVal) || (size3 > QLut.MaxSubdVal));
   }
 
-  // static bool QuadrangulateExtendLUT(const QuadrangulationLUT<ScalarType> &QLut,
-  //                                   const std::vector<std::vector<Geo::Point2<ScalarType>>> &UVSideSubd)
+  // static bool QuadrangulateExtendLUT(const QuadrangulationLUT<ScalarType>
+  // &QLut,
+  //                                   const
+  //                                   std::vector<std::vector<Geo::Point2<ScalarType>>>
+  //                                   &UVSideSubd)
   // {
   //   int Diff0_U=UVSideSubd[0].size()-QLut.MaxSubdVal;
   //   int Diff1_U=UVSideSubd[2].size()-QLut.MaxSubdVal;
@@ -180,15 +180,14 @@ public:
     std::vector<Geo::Point2<ScalarType>> QuadVertUV;
     bool found = false;
 
-    if (!OutofLUTBounds(QLut,UVSideSubd))
-       found = QLut.GetQuadrangulation(UVSideSubd, QuadVertUV, QuadFaces);
-    else
-    {
-      std::cout<<"MaxSizd:"<<QLut.MaxSubdVal<<std::endl;
-      std::cout<<"Size 0:"<<UVSideSubd[0].size()<<std::endl;
-      std::cout<<"Size 1:"<<UVSideSubd[1].size()<<std::endl;
-      std::cout<<"Size 2:"<<UVSideSubd[2].size()<<std::endl;
-      std::cout<<"Size 3:"<<UVSideSubd[3].size()<<std::endl;
+    if (!OutofLUTBounds(QLut, UVSideSubd))
+      found = QLut.GetQuadrangulation(UVSideSubd, QuadVertUV, QuadFaces);
+    else {
+      std::cout << "MaxSizd:" << QLut.MaxSubdVal << std::endl;
+      std::cout << "Size 0:" << UVSideSubd[0].size() << std::endl;
+      std::cout << "Size 1:" << UVSideSubd[1].size() << std::endl;
+      std::cout << "Size 2:" << UVSideSubd[2].size() << std::endl;
+      std::cout << "Size 3:" << UVSideSubd[3].size() << std::endl;
       return false;
     }
     // std::cout<<"DEDE"<<std::endl;
@@ -212,7 +211,7 @@ public:
     // std::cout<<"Size0 "<<BorderNum<<std::endl;
     // std::cout<<"Size1 "<<QuadVert.size()<<std::endl;
 
-    //the first one will be the one along the border, sorted accordignly
+    // the first one will be the one along the border, sorted accordignly
     for (size_t i = 0; i < BorderNum; i++)
       QuadVert[i] = AllSide3D[i];
 
@@ -276,13 +275,13 @@ public:
 
     // paremetrize the patch also considering corners
     Geo::UVParam<ScalarType>::TutteEmbedding(PatchVert, Patch_Faces,
-                                             PatchCorners, VertUV,true);
+                                             PatchCorners, VertUV, true);
     Geo::TriangleSpatialIndex<ScalarType> Grid;
     Grid.Init(PatchVert, Patch_Faces);
     Geo::Box3<ScalarType> BB;
     BB.Init(PatchVert);
 
-    //get the UV of side subdivision
+    // get the UV of side subdivision
     std::vector<std::vector<Geo::Point2<ScalarType>>> UVSideSubd;
     for (size_t i = 0; i < SideSubd.size(); i++) {
       UVSideSubd.resize(UVSideSubd.size() + 1);
@@ -327,12 +326,12 @@ public:
       has_sampled = SampleWithLUT(VertUV, PatchVert, Patch_Faces, SideSubd,
                                   UVSideSubd, QLut, QuadVert, QuadFaces);
     }
-    
+
     return has_sampled;
   }
 
 public:
-  //return the amount of non quadrangulated patches
+  // return the amount of non quadrangulated patches
   static int QuadrangulateQuadPatchsWithSubs(
       const std::vector<Geo::Point3<ScalarType>> &Vert_3D,
       const std::vector<std::vector<int>> &Faces,
@@ -351,23 +350,32 @@ public:
 
     assert(PatchFacesIdx.size() == PatchCornerIdx.size());
 
-    int problematic_patches=0;
+    int problematic_patches = 0;
     for (size_t i = 0; i < PatchFacesIdx.size(); i++) {
       // for (size_t i = 0; i <1; i++) {
       assert(PatchCornerIdx[i].size() == SideSamples3D[i].size());
 
-      //only if the patch corner side is 4
-      if (PatchCornerIdx[i].size() != 4)
+      // only if the patch corner side is 4
+      if (PatchCornerIdx[i].size() != 4) {
+        problematic_patches++;
         continue;
-
-      //copy the submesh
+      }
+      // check eveness
+      int TotSub = 0;
+      for (size_t j = 0; j < SideSamples3D[i].size(); j++)
+        TotSub += SideSamples3D[i][j].size();
+      if ((TotSub % 2) != 0) {
+        problematic_patches++;
+        continue;
+      }
+      // copy the submesh
       std::vector<Geo::Point3<ScalarType>> CurrPatchVert;
       std::vector<std::vector<int>> CurrPatchFaces;
       std::vector<int> OriginalVert, OriginalElem;
       CopySubMesh<ScalarType>(Vert_3D, Faces, PatchFacesIdx[i], CurrPatchVert,
                               CurrPatchFaces, OriginalVert, OriginalElem);
-      
-      //then map the corners on the subpatch
+
+      // then map the corners on the subpatch
       std::vector<int> CurrPatchCorners;
       for (size_t j = 0; j < OriginalVert.size(); j++) {
         std::vector<int>::const_iterator it =
@@ -381,22 +389,21 @@ public:
       std::vector<Geo::Point3<ScalarType>> Curr_Patch_QuadVert;
       std::vector<std::vector<int>> Curr_Patch_QuadFaces;
 
-      //then quadrangulate returning also the side samples
-      bool has_quadrangulated=QuadrangulateQuadPatchWithSubs(CurrPatchVert, CurrPatchFaces,
-                                     CurrPatchCorners, SideSamples3D[i], QLut,
-                                     Curr_Patch_QuadVert, Curr_Patch_QuadFaces);
-      if (!has_quadrangulated)
-      {
+      // then quadrangulate returning also the side samples
+      bool has_quadrangulated = QuadrangulateQuadPatchWithSubs(
+          CurrPatchVert, CurrPatchFaces, CurrPatchCorners, SideSamples3D[i],
+          QLut, Curr_Patch_QuadVert, Curr_Patch_QuadFaces);
+      if (!has_quadrangulated) {
         problematic_patches++;
-        std::cout<<"WARNING: Problem Quadrangulating patch "<<i<<std::endl;
+        std::cout << "WARNING: Problem Quadrangulating patch " << i
+                  << std::endl;
       }
       if (save_debug) {
-        std::string out_file = std::string("quad_mesh_") +
-                               std::to_string(i) + 
-                               std::string(".obj");
-        WriteOBJ(out_file.c_str(),Curr_Patch_QuadVert, Curr_Patch_QuadFaces);
+        std::string out_file =
+            std::string("quad_mesh_") + std::to_string(i) + std::string(".obj");
+        WriteOBJ(out_file.c_str(), Curr_Patch_QuadVert, Curr_Patch_QuadFaces);
       }
-      
+
       AppendMesh<ScalarType>(QuadVert, QuadFaces, Curr_Patch_QuadVert,
                              Curr_Patch_QuadFaces);
 

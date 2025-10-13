@@ -1164,13 +1164,13 @@ void SmoothReprojectUVStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
   Geo::getFFAdjacency(Faces, NextF, NextE);
 
   typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVParam;
-  Geo::FeatureCorners<ScalarType>(VertPos, Faces, NextF, feature_angle,
+  Geo::MeshFeatures<ScalarType>::FeatureCorners(VertPos, Faces, NextF, feature_angle,
                                   UVParam.FeatureLines, UVParam.Fixed, true);
   std::vector<int> FixedVert1;
   std::vector<std::pair<int, int>> FeatureLines1;
-  Geo::GetVertPairFromBoolFeatures<ScalarType>(Faces, IsFaceEFeature,
+  Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(Faces, IsFaceEFeature,
                                                FeatureLines1);
-  Geo::GetVertIndexFromBoolCorners<ScalarType>(IsVertCorner, FixedVert1);
+  Geo::MeshFeatures<ScalarType>::GetVertIndexFromBoolCorners(IsVertCorner, FixedVert1);
 
   UVParam.FeatureLines.insert(UVParam.FeatureLines.end(), FeatureLines1.begin(),
                       FeatureLines1.end());
@@ -1212,14 +1212,14 @@ void SmoothReproject3DStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
 
   std::vector<int> FixedVert;
   std::vector<std::pair<int, int>> FeatureLines;
-  Geo::FeatureCorners<ScalarType>(VertPos, Faces, NextF, feature_angle,
+  Geo::MeshFeatures<ScalarType>::FeatureCorners(VertPos, Faces, NextF, feature_angle,
                                   FeatureLines, FixedVert, true);
 
   std::vector<int> FixedVert1;
   std::vector<std::pair<int, int>> FeatureLines1;
-  Geo::GetVertPairFromBoolFeatures<ScalarType>(Faces, IsFaceEFeature,
+  Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(Faces, IsFaceEFeature,
                                                FeatureLines1);
-  Geo::GetVertIndexFromBoolCorners<ScalarType>(IsVertCorner, FixedVert1);
+  Geo::MeshFeatures<ScalarType>::GetVertIndexFromBoolCorners(IsVertCorner, FixedVert1);
 
   FeatureLines.insert(FeatureLines.end(), FeatureLines1.begin(),
                       FeatureLines1.end());

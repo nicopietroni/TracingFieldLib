@@ -814,6 +814,7 @@ void GetBoundaryConstraints(
   }
 }
 
+//this function interpolate for each set of elements in AdjEl the frame field
 template <class ScalarType>
 void InterpolateFrameFromAdj(
     const std::vector<std::vector<int>> &AdjEl,
@@ -889,6 +890,8 @@ void InterpolateElemFrameFromVert(
     PerElemFrame[i].Pos = BaryEl[i];
 }
 
+//return a map where for each edge I have the interpolated
+//frame on all faces on such an edge
 template <class ScalarType>
 static void InterpolateEdgeFrameFromElem(
     const std::vector<std::vector<int>> &Elem,
@@ -901,7 +904,7 @@ static void InterpolateEdgeFrameFromElem(
 
   std::vector<std::vector<int>> AdjEl;
 
-  // get adjacency edge to elem
+  // get adjacency faces to each edge
   std::map<EdgeIndex, std::vector<int>> EdgeElem;
   for (size_t i = 0; i < Elem.size(); i++) {
     int sizeEl = Elem[i].size();
@@ -914,15 +917,17 @@ static void InterpolateEdgeFrameFromElem(
     }
   }
 
+  //then put them in a vector
   std::map<EdgeIndex, std::vector<int>>::iterator IteMap;
   for (IteMap = EdgeElem.begin(); IteMap != EdgeElem.end(); IteMap++)
     AdjEl.push_back((*IteMap).second);
 
+  //then interpolate for each subset
   std::vector<Field::FrameField<ScalarType>> FrameInterp;
   InterpolateFrameFromAdj(AdjEl, ElemFrameField, FrameInterp);
   assert(AdjEl.size() == FrameInterp.size());
 
-  // then put into the map
+  // then put back into the map
   int Index = 0;
   for (IteMap = EdgeElem.begin(); IteMap != EdgeElem.end(); IteMap++) {
     std::pair<int, int> KeyE = (*IteMap).first;

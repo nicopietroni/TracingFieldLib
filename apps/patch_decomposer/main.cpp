@@ -1434,7 +1434,7 @@ void UpdateQuadFeatures() {
   for (size_t i = 0; i < CornersIdx.size(); i++)
     CornerPosSet.insert(VertPos[CornersIdx[i]]);
 
-  CornersByCount(QuadVert, QuadFeatures, QuadCorners);
+  Geo::MeshFeatures<ScalarType>::CornersByCount(QuadVert, QuadFeatures, QuadCorners,true);
 
   for (size_t i = 0; i < QuadVert.size(); i++) {
     if (CornerPosSet.count(QuadVert[i]) > 0)
@@ -2272,7 +2272,7 @@ int main(int argc, char *argv[]) {
         exit(0);
       std::cout << "Loaded Features" << std::endl;
 
-      Geo::Corners<ScalarType>(VertPos, Features, 45, CornersIdx);
+      Geo::MeshFeatures<ScalarType>::Corners(VertPos, Features, 45, CornersIdx);
       // has_load_features = true;
       continue;
     }
