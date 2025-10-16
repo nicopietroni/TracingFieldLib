@@ -177,3 +177,5 @@ apps/commandline_quadrangulator/.clang-tidy
 /apps/uv_mapping/build
 /apps/uv_mapping/test_data
 /apps/LUTCreator/4patches
+/.vs/TracingFieldLib
+/apps/commandline_quadrangulator/build
