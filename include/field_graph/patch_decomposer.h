@@ -247,11 +247,12 @@ public:
   bool start_orginal_border;
   bool start_concave;
   bool start_spike;
-  bool start_features;
+  // bool start_features;
 
   // bool end_internal;
   bool end_original_border;
   bool end_patch_border;
+  bool end_features;
   bool end_concave;
   bool end_spike;
 
@@ -549,6 +550,34 @@ public:
     }
   }
 
+  // void GetFeatureOrtho(std::vector<int> &FeatureOrtho) {
+  //   std::vector<int> FixedPathsV(FixedPaths.begin(), FixedPaths.end());
+  //   FeatureOrtho.clear();
+  //   for (size_t i = 0; i < FixedPathsV.size(); i++) {
+  //     int IndexP = FixedPathsV[i];
+  //     assert(IndexP >= 0);
+  //     assert(IndexP < PathSampl.SelectedPaths.size());
+  //     std::vector<int> CurrOrthoN;
+  //     Field::CrossFieldGraph::OrthoNodesCrossField(
+  //         PathSampl.SelectedPaths[IndexP], CurrOrthoN);
+  //     FeatureOrtho.insert(FeatureOrtho.end(), CurrOrthoN.begin(),
+  //                         CurrOrthoN.end());
+  //   }
+  // }
+
+  void GetFeatureElem(std::vector<int> &FeatureElem) {
+    std::vector<int> FixedPathsV(FixedPaths.begin(), FixedPaths.end());
+    FeatureElem.clear();
+    for (size_t i = 0; i < FixedPathsV.size(); i++) {
+      int IndexP = FixedPathsV[i];
+      std::vector<int> CurrFeatureEl;
+      Field::CrossFieldGraph::ElemsOfNode(
+          PathSampl.SelectedPaths[IndexP], CurrFeatureEl);
+      FeatureElem.insert(FeatureElem.end(), CurrFeatureEl.begin(),
+                          CurrFeatureEl.end());
+    }
+  }
+
   void GetBorderUnsolved(std::vector<int> &BorderUnsolved) {
     BorderUnsolved.clear();
 
@@ -681,6 +710,14 @@ public:
       PathSampl.SetBorderCanPassToExit(BorderUnsolved);
     }
 
+    if (end_features) {
+      std::vector<int> ArrivalFeatures;
+      //GetFeatureOrtho(ArrivalFeatures); //, false);
+      GetFeatureElem(ArrivalFeatures);
+
+      PathSampl.SetBorderCanPassToExit(ArrivalFeatures);
+    }
+
     auto t1 = std::chrono::high_resolution_clock::now();
 
     auto elapsed0 =
@@ -699,9 +736,9 @@ public:
 
     // restore the node type for borders that have been changed to exit
     // for the recursive call
-    if (end_patch_border && add_only_where_needed) // || doing_mandatory) {
+    if (end_features ||
+        (end_patch_border && add_only_where_needed)) // || doing_mandatory) {
       PathSampl.RestoreNodeType();
-    // }
   }
 
   bool GetConditionPerFaceScalar(std::vector<ScalarType> &FaceV,
@@ -970,7 +1007,7 @@ public:
   // int time_rem3;
   // int time_rem4;
 
-  //#define SAVE_STATUS
+  // #define SAVE_STATUS
 
   bool RemoveIfPossible(int &Path_To_remove, bool remove_unsolved = false,
                         int minGain = 0, bool debug_msg = false) {
@@ -1309,13 +1346,14 @@ public:
     start_orginal_border = true;
     start_concave = true;
     start_spike = true;
-    start_features = true;
+    // start_features = true;
 
     // end_internal = true;
     end_original_border = true;
     end_patch_border = false;
     end_concave = true;
     end_spike = true;
+    end_features = false;
 
     to_init_distance = true;
     first_ite = true;
@@ -1335,12 +1373,13 @@ public:
     start_concave = false;
     start_spike = true;
     start_orginal_border = false;
-    start_features=false;
+    // start_features=false;
 
     end_original_border = false;
     end_patch_border = false;
     end_concave = false;
     end_spike = true;
+    end_features = false;
   }
 
   void SetFeatureFeatureConfiguration() {
@@ -1349,12 +1388,13 @@ public:
     start_concave = true;
     start_spike = true;
     start_orginal_border = false;
-    start_features=false;
+    // start_features=false;
 
     end_original_border = false;
     end_patch_border = false;
     end_concave = true;
     end_spike = true;
+    end_features = false;
   }
 
   void SetFeatureAllConfiguration() {
@@ -1362,12 +1402,12 @@ public:
     start_orginal_border = false;
     start_concave = true;
     start_spike = true;
-    start_features=false;
 
     end_original_border = true;
     end_patch_border = true;
     end_concave = true;
     end_spike = true;
+    end_features = false;
   }
 
   void SetBaseContinuumConfiguration() {
@@ -1375,12 +1415,12 @@ public:
     start_orginal_border = true;
     start_concave = false;
     start_spike = false;
-    start_features=true;
 
     end_original_border = true;
     end_patch_border = false;
     end_concave = false;
     end_spike = false;
+    end_features = false;
   }
 
   void SetBaseSplitConfiguration() {
@@ -1388,10 +1428,23 @@ public:
     start_orginal_border = true;
     start_concave = false;
     start_spike = false;
-    start_features=true;
 
     end_original_border = true;
     end_patch_border = true;
+    end_features = false;
+    end_concave = false;
+    end_spike = false;
+  }
+
+  void SetBaseFeatureConfiguration() {
+    start_internal = true;
+    start_orginal_border = true;
+    start_concave = false;
+    start_spike = false;
+
+    end_original_border = true;
+    end_patch_border = false;
+    end_features = true;
     end_concave = false;
     end_spike = false;
   }
@@ -1818,6 +1871,8 @@ public:
     // PriorityType PType;
 
     // assert (PathSampl.PType==CrossPathSampling<ScalarType>::PrioDist);
+
+    // FIRST ITERATION STOP ON BORDER OR LOOPS
     if (first_ite) {
       SetBaseContinuumConfiguration();
       assert(!IsSolvingFeatures());
@@ -1832,6 +1887,19 @@ public:
       first_ite = false;
     }
 
+    // // SECOND ITERATION STOP ON BORDER FEATURES OR LOOPS
+    if (FixedPaths.size() > 0) {
+      SetBaseFeatureConfiguration();
+      PathSampl.PType = CrossPathSampling<ScalarType>::PrioDist;
+      InitSampling(add_only_where_needed);
+      if (add_only_where_needed)
+        InitMustPassEdges();
+
+      RetraceCandidates();
+      has_added |= AddAllPaths();
+    }
+
+    // THIRD ITERATION STOP ON BORDER, PATCH BORDERS OR LOOPS
     SetBaseSplitConfiguration();
     assert(!IsSolvingFeatures());
     PathSampl.PType = CrossPathSampling<ScalarType>::PrioDist;

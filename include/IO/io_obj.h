@@ -182,6 +182,8 @@ bool WriteOBJ(std::string meshFile,
     std::ofstream fout(meshFile.c_str());
     if(!fout) return false;
 
+    fout<<std::setprecision(17);
+
     for (size_t i=0;i<VertPos.size();i++)
     {
         assert(VertPos[i].size()==3);
@@ -216,7 +218,9 @@ bool WriteOBJ(std::string meshFile,
 
     if (!pathTxt.empty())
         fout<<"mtllib "<<MTLFile.c_str()<<"\n";
-    
+
+    fout<<std::setprecision(17);
+
     for (size_t i=0;i<VertPos.size();i++)
     {
         assert(VertPos[i].size()==3);
@@ -234,7 +238,11 @@ bool WriteOBJ(std::string meshFile,
 
     for (size_t i=0;i<Connectivity.size();i++)
     {
-        fout<<"f";
+        std::string KeyElem("f");
+        if (Connectivity[i].size()==2)
+            KeyElem=std::string("l");
+
+        fout<<KeyElem.c_str();
         for (size_t j=0;j<Connectivity[i].size();j++)
             fout<<" "<<Connectivity[i][j]+1<<"/"<<Connectivity[i][j]+1;
         fout<<"\n";

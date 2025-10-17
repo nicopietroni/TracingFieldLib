@@ -15,6 +15,7 @@
 #define WeightFIX 100000
 
 namespace Geo {
+
 template <class ScalarType> class IntegerLinearConstraintLeastSQSolver {
   LinearConstraintLeastSQSolver<ScalarType> LQSolver;
   std::vector<bool> FixedVar;
@@ -29,9 +30,9 @@ public:
   FixOrderType FOrdType;
 
 private:
-
   std::vector<int> MinValue, MaxValue;
   std::vector<int> SoftMinValue, SoftMaxValue, OptValues;
+  std::vector<ScalarType> RoundPriority;
   // bool PrioritizeMinVal;
   int InitialSize;
 
@@ -115,10 +116,32 @@ private:
     // return (fabs(Solution[IndexVar] - RoundedValue(Solution[IndexVar])));
   }
 
+  struct RPriority {
+    ScalarType VarPrio;
+    ScalarType Error;
+    int IndexVar;
+
+    RPriority(const ScalarType _VarPrio, const ScalarType _Error,
+              const int _IndexVar) {
+      VarPrio = _VarPrio;
+      Error = _Error;
+      IndexVar = _IndexVar;
+    }
+
+    bool operator<(const RPriority &other) const {
+      if (VarPrio != other.VarPrio)
+        return VarPrio < other.VarPrio;
+      if (Error != other.Error)
+        return Error < other.Error;
+      return IndexVar < other.IndexVar;
+    }
+  };
+
   void SortByRound(const std::vector<ScalarType> &Solution,
                    std::vector<std::pair<int, int>> &RoundRank) {
     RoundRank.clear();
-    std::vector<std::pair<ScalarType, int>> RoundPrio;
+    // std::vector<std::pair<ScalarType, int>> RoundPrio;
+    std::vector<RPriority> RoundPrio;
 
     std::vector<ScalarType> Residual;
     if (FOrdType == ST_LowError) {
@@ -146,14 +169,18 @@ private:
         assert(i < StQRorder.size());
         Diff = StQRorder[i];
       }
-      RoundPrio.push_back(std::pair<ScalarType, int>(Diff, i));
+      // RoundPrio.push_back(std::pair<ScalarType, int>(Diff, i));
+      if (RoundPriority.size() != Solution.size())
+        RoundPrio.push_back(RPriority(0, Diff, i));
+      else
+        RoundPrio.push_back(RPriority(RoundPriority[i], Diff, i));
       // if (Solution[i]<MinValue)
       // std::cout<<"dede"<<std::endl;
     }
     std::sort(RoundPrio.begin(), RoundPrio.end());
     // std::cout<<"Diff:"<<RoundPrio[0].first<<std::endl;
     for (size_t i = 0; i < RoundPrio.size(); i++) {
-      int VarIdx = RoundPrio[i].second;
+      int VarIdx = RoundPrio[i].IndexVar; // RoundPrio[i].second;
       int IntValue = floor(Solution[VarIdx] + 0.5);
       RoundRank.push_back(std::pair<int, int>(VarIdx, IntValue));
     }
@@ -224,14 +251,13 @@ private:
 
   bool UseSoft;
 
-  void PrintUsedMethod()
-  {
+  void PrintUsedMethod() {
     if (FOrdType == ST_ClosestInt)
-      std::cout<<"Rounding CLOSEST Int"<<std::endl;
+      std::cout << "Rounding CLOSEST Int" << std::endl;
     if (FOrdType == ST_LowError)
-      std::cout<<"Rounding LOWEST Err"<<std::endl;
+      std::cout << "Rounding LOWEST Err" << std::endl;
     if (FOrdType == ST_StQRPivoting)
-      std::cout<<"Rounding SQRPivot"<<std::endl;
+      std::cout << "Rounding SQRPivot" << std::endl;
   }
 
 public:
@@ -240,7 +266,9 @@ public:
             const std::vector<int> &_MaxValue,
             const std::vector<int> &_SoftMinValue = std::vector<int>(),
             const std::vector<int> &_SoftMaxValue = std::vector<int>(),
-            const std::vector<int> &_OptValues = std::vector<int>()) {
+            const std::vector<int> &_OptValues = std::vector<int>(),
+            const std::vector<ScalarType> _RoundPriority =
+                std::vector<ScalarType>()) {
     BasicLinConstr = _BasicLinConstr;
     InitialSize = BasicLinConstr.size();
 
@@ -249,6 +277,7 @@ public:
     SoftMinValue = _SoftMinValue;
     SoftMaxValue = _SoftMaxValue;
     OptValues = _OptValues;
+    RoundPriority = _RoundPriority;
 
     int MaxVar = 0;
     int MaxComp = 0;
@@ -274,7 +303,6 @@ public:
 
   bool SolveIterationIterativeFix(std::vector<ScalarType> &Solution) {
 
-    
     std::vector<LinearConstraint<ScalarType>> AllLinConstr = BasicLinConstr;
     AllLinConstr.insert(AllLinConstr.end(), HardLinConstr.begin(),
                         HardLinConstr.end());
@@ -340,6 +368,8 @@ public:
         // fix the one on top
         int IndexVar = RoundRank[0].first;
         int ValueVar = RoundRank[0].second;
+        // std::cout<<"Rounding "<<IndexVar<<std::endl;
+        // std::cout<<"Prio "<<RoundPriority[IndexVar]<<std::endl;
         FixedVar[IndexVar] = true;
         FixedInt[IndexVar] = ValueVar;
       }

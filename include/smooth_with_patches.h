@@ -1,678 +1,1109 @@
-#ifndef SMOOTH_WITH_PATCHES
-#define SMOOTH_WITH_PATCHES
-
 #include "IO/io_obj.h"
-#include "UV_param.h"
-#include "UV_utils.h"
 #include "connectivity.h"
+#include "geodesic.h"
+#include "laplacian_neighbors.h"
+#include "mesh_functions.h"
+#include "mesh_mapping.h"
 #include "point3.h"
-#include "rectify_features.h"
-#include "reproject_mesh.h"
+#include "polyline3.h"
+#include "pos3.h"
+#include "quad3.h"
 #include "smooth_mesh.h"
-#include "solve/least_squares_lin_constraint_solver.h"
-#include "solve/linear_constraint.h"
-#include "solve/linear_constraints_functions.h"
-#include <Eigen/Sparse>
-#include <algorithm>
+#include "quad_mesh_functions.h"
+#include "quad_mesh_convex_patch.h"
 #include <cassert>
-#include <cotangent.h>
-#include <cstddef>
 #include <iostream>
-#include <limits>
-#include <mesh_functions.h>
-#include <numeric>
+#include <map>
 #include <set>
 #include <utility>
 #include <vector>
+#ifndef SMOOTH_WITH_PATCHES
+#define SMOOTH_WITH_PATCHES
 
 namespace Geo {
 
-template <class ScalarType> class InPatchSmooth {
+// template <class ScalarType> class QuadMeshSeparatrixSmooth {
 
-  static void
-  FindVertPatches(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                  const std::vector<std::vector<int>> &Faces,
-                  const std::vector<int> &FacePatch,
-                  std::vector<std::vector<int>> &VertPatches) {
-    std::vector<std::vector<int>> VF;
-    std::vector<std::vector<int>> VFIndex;
-    getVFAdjacency(Faces, VF, VFIndex);
-    std::vector<bool> IsBorderV;
-    getBorderVert(Faces, IsBorderV);
+//   static void
+//   SmoothPosSeparatrix(const std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
+//                       const std::vector<int> &SeparatrixV,
+//                       const std::set<int> &FixedV,
+//                       std::vector<Geo::Point3<ScalarType>> &NewVertPos,
+//                       int smooth_steps = 3, ScalarType delta = 0.25) {
+//     Polyline3<ScalarType> poly_sep;
+//     for (size_t i = 0; i < SeparatrixV.size(); i++) {
+//       int IndexV = SeparatrixV[i];
+//       poly_sep.PolyPos.push_back(QuadVertPos[IndexV]);
+//     }
 
-    std::set<std::vector<int>> VertPatchesSet;
+//     poly_sep.Smooth(smooth_steps, delta);
+//     NewVertPos = poly_sep.PolyPos;
+//   }
 
-    for (size_t i = 0; i < VF.size(); i++) {
-      std::set<int> CurrVPatches;
-      for (size_t j = 0; j < VF[i].size(); j++) {
-        int IndexF = VF[i][j];
-        assert(IndexF >= 0);
-        assert(IndexF < FacePatch.size());
-        CurrVPatches.insert(FacePatch[IndexF]);
-      }
-      if (CurrVPatches.size() < 2)
-        continue;
-      bool IsVert = (CurrVPatches.size() > 2) ||
-                    ((CurrVPatches.size() == 2) && IsBorderV[i]);
-      if (!IsVert)
-        continue;
-      std::vector<int> CurrP(CurrVPatches.begin(), CurrVPatches.end());
-      std::sort(CurrP.begin(), CurrP.end());
-      VertPatchesSet.insert(CurrP);
-    }
+//   static void
+//   SmoothPosSeparatrixStep(std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
+//                           const std::vector<std::vector<int>> &QuadFaces,
+//                           const std::vector<std::vector<int>> &Separatrices,
+//                           const std::vector<std::pair<int, int>> &Features,
+//                           const std::set<int> &FixedV, int smooth_steps = 3,
+//                           ScalarType delta = 0.25) {
+//     std::vector<Geo::Point3<ScalarType>> AvgPos(
+//         QuadVertPos.size(), Geo::Point3<ScalarType>(0, 0, 0));
+//     std::vector<ScalarType> SumN(QuadVertPos.size(), 0);
 
-    VertPatches = std::vector<std::vector<int>>(VertPatchesSet.begin(),
-                                                VertPatchesSet.end());
-  }
+//     std::vector<std::vector<int>> Neighbors;
+//     GetLaplacianNeighbours(QuadVertPos, QuadFaces, Neighbors, Features);
 
-  // static void
-  // FindVertFromPatches(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-  //                     const std::vector<std::vector<int>> &Faces,
-  //                     const std::vector<int> &FacePatch,
-  //                     std::vector<int> &VertIdx) {
-  //   std::vector<std::vector<int>> VF;
-  //   std::vector<std::vector<int>> VFIndex;
-  //   getVFAdjacency(Faces, VF, VFIndex);
-  //   std::vector<bool> IsBorderV;
-  //   getBorderVert(Faces, IsBorderV);
+//     // add separatrices term
+//     for (size_t i = 0; i < Separatrices.size(); i++) {
+//       std::vector<Geo::Point3<ScalarType>> NewVertPos;
+//       SmoothPosSeparatrix(QuadVertPos, Separatrices[i], FixedV, NewVertPos,
+//                           smooth_steps, 0.25);
 
-  //   for (size_t i = 0; i < VF.size(); i++) {
-  //     std::set<int> CurrVPatches;
-  //     for (size_t j = 0; j < VF[i].size(); j++) {
-  //       int IndexF = VF[i][j];
-  //       assert(IndexF >= 0);
-  //       assert(IndexF < FacePatch.size());
-  //       CurrVPatches.insert(FacePatch[IndexF]);
-  //     }
-  //     if (CurrVPatches.size() < 2)
-  //       continue;
-  //     bool IsVert = (CurrVPatches.size() > 2) ||
-  //                   ((CurrVPatches.size() == 2) && IsBorderV[i]);
-  //     if (!IsVert)
-  //       continue;
+//       bool isLoop = (Separatrices[i][0] == Separatrices[i].back());
+//       int startIdx = 0;
+//       int endIdx = Separatrices[i].size();
+//       if (!isLoop) {
+//         startIdx++;
+//         endIdx--;
+//       }
+//       for (size_t j = startIdx; j < endIdx; j++) {
+//         int IndexV = Separatrices[i][j];
+//         AvgPos[IndexV] += NewVertPos[j];
+//         SumN[IndexV]+=1;
+//       }
+//     }
 
-  //     VertIdx.push_back(i);
-  //   }
-  // }
+//     // add laplacian term if needed
+//     for (size_t i = 0; i < AvgPos.size(); i++) {
+//       // add separatrices term
+//       if (SumN[i] == 0) {
+//         for (size_t j = 0; j < Neighbors[i].size(); j++) {
+//           AvgPos[i] += QuadVertPos[Neighbors[i][j]];
+//           SumN[i]+=1;
+//         }
+//       }
+//     }
 
-  static void SmoothRectify(std::vector<Geo::Point3<ScalarType>> &VertPos,
-                            const std::vector<std::vector<int>> &QuadFaces,
-                            const std::vector<std::pair<int, int>> &Features,
-                            const std::vector<int> &QuadCorners) {
-    // WriteOBJ("test_0.obj",VertPos, QuadFaces);
-    //  bool hasF=(Features.size()>0);
-    //  if (!hasF)return;
-    // get the corners
-    std::vector<int> BorderV;
-    getBorderVert(QuadFaces, BorderV);
+//     // add the anti-shear term along diagonals
+//     std::vector<ScalarType> FaceAR;
+//     AspectRatioWorstAngle(QuadVertPos,QuadFaces,FaceAR);
+//     // for (size_t i=0;i<FaceAR.size();i++)
+//     //   FaceAR[i]=1-FaceAR[i];
 
-    std::vector<std::vector<int>> VF;
-    std::vector<std::vector<int>> VFIndex;
-    getVFAdjacency(QuadFaces, VF, VFIndex);
+//     ScalarType MinWeightSh=0.05;
+//     for (size_t i = 0; i < QuadFaces.size(); i++) 
+//     for (size_t j = 0; j < QuadFaces[i].size(); j++) 
+//     {
+//       int IndexV0=QuadFaces[i][j];
+//       int IndexV1=QuadFaces[i][(j+1)%4];
+//       ScalarType CurrW=MinWeightSh+FaceAR[i];
+//       AvgPos[IndexV0] += QuadVertPos[IndexV1]*CurrW;
+//       SumN[IndexV0]+=CurrW;
+//     }
 
-    std::vector<int> RectifyCorners = QuadCorners;
-    for (size_t i = 0; i < BorderV.size(); i++) {
-      int IndexV = BorderV[i];
-      if (VF[IndexV].size() == 2)
-        continue;
-      RectifyCorners.push_back(IndexV);
-    }
-    RectifyCorners.insert(RectifyCorners.end(), QuadCorners.begin(),
-                          QuadCorners.end());
+//     for (size_t i = 0; i < AvgPos.size(); i++) {
+//       assert(SumN[i] > 0);
+//       if (FixedV.count(i) > 0)
+//         continue;
+//       Geo::Point3<ScalarType> TargetPos = AvgPos[i] / (ScalarType)SumN[i];
+//       QuadVertPos[i] = QuadVertPos[i] * (1 - delta) + TargetPos * delta;
+//     }
+//   }
 
-    std::vector<std::vector<int>> TriFaces;
-    SplitQuadIntoTris<ScalarType>(VertPos, QuadFaces, TriFaces);
+// public:
+//   struct SeparatrixSmoothParam {
+//     std::vector<int> Fixed;
+//     std::vector<std::pair<int, int>> FeatureLines;
+//     ScalarType Damp;
+//     size_t Steps;
+//     bool fixBorder;
+//     std::vector<Geo::Point3<ScalarType>> *ReprojVert;
+//     std::vector<std::vector<int>> *ReprojFaces;
+//     std::vector<std::pair<int, int>> ReprojFeatureLines;
+//     int ReprojStep;
+//     bool post_project;
 
-    // std::vector<std::pair<int,int>> FeaturesB;
-    // getBorderEdges(TriFaces,FeaturesB);
+//     void Clear() {
+//       Fixed.clear();
+//       FeatureLines.clear();
+//       ReprojVert = NULL;
+//       ReprojFaces = NULL;
+//       ReprojFeatureLines.clear();
+//     }
 
-    std::vector<std::pair<int, int>> RectifyF; //=FeaturesB;
-    RectifyF.insert(RectifyF.end(), Features.begin(), Features.end());
+//     SeparatrixSmoothParam() {
+//       Damp = 0.2;
+//       Steps = 5;
+//       fixBorder = false;
+//       ReprojStep = 5;
+//       ReprojVert = NULL;
+//       ReprojFaces = NULL;
+//       post_project = true;
+//     }
+//   };
 
-    for (size_t i = 0; i < RectifyF.size(); i++) {
-      if (RectifyF[i].second > RectifyF[i].first)
-        std::swap(RectifyF[i].first, RectifyF[i].second);
-    }
-    std::sort(RectifyF.begin(), RectifyF.end());
-    RectifyF.erase(std::unique(RectifyF.begin(), RectifyF.end()),
-                   RectifyF.end());
+// private:
+//   static void
+//   ReprojectIfNeeded(const SeparatrixSmoothParam &SParam,
+//                     std::vector<Geo::Point3<ScalarType>> &VertPos,
+//                     const std::vector<std::vector<int>> &Faces,
+//                     Geo::TriangleSpatialIndex<ScalarType> &TriGrid,
+//                     std::vector<Geo::Segment3<ScalarType>> &FeatureSegs,
+//                     Geo::SegmentSpatialIndex<ScalarType> &SegGrid) {
 
-    std::vector<Geo::Point3<ScalarType>> OldVertPos = VertPos;
+//     bool do_reproject =
+//         ((SParam.ReprojStep > 0) && (SParam.ReprojVert != NULL) &&
+//          (SParam.ReprojFaces != NULL));
 
-    // RectifyFeatures<ScalarType>(VertPos,TriFaces,RectifyF,
-    //                 RectifyCorners);
+//     bool post_project = (do_reproject && SParam.post_project);
+    
+//     if (post_project)
+//       Geo::AttractProject<ScalarType>(*SParam.ReprojVert, VertPos, Faces);
 
-    // then smooth
-    Geo::SmoothParam<ScalarType> SParamQuadSmooth;
+//     if (do_reproject)
+//       Geo::ProjectOn<ScalarType>(VertPos, Faces, SParam.FeatureLines,
+//                                  *SParam.ReprojVert, *SParam.ReprojFaces,
+//                                  TriGrid, FeatureSegs, SegGrid);
+//   }
 
-    // SParamQuadSmooth.ReprojVert = &VertPos;
-    // SParamQuadSmooth.ReprojFaces = &TriFaces;
-    SParamQuadSmooth.Damp = 0.5;
-    SParamQuadSmooth.post_project = false;
-    SParamQuadSmooth.NumIte = 1;
-    SParamQuadSmooth.SType = Geo::SMLaplacian;
-    SParamQuadSmooth.Features = RectifyF;
+//   static void
+//   InitGridIfNeeded(const SeparatrixSmoothParam &SParam,
+//                    Geo::TriangleSpatialIndex<ScalarType> &TriGrid,
+//                    std::vector<Geo::Segment3<ScalarType>> &FeatureSegs,
+//                    Geo::SegmentSpatialIndex<ScalarType> &SegGrid) {
 
-    Geo::getBorderVert(QuadFaces, SParamQuadSmooth.FixedVert);
-    SParamQuadSmooth.FixedVert.insert(SParamQuadSmooth.FixedVert.end(),
-                                      QuadCorners.begin(), QuadCorners.end());
+//     bool do_reproject =
+//         ((SParam.ReprojStep > 0) && (SParam.ReprojVert != NULL) &&
+//          (SParam.ReprojFaces != NULL));
 
-    std::vector<Geo::Point3<ScalarType>> SmoothVertPos = VertPos;
-    Geo::SmoothLaplacian<ScalarType>(SmoothVertPos, QuadFaces,
-                                     SParamQuadSmooth);
+//     bool post_project = (do_reproject && SParam.post_project);
 
-    // project back to the original mesh
-    std::vector<int> IndexF;
-    std::vector<Geo::Point3<ScalarType>> BaryCoord;
-    ReprojectBasis(SmoothVertPos, VertPos, TriFaces, IndexF, BaryCoord);
+//     if (!do_reproject)
+//       return;
 
-    // //then deform it back
-    // WriteOBJ("test_1.obj",SmoothVertPos,QuadFaces);
+//     Geo::InitProjStructures<ScalarType>(*SParam.ReprojVert, *SParam.ReprojFaces,
+//                                         SParam.ReprojFeatureLines, TriGrid,
+//                                         FeatureSegs, SegGrid);
+//   }
 
-    for (size_t i = 0; i < SmoothVertPos.size(); i++) {
-      int currF = IndexF[i];
-      Geo::Point3<ScalarType> CurrB = BaryCoord[i];
-      int IndexV0 = TriFaces[currF][0];
-      int IndexV1 = TriFaces[currF][1];
-      int IndexV2 = TriFaces[currF][2];
+// public:
+//   static void Smooth(std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
+//                      const std::vector<std::vector<int>> &QuadFaces,
+//                      const SeparatrixSmoothParam &SParam) {
+//     std::vector<std::vector<int>> Separatrices;
 
-      Geo::Point3<ScalarType> OldP0 = OldVertPos[IndexV0];
-      Geo::Point3<ScalarType> OldP1 = OldVertPos[IndexV1];
-      Geo::Point3<ScalarType> OldP2 = OldVertPos[IndexV2];
+//     Geo::TriangleSpatialIndex<ScalarType> TriGrid;
+//     std::vector<Geo::Segment3<ScalarType>> FeatureSegs;
+//     Geo::SegmentSpatialIndex<ScalarType> SegGrid;
+//     InitGridIfNeeded(SParam, TriGrid, FeatureSegs, SegGrid);
 
-      SmoothVertPos[i] = OldP0 * CurrB.X + OldP1 * CurrB.Y + OldP2 * CurrB.Z;
-    }
-    VertPos = SmoothVertPos;
-    // //then restore border and corners
-    // WriteOBJ("test_2.obj",SmoothVertPos, QuadFaces);
+//     QuadPatchFunctions<ScalarType>::FindSeparatrices(
+//         QuadVertPos, QuadFaces, SParam.FeatureLines, SParam.Fixed,
+//         Separatrices);
 
-    // //then remap back
+//     std::set<int> FixedSet(SParam.Fixed.begin(), SParam.Fixed.end());
 
-    // exit(0);
-  }
+//     if (SParam.fixBorder) {
+//       std::vector<int> BorderV;
+//       getBorderVert(QuadFaces, BorderV);
+//       FixedSet.insert(BorderV.begin(), BorderV.end());
+//     }
 
-  // static void
-  // SmoothQuadPatches(std::vector<Geo::Point3<ScalarType>> &VertPos,
-  //                   const std::vector<std::vector<int>> &QuadFaces,
-  //                   const std::vector<std::pair<int,int>> &QuadFeatures,
-  //                   const std::vector<int> &QuadCorners,
-  //                   const std::vector<std::vector<int>> &QuadPatchFaces,
-  //                   const std::vector<int> &To_SmoothPatches,
-  //                   const int smooth_steps = 1) {
+//     for (size_t s = 0; s < SParam.Steps; s++) {
+//       SmoothPosSeparatrixStep(QuadVertPos, QuadFaces, Separatrices,
+//                               SParam.FeatureLines, FixedSet, 5, SParam.Damp);
 
-  //   if (To_SmoothPatches.size() == 0)
-  //     return;
+//       if ((s % SParam.ReprojStep) == 0)
+//         ReprojectIfNeeded(SParam, QuadVertPos, QuadFaces, TriGrid, FeatureSegs,
+//                           SegGrid);
+//     }
+//     ReprojectIfNeeded(SParam, QuadVertPos, QuadFaces, TriGrid, FeatureSegs,
+//                       SegGrid);
+//   }
+// };
 
-  //   std::vector<int> CurrPatchFacesIdx;
+// template <class ScalarType> class ConvexPatchFinder {
 
-  //   for (size_t i = 0; i < To_SmoothPatches.size(); i++) {
-  //     int IndexP = To_SmoothPatches[i];
-  //     assert(IndexP < QuadPatchFaces.size());
-  //     CurrPatchFacesIdx.insert(CurrPatchFacesIdx.end(),
-  //                              QuadPatchFaces[IndexP].begin(),
-  //                              QuadPatchFaces[IndexP].end());
-  //   }
+//   const std::vector<Geo::Point3<ScalarType>> &QuadVertPos;
+//   const std::vector<std::vector<int>> &QuadFaces;
+//   // const std::vector<std::pair<int, int>> &QuadFeatures;
 
-  //   // get the mesh for that vertex
-  //   std::vector<Geo::Point3<ScalarType>> SubMeshVert;
-  //   std::vector<std::vector<int>> SubMeshesFaces;
-  //   std::vector<int> OriginalVert,OriginalElem;
+//   std::vector<std::vector<int>> VF, VFIndex;
+//   std::vector<std::vector<int>> FF, FFEdge;
+//   std::vector<bool> IsB;
+//   // std::set<std::pair<int, int>> QuadFeaturesSet;
 
-  //   CopySubMesh(VertPos, QuadFaces,
-  //             CurrPatchFacesIdx,
-  //             SubMeshVert,
-  //             SubMeshesFaces,
-  //             OriginalVert,OriginalElem);
+//   // using clock_t = std::chrono::steady_clock;
+//   // using ns = std::chrono::nanoseconds;
 
-  //   //map the features to the submeshes
-  //   std::map<int,int> VertMap;
-  //   for (size_t i=0;i<OriginalVert.size();i++)
-  //     VertMap[OriginalVert[i]]=i;
+//   int ExpandingSideScore(const std::vector<Geo::Point3<ScalarType>> &PatchPos,
+//                          const std::vector<std::vector<int>> &PatchFaces,
+//                          const std::vector<std::vector<Pos3>> &Side,
+//                          const int CentralV,
+//                          std::vector<std::pair<ScalarType, int>> &SideDist) {
 
-  //   std::vector<std::pair<int,int>> SubMeshFeatures;
-  //   std::vector<int> SubMeshCorners;
+//     std::vector<std::vector<int>> VVAdj;
+//     Geo::FindVertexStar(PatchFaces, PatchPos.size(), VVAdj);
+//     Geo::TMark TempMark;
+//     typename Geodesic<ScalarType>::GeodesicParam GParam;
+//     GParam.Seeds.push_back(CentralV);
+//     GParam.unitary_dist = true;
+//     Geodesic<ScalarType>::NodeDijkstra(PatchPos, VVAdj, TempMark, GParam);
 
-  //   for (size_t i=0;i<QuadFeatures.size();i++)
-  //   {
-  //     int IndexV0=QuadFeatures[i].first;
-  //     int IndexV1=QuadFeatures[i].second;
+//     SideDist.clear();
+//     for (int i = 0; i < Side.size(); i++) {
+//       ScalarType MinSideD = std::numeric_limits<ScalarType>::max();
+//       for (int j = 0; j < Side[i].size(); j++) {
+//         int IndexV0 = Side[i][j].V;
+//         int IndexV1 = Side[i][j].VFlip(PatchFaces);
+//         assert(IndexV0 >= 0);
+//         assert(IndexV1 >= 0);
+//         assert(IndexV0 < GParam.Dist.size());
+//         assert(IndexV1 < GParam.Dist.size());
+//         MinSideD = std::min(MinSideD, GParam.Dist[IndexV0]);
+//         MinSideD = std::min(MinSideD, GParam.Dist[IndexV1]);
+//       }
+//       assert(MinSideD != std::numeric_limits<ScalarType>::max());
+//       SideDist.push_back(std::pair<ScalarType, int>(MinSideD, i));
+//     }
+//     std::sort(SideDist.begin(), SideDist.end());
+//   }
 
-  //     if (VertMap.count(IndexV0)==0)continue;
-  //     if (VertMap.count(IndexV1)==0)continue;
+//   void Expand(std::vector<int> &CurrFaces, const std::vector<Pos3> &ExpandPos) {
 
-  //     IndexV0=VertMap[IndexV0];
-  //     IndexV1=VertMap[IndexV1];
-  //     std::pair<int,int> KeyF(std::min(IndexV0,IndexV1),
-  //                             std::max(IndexV0,IndexV1));
-  //     SubMeshFeatures.push_back(KeyF);
-  //   }
+//     int ExpF0 = ExpandPos[0].FFlip(FF, FFEdge);
+//     int ExpF1 = ExpandPos.back().FFlip(FF, FFEdge);
+//     CurrFaces.push_back(ExpF0);
+//     CurrFaces.push_back(ExpF1);
 
-  //   for (size_t i=0;i<QuadCorners.size();i++)
-  //   {
-  //     int IndexV=QuadCorners[i];
-  //     if (VertMap.count(IndexV)==0)continue;
-  //     IndexV=VertMap[IndexV];
-  //     SubMeshCorners.push_back(IndexV);
-  //   }
+//     for (size_t i = 1; i < ExpandPos.size(); i++) {
+//       int IndexV = ExpandPos[i].VFlip(QuadFaces);
+//       CurrFaces.insert(CurrFaces.end(), VF[IndexV].begin(), VF[IndexV].end());
+//     }
+//     std::sort(CurrFaces.begin(), CurrFaces.end());
+//     CurrFaces.erase(std::unique(CurrFaces.begin(), CurrFaces.end()),
+//                     CurrFaces.end());
+//   }
 
-  //   Geo::SmoothParam<ScalarType> SParamQuadSmooth;
+//   bool CanExpand(const std::vector<int> &CurrFaces,
+//                  const std::vector<Pos3> &ExpandPos) {
 
-  //   std::vector<Geo::Point3<ScalarType>> ReprojV=SubMeshVert;
-  //   std::vector<std::vector<int>> ReprojF;
-  //  //if (IsAllQuad(SubMeshesFaces))
-  //   SplitQuadIntoTris<ScalarType>(ReprojV,SubMeshesFaces,ReprojF);
+//     // check boundary edges
+//     for (size_t i = 0; i < ExpandPos.size(); i++) {
+//       if (ExpandPos[i].IsBorder(FF))
+//         return false;
 
-  //   SParamQuadSmooth.ReprojVert = &ReprojV;
-  //   SParamQuadSmooth.ReprojFaces = &ReprojF;
-  //   SParamQuadSmooth.Damp = 0.5;
-  //   SParamQuadSmooth.post_project = false;
-  //   SParamQuadSmooth.NumIte = smooth_steps;
-  //   SParamQuadSmooth.SType = Geo::SMLaplacian;
-  //   SParamQuadSmooth.Features = SubMeshFeatures;
+//       // int IndexV0 = ExpandPos[i].V;
+//       // int IndexV1 = ExpandPos[i].VFlip(QuadFaces);
+//       // assert(IndexV0 >= 0);
+//       // assert(IndexV1 >= 0);
+//       // assert(IndexV0 < QuadVertPos.size());
+//       // assert(IndexV1 < QuadVertPos.size());
+//       // std::pair<int, int> Key(std::min(IndexV0, IndexV1),
+//       //                         std::max(IndexV0, IndexV1));
+//       // if (QuadFeaturesSet.count(Key) > 0)
+//       //   return false;
+//     }
 
-  //   Geo::getBorderVert(SubMeshesFaces,SParamQuadSmooth.FixedVert);
-  //   SParamQuadSmooth.FixedVert.insert(SParamQuadSmooth.FixedVert.end(),
-  //                                     SubMeshCorners.begin(),
-  //                                     SubMeshCorners.end());
-  //   Geo::SmoothLaplacian<ScalarType>(SubMeshVert, SubMeshesFaces,
-  //   SParamQuadSmooth);
+//     // check internal features (only vertex in between)
+//     for (size_t i = 1; i < ExpandPos.size() - 1; i++) {
+//       int IndexV0 = ExpandPos[i].V;
+//       int IndexV1 = ExpandPos[i].VFlip(QuadFaces);
+//       // if (CornersV.count(IndexV0) > 0)
+//       //   return false;
+//       // if (CornersV.count(IndexV1) > 0)
+//       //   return false;
+//       if (IsB[IndexV0])
+//         return false;
+//       if (IsB[IndexV1])
+//         return false;
+//     }
 
-  //   //copy back values
-  //   for (size_t i=0;i<SubMeshVert.size();i++)
-  //   {
-  //     int OrigIndex=OriginalVert[i];
-  //     VertPos[OrigIndex]=SubMeshVert[i];
-  //   }
-  // }
+//     // try to expand
+//     std::vector<int> NextFaces = CurrFaces;
+//     Expand(NextFaces, ExpandPos);
 
-  static void
-  SmoothQuadPatches(std::vector<Geo::Point3<ScalarType>> &VertPos,
-                    const std::vector<std::vector<int>> &QuadFaces,
-                    const std::vector<std::pair<int, int>> &QuadFeatures,
-                    const std::vector<int> &QuadCorners,
-                    const std::vector<std::vector<int>> &QuadPatchFaces,
-                    const std::vector<int> &To_SmoothPatches,
-                    const int smooth_steps = 1) {
+//     // get the mesh
+//     std::vector<int> OriginalFaces, OriginalVert;
+//     std::vector<Geo::Point3<ScalarType>> PatchVertPos;
+//     std::vector<std::vector<int>> PatchFaces;
+//     CopySubMesh(QuadVertPos, QuadFaces, NextFaces, PatchVertPos, PatchFaces,
+//                 OriginalVert, OriginalFaces);
 
-    if (To_SmoothPatches.size() == 0)
+//     std::vector<std::vector<Pos3>> BorderPos;
+//     std::vector<std::vector<int>> PatchNextF, PatchNextE;
+//     getFFAdjacency(PatchFaces, PatchNextF, PatchNextE);
+
+//     getBorderSequnces(PatchFaces, PatchNextF, PatchNextE, BorderPos);
+//     if (BorderPos.size() != 1)
+//       return false;
+
+//     int Genus = PolyMeshGenus(PatchVertPos, PatchFaces);
+//     if (Genus != 0)
+//       return false;
+
+//     std::vector<std::vector<Pos3>> Sides;
+//     FindSides(PatchVertPos, PatchFaces, Sides);
+//     if (Sides.size() < 3)
+//       return false;
+
+//     return true;
+//   }
+
+//   void FindSides(const std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
+//                  const std::vector<std::vector<int>> &QuadFaces,
+//                  std::vector<std::vector<Pos3>> &Sides) {
+//     std::vector<std::vector<int>> NextF, NextE;
+//     getFFAdjacency(QuadFaces, NextF, NextE);
+
+//     std::vector<std::vector<Pos3>> BorderPos;
+//     getBorderSequnces(QuadFaces, NextF, NextE, BorderPos);
+//     // if (BorderPos.size() != 1) {
+//     //   WriteOBJ("testMesh.obj", QuadVertPos, QuadFaces);
+//     //   assert(0);
+//     // }
+//     assert(BorderPos.size() == 1);
+
+//     // then find corners
+//     std::vector<int> CornersIdx;
+//     std::vector<Pos3> Border = BorderPos[0];
+//     QuadPatchFunctions<ScalarType>::FindCorners(Border, CornersIdx);
+//     // assert(CornersIdx.size() >= 2);
+//     // shift all by one
+//     for (size_t i = 0; i < CornersIdx.size(); i++)
+//       CornersIdx[i] = (CornersIdx[i] + 1) % Border.size();
+//     // first rotate to have first corner first
+//     std::set<int> CornerSet(CornersIdx.begin(), CornersIdx.end());
+//     int StartIdx = CornersIdx[0];
+//     Sides.clear();
+//     Sides.resize(1);
+//     Sides.back().push_back(Border[StartIdx]);
+//     for (int i = 1; i < Border.size(); i++) {
+//       int CurrIdx = (StartIdx + i) % Border.size();
+
+//       if (CornerSet.count(CurrIdx) > 0)
+//         Sides.resize(Sides.size() + 1);
+
+//       Sides.back().push_back(Border[CurrIdx]);
+//     }
+//   }
+
+//   int FindCentralVert(const std::vector<int> &SeedFaceIdx) {
+
+//     std::vector<Geo::Point3<ScalarType>> SeedVertPos;
+//     std::vector<std::vector<int>> SeedFaces;
+//     std::vector<int> OriginalFaces, OriginalVert;
+
+//     CopySubMesh(QuadVertPos, QuadFaces, SeedFaceIdx, SeedVertPos, SeedFaces,
+//                 OriginalVert, OriginalFaces);
+
+//     std::vector<int> CornersIdx;
+//     QuadPatchFunctions<ScalarType>::FindCorners(SeedFaces, CornersIdx);
+
+//     typename Geodesic<ScalarType>::GeodesicParam GParam;
+//     GParam.Seeds = CornersIdx;
+//     GParam.unitary_dist = true;
+
+//     std::vector<std::vector<int>> VVAdj;
+//     Geo::FindVertexStar(SeedFaces, SeedVertPos.size(), VVAdj);
+//     Geo::TMark TempMark;
+
+//     Geodesic<ScalarType>::NodeDijkstra(SeedVertPos, VVAdj, TempMark, GParam);
+
+//     ScalarType MaxD = -1;
+//     int IndexSeed = -1;
+//     for (int i = 0; i < SeedVertPos.size(); i++) {
+//       if (GParam.Dist[i] < MaxD)
+//         continue;
+//       IndexSeed = i;
+//       MaxD = GParam.Dist[i];
+//     }
+//     assert(IndexSeed >= 0);
+//     return OriginalVert[IndexSeed];
+//   }
+
+// public:
+//   void FindConvexPatchFrom(const std::vector<int> &SeedF,
+//                            std::vector<int> &FaceIdx,
+//                            const int MaxExpandSteps = -1,
+//                            bool debug_msg = false) {
+
+//     assert(SeedF.size() >= 0);
+
+//     // initialize with faces sharing vertex
+//     std::vector<int> CurrFIdx = SeedF;
+//     int SeedIndexV = FindCentralVert(SeedF);
+//     assert(SeedIndexV >= 0);
+//     assert(SeedIndexV < QuadVertPos.size());
+//     bool has_expanded = false;
+//     int curr_step = 0;
+//     do {
+
+//       if (debug_msg)
+//         std::cout << "Expanding Step " << curr_step << std::endl;
+//       // copy the mesh from current set
+//       std::vector<Geo::Point3<ScalarType>> PatchVertPos;
+//       std::vector<std::vector<int>> PatchFaces;
+//       std::vector<int> OriginalFaces, OriginalVert;
+
+//       CopySubMesh(QuadVertPos, QuadFaces, CurrFIdx, PatchVertPos, PatchFaces,
+//                   OriginalVert, OriginalFaces);
+
+//       if (!QuadPatchFunctions<ScalarType>::HasConcaveAngle(PatchVertPos,
+//                                                            PatchFaces)) {
+//         FaceIdx = CurrFIdx;
+//         // BestPatchOriginalVert = OriginalVert;
+//       }
+
+//       // retrieve the central vertex
+//       int CentralV = -1;
+//       for (size_t i = 0; i < OriginalVert.size(); i++) {
+//         if (OriginalVert[i] == SeedIndexV) {
+//           CentralV = i;
+//           break;
+//         }
+//       }
+//       assert(CentralV != -1);
+
+//       // then update sides
+//       std::vector<std::vector<Pos3>> Sides;
+//       FindSides(PatchVertPos, PatchFaces, Sides);
+
+//       // map sides to original mesh
+//       std::vector<std::vector<Pos3>> OriginalSides = Sides;
+//       for (size_t i = 0; i < OriginalSides.size(); i++)
+//         for (size_t j = 0; j < OriginalSides[i].size(); j++) {
+//           int CurrF = OriginalSides[i][j].F;
+//           int CurrV = OriginalSides[i][j].V;
+//           OriginalSides[i][j].F = OriginalFaces[CurrF];
+//           OriginalSides[i][j].V = OriginalVert[CurrV];
+//         }
+
+//       // get the score of expansion
+//       std::vector<std::pair<ScalarType, int>> SideDist;
+//       ExpandingSideScore(PatchVertPos, PatchFaces, Sides, CentralV, SideDist);
+
+//       // then expand the one that can
+//       has_expanded = false;
+//       for (size_t i = 0; i < SideDist.size(); i++) {
+//         int IndexSide = SideDist[i].second;
+//         int CurrDist = SideDist[i].first;
+//         if (!CanExpand(CurrFIdx, OriginalSides[IndexSide]))
+//           continue;
+
+//         // already expanded to the limit
+//         if ((MaxExpandSteps != -1) && (CurrDist >= MaxExpandSteps))
+//           return;
+
+//         Expand(CurrFIdx, OriginalSides[IndexSide]);
+//         has_expanded = true;
+//         curr_step++;
+//         break;
+//       }
+//     } while (has_expanded);
+//   }
+
+//   void Init() {
+//     Geo::getVFAdjacency(QuadFaces, VF, VFIndex);
+//     Geo::getFFAdjacency(QuadFaces, FF, FFEdge);
+//     Geo::getBorderVert(QuadFaces, IsB);
+
+//     // then initialize the domains
+//     assert(IsAllQuad(QuadFaces));
+//   }
+
+//   ConvexPatchFinder(const std::vector<Geo::Point3<ScalarType>> &_QuadVertPos,
+//                     const std::vector<std::vector<int>> &_QuadFaces)
+//       : QuadVertPos(_QuadVertPos), QuadFaces(_QuadFaces) {}
+// };
+
+#define MIN_KERN 1
+#define MAX_KERN 4
+
+template <class ScalarType> class QuadPatchSmooth {
+
+  std::vector<Geo::Point3<ScalarType>> &QuadVertPos;
+  const std::vector<std::vector<int>> &QuadFaces;
+  std::vector<int> QuadPatch;
+  std::vector<std::vector<int>> PatchQuad;
+  const std::vector<std::pair<int, int>> &QuadFeatures;
+  const std::vector<int> &Constraints;
+
+  std::vector<std::vector<int>> FF, FFEdge;
+  std::vector<std::vector<int>> SmoothDomainFaces;
+
+  // ConvexPatchFinder<ScalarType> CPatch;
+  std::vector<std::vector<int>> VF, VFIndex;
+  //    std::vector<std::vector<int>> FF, FFEdge;
+  std::vector<bool> IsB;
+
+  using clock_t = std::chrono::steady_clock;
+  using ns = std::chrono::nanoseconds;
+
+  void getBiggestComponent(std::vector<int> &FacesIdx) {
+
+    std::vector<Geo::Point3<ScalarType>> PatchVertPos;
+    std::vector<std::vector<int>> PatchFaces;
+    std::vector<int> OriginalFaces, OriginalVert;
+
+    CopySubMesh(QuadVertPos, QuadFaces, FacesIdx, PatchVertPos, PatchFaces,
+                OriginalVert, OriginalFaces);
+
+    std::vector<std::vector<int>> ComponentsF;
+    FFConnectedComponenent(PatchFaces, ComponentsF);
+    if (ComponentsF.size() == 1)
       return;
 
-    std::vector<int> CurrPatchFacesIdx;
+    // get biggest component
+    int bestC = 0;
+    int bestSize = ComponentsF[0].size();
+    for (size_t i = 1; i < ComponentsF.size(); i++) {
+      if (ComponentsF[i].size() <= bestSize)
+        continue;
+      bestSize = ComponentsF[i].size();
+      bestC = i;
+    }
+    FacesIdx = ComponentsF[bestC];
 
-    for (size_t i = 0; i < To_SmoothPatches.size(); i++) {
-      int IndexP = To_SmoothPatches[i];
-      assert(IndexP < QuadPatchFaces.size());
-      CurrPatchFacesIdx.insert(CurrPatchFacesIdx.end(),
-                               QuadPatchFaces[IndexP].begin(),
-                               QuadPatchFaces[IndexP].end());
+    // then map back to original one
+    for (size_t i = 0; i < FacesIdx.size(); i++)
+      FacesIdx[i] = OriginalFaces[FacesIdx[i]];
+  }
+
+  void GetDomainMesh(const int &IndexP,
+                     std::vector<Geo::Point3<ScalarType>> &PatchVertPos,
+                     std::vector<std::vector<int>> &PatchFaces,
+                     std::vector<int> &OriginalFaces,
+                     std::vector<int> &OriginalVert) const {
+    assert(IndexP >= 0);
+    assert(IndexP < SmoothDomainFaces.size());
+    CopySubMesh(QuadVertPos, QuadFaces, SmoothDomainFaces[IndexP], PatchVertPos,
+                PatchFaces, OriginalVert, OriginalFaces);
+  }
+
+  enum PatchType { PTOk, PTConcave, PTNonDiskLike, PTNonCorners };
+
+  PatchType
+  GetPatchType(const std::vector<Geo::Point3<ScalarType>> &PatchVertPos,
+               const std::vector<std::vector<int>> &PatchFaces) {
+    if (QuadPatchFunctions<ScalarType>::HasConcaveAngle(PatchVertPos,
+                                                        PatchFaces))
+      return PTConcave;
+
+    if (!QuadPatchFunctions<ScalarType>::IsDiskPatch(PatchVertPos, PatchFaces))
+      return PTNonDiskLike;
+
+    if (QuadPatchFunctions<ScalarType>::NumCorners(PatchFaces) < 3)
+      return PTNonCorners;
+
+    return PTOk;
+  }
+
+  void CheckPatches() {
+    int ConcaveP = 0;
+    int NonDiskP = 0;
+    int NonRightCorn = 0;
+    for (size_t i = 0; i < SmoothDomainFaces.size(); i++) {
+      if (SmoothDomainFaces[i].size() == 0)
+        continue;
+
+      std::vector<Geo::Point3<ScalarType>> PatchVertPos;
+      std::vector<std::vector<int>> PatchFaces;
+      std::vector<int> OriginalFaces, OriginalVert;
+
+      GetDomainMesh(i, PatchVertPos, PatchFaces, OriginalFaces, OriginalVert);
+
+      PatchType PT = GetPatchType(PatchVertPos, PatchFaces);
+      switch (PT) {
+      case PTConcave:
+        ConcaveP++;
+        break;
+      case PTNonDiskLike:
+        NonDiskP++;
+        break;
+      case PTNonCorners:
+        NonRightCorn++;
+        break;
+      default:
+        assert(PT == PTOk);
+      }
+    }
+    std::cout << "Total Patches Num:" << SmoothDomainFaces.size() << std::endl;
+    std::cout << "Patch With Concave Vert:" << ConcaveP << std::endl;
+    std::cout << "Patch Non Disk Like:" << NonDiskP << std::endl;
+    std::cout << "Patch Right Num Corners:" << NonRightCorn << std::endl;
+  }
+
+  void AddBasicPatches() {
+    for (size_t i = 0; i < PatchQuad.size(); i++) {
+      std::vector<Geo::Point3<ScalarType>> PatchVertPos;
+      std::vector<std::vector<int>> PatchFaces;
+      std::vector<int> OriginalFaces, OriginalVert;
+
+      CopySubMesh(QuadVertPos, QuadFaces, PatchQuad[i], PatchVertPos,
+                  PatchFaces, OriginalVert, OriginalFaces);
+
+      PatchType PT = GetPatchType(PatchVertPos, PatchFaces);
+
+      if (PT != PTOk)
+        continue;
+
+      SmoothDomainFaces.push_back(PatchQuad[i]);
+    }
+  }
+
+  // void AddVertexPatches()
+  // {
+  //   for (size_t i=0;i<)
+  // }
+
+  void SolvePatchIfNeeded(std::vector<int> &FaceIdx,
+                          const std::vector<int> &StartingF) {
+    std::vector<Geo::Point3<ScalarType>> PatchVertPos;
+    std::vector<std::vector<int>> PatchFaces;
+    std::vector<int> OriginalFaces, OriginalVert;
+
+    CopySubMesh(QuadVertPos, QuadFaces, FaceIdx, PatchVertPos, PatchFaces,
+                OriginalVert, OriginalFaces);
+    // remap starting vert
+    std::vector<int> StartingFPatch;
+    for (size_t i = 0; i < StartingF.size(); i++) {
+      int TargetF = StartingF[i];
+      int NewIdxTargetF = -1;
+      for (size_t j = 0; j < OriginalFaces.size(); j++) {
+        if (OriginalFaces[j] != TargetF)
+          continue;
+        NewIdxTargetF = j;
+        break;
+      }
+      assert(NewIdxTargetF != -1);
+      StartingFPatch.push_back(NewIdxTargetF);
     }
 
-    // get the mesh for that vertex
-    std::vector<Geo::Point3<ScalarType>> SubMeshVert;
-    std::vector<std::vector<int>> SubMeshesFaces;
-    std::vector<int> OriginalVert, OriginalElem;
+    PatchType PT = GetPatchType(PatchVertPos, PatchFaces);
+    if (PT == PTOk)
+      return;
 
-    CopySubMesh(VertPos, QuadFaces, CurrPatchFacesIdx, SubMeshVert,
-                SubMeshesFaces, OriginalVert, OriginalElem);
+    ConvexPatchFinder<ScalarType> CPatch(PatchVertPos, PatchFaces);
+    CPatch.Init();
+    std::vector<int> ConvexFaceIdx;
+    CPatch.FindConvexPatchFrom(StartingFPatch, ConvexFaceIdx);
 
-    // map the features to the submeshes
-    std::map<int, int> VertMap;
-    for (size_t i = 0; i < OriginalVert.size(); i++)
-      VertMap[OriginalVert[i]] = i;
+    /// then maps back
+    FaceIdx.clear();
+    for (size_t i = 0; i < ConvexFaceIdx.size(); i++)
+      FaceIdx.push_back(OriginalFaces[ConvexFaceIdx[i]]);
+  }
 
-    std::vector<std::pair<int, int>> SubMeshFeatures;
-    std::vector<int> SubMeshCorners;
+  void AddEdgePatches() {
+    // first find patch patch adjacency
+    std::vector<std::pair<int, int>> PatchAdj;
+    std::map<std::pair<int, int>, std::vector<int>> BorderF;
 
-    for (size_t i = 0; i < QuadFeatures.size(); i++) {
-      int IndexV0 = QuadFeatures[i].first;
-      int IndexV1 = QuadFeatures[i].second;
+    for (size_t i = 0; i < FF.size(); i++)
+      for (size_t j = 0; j < FF[i].size(); j++) {
+        int IndexF0 = i;
+        int IndexF1 = FF[i][j];
+        if (IndexF1 == -1)
+          continue;
 
-      if (VertMap.count(IndexV0) == 0)
-        continue;
-      if (VertMap.count(IndexV1) == 0)
-        continue;
+        int IndexP0 = QuadPatch[IndexF0];
+        int IndexP1 = QuadPatch[IndexF1];
+        if (IndexP0 == IndexP1)
+          continue;
 
-      IndexV0 = VertMap[IndexV0];
-      IndexV1 = VertMap[IndexV1];
-      std::pair<int, int> KeyF(std::min(IndexV0, IndexV1),
-                               std::max(IndexV0, IndexV1));
-      SubMeshFeatures.push_back(KeyF);
+        std::pair<int, int> KeyAdj(std::min(IndexP0, IndexP1),
+                                   std::max(IndexP0, IndexP1));
+        PatchAdj.push_back(KeyAdj);
+
+        // int IndexV0 = QuadFaces[i][j];
+        // int IndexV1 = QuadFaces[i][(j + 1) % QuadFaces[i].size()];
+        BorderF[KeyAdj].push_back(IndexF0);
+        BorderF[KeyAdj].push_back(IndexF1);
+      }
+    // unique all adjacence
+    std::sort(PatchAdj.begin(), PatchAdj.end());
+    PatchAdj.erase(std::unique(PatchAdj.begin(), PatchAdj.end()),
+                   PatchAdj.end());
+
+    // unique all in between vertices
+    std::map<std::pair<int, int>, std::vector<int>>::iterator IteMap;
+    for (IteMap = BorderF.begin(); IteMap != BorderF.end(); IteMap++) {
+      std::vector<int> FaceIdx = (*IteMap).second;
+      std::sort(FaceIdx.begin(), FaceIdx.end());
+      FaceIdx.erase(std::unique(FaceIdx.begin(), FaceIdx.end()), FaceIdx.end());
+      (*IteMap).second = FaceIdx;
     }
 
-    for (size_t i = 0; i < QuadCorners.size(); i++) {
-      int IndexV = QuadCorners[i];
-      if (VertMap.count(IndexV) == 0)
-        continue;
-      IndexV = VertMap[IndexV];
-      SubMeshCorners.push_back(IndexV);
+    // add all adjacent patches
+    int Size0 = SmoothDomainFaces.size();
+    for (size_t i = 0; i < PatchAdj.size(); i++) {
+      int IndexP0 = PatchAdj[i].first;
+      int IndexP1 = PatchAdj[i].second;
+      assert(IndexP0 >= 0);
+      assert(IndexP1 >= 0);
+      assert(IndexP0 < PatchQuad.size());
+      assert(IndexP1 < PatchQuad.size());
+      assert(IndexP0 != IndexP1);
+      assert(IndexP1 >= 0);
+
+      // add the two patches
+      std::vector<int> PatchQ0 = PatchQuad[IndexP0];
+      std::vector<int> PatchQ1 = PatchQuad[IndexP1];
+
+      std::vector<int> EdgePatchQ = PatchQ0;
+      EdgePatchQ.insert(EdgePatchQ.end(), PatchQ1.begin(), PatchQ1.end());
+
+      std::pair<int, int> KeyAdj(std::min(IndexP0, IndexP1),
+                                 std::max(IndexP0, IndexP1));
+      assert(BorderF.count(KeyAdj) > 0);
+      // border faces should be a single connected component
+      std::vector<int> Single_Comp_BorderF = BorderF[KeyAdj];
+      getBiggestComponent(Single_Comp_BorderF);
+      SolvePatchIfNeeded(EdgePatchQ, Single_Comp_BorderF);
+      SmoothDomainFaces.push_back(EdgePatchQ);
+    }
+    int Size1 = SmoothDomainFaces.size();
+    std::cout << "ADDED " << Size1 - Size0 << " edge domain patches"
+              << std::endl;
+  }
+
+  void AddVertPatches() {
+
+    // first find vert patch adjacency
+    std::vector<std::vector<int>> VFPatch;
+    std::vector<std::vector<int>> SeedF;
+
+    for (size_t i = 0; i < VF.size(); i++) {
+      std::set<int> VertPatchSet;
+      for (size_t j = 0; j < VF[i].size(); j++) {
+        int IndexF = VF[i][j];
+        VertPatchSet.insert(QuadPatch[IndexF]);
+      }
+      bool IsPatchVert = false;
+      if (VertPatchSet.size() > 2)
+        IsPatchVert = true;
+      if ((VertPatchSet.size() == 2) && (IsB[i]))
+        IsPatchVert = true;
+      if (IsPatchVert) {
+        std::vector<int> VertPVect(VertPatchSet.begin(), VertPatchSet.end());
+        VFPatch.push_back(VertPVect);
+        SeedF.push_back(VF[i]);
+      }
     }
 
-    SmoothRectify(SubMeshVert, SubMeshesFaces, SubMeshFeatures, SubMeshCorners);
+    int Size0 = SmoothDomainFaces.size();
 
-    //   Geo::SmoothParam<ScalarType> SParamQuadSmooth;
+    // // add all adjacent patches
+    for (size_t i = 0; i < VFPatch.size(); i++) {
+      std::vector<int> FaceDomainIDX;
+      for (size_t j = 0; j < VFPatch[i].size(); j++) {
+        int IndexP = VFPatch[i][j];
+        assert(IndexP >= 0);
+        assert(IndexP < PatchQuad.size());
+        FaceDomainIDX.insert(FaceDomainIDX.end(), PatchQuad[IndexP].begin(),
+                             PatchQuad[IndexP].end());
+      }
+      SolvePatchIfNeeded(FaceDomainIDX, SeedF[i]);
+      SmoothDomainFaces.push_back(FaceDomainIDX);
+    }
+    int Size1 = SmoothDomainFaces.size();
+    std::cout << "ADDED " << Size1 - Size0 << " vertex domain patches"
+              << std::endl;
+  }
 
-    //   std::vector<Geo::Point3<ScalarType>> ReprojV=SubMeshVert;
-    //   std::vector<std::vector<int>> ReprojF;
-    //  //if (IsAllQuad(SubMeshesFaces))
-    //   SplitQuadIntoTris<ScalarType>(ReprojV,SubMeshesFaces,ReprojF);
+  void GetDomainKernel(const int IndexDomain,
+                       std::vector<std::pair<int, int>> &VertKernel) const {
+    std::vector<Geo::Point3<ScalarType>> PatchVertPos;
+    std::vector<std::vector<int>> PatchFaces;
+    std::vector<int> OriginalFaces, OriginalVert;
 
-    //   SParamQuadSmooth.ReprojVert = &ReprojV;
-    //   SParamQuadSmooth.ReprojFaces = &ReprojF;
-    //   SParamQuadSmooth.Damp = 0.5;
-    //   SParamQuadSmooth.post_project = false;
-    //   SParamQuadSmooth.NumIte = smooth_steps;
-    //   SParamQuadSmooth.SType = Geo::SMLaplacian;
-    //   SParamQuadSmooth.Features = SubMeshFeatures;
+    GetDomainMesh(IndexDomain, PatchVertPos, PatchFaces, OriginalFaces,
+                  OriginalVert);
 
-    //   Geo::getBorderVert(SubMeshesFaces,SParamQuadSmooth.FixedVert);
-    //   SParamQuadSmooth.FixedVert.insert(SParamQuadSmooth.FixedVert.end(),
-    //                                     SubMeshCorners.begin(),
-    //                                     SubMeshCorners.end());
-    //   Geo::SmoothLaplacian<ScalarType>(SubMeshVert, SubMeshesFaces,
-    //   SParamQuadSmooth);
+    // compute geodesic from border
+    std::vector<std::vector<int>> VVAdj;
+    Geo::FindVertexStar(PatchFaces, PatchVertPos.size(), VVAdj);
+    Geo::TMark TempMark;
+    typename Geodesic<ScalarType>::GeodesicParam GParam;
+    getBorderVert(PatchFaces, GParam.Seeds);
+    GParam.unitary_dist = true;
+    Geodesic<ScalarType>::NodeDijkstra(PatchVertPos, VVAdj, TempMark, GParam);
 
-    // copy back values
-    for (size_t i = 0; i < SubMeshVert.size(); i++) {
-      int OrigIndex = OriginalVert[i];
-      VertPos[OrigIndex] = SubMeshVert[i];
+    // return result
+    VertKernel.clear();
+    for (size_t i = 0; i < PatchVertPos.size(); i++) {
+      int IndexOrV = OriginalVert[i];
+      int Dist = (int)GParam.Dist[i];
+      VertKernel.push_back(std::pair<int, int>(IndexOrV, Dist));
+    }
+  }
+
+  void GetBestVertexKernel(std::vector<int> &VertKernel) const {
+    VertKernel = std::vector<int>(QuadVertPos.size(), 0);
+    for (size_t i = 0; i < SmoothDomainFaces.size(); i++) {
+      std::vector<std::pair<int, int>> CurrKernel;
+      GetDomainKernel(i, CurrKernel);
+      for (size_t j = 0; j < CurrKernel.size(); j++) {
+        int IndexV = CurrKernel[j].first;
+        int KernV = CurrKernel[j].second;
+        VertKernel[IndexV] = std::max(VertKernel[IndexV], KernV);
+      }
+    }
+  }
+
+  void LowKernelVert(std::vector<int> &LowLern, int MinKern = MIN_KERN) const {
+    std::vector<int> VertKernel;
+    GetBestVertexKernel(VertKernel);
+    LowLern.clear();
+    for (size_t i = 0; i < VertKernel.size(); i++) {
+      if (VertKernel[i] < MinKern)
+        LowLern.push_back(i);
+    }
+  }
+
+  void AddKernelVert(std::vector<int> &VertIdx, int MaxKern = MAX_KERN) {
+    ConvexPatchFinder<ScalarType> CPatch(QuadVertPos, QuadFaces);
+    CPatch.Init();
+
+    for (size_t i = 0; i < VertIdx.size(); i++) {
+      int CurrV = VertIdx[i];
+      std::vector<int> ConvexFaceIdx;
+      CPatch.FindConvexPatchFrom(VF[CurrV], ConvexFaceIdx, MaxKern, false);
+      SmoothDomainFaces.push_back(ConvexFaceIdx);
+    }
+  }
+
+  void FindSmoothDomains_UsingQuadPatches() {
+
+    auto t0 = clock_t::now();
+
+    SmoothDomainFaces.clear();
+    std::cout << "*** ADDING BASIC PATCHES ***" << std::endl;
+    AddBasicPatches();
+    std::cout << "*** ADDING EDGE PATCHES ***" << std::endl;
+    AddEdgePatches();
+    std::cout << "*** ADDING VERT PATCHES ***" << std::endl;
+    AddVertPatches();
+    std::cout << "*** Checking Remaining Vert ***" << std::endl;
+    std::vector<int> LowLernV;
+    LowKernelVert(LowLernV);
+    std::cout << "There are " << LowLernV.size() << " Low Kernel V"
+              << std::endl;
+    if (LowLernV.size() > 0) {
+      AddKernelVert(LowLernV);
+      LowKernelVert(LowLernV);
+      std::cout << "There are " << LowLernV.size() << " Low Kernel V"
+                << std::endl;
+    }
+    std::cout << "*** Done ***" << std::endl;
+
+    auto t1 = clock_t::now();
+    ns t_delta{0};
+    t_delta = std::chrono::duration_cast<ns>(t1 - t0);
+    auto to_ms = [](ns d) {
+      return std::chrono::duration<double, std::milli>(d).count();
+    };
+
+    std::cout << "Time   : " << to_ms(t_delta) << " ms\n";
+  }
+
+  void FindSmoothDomains_PerVertex() {
+
+    auto t0 = clock_t::now();
+
+    SmoothDomainFaces.clear();
+    std::cout << "*** ADDING VERTEX CONVEX PATCHES ***" << std::endl;
+    std::vector<int> KernVert;
+    for (size_t i = 0; i < QuadVertPos.size(); i++)
+      KernVert.push_back(i);
+
+    AddKernelVert(KernVert);
+    LowKernelVert(KernVert);
+    std::cout << "There are " << KernVert.size() << " Low Kernel V"
+              << std::endl;
+
+    std::cout << "*** Done ***" << std::endl;
+
+    auto t1 = clock_t::now();
+    ns t_delta{0};
+    t_delta = std::chrono::duration_cast<ns>(t1 - t0);
+    auto to_ms = [](ns d) {
+      return std::chrono::duration<double, std::milli>(d).count();
+    };
+
+    std::cout << "Time   : " << to_ms(t_delta) << " ms\n";
+  }
+
+  void FindVertOrderByDistortion(std::vector<int> &VertSeq) {
+    VertSeq.clear();
+    std::vector<ScalarType> FaceAR;
+    AspectRatioScaledJacobian<ScalarType>(QuadVertPos, QuadFaces, FaceAR);
+
+    std::vector<ScalarType> VertAr(QuadVertPos.size(), 0);
+    std::vector<int> Num(QuadVertPos.size(), 0);
+    for (size_t i = 0; i < QuadFaces.size(); i++)
+      for (size_t j = 0; j < QuadFaces[i].size(); j++) {
+        int IndexV = QuadFaces[i][j];
+        VertAr[IndexV] += FaceAR[i];
+        Num[IndexV]++;
+      }
+    for (size_t i = 0; i < VertAr.size(); i++)
+      VertAr[i] /= Num[i];
+
+    std::vector<std::pair<ScalarType, int>> RatioF;
+    for (size_t i = 0; i < VertAr.size(); i++)
+      RatioF.push_back(std::pair<ScalarType, int>(VertAr[i], i));
+
+    std::sort(RatioF.begin(), RatioF.end());
+
+    for (size_t i = 0; i < RatioF.size(); i++)
+      VertSeq.push_back(RatioF[i].second);
+  }
+
+  void FindSmoothDomains_PerVertexIncremental(bool Sort_Distortion = true,
+                                              int MaxKern = MAX_KERN) {
+
+    auto t0 = clock_t::now();
+
+    std::vector<bool> Solved(QuadVertPos.size(), false);
+    SmoothDomainFaces.clear();
+
+    ConvexPatchFinder<ScalarType> CPatch(QuadVertPos, QuadFaces);
+    CPatch.Init();
+
+    std::vector<int> VertSeq;
+    if (Sort_Distortion) {
+      FindVertOrderByDistortion(VertSeq);
+    } else {
+      for (size_t i = 0; i < QuadVertPos.size(); i++)
+        VertSeq.push_back(i);
+    }
+
+    std::cout << "*** ADDING VERTEX CONVEX PATCHES ***" << std::endl;
+    for (size_t i = 0; i < VertSeq.size(); i++) {
+      int CurrV = VertSeq[i];
+      assert(CurrV >= 0);
+      assert(CurrV < QuadVertPos.size());
+      if (Solved[CurrV])
+        continue;
+
+      std::vector<int> ConvexFaceIdx;
+      CPatch.FindConvexPatchFrom(VF[CurrV], ConvexFaceIdx, MaxKern, false);
+      SmoothDomainFaces.push_back(ConvexFaceIdx);
+
+      int LastSmoothD = SmoothDomainFaces.size() - 1;
+      std::vector<std::pair<int, int>> CurrKernel;
+      GetDomainKernel(LastSmoothD, CurrKernel);
+      for (size_t j = 0; j < CurrKernel.size(); j++) {
+        int IndexV = CurrKernel[j].first;
+        int KernV = CurrKernel[j].second;
+        if (KernV >= MIN_KERN)
+          Solved[IndexV] = true;
+      }
+    }
+    std::vector<int> KernVert;
+    LowKernelVert(KernVert);
+    std::cout << "There are " << KernVert.size() << " Low Kernel V"
+              << std::endl;
+
+    std::cout << "*** Done ***" << std::endl;
+
+    auto t1 = clock_t::now();
+    ns t_delta{0};
+    t_delta = std::chrono::duration_cast<ns>(t1 - t0);
+    auto to_ms = [](ns d) {
+      return std::chrono::duration<double, std::milli>(d).count();
+    };
+
+    std::cout << "Time   : " << to_ms(t_delta) << " ms\n";
+  }
+
+  void InitPatchQuad() {
+    PatchQuad.clear();
+    int MaxPIdx = -1;
+    for (size_t i = 0; i < QuadPatch.size(); i++)
+      MaxPIdx = std::max(MaxPIdx, QuadPatch[i]);
+    assert(MaxPIdx >= 0);
+
+    PatchQuad.resize(MaxPIdx + 1);
+
+    for (size_t i = 0; i < QuadPatch.size(); i++) {
+      int IndexP = QuadPatch[i];
+      assert(IndexP < PatchQuad.size());
+      int IndexF = i;
+      PatchQuad[IndexP].push_back(IndexF);
+    }
+  }
+
+  void SmoothWithPatches() {
+    for (size_t i = 0; i < SmoothDomainFaces.size(); i++) {
+      std::vector<Geo::Point3<ScalarType>> PatchVertPos;
+      std::vector<std::vector<int>> PatchFaces;
+      std::vector<int> OriginalFaces;
+      std::vector<int> OriginalVert;
+
+      GetDomainMesh(i, PatchVertPos, PatchFaces, OriginalFaces, OriginalVert);
+      std::vector<int> CornersIdx;
+      QuadPatchFunctions<ScalarType>::FindCorners(PatchFaces, CornersIdx);
+
+      std::vector<std::pair<int, int>> Features;
+      std::vector<int> Fixed;
+      UVPatchSmoother<ScalarType>::SmoothPatch(PatchVertPos, PatchFaces,
+                                               CornersIdx, Features, Fixed);
+
+      // then update positions on original mesh
+      for (size_t j = 0; j < OriginalVert.size(); j++) {
+        int IndexV = OriginalVert[j];
+        QuadVertPos[IndexV] = PatchVertPos[j];
+      }
     }
   }
 
 public:
-  static void SmoothPatchesWithQuad(
-      std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
-      const std::vector<std::vector<int>> &QuadFaces,
-      const std::vector<std::pair<int, int>> &QuadFeatures,
-      const std::vector<int> &QuadCorners, const std::vector<int> &QuadPatch,
-      const std::vector<Geo::Point3<ScalarType>> &ReprojVertPos,
-      const std::vector<std::vector<int>> &ReprojTriFaces,
-      const std::vector<std::pair<int, int>> &ReprojectTriFeatures,
-      const int smooth_steps = 10) {
-    // initialize the reprojection structures
-    Geo::TriangleSpatialIndex<ScalarType> TriGrid;
-    std::vector<Geo::Segment3<ScalarType>> FeatureSegs;
-    Geo::SegmentSpatialIndex<ScalarType> SegGrid;
-    Geo::InitProjStructures<ScalarType>(ReprojVertPos, ReprojTriFaces,
-                                        ReprojectTriFeatures, TriGrid,
-                                        FeatureSegs, SegGrid);
+  QuadPatchSmooth(std::vector<Geo::Point3<ScalarType>> &_QuadVertPos,
+                  const std::vector<std::vector<int>> &_QuadFaces,
+                  const std::vector<std::pair<int, int>> &_QuadFeatures,
+                  const std::vector<int> &_Constraints)
+      : QuadVertPos(_QuadVertPos), QuadFaces(_QuadFaces),
+        QuadFeatures(_QuadFeatures), Constraints(_Constraints) {}
 
+  void InitViaPatch(std::vector<int> &_QuadPatch) {
+    QuadPatch = _QuadPatch;
+    assert(QuadPatch.size() == QuadFaces.size());
+
+    Geo::getVFAdjacency(QuadFaces, VF, VFIndex);
+    Geo::getFFAdjacency(QuadFaces, FF, FFEdge);
+    Geo::getBorderVert(QuadFaces, IsB);
+
+    // then initialize the domains
     assert(IsAllQuad(QuadFaces));
 
-    // find per patch face indexes
-    std::vector<std::vector<int>> QuadPatchFaces;
-    Geo::ClusterOperations<ScalarType>::UpdateClusterFacesFromFaceCluster(
-        QuadPatch, QuadPatchFaces);
+    InitPatchQuad();
 
-    // split the quads into tris
-    std::vector<std::vector<int>> TriFaces;
-    SplitQuadIntoTris<ScalarType>(QuadVertPos, QuadFaces, TriFaces);
+    FindSmoothDomains_UsingQuadPatches();
 
-    // reupdate the patch per triangle
-    std::vector<int> TriPatch;
-    for (size_t i = 0; i < QuadPatch.size(); i++) {
-      TriPatch.push_back(QuadPatch[i]);
-      TriPatch.push_back(QuadPatch[i]);
-    }
+    CheckPatches();
 
-    // find for each vertex the surrounding patches
-    std::vector<std::vector<int>> VertPatches;
-    FindVertPatches(QuadVertPos, TriFaces, TriPatch, VertPatches);
-
-    // std::vector<std::pair<int, int>> EdgePatches;
-    // FindEdgePatches(TriFaces, TriPatch, EdgePatches);
-
-    // then does different steps
-    for (size_t s = 0; s < smooth_steps; s++) {
-
-      // smooth around all vertices
-      for (size_t v = 0; v < VertPatches.size(); v++) {
-        SmoothQuadPatches(QuadVertPos, QuadFaces, QuadFeatures, QuadCorners,
-                          QuadPatchFaces, VertPatches[v]);
-      }
-
-      // ///backproject
-      Geo::AttractProject<ScalarType>(ReprojVertPos, QuadVertPos, TriFaces);
-
-      // reproject
-      Geo::ProjectOn(QuadVertPos, QuadFaces, QuadFeatures, ReprojVertPos,
-                     ReprojTriFaces, TriGrid, FeatureSegs, SegGrid);
-    }
+    SmoothWithPatches();
   }
 
-  // static void SmoothPatchesUV(
-  //     std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
-  //     const std::vector<std::vector<int>> &QuadFaces,
-  //     const std::vector<int> &QuadCorners, const std::vector<int> &QuadPatch,
-  //     const std::vector<Geo::Point3<ScalarType>> &ReprojVertPos,
-  //     const std::vector<std::vector<int>> &ReprojTriFaces,
-  //     const std::vector<std::pair<int, int>> &ReprojectTriFeatures) {
+  void InitPerVertex() {
 
-  //   // find for each vertex the surrounding patches
-  //   std::vector<std::vector<int>> QuadPatchFaces;
-  //   Geo::ClusterOperations<ScalarType>::UpdateClusterFacesFromFaceCluster(
-  //       QuadPatch, QuadPatchFaces);
+    Geo::getVFAdjacency(QuadFaces, VF, VFIndex);
+    Geo::getFFAdjacency(QuadFaces, FF, FFEdge);
+    Geo::getBorderVert(QuadFaces, IsB);
 
-  //   for (size_t i = 0; i < QuadPatchFaces.size(); i++) {
-  //     std::vector<Geo::Point3<ScalarType>> SubMeshVert;
-  //     std::vector<std::vector<int>> SubMeshesFaces;
-  //     std::vector<int> OriginalVert, OriginalElem;
+    // then initialize the domains
+    assert(IsAllQuad(QuadFaces));
 
-  //     CopySubMesh(QuadVertPos, QuadFaces, QuadPatchFaces[i], SubMeshVert,
-  //                 SubMeshesFaces, OriginalVert, OriginalElem);
+    // FindSmoothDomains_PerVertex();
+    FindSmoothDomains_PerVertexIncremental();
 
-  //     std::vector<std::vector<int>> VF;
-  //     std::vector<std::vector<int>> VFIndex;
-  //     getVFAdjacency(SubMeshesFaces, VF, VFIndex);
-  //     std::vector<int> SubMCornerIDX;
-  //     for (size_t j = 0; j < VF.size(); j++) {
-  //       if (VF[j].size() == 1)
-  //         SubMCornerIDX.push_back(j);
-  //     }
+    CheckPatches();
 
-  //     // split into tris
-  //     std::vector<std::vector<int>> SubMeshesTriFaces;
-  //     SplitQuadIntoTris<ScalarType>(SubMeshVert, SubMeshesFaces,
-  //                                   SubMeshesTriFaces);
-      
-  //     std::vector<std::pair<int,int>> BorderE;
-  //     getBorderEdges(SubMeshesFaces, BorderE);
-  //     std::vector<Geo::Point3<ScalarType>> SubMeshVertOld=SubMeshVert;
-  //     RectifyFeatures<ScalarType>(SubMeshVert, SubMeshesFaces, 
-  //                       BorderE,SubMCornerIDX);
-
-  //     std::vector<Geo::Point2<ScalarType>> VertUV;
-  //     // Geo::UVParam<ScalarType>::TutteEmbedding(SubMeshVert, SubMeshesTriFaces,
-  //     //                                           SubMCornerIDX, VertUV,true);
-  //     Geo::UVParam<ScalarType>::Arap(SubMeshVert, SubMeshesTriFaces,VertUV);
-  //     // then smooth
-  //     // SmoothLaplacianImplicit<ScalarType>(int &VertPos, const int &Faces,
-  //     // const int &FixedVert)
-  //     std::vector<int> BorderV;
-  //     getBorderVert(SubMeshesTriFaces, BorderV);
-  //     SmoothParam<ScalarType> SParam;
-  //     SParam.FixedVert = SubMCornerIDX; //
-  //     SParam.NumIte = 10;
-  //     SParam.Damp = 0.5;
-  //     SParam.Features=BorderE;
-  //     //getBorderEdges(SubMeshesFaces, SParam.Features);
-  //     std::vector<Geo::Point2<ScalarType>> SmoothVertUV = VertUV;
-  //     Geo::SmoothLaplacian<ScalarType>(SmoothVertUV, SubMeshesFaces, SParam);
-  //     //WriteOBJ("testUV0.obj",SmoothVertUV,SubMeshesFaces);
-  //     // WriteOBJ("testUV1.obj",SmoothVertUV,SubMeshesFaces);
-  //     // return;
-  //     std::vector<int> faceIDx;
-  //     std::vector<Geo::Point3<ScalarType>> bary;
-  //     Geo::UVUtils<ScalarType>::MapBetween(SmoothVertUV, VertUV,
-  //                                          SubMeshesTriFaces, faceIDx, bary);
-
-      
-  //     assert(faceIDx.size() == SmoothVertUV.size());
-  //     assert(faceIDx.size() == bary.size());
-  //     assert(faceIDx.size() == OriginalVert.size());
-
-  //     // then reassign the values
-  //     for (size_t j = 0; j < OriginalVert.size(); j++) {
-  //       int OrigVertIDX = OriginalVert[j];
-  //       assert(OrigVertIDX >= 0);
-  //       assert(OrigVertIDX < QuadVertPos.size());
-
-  //       int IndexF = faceIDx[j];
-  //       assert(IndexF >= 0);
-  //       assert(IndexF < SubMeshesTriFaces.size());
-  //       int IndexV0 = SubMeshesTriFaces[IndexF][0];
-  //       int IndexV1 = SubMeshesTriFaces[IndexF][1];
-  //       int IndexV2 = SubMeshesTriFaces[IndexF][2];
-
-  //       assert(IndexV0 >= 0);
-  //       assert(IndexV0 < SubMeshVert.size());
-
-  //       assert(IndexV1 >= 0);
-  //       assert(IndexV1 < SubMeshVert.size());
-
-  //       assert(IndexV2 >= 0);
-  //       assert(IndexV2 < SubMeshVertOld.size());
-
-  //       Geo::Point3<ScalarType> P0 = SubMeshVertOld[IndexV0];
-  //       Geo::Point3<ScalarType> P1 = SubMeshVertOld[IndexV1];
-  //       Geo::Point3<ScalarType> P2 = SubMeshVertOld[IndexV2];
-
-  //       QuadVertPos[OrigVertIDX] = P0 * bary[j].X + P1 * bary[j].Y + P2 * bary[j].Z;
-  //     }
-  //     //return;
-  //   }
-  //    // ///backproject
-  //   //   Geo::AttractProject<ScalarType>(ReprojVertPos, QuadVertPos, ReprojTriFaces);
-
-  //   //   // reproject
-  //   //    Geo::TriangleSpatialIndex<ScalarType> TriGrid;
-  //   // std::vector<Geo::Segment3<ScalarType>> FeatureSegs;
-  //   // Geo::SegmentSpatialIndex<ScalarType> SegGrid;
-  //   // Geo::InitProjStructures<ScalarType>(ReprojVertPos, ReprojTriFaces,
-  //   //                                     ReprojectTriFeatures, TriGrid,
-  //   //                                     FeatureSegs, SegGrid);
-
-  //   //   Geo::ProjectOn(QuadVertPos, QuadFaces, QuadFeatures, ReprojVertPos,
-  //   //                  ReprojTriFaces, TriGrid, FeatureSegs, SegGrid);
-
-  // }
-
-
-
-  static void SmoothPatchesUV(
-      std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
-      const std::vector<std::vector<int>> &QuadFaces,
-      const std::vector<int> &QuadCorners, const std::vector<int> &QuadPatch,
-      const std::vector<Geo::Point3<ScalarType>> &ReprojVertPos,
-      const std::vector<std::vector<int>> &ReprojTriFaces,
-      const std::vector<std::pair<int, int>> &ReprojectTriFeatures) {
-
-    // find for each vertex the surrounding patches
-    std::vector<std::vector<int>> QuadPatchFaces;
-    Geo::ClusterOperations<ScalarType>::UpdateClusterFacesFromFaceCluster(
-        QuadPatch, QuadPatchFaces);
-
-    for (size_t i = 0; i < QuadPatchFaces.size(); i++) {
-      std::vector<Geo::Point3<ScalarType>> SubMeshVert;
-      std::vector<std::vector<int>> SubMeshesFaces;
-      std::vector<int> OriginalVert, OriginalElem;
-
-      CopySubMesh(QuadVertPos, QuadFaces, QuadPatchFaces[i], SubMeshVert,
-                  SubMeshesFaces, OriginalVert, OriginalElem);
-
-      std::vector<std::vector<int>> VF;
-      std::vector<std::vector<int>> VFIndex;
-      getVFAdjacency(SubMeshesFaces, VF, VFIndex);
-      std::vector<int> SubMCornerIDX;
-      for (size_t j = 0; j < VF.size(); j++) {
-        if (VF[j].size() == 1)
-          SubMCornerIDX.push_back(j);
-      }
-
-      // split into tris
-      std::vector<std::vector<int>> SubMeshesTriFaces;
-      SplitQuadIntoTris<ScalarType>(SubMeshVert, SubMeshesFaces,
-                                    SubMeshesTriFaces);
-      
-      std::vector<std::pair<int,int>> BorderE;
-      getBorderEdges(SubMeshesFaces, BorderE);
-      std::vector<Geo::Point3<ScalarType>> SubMeshVertOld=SubMeshVert;
-      RectifyFeatures<ScalarType>(SubMeshVert, SubMeshesFaces, 
-                        BorderE,SubMCornerIDX);
-
-      std::vector<Geo::Point2<ScalarType>> VertUV;
-      // Geo::UVParam<ScalarType>::TutteEmbedding(SubMeshVert, SubMeshesTriFaces,
-      //                                           SubMCornerIDX, VertUV,true);
-      Geo::UVParam<ScalarType>::Arap(SubMeshVert, SubMeshesTriFaces,VertUV);
-      // then smooth
-      // SmoothLaplacianImplicit<ScalarType>(int &VertPos, const int &Faces,
-      // const int &FixedVert)
-      std::vector<int> BorderV;
-      getBorderVert(SubMeshesTriFaces, BorderV);
-      SmoothParam<ScalarType> SParam;
-      SParam.FixedVert = SubMCornerIDX; //
-      SParam.NumIte = 10;
-      SParam.Damp = 0.5;
-      SParam.Features=BorderE;
-      //getBorderEdges(SubMeshesFaces, SParam.Features);
-      std::vector<Geo::Point2<ScalarType>> SmoothVertUV = VertUV;
-      Geo::SmoothLaplacian<ScalarType>(SmoothVertUV, SubMeshesFaces, SParam);
-      //WriteOBJ("testUV0.obj",SmoothVertUV,SubMeshesFaces);
-      // WriteOBJ("testUV1.obj",SmoothVertUV,SubMeshesFaces);
-      // return;
-      std::vector<int> faceIDx;
-      std::vector<Geo::Point3<ScalarType>> bary;
-      Geo::UVUtils<ScalarType>::MapBetween(SmoothVertUV, VertUV,
-                                           SubMeshesTriFaces, faceIDx, bary);
-
-      
-      assert(faceIDx.size() == SmoothVertUV.size());
-      assert(faceIDx.size() == bary.size());
-      assert(faceIDx.size() == OriginalVert.size());
-
-      // then reassign the values
-      for (size_t j = 0; j < OriginalVert.size(); j++) {
-        int OrigVertIDX = OriginalVert[j];
-        assert(OrigVertIDX >= 0);
-        assert(OrigVertIDX < QuadVertPos.size());
-
-        int IndexF = faceIDx[j];
-        assert(IndexF >= 0);
-        assert(IndexF < SubMeshesTriFaces.size());
-        int IndexV0 = SubMeshesTriFaces[IndexF][0];
-        int IndexV1 = SubMeshesTriFaces[IndexF][1];
-        int IndexV2 = SubMeshesTriFaces[IndexF][2];
-
-        assert(IndexV0 >= 0);
-        assert(IndexV0 < SubMeshVert.size());
-
-        assert(IndexV1 >= 0);
-        assert(IndexV1 < SubMeshVert.size());
-
-        assert(IndexV2 >= 0);
-        assert(IndexV2 < SubMeshVertOld.size());
-
-        Geo::Point3<ScalarType> P0 = SubMeshVertOld[IndexV0];
-        Geo::Point3<ScalarType> P1 = SubMeshVertOld[IndexV1];
-        Geo::Point3<ScalarType> P2 = SubMeshVertOld[IndexV2];
-
-        QuadVertPos[OrigVertIDX] = P0 * bary[j].X + P1 * bary[j].Y + P2 * bary[j].Z;
-      }
-      //return;
-    }
-     // ///backproject
-    //   Geo::AttractProject<ScalarType>(ReprojVertPos, QuadVertPos, ReprojTriFaces);
-
-    //   // reproject
-    //    Geo::TriangleSpatialIndex<ScalarType> TriGrid;
-    // std::vector<Geo::Segment3<ScalarType>> FeatureSegs;
-    // Geo::SegmentSpatialIndex<ScalarType> SegGrid;
-    // Geo::InitProjStructures<ScalarType>(ReprojVertPos, ReprojTriFaces,
-    //                                     ReprojectTriFeatures, TriGrid,
-    //                                     FeatureSegs, SegGrid);
-
-    //   Geo::ProjectOn(QuadVertPos, QuadFaces, QuadFeatures, ReprojVertPos,
-    //                  ReprojTriFaces, TriGrid, FeatureSegs, SegGrid);
-
+    SmoothWithPatches();
   }
 };
 

@@ -12,17 +12,23 @@ else ()
     # Flags for other operating systems, such as Windows
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
 endif ()
+
 if(NOT CMAKE_BUILD_TYPE)
    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
 
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -flto" )
+
 set(LUT_PATH "../../../include/Lut.txt")
 add_definitions(-DLUT_PATH=\"${LUT_PATH}\")
 
+find_package(Threads REQUIRED)
+
+
 # Enable AddressSanitizer and UndefinedBehaviorSanitizer in debug mode
-# set(SANITIZE_FLAGS "-fsanitize=address -fsanitize=undefined")
-# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${SANITIZE_FLAGS} -g -O1")
-# set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} ${SANITIZE_FLAGS}")
+#set(SANITIZE_FLAGS "-fsanitize=address -fsanitize=undefined")
+#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${SANITIZE_FLAGS} -g -O1")
+#set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} ${SANITIZE_FLAGS}")
 
 
 list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -44,12 +50,15 @@ set(IGLLIB  = "../../external_lib/libigl/include/" CACHE INTERNAL "")
 
 include_directories(${TRACEFIELD_DIR})
 include_directories(${EIGENPATH})
-option(USE_DIRECTIONAL "Use directional feature" OFF)
-if(USE_DIRECTIONAL)
-include_directories(${DIRECTIONALPATH})
-endif()
+#option(USE_DIRECTIONAL "Use directional feature" OFF)
+#if(USE_DIRECTIONAL)
+#include_directories(${DIRECTIONALPATH})
+#endif()
 include_directories(${IGLLIB})
 add_executable( ${PROJECT_NAME} main.cpp)
+
+#target_compile_options(quad_commandline PRIVATE -fsanitize=address -fsanitize=undefined -g -O1)
+#target_link_options(quad_commandline PRIVATE -fsanitize=address -fsanitize=undefined)
 
 #if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")

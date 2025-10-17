@@ -56,6 +56,7 @@ namespace Geo
             // output parameters
             std::vector<int> Path;
             ScalarType Lenght;
+            bool unitary_dist;
 
             bool IsAllocated(const int &NumEl) const
             {
@@ -89,6 +90,7 @@ namespace Geo
                 MaxSteps = std::numeric_limits<int>::max();
                 MaxD = std::numeric_limits<ScalarType>::max();
                 Lenght = -1;
+                unitary_dist=false;
             }
 
             void Reset(const int &NumEl)
@@ -188,6 +190,8 @@ namespace Geo
                     assert(NextNode < NodePos.size());
 
                     ScalarType Delta = (NodePos[CurrNode] - NodePos[NextNode]).Norm();
+                    if (GeoP.unitary_dist)Delta =1;
+                    
                     ScalarType nextDist = GeoP.Dist[CurrNode] + Delta;
 
                     int nextStep = GeoP.Steps[CurrNode] + 1;

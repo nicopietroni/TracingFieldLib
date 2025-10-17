@@ -96,10 +96,12 @@ public:
               << " perc of Internal nodes that were dead ends" << std::endl;
   }
 
+  //this function is used to symmetrize the connections
   static void
   SymmetrizeM3(Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
                const std::vector<std::vector<int>> &TetraInternalFaces) {
-
+    
+    //structure to keep info on connections
     struct ConnInfo {
       ScalarType W;
       bool IsActive;
@@ -115,27 +117,36 @@ public:
       }
     };
 
-    // first save all neighbours
+    // for each pair of nodes saves the connections
     std::map<std::pair<int, int>, ConnInfo> NodeNodeInfo;
+
+    //for each node
     for (size_t i = 0; i < Facegraph.NumNodes(); i++) {
       int IndexN0 = i;
 
+      //for each label
       for (size_t l = 0; l < 3; l++) {
         int IndexLabel = l;
         std::vector<int> IndexNeigh;
         std::vector<ScalarType> WeightNeigh;
         std::vector<bool> ActiveLink;
+
+        //get all neighbours info
         Facegraph.AllNeigh(IndexN0, IndexLabel, IndexNeigh, WeightNeigh,
                            ActiveLink);
-
+        
+        //then for each neighbours
         for (size_t j = 0; j < IndexNeigh.size(); j++) {
           int IndexN1 = IndexNeigh[j];
+          //save the connection info
           ConnInfo CI(WeightNeigh[j], ActiveLink[j]);
           std::pair<int, int> VertPair(IndexN0, IndexN1);
           NodeNodeInfo[VertPair] = CI;
         }
       }
     }
+
+    //THIS HAS TO BE COMPLETED
   }
 
   static void
@@ -392,34 +403,54 @@ public:
     } while (has_disabled);
   }
 
+  //this one resize the number of neighbour 
+  // for each node for each label to a maximum number
   static void ResizeNeigh(LabelNeighOrientedGraph<ScalarType> &Graph,
                           int NumNeigh = 2) {
+    //for each node
     for (size_t i = 0; i < Graph.NumNodes(); i++)
+    //for each label
       for (size_t l = 0; l < 3; l++) {
         std::vector<std::pair<ScalarType, int>> WeightNeigh;
         std::vector<int> IndexN;
         std::vector<ScalarType> WeightN;
+        //if the node has exit label try to keep
+        //maximum connectivity
         if (Graph.HasExitLabel(i))
           continue;
+        //if the node is tangent doesn't care
         if (Graph.NodeType(i) == TangentDomain)
           continue;
+        //if the node is not enabled doesn't care
         if (!Graph.IsEnabled(i))
           continue;
 
+        //get the active neighbour for that 
+        //node for that label
         Graph.ActiveNeigh(i, l, IndexN, WeightN);
 
+        //if the number of neighbours is less than
+        //the thresold than does nothing
         if (IndexN.size() <= NumNeigh)
           continue;
 
+        //then for each neighbours push weight and neighbour index
         for (size_t j = 0; j < IndexN.size(); j++) {
           WeightNeigh.push_back(
               std::pair<ScalarType, int>(WeightN[j], IndexN[j]));
         }
 
+        //sort them
         std::sort(WeightNeigh.begin(), WeightNeigh.end());
+
+        //resize to the maximum
         WeightNeigh.resize(NumNeigh);
 
+        //clear the set of neighbours for that node
+        // and that specific label (edge of face)
         Graph.ClearNeighbor(i, l);
+
+        //then re-add the neighbours
         for (size_t j = 0; j < WeightNeigh.size(); j++)
           Graph.AddNeighbour(i, WeightNeigh[j].second, l, WeightNeigh[j].first);
       }

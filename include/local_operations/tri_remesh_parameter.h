@@ -24,6 +24,7 @@ template <class ScalarType> struct TriRemParam {
 
   std::vector<std::vector<bool> > IsFaceEFeature;
   std::vector<bool> IsVertCorner;
+  std::vector<ScalarType> VertSize;
   //std::vector<bool> Exclude;
   // std::vector<std::pair<int,int> > VertPairFeatures;
   // std::vector<int> CornersIdx;

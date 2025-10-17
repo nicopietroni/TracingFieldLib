@@ -121,18 +121,18 @@ void FindVertexStar(const std::vector<std::vector<int>> &connections,
     //     Kernel[VertIDX1].push_back(VertIDX0);
     //   }
     // }
-    int sizeF=connections[i].size();
+    int sizeF = connections[i].size();
     for (size_t j = 0; j < connections[i].size(); j++) {
       int VertIDX0 = connections[i][j];
-      int VertIDX1 = connections[i][(j+1)%sizeF];
+      int VertIDX1 = connections[i][(j + 1) % sizeF];
       // for (size_t k = 0; k < connections[i].size(); k++) {
       //   if (j == k)
       //     continue;
       //   int VertIDX1 = connections[i][k];
       //   assert(VertIDX0 != VertIDX1);
-        Kernel[VertIDX0].push_back(VertIDX1);
-        Kernel[VertIDX1].push_back(VertIDX0);
-     // }
+      Kernel[VertIDX0].push_back(VertIDX1);
+      Kernel[VertIDX1].push_back(VertIDX0);
+      // }
     }
   }
   // make them unique
@@ -228,10 +228,9 @@ void getFFAdjacency(const std::vector<std::vector<int>> &Faces,
   NextF.resize(Faces.size());
   NextE.resize(Faces.size());
 
-  //std::map<sizeTPair, std::vector<sizeTPair>> EdgeVToFaceE;
-  std::unordered_map<sizeTPair, 
-                     std::vector<sizeTPair>, 
-                     hashPairSizeTFunction> EdgeVToFaceE;
+  // std::map<sizeTPair, std::vector<sizeTPair>> EdgeVToFaceE;
+  std::unordered_map<sizeTPair, std::vector<sizeTPair>, hashPairSizeTFunction>
+      EdgeVToFaceE;
 
   for (size_t i = 0; i < Faces.size(); i++) {
     size_t sizeF = Faces[i].size();
@@ -1066,7 +1065,8 @@ int NumSharedFaces(const int &VIndex0, const int &VIndex1,
 }
 
 // for each edge the element index and the index of the edge
-void GetEdgeElem(const std::vector<std::vector<int>> &connections,
+void GetEdgeElem(
+    const std::vector<std::vector<int>> &connections,
     std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> &EdgeElem) {
   EdgeElem.clear();
   for (size_t i = 0; i < connections.size(); i++) {
@@ -1076,10 +1076,30 @@ void GetEdgeElem(const std::vector<std::vector<int>> &connections,
       int IndexV1 = connections[i][(j + 1) % sizeEl];
       std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
                                std::max(IndexV0, IndexV1));
-      EdgeElem[KeyE].push_back(std::pair<int, int>((int)i,(int)j));
+      EdgeElem[KeyE].push_back(std::pair<int, int>((int)i, (int)j));
     }
   }
 }
+
+void FacesOfVertices(const std::vector<std::vector<int>> &connections,
+                     const std::vector<std::vector<int>> &VF,
+                     const std::vector<int> &vertidx,
+                     std::vector<int> &faces_idx)
+{
+  faces_idx.clear();
+  for (size_t i=0;i<vertidx.size();i++)
+  {
+    int CurrVIndex=vertidx[i];
+    assert(CurrVIndex>=0);
+    assert(CurrVIndex<VF.size());
+    faces_idx.insert(faces_idx.end(),
+                    VF[CurrVIndex].begin(),
+                     VF[CurrVIndex].end());
+  }
+  std::sort(faces_idx.begin(), faces_idx.end());
+  faces_idx.erase(std::unique(faces_idx.begin(), faces_idx.end()), faces_idx.end());
+}
+
 } // namespace Geo
 
 #endif

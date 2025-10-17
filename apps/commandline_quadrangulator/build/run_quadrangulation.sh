@@ -1,44 +1,42 @@
 #!/bin/bash
 
-# Check if exactly one argument is passed
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <folder>"
-    exit 1
-fi
+# Directory containing the .obj files
+INPUT_DIR="./test_data/with_features"
 
-INPUT_FOLDER="$1"
-EXECUTABLE="./quad_commandline"  # Modify this path if needed
+./quad_commandline ../test_data/no_features/aquadom.obj -nofeatures
+./quad_commandline ../test_data/no_features/beetle.obj -nofeatures
+./quad_commandline ../test_data/no_features/botanic.obj -nofeatures
+./quad_commandline ../test_data/no_features/bunny.obj -nofeatures
+./quad_commandline ../test_data/no_features/calla.obj -nofeatures
+./quad_commandline ../test_data/no_features/chair.obj -nofeatures
+./quad_commandline ../test_data/no_features/chinese_lion24K.obj -nofeatures
+./quad_commandline ../test_data/no_features/dome.obj -nofeatures
+./quad_commandline ../test_data/no_features/ellipse.obj -nofeatures
+./quad_commandline ../test_data/no_features/ellipsetorus.obj -nofeatures
+./quad_commandline ../test_data/no_features/fertility.obj -nofeatures
+./quad_commandline ../test_data/no_features/funnel.obj -nofeatures
+./quad_commandline ../test_data/no_features/indorelax.obj -nofeatures
+./quad_commandline ../test_data/no_features/lilium_2.obj -nofeatures
+./quad_commandline ../test_data/no_features/manta.obj -nofeatures
+./quad_commandline ../test_data/no_features/six_s0.obj -nofeatures
+./quad_commandline ../test_data/no_features/spring.obj -nofeatures
+./quad_commandline ../test_data/no_features/trebol.obj -nofeatures
+./quad_commandline ../test_data/no_features/twist.obj -nofeatures
 
-# Loop through all .obj files in the folder
-for OBJ_FILE in "$INPUT_FOLDER"/*.obj; do
-    # Skip if no .obj files are found
-    [ -e "$OBJ_FILE" ] || continue
 
-    BASE_NAME="${OBJ_FILE%.obj}"  # Remove .obj extension
+./quad_commandline ../test_data/with_features/12.obj -angle 70
+./quad_commandline ../test_data/with_features/Bracket.obj -angle 70
+./quad_commandline ../test_data/with_features/anti_backlash_nut.obj
+./quad_commandline ../test_data/with_features/bathtub.obj -angle 70
+./quad_commandline ../test_data/with_features/blockLP.obj
+./quad_commandline ../test_data/with_features/bottle.obj
+./quad_commandline ../test_data/with_features/bracket_CAD.obj
+./quad_commandline ../test_data/with_features/fandisk.obj
+./quad_commandline ../test_data/with_features/fusee_Lp.obj -angle 40
+./quad_commandline ../test_data/with_features/joint.obj
+./quad_commandline ../test_data/with_features/mount.obj
+./quad_commandline ../test_data/with_features/mouse.obj
+./quad_commandline ../test_data/with_features/part20k.obj
+./quad_commandline ../test_data/with_features/wineglass.obj
 
-    # Start building the command
-    CMD="$EXECUTABLE \"$OBJ_FILE\""
-
-    # Add .field if it exists
-    if [ -f "$BASE_NAME.field" ]; then
-        CMD="$CMD \"$BASE_NAME.field\""
-    fi
-
-    # Add .ffield if it exists
-    if [ -f "$BASE_NAME.ffield" ]; then
-        CMD="$CMD \"$BASE_NAME.ffield\""
-    fi
-
-    # Add .features if it exists
-    if [ -f "$BASE_NAME.features" ]; then
-        CMD="$CMD \"$BASE_NAME.features\""
-    fi
-
-    # Add .feature if it exists
-    if [ -f "$BASE_NAME.feature" ]; then
-        CMD="$CMD \"$BASE_NAME.feature\""
-    fi
-
-    echo "Running: $CMD"
-    eval $CMD
-done
+echo "✅ All files processed."

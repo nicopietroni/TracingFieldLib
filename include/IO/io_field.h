@@ -159,6 +159,7 @@ bool WriteField(const std::string &fieldFile,
 
     assert(VertField.size()==VertFieldK.size());
     fout<<VertField.size()<<"\n";
+    fout<<std::setprecision(17);
     for (size_t i=0;i<VertField.size();i++)
     {
         fout<<VertField[i].size();

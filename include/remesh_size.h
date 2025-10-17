@@ -2,25 +2,302 @@
 #define REMESH_SIZE
 
 #include "IO/io_obj.h"
+#include "Space_Query/point_grid_3D.h"
+#include "connectivity.h"
 #include "geodesic.h"
 #include "point3.h"
+#include "smooth_mesh.h"
 #include <algorithm>
 #include <cassert>
+#include "edge_mesh_functions.h"
+#include "geodesic.h"
 #include <iostream>
+#include <limits>
+#include "mesh_functions.h"
+#include "mesh_sampling.h"
+#include "smooth_mesh.h"
+#include "mesh_features.h"
+#include <sys/_types/_size_t.h>
+#include <utility>
 #include <vector>
-#include "Space_Query/point_grid_3D.h"
 
 namespace Geo {
 
 template <class ScalarType> class RemeshSize {
 
+  typedef typename std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>
+      EdgePosK;
+
+  static void
+  GetSubFeatureMesh(const std::vector<Geo::Point3<ScalarType>> &SubMeshVertPos,
+                    const std::vector<std::vector<int>> &SubMeshFaces,
+                    const std::set<EdgePosK> &FeaturesPos,
+                    std::vector<Geo::Point3<ScalarType>> &SubEdgeVertPos,
+                    std::vector<std::vector<int>> &SubEdges) {
+    // get which fetures are stil there
+    std::vector<std::pair<int, int>> SubMeshFeatures;
+    for (size_t i = 0; i < SubMeshFaces.size(); i++)
+      for (size_t j = 0; j < SubMeshFaces[i].size(); j++) {
+        int SizeF = SubMeshFaces[i].size();
+        int IndexV0 = SubMeshFaces[i][j];
+        int IndexV1 = SubMeshFaces[i][(j + 1) % SizeF];
+        Geo::Point3<ScalarType> Pos0 = SubMeshVertPos[IndexV0];
+        Geo::Point3<ScalarType> Pos1 = SubMeshVertPos[IndexV1];
+        EdgePosK Key(std::min(Pos0, Pos1), std::max(Pos0, Pos1));
+        if (FeaturesPos.count(Key) == 0)
+          continue;
+        std::pair<int, int> keyFeature(std::min(IndexV0, IndexV1),
+                                       std::max(IndexV0, IndexV1));
+        SubMeshFeatures.push_back(keyFeature);
+      }
+
+    std::sort(SubMeshFeatures.begin(), SubMeshFeatures.end());
+    SubMeshFeatures.erase(
+        std::unique(SubMeshFeatures.begin(), SubMeshFeatures.end()),
+        SubMeshFeatures.end());
+
+    std::vector<std::pair<int, int>> EdgesPair;
+    Geo::EdgeMeshFunctions<ScalarType>::ExtractFromFeatures(
+        SubMeshVertPos, SubMeshFaces, SubMeshFeatures, SubEdgeVertPos,
+        EdgesPair);
+
+    for (size_t i = 0; i < EdgesPair.size(); i++) {
+      SubEdges.resize(SubEdges.size() + 1);
+      SubEdges.back().push_back(EdgesPair[i].first);
+      SubEdges.back().push_back(EdgesPair[i].second);
+    }
+  }
+
+  static ScalarType GetPercentile(const std::vector<ScalarType> &VertSize,
+                                  const ScalarType PercVal,
+                                  const ScalarType &MaxSize) {
+    assert(PercVal >= 0);
+    assert(PercVal <= 1);
+    std::vector<ScalarType> SortVertSize = VertSize;
+    std::sort(SortVertSize.begin(), SortVertSize.end());
+    int lessIdx = 0;
+    for (size_t i = 0; i < SortVertSize.size(); i++) {
+      if (SortVertSize[i] >= MaxSize)
+        continue;
+      lessIdx++;
+    }
+    int IndexPerc = floor(0.5 + SortVertSize.size() * PercVal);
+    IndexPerc = std::min(IndexPerc, (int)SortVertSize.size() - 1);
+    IndexPerc = std::max(IndexPerc, 0);
+    return SortVertSize[IndexPerc];
+  }
+
 public:
+  // static void SampleWithBorderRegular(
+  //       const int NumVert, const std::vector<std::vector<int>> &Faces,
+  //       const int StepSize, const int MinSamplePerBorder,
+  //       std::vector<int> &Selected, std::vector<int> *SampleFrom = NULL,
+  //       int RandSeed = 0) {
+  //     std::vector<std::vector<int>> NextF, NextE;
+  //     Geo::getFFAdjacency(Faces, NextF, NextE);
+  //     SampleWithBorderRegular(NumVert, Faces, NextF, NextE, StepSize,
+  //                             MinSamplePerBorder, Selected, SampleFrom,
+  //                             RandSeed);
+  //   }
+
+  static ScalarType
+  RemeshSizeFeatures(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                     const std::vector<std::vector<int>> &Faces,
+                     const std::vector<std::pair<int, int>> &Features,
+                     const ScalarType &MinSize, const ScalarType &MaxSize,
+                     std::vector<ScalarType> *VertSize = NULL,
+                     bool subSample = true, bool useGeodesic = true) {
+
+    std::vector<int> SelectedSample;
+
+    if (subSample) {
+      ScalarType Radius3D =
+          Geo::MeshSampling<ScalarType>::Esteem3DSamplingRadius(VertPos, Faces,
+                                                                500);
+      Geo::MeshSampling<ScalarType>::SampleWithFeatures3D(
+          VertPos, Faces, Features, Radius3D, SelectedSample);
+      // int Radii = Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(
+      //     VertPos.size(), 500);
+      // Geo::MeshSampling<ScalarType>::SampleWithFeatures(
+      //     VertPos, Faces, Features, Radii, 4, SelectedSample);
+    } else {
+      // by default use all
+      for (size_t i = 0; i < VertPos.size(); i++)
+        SelectedSample.push_back(i);
+    }
+    std::cout << "Found " << SelectedSample.size() << " samples" << std::endl;
+    ScalarType RatioDist = 1.5;
+
+    // get all vertices from features
+    std::set<EdgePosK> FeaturesPos;
+    std::set<int> FeaturesIdx;
+    for (size_t i = 0; i < Features.size(); i++) {
+      int IndexV0 = Features[i].first;
+      int IndexV1 = Features[i].second;
+      // Seeds.push_back(IndexV0);
+      // Seeds.push_back(IndexV1);
+      assert(IndexV0 >= 0);
+      assert(IndexV1 >= 0);
+      assert(IndexV0 < VertPos.size());
+      assert(IndexV1 < VertPos.size());
+      Geo::Point3<ScalarType> Pos0 = VertPos[IndexV0];
+      Geo::Point3<ScalarType> Pos1 = VertPos[IndexV1];
+      EdgePosK Key(std::min(Pos0, Pos1), std::max(Pos0, Pos1));
+      FeaturesPos.insert(Key);
+      FeaturesIdx.insert(IndexV0);
+      FeaturesIdx.insert(IndexV1);
+    }
+    // std::sort(Seeds.begin(), Seeds.end());
+    // Seeds.erase(std::unique(Seeds.begin(), Seeds.end()), Seeds.end());
+
+    std::vector<std::vector<int>> VVAdj;
+    Geo::FindVertexStar(Faces, VertPos.size(), VVAdj);
+
+    std::vector<std::vector<int>> VF, VFIndex;
+    getVFAdjacency(Faces, VF, VFIndex);
+
+    Geo::TMark TempMark;
+    std::vector<int> FixedVal;
+    if (VertSize!=NULL)
+    (*VertSize) = std::vector<ScalarType>(VertPos.size(), MaxSize);
+
+    PointSpatialIndex<ScalarType> PIndex;
+    if (!useGeodesic) {
+      PIndex.Init(VertPos);
+    }
+    std::cout << "Computing Radiuses" << std::endl;
+    std::vector<ScalarType> SampledVal;
+    for (size_t i = 0; i < SelectedSample.size(); i++) {
+
+      int CurrV = SelectedSample[i];
+      assert(CurrV >= 0);
+      assert(CurrV < VertPos.size());
+      bool IsFeatureVert = (FeaturesIdx.count(CurrV) > 0);
+
+      std::vector<int> InKernVert;
+      if (useGeodesic) {
+        typename Geo::Geodesic<ScalarType>::GeodesicParam GeoP;
+        GeoP.Seeds.push_back(CurrV);
+        GeoP.MaxD = MaxSize * 1.1;
+        Geo::Geodesic<ScalarType>::NodeDijkstra(VertPos, VVAdj, TempMark, GeoP);
+
+        InKernVert =
+            std::vector<int>(GeoP.InInterval.begin(), GeoP.InInterval.end());
+      } else {
+        PIndex.PointsInSphere(VertPos, VertPos[CurrV], MaxSize * 1.1,
+                              InKernVert);
+      }
+      // then extract the submes
+      std::vector<int> faces_idx;
+      Geo::FacesOfVertices(Faces, VF, InKernVert, faces_idx);
+
+      std::vector<Geo::Point3<ScalarType>> SubMeshVertPos;
+      std::vector<std::vector<int>> SubMeshFaces;
+      CopySubMesh<ScalarType>(VertPos, Faces, faces_idx, SubMeshVertPos,
+                              SubMeshFaces);
+
+      std::vector<Geo::Point3<ScalarType>> SubEdgeVertPos;
+      std::vector<std::vector<int>> SubEdges;
+      GetSubFeatureMesh(SubMeshVertPos, SubMeshFaces, FeaturesPos,
+                        SubEdgeVertPos, SubEdges);
+
+      std::vector<std::vector<int>> VVEdgeAdj;
+      Geo::FindVertexStar(SubEdges, SubEdgeVertPos.size(), VVEdgeAdj);
+
+      if (SubEdges.size() == 0) {
+        // already set to max and determined
+        FixedVal.push_back(CurrV);
+        SampledVal.push_back(MaxSize);
+        continue;
+      }
+      // not a feature but surrounded by, just put the max
+      if (!IsFeatureVert)
+      {
+        FixedVal.push_back(CurrV);
+        SampledVal.push_back(MaxSize);
+        continue;
+      }
+      int IndexSeed = -1;
+      Geo::Point3<ScalarType> RootPos = VertPos[CurrV];
+      for (size_t j = 0; j < SubEdgeVertPos.size(); j++)
+        if (SubEdgeVertPos[j] == RootPos) {
+          IndexSeed = j;
+          break;
+        }
+
+      assert(IndexSeed != -1);
+      typename Geo::Geodesic<ScalarType>::GeodesicParam GeoPEdgeM;
+      GeoPEdgeM.Seeds.push_back(IndexSeed);
+      GeoPEdgeM.MaxD = std::numeric_limits<ScalarType>::max();
+      Geo::TMark TempMarkEdgeM;
+      Geo::Geodesic<ScalarType>::NodeDijkstra(SubEdgeVertPos, VVEdgeAdj,
+                                              TempMarkEdgeM, GeoPEdgeM);
+
+      // then ckeck distance
+      ScalarType CurrSize = MaxSize;
+      for (size_t j = 0; j < SubEdgeVertPos.size(); j++) {
+        // get difference between 3D and Geo
+        ScalarType Size3D = (RootPos - SubEdgeVertPos[j]).Norm();
+
+        if (Size3D > MaxSize)
+          continue;
+        if (Size3D < MinSize)
+          continue;
+
+        // feature not reacheable
+        if (GeoPEdgeM.InInterval.count(j) == 0) {
+          CurrSize = std::min(CurrSize, Size3D);
+          continue;
+        }
+
+        ScalarType SizeGeo = GeoPEdgeM.Dist[j];
+        if (Size3D < (SizeGeo / RatioDist))
+          CurrSize = std::min(CurrSize, Size3D);
+      }
+      CurrSize = std::max(CurrSize, MinSize);
+      SampledVal.push_back(CurrSize);
+      // size determined
+      if (VertSize!=NULL)
+        (*VertSize)[CurrV] = CurrSize;
+
+      FixedVal.push_back(CurrV);
+      
+    }
+
+    // smooth on the surface
+    //std::cout << "Smoothing" << std::endl;
+    if (VertSize!=NULL)
+    Geo::SmoothLaplacianImplicit((*VertSize), Faces, FixedVal);
+    std::cout<<"Finding Perc Size:"<<SampledVal.size()<<std::endl;
+    return GetPercentile(SampledVal, 0.05, MaxSize);
+  }
+
   static ScalarType
   RemeshSizeNormal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                    const std::vector<std::vector<int>> &Faces,
                    const ScalarType &MinSize, const ScalarType &MaxSize,
-                   ScalarType MaxNormVar = 135) {
+                   std::vector<ScalarType> *VertSize = NULL,
+                   ScalarType MaxNormVar = 135, bool subSample = true) {
     assert(MaxSize > MinSize);
+
+    std::vector<int> SelectedSample;
+
+    if (subSample) {
+      ScalarType Radius3D =
+          Geo::MeshSampling<ScalarType>::Esteem3DSamplingRadius(VertPos, Faces,
+                                                                500);
+      Geo::MeshSampling<ScalarType>::SampleRadius3D(VertPos, Radius3D,
+                                                    SelectedSample, 0);
+      // int Radii = Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(
+      //     VertPos.size(), 500);
+      // Geo::MeshSampling<ScalarType>::SampleVert(Faces, VertPos.size(), Radii,
+      //                                           SelectedSample);
+    } else {
+      // by default use all
+      for (size_t i = 0; i < VertPos.size(); i++)
+        SelectedSample.push_back(i);
+    }
+    std::cout << "Found " << SelectedSample.size() << " samples" << std::endl;
 
     std::vector<Geo::Point3<ScalarType>> FaceNorm, VertNorm;
     Geo::ComputeNormals<ScalarType>(VertPos, Faces, FaceNorm, VertNorm);
@@ -31,25 +308,26 @@ public:
     PointSpatialIndex<ScalarType> PIndex;
     PIndex.Init(VertPos);
 
-    std::vector<ScalarType> RemSize =
-        std::vector<ScalarType>(VertPos.size(), MinSize);
+    if (VertSize != NULL) {
+      (*VertSize) = std::vector<ScalarType>(VertPos.size(), MinSize);
+    }
 
-    for (size_t i = 0; i < VertPos.size(); i++) {
-      int CurrV=i;
-      // GParam.Seeds.clear();
-      // GParam.Seeds.push_back(i);
-      // GParam.InInterval.clear();
+    std::vector<int> FixedVal;
+    std::vector<ScalarType> SampledVal;
+    for (size_t i = 0; i < SelectedSample.size(); i++) {
+      int CurrV = SelectedSample[i];
+      FixedVal.push_back(CurrV);
       Geo::TMark TempMark;
 
       Geo::Point3<ScalarType> CurrN = VertNorm[CurrV];
-      // Geo::Geodesic<ScalarType>::NodeDijkstra(VertPos, Faces, TempMark, GParam);
+      // Geo::Geodesic<ScalarType>::NodeDijkstra(VertPos, Faces, TempMark,
+      // GParam);
 
       // // sort wrt distance
       std::vector<int> InInterval;
       std::vector<std::pair<ScalarType, int>> DistKernel;
-      // std::vector<int> InInterval(GParam.InInterval.begin(),
-      //                             GParam.InInterval.end());
-      PIndex.PointsInSphere(VertPos,VertPos[CurrV],MaxSize,InInterval);
+
+      PIndex.PointsInSphere(VertPos, VertPos[CurrV], MaxSize, InInterval);
       for (size_t j = 0; j < InInterval.size(); j++) {
         int IndexV = InInterval[j];
         // ScalarType DistV = GParam.Dist[IndexV];
@@ -69,22 +347,81 @@ public:
         CurrSize = DistKernel[j].first;
         break;
       }
-      RemSize[CurrV] = std::max(RemSize[CurrV], CurrSize);
+      CurrSize=std::min(CurrSize,MaxSize);
+      CurrSize=std::max(CurrSize,MinSize);
+      SampledVal.push_back(CurrSize);
+
+      if (VertSize != NULL) 
+        (*VertSize)[CurrV] = CurrSize;
     }
-    std::sort(RemSize.begin(), RemSize.end());
-    int lessIdx=0;
-    for (size_t i = 0; i < RemSize.size(); i++) {
-      if (RemSize[i]>=MaxSize)continue;
-      lessIdx++;
+    if ((subSample)&&(VertSize != NULL)) {
+      // smooth on the surface
+      Geo::SmoothLaplacianImplicit((*VertSize), Faces, FixedVal);
     }
-    // std::cout<<"Less are "<<lessIdx<<std::endl;
-    // std::cout<<"Total "<<RemSize.size()<<std::endl;
-    int IndexPerc = floor(0.5 + RemSize.size() * 0.05);
-    IndexPerc = std::min(IndexPerc, (int)RemSize.size() - 1);
-    IndexPerc = std::max(IndexPerc, 0);
-    
-    return RemSize[IndexPerc];
-     //return RemSize[0];
+
+    return GetPercentile(SampledVal, 0.05, MaxSize);
+    // return RemSize[0];
+  }
+
+  static ScalarType
+  RemeshSizeAggregated(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                       const std::vector<std::vector<int>> &Faces,
+                       const std::vector<std::pair<int, int>> &Features,
+                       const ScalarType &MinSize, const ScalarType &MaxSize,
+                       std::vector<ScalarType> *VertSize = NULL,
+                       bool subSample = true, ScalarType MaxNormVar = 135) {
+
+    std::cout << "Finding Remesh Size by Features" << std::endl;
+    std::vector<ScalarType> VertSizeFeat;
+
+    ScalarType SizeFeat = -1;
+    ScalarType SizeNorm = -1;
+
+    if (VertSize != NULL)
+      SizeFeat = RemeshSizeFeatures(VertPos, Faces, Features, MinSize, MaxSize,
+                                    &VertSizeFeat, subSample);
+    else
+      SizeFeat = RemeshSizeFeatures(VertPos, Faces, Features, MinSize, MaxSize,
+                                    NULL, subSample);
+
+    std::cout << "Finding Remesh Size by Normal Variation" << std::endl;
+    std::vector<ScalarType> VertSizeNorm;
+
+    if (VertSize != NULL)
+      SizeNorm = RemeshSizeNormal(VertPos, Faces, MinSize, MaxSize,
+                                  &VertSizeNorm, MaxNormVar, subSample);
+    else
+      SizeNorm = RemeshSizeNormal(VertPos, Faces, MinSize, MaxSize, NULL,
+                                  MaxNormVar, subSample);
+
+    std::cout << "Done" << std::endl;
+
+    assert(SizeFeat > 0);
+    assert(SizeNorm > 0);
+
+    if (VertSize != NULL) {
+      assert(VertSizeFeat.size() == VertSizeNorm.size());
+      for (size_t i = 0; i < VertSizeFeat.size(); i++)
+        (*VertSize).push_back(std::min(VertSizeFeat[i], VertSizeNorm[i]));
+    }
+
+    // return GetPercentile(VertSize, 0.05, MaxSize);
+    return std::min(SizeFeat, SizeNorm);
+  }
+
+  static ScalarType
+  RemeshSizeAggregated(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                       const std::vector<std::vector<int>> &Faces,
+                       const std::vector<std::vector<bool>> &IsFaceEFeature,
+                       const ScalarType &MinSize, const ScalarType &MaxSize,
+                       std::vector<ScalarType> *VertSize = NULL,
+                       bool subSample = true, ScalarType MaxNormVar = 135) {
+    std::vector<std::pair<int, int>> VertPairFeatures;
+    Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(
+        Faces, IsFaceEFeature, VertPairFeatures);
+    std::cout << "There are Fearures:" << VertPairFeatures.size() << std::endl;
+    return (RemeshSizeAggregated(VertPos, Faces, VertPairFeatures, MinSize,
+                                 MaxSize, VertSize));
   }
 };
 } // namespace Geo

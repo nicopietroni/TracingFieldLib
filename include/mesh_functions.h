@@ -22,6 +22,7 @@
 #include <queue>
 #include <set>
 #include <string>
+#include <sys/_types/_size_t.h>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -376,6 +377,13 @@ void SingularVertices(const std::vector<std::vector<int>> &Faces,
     if (!BorderV[i] && (VertValence[i] != 4))
       SingularVert.push_back(i);
   }
+}
+
+void SingularVertices(const std::vector<std::vector<int>> &Faces,
+                      std::vector<int> &SingularVert) {
+  std::vector<bool> BorderV;
+  Geo::getBorderVert(Faces, BorderV);
+  SingularVertices(Faces, BorderV, SingularVert);
 }
 
 enum MType { MT_Triangle, MT_Tetra, MT_Other };
@@ -1624,11 +1632,13 @@ template <class ScalarType>
 static void RemoveDeleted(std::vector<Geo::Point3<ScalarType>> &Pos3D,
                           std::vector<std::vector<int>> &Connectivity,
                           const std::vector<bool> &DeletedV,
-                          const std::vector<bool> &DeletedEl) {
-  // std::cout<<"Size:"<<Pos3D.size()<<std::endl;
-  // std::cout<<"Size Del:"<<DeletedV.size()<<std::endl;
+                          const std::vector<bool> &DeletedEl,
+                          std::vector<int> &OriginalV,
+                          std::vector<int> &OriginalEl) {
+
   assert(Pos3D.size() == DeletedV.size());
   assert(Connectivity.size() == DeletedEl.size());
+  OriginalV.clear();
 
   std::vector<Geo::Point3<ScalarType>> NewPos3D;
   std::vector<int> NewIdx(Pos3D.size(), -1);
@@ -1637,9 +1647,11 @@ static void RemoveDeleted(std::vector<Geo::Point3<ScalarType>> &Pos3D,
       continue;
     NewPos3D.push_back(Pos3D[i]);
     NewIdx[i] = NewPos3D.size() - 1;
+    OriginalV.push_back(i);
   }
 
   std::vector<std::vector<int>> NewConnectivity;
+  OriginalEl.clear();
   for (size_t i = 0; i < Connectivity.size(); i++) {
     if (DeletedEl[i])
       continue;
@@ -1647,17 +1659,57 @@ static void RemoveDeleted(std::vector<Geo::Point3<ScalarType>> &Pos3D,
     for (size_t j = 0; j < Connectivity[i].size(); j++) {
       int IndexVOr = Connectivity[i][j];
       assert(IndexVOr >= 0);
-      //            std::cout<<"IndexVOr "<<IndexVOr<<std::endl;
-      //            std::cout<<"NewIdx.size() "<<NewIdx.size()<<std::endl;
+
       assert(IndexVOr < NewIdx.size());
       int IndexVNew = NewIdx[IndexVOr];
       assert(IndexVNew >= 0);
       assert(IndexVNew < NewPos3D.size());
       NewConnectivity.back().push_back(IndexVNew);
     }
+    OriginalEl.push_back(i);
   }
   Pos3D = NewPos3D;
   Connectivity = NewConnectivity;
+}
+
+template <class ScalarType>
+static void RemoveDeleted(std::vector<Geo::Point3<ScalarType>> &Pos3D,
+                          std::vector<std::vector<int>> &Connectivity,
+                          const std::vector<bool> &DeletedV,
+                          const std::vector<bool> &DeletedEl) {
+  std::vector<int> OriginalV, OriginalEl;
+  RemoveDeleted<ScalarType>(Pos3D, Connectivity, 
+                            DeletedV, DeletedEl, 
+                            OriginalV,OriginalEl);
+}
+
+template <class ScalarType>
+static void RemoveDeleted(std::vector<Geo::Point3<ScalarType>> &Pos3D,
+                          std::vector<std::vector<int>> &Connectivity,
+                          const std::vector<int> &DeletedV,
+                          const std::vector<int> &DeletedEl,
+                          std::vector<int> &OriginalV,
+                          std::vector<int> &OriginalEl) {
+
+  std::vector<bool> DeletedVBool(Pos3D.size(), false);
+  for (size_t i = 0; i < DeletedV.size(); i++) {
+    int IndexV = DeletedV[i];
+    assert(IndexV >= 0);
+    assert(IndexV < DeletedVBool.size());
+    DeletedVBool[IndexV] = true;
+  }
+
+  std::vector<bool> DeletedEBool(Connectivity.size(), false);
+  for (size_t i = 0; i < DeletedEl.size(); i++) {
+    int IndexV = DeletedEl[i];
+    assert(IndexV >= 0);
+    assert(IndexV < DeletedEBool.size());
+    DeletedEBool[IndexV] = true;
+  }
+
+  RemoveDeleted(Pos3D, Connectivity, 
+                DeletedVBool, DeletedEBool,
+                OriginalV,OriginalEl);
 }
 
 static void InvertOrientation(std::vector<std::vector<int>> &Faces) {

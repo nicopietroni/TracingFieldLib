@@ -90,6 +90,11 @@ float GlobalSmoothVal = (float)SParam.GlobalSmoothVal;
 std::vector<std::pair<int, int>> Features;
 std::vector<int> Corners;
 
+int ero_steps=3;
+int old_ero_steps=0;
+int dil_steps=3;
+int old_dil_steps=0;
+
 ScalarType initial_feature_angle = 45;
 ScalarType old_initial_feature_angle = 0;
 
@@ -190,6 +195,8 @@ void BatchProcessCurv() {
   if (processForTracing)
     RefineForTracing();
 
+  //WriteOBJ("testMesh0.obj",VertPos, Connectivity);
+  
   SParam.FixedCross.clear();
   InitFieldByCurvature();
   SmoothGlobal();
@@ -292,8 +299,18 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action,
 }
 
 void UpdateFeatureCorners() {
-  Geo::FeatureCorners(VertPos, Connectivity, initial_feature_angle, Features,
-                      Corners);
+  Geo::FeatureCorners(VertPos, Connectivity, 
+        initial_feature_angle, 
+    Features,Corners);
+
+  Geo::RemoveSingleFaceFeatures(Connectivity,Features);
+
+  if ((ero_steps>0)||(dil_steps>0))
+  {
+    Geo::ErodeDilateFeatures(ero_steps,dil_steps,Features) ;
+    Geo::Corners<ScalarType>(VertPos, Features, initial_feature_angle, Corners);
+  }
+  
 }
 
 void InitGLFW_Window() {
@@ -402,10 +419,24 @@ void SetRenderBar() {
     ImGui::SetNextItemWidth(100.0f);
     ImGui::SliderInt("Inital features", &valueA0, 0, 180);
     initial_feature_angle = valueA0;
-    if (old_initial_feature_angle != initial_feature_angle) {
+    
+
+    ImGui::SliderInt("Ero Steps", &ero_steps, 0, 5);
+    ImGui::SliderInt("Dil Steps", &dil_steps, 0, 5);
+
+    if ((old_initial_feature_angle != initial_feature_angle)||
+        (old_ero_steps != ero_steps)||
+        (old_dil_steps != dil_steps)) 
+    {
       UpdateFeatureCorners();
       old_initial_feature_angle = initial_feature_angle;
+      old_ero_steps = ero_steps;
+      old_dil_steps = dil_steps;
     }
+    // if (old_ero_dil_steps != ero_dil_steps) {
+    //   UpdateFeatureCorners();
+    //   old_ero_dil_steps = ero_dil_steps;
+    // }
   }
 
   if (ImGui::Button("Refine For Tracing")) {

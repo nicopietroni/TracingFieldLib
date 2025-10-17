@@ -1245,13 +1245,13 @@ namespace Geo
                 // avoid patches with multiple boundaries
                 if (PM.PData.PatchCorners[i].size() != 1)
                 {
-                    std::cout << "WARNING PATCH MULTIPL SIDES" << std::endl;
+                    std::cout << "WARNING DUAL PATCH MULTIPL SIDES" << std::endl;
                     continue;
                 }
                 // avoid valence 2 (or smaller) paches
                 if (PM.PData.PatchCorners[i][0].size() < 3)
                 {
-                    std::cout << "WARNING PATCH SIDES < 3" << std::endl;
+                    std::cout << "WARNING DUAL PATCH SIDES < 3" << std::endl;
                     continue;
                 }
                 int NumSides = PM.NumSides(i);

@@ -292,6 +292,7 @@ public:
       return ActiveLink(IndexN0, i);
     }
     assert(0);
+    return false;
   }
 
   void DisableArc(const int &IndexN, const int &IndexNeigh) {

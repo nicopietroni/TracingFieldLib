@@ -705,14 +705,20 @@ private:
       ScalarType AngleVal1 = Geo::AngleRad(-Dir1, Dir2);
       ScalarType AngleVal2 = Geo::AngleRad(-Dir2, Dir3);
       ScalarType AngleVal3 = Geo::AngleRad(-Dir3, Dir0);
+
       // ScalarType Dev0=pow(AngleVal0-M_PI/2,2);
       ScalarType Dev1 = fabs(AngleVal1 - M_PI / 2); //,2);
       ScalarType Dev2 = fabs(AngleVal2 - IdealA);   //,2);
       ScalarType Dev3 = fabs(AngleVal3 - M_PI / 2); //,2);
+
       // DotSum+=Dev0;
+
       DotSum += Dev1;//pow(Dev1,2);
       DotSum += Dev2;//pow(Dev2,2);
       DotSum += Dev3;//pow(Dev3,2);
+      // DotSum = std::max(DotSum,Dev1);
+      // DotSum = std::max(DotSum,Dev2);
+      // DotSum = std::max(DotSum,Dev3);
     }
     return DotSum;
   }
@@ -1184,10 +1190,12 @@ private:
     std::vector<std::vector<int>> PatchFaces = PData.PatchFaces[IndexPatch];
 
     // parametrize with tytte
+    // bool done_param = Geo::UVParam<ScalarType>::TutteEmbedding(
+    //     PatchVertPos, PatchFaces, PData.PatchCorners[IndexPatch][0],
+    //     PatchVertUVTutte, true);
     bool done_param = Geo::UVParam<ScalarType>::TutteEmbedding(
         PatchVertPos, PatchFaces, PData.PatchCorners[IndexPatch][0],
-        PatchVertUVTutte, true);
-
+        PatchVertUVTutte, false);
     assert(done_param);
   }
 
@@ -1257,6 +1265,7 @@ public:
       MaxIte = 5;
       // RType = RT_UVDist_Tutte;
       RType = RT_UVDist_LSC;
+      //RType = RT_CCability;
       // SmoothSteps = 5;
     }
   };
@@ -1347,7 +1356,7 @@ public:
       ParametrizePatchTutte(PData, i, PatchVertUVTutte[i]);
 
       if ((DualParam.RType == RT_UVDist_LSC)||
-        (DualParam.RType == RT_CCability))
+         (DualParam.RType == RT_CCability))
         ParametrizePatchLSC(PData, i, PatchVertUVLSC[i]);
 
       if (DualParam.RType == RT_UVDist_ARAP) 
@@ -1413,6 +1422,9 @@ public:
                      false);
 
       if (DualParam.RType == RT_CCability)
+          // FindSplitPos(PData, CentralV, PatchVertUVTutte, AllSplEdgesPos,
+          //            SplEdgesIDX, DualParam.JointBorder, PrimalCornerPosSet,
+          //            true);
         FindSplitPos(PData, CentralV, PatchVertUVLSC, AllSplEdgesPos,
                      SplEdgesIDX, DualParam.JointBorder, PrimalCornerPosSet,
                      true);
@@ -1432,7 +1444,7 @@ public:
         if (HasSing[i] && DualParam.FixSingPos)
           continue;
 
-        if (DualParam.RType == RT_UVDist_Tutte)
+       if (DualParam.RType == RT_UVDist_Tutte)
           CentralV[i] = OptimizeSingularPos(
               PatchVertPos, PatchVertUVTutte[i], SplEdgesIDX[i],
               PData.PatchCorners[i][0], PerPatchIsB[i]);
@@ -1446,7 +1458,7 @@ public:
               PData.PatchCorners[i][0], PerPatchIsB[i]);
         if (DualParam.RType == RT_CCability)
           CentralV[i] = OptimizeSingularPos(
-              PatchVertPos, PatchVertUVLSC[i], SplEdgesIDX[i],
+              PatchVertPos, PatchVertUVTutte[i], SplEdgesIDX[i],
               PData.PatchCorners[i][0], PerPatchIsB[i]);//,EdgeCCCentralD[i]);
       }
     }
@@ -1467,9 +1479,13 @@ public:
                    false);
 
     if (DualParam.RType == RT_CCability)
+    //     FindSplitPos(PData, CentralV, PatchVertUVTutte, AllSplEdgesPos,
+    //                SplEdgesIDX, DualParam.JointBorder, PrimalCornerPosSet,
+    //                true);
       FindSplitPos(PData, CentralV, PatchVertUVLSC, AllSplEdgesPos,
                    SplEdgesIDX, DualParam.JointBorder, PrimalCornerPosSet,
                    true);
+                   
     // FindSplitPos(PData, CentralV, PatchVertUVArap, AllSplEdgesPos,
     // SplEdgesIDX,
     //              DualParam.JointBorder, PrimalCornerPosSet);

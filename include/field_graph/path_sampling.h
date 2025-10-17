@@ -2338,10 +2338,15 @@ public:
     SwapNodeType.clear();
     // set ones possible to exit
     std::vector<int> IndexN;
+    
     FindExitAllowPathAreaNodes(TestVertex, IndexN);
+
     // set as exit node
     for (size_t i = 0; i < IndexN.size(); i++) {
       int currN = IndexN[i];
+      assert(currN>=0);
+      assert(currN<TGraph.NumNodes());
+      assert(currN<TGraph.NT.size());
       std::pair<int, NType> Entry(currN, TGraph.NodeType(currN));
       SwapNodeType.push_back(Entry);
       TGraph.NodeType(currN) = Geo::ExitDomain;
@@ -2374,12 +2379,13 @@ public:
   }
 
   void RestoreNodeType() {
-    std::cout << "Restoring modes:" << SwapNodeType.size() << std::endl;
+    std::cout << "Restoring nodes:" << SwapNodeType.size() << std::endl;
     for (size_t i = 0; i < SwapNodeType.size(); i++) {
       int IndexN = SwapNodeType[i].first;
       NType TypeNode = SwapNodeType[i].second;
       TGraph.NodeType(IndexN) = TypeNode;
     }
+    SwapNodeType.clear();
   }
 
   void SampleCandidates(bool Init_Distances) {

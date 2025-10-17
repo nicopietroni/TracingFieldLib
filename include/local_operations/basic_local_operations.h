@@ -401,7 +401,7 @@ public:
 
     // LocalVertPairFeatures.clear();
     std::vector<int> CornersIdx;
-    Geo::FeatureCorners<ScalarType>(this->Vert, this->Faces, this->NextF,
+    Geo::MeshFeatures<ScalarType>::FeatureCorners(this->Vert, this->Faces, this->NextF,
                                     involved_f, this->feature_angle,
                                     TestVertPairFeatures, CornersIdx);
     

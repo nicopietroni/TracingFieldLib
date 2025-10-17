@@ -289,7 +289,7 @@ void ComputeFrame(const std::vector<Geo::Point3<ScalarType> > &TetraVertPos,
 
     //STEP 3 SMOOTH
     std::cout<<"** SMOOTHING"<<std::endl;
-    SmoothParam<ScalarType> SParamCross;
+    FieldSmoothParam<ScalarType> SParamCross;
     SParamCross.GlobalSmoothVal=FrameParam.CrossGlobalSmoothVal;
 
     //get the features on surface
