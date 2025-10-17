@@ -9,7 +9,6 @@
 #include <cassert>
 #include <cstddef>
 #include <limits>
-#include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
 #include <set>

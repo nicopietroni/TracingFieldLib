@@ -5,7 +5,6 @@
 #include <cassert>
 #include <cstddef>
 #include <iostream>
-#include <sys/_types/_size_t.h>
 #include <vector>
 
 #include "best_rotation.h"
