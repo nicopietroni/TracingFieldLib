@@ -78,7 +78,8 @@ bool HasUnfererencedVert(const std::vector<Geo::Point2<ScalarType>> &VertPos,
 
 template <class ScalarType>
 void RemoveUnfererencedVert(std::vector<Geo::Point3<ScalarType>> &VertPos,
-                            std::vector<std::vector<int>> &Faces) {
+                            std::vector<std::vector<int>> &Faces,
+                            std::vector<int> &OrigVertIdx) {
   std::vector<bool> Referred(VertPos.size(), false);
   for (size_t i = 0; i < Faces.size(); i++)
     for (size_t j = 0; j < Faces[i].size(); j++)
@@ -88,11 +89,13 @@ void RemoveUnfererencedVert(std::vector<Geo::Point3<ScalarType>> &VertPos,
   std::vector<Geo::Point3<ScalarType>> NewVertPos;
 
   int currIdx = 0;
+  OrigVertIdx.clear();
   for (size_t i = 0; i < Referred.size(); i++)
     if (Referred[i]) {
       NewIdx[i] = currIdx;
       currIdx++;
       NewVertPos.push_back(VertPos[i]);
+      OrigVertIdx.push_back(i);
     }
 
   VertPos = NewVertPos;
@@ -105,6 +108,13 @@ void RemoveUnfererencedVert(std::vector<Geo::Point3<ScalarType>> &VertPos,
       assert(newIdx < VertPos.size());
       Faces[i][j] = newIdx;
     }
+}
+
+template <class ScalarType>
+void RemoveUnfererencedVert(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            std::vector<std::vector<int>> &Faces) {
+  std::vector<int> OrigVertIdx;
+  RemoveUnfererencedVert(VertPos, Faces, OrigVertIdx);
 }
 
 template <class ScalarType>
@@ -1126,6 +1136,8 @@ int PolyMeshGenus(int NVert, int nEdges, int NFaces, int NHoles,
   return -((NVert + NFaces - nEdges + NHoles - 2 * NComponents) / 2);
 }
 
+
+
 // int NumEdges(const std::vector<std::vector<int>> &Connectivity) {
 //   std::set<std::pair<int, int>> EdgeSet;
 //   for (size_t i = 0; i < Connectivity.size(); i++) {
@@ -1360,6 +1372,16 @@ bool SplitNonManifoldBorderV(std::vector<Geo::Point3<ScalarType>> &Pos,
   //   WriteOBJ("testManif.obj",Pos,Faces);
   //   exit(0);
   // }
+}
+
+template <class ScalarType>
+bool SplitNonManifoldBorderV(std::vector<Geo::Point3<ScalarType>> &Pos,
+                             std::vector<std::vector<int>> &Faces)
+{
+  std::vector<std::vector<int>> NextF,NextE;
+  Geo::getFFAdjacency(Faces,NextF,NextE);
+  bool has_split=SplitNonManifoldBorderV(Pos,Faces,NextF,NextE);
+  return has_split;
 }
 
 template <class ScalarType>
@@ -1678,9 +1700,8 @@ static void RemoveDeleted(std::vector<Geo::Point3<ScalarType>> &Pos3D,
                           const std::vector<bool> &DeletedV,
                           const std::vector<bool> &DeletedEl) {
   std::vector<int> OriginalV, OriginalEl;
-  RemoveDeleted<ScalarType>(Pos3D, Connectivity, 
-                            DeletedV, DeletedEl, 
-                            OriginalV,OriginalEl);
+  RemoveDeleted<ScalarType>(Pos3D, Connectivity, DeletedV, DeletedEl, OriginalV,
+                            OriginalEl);
 }
 
 template <class ScalarType>
@@ -1707,9 +1728,37 @@ static void RemoveDeleted(std::vector<Geo::Point3<ScalarType>> &Pos3D,
     DeletedEBool[IndexV] = true;
   }
 
-  RemoveDeleted(Pos3D, Connectivity, 
-                DeletedVBool, DeletedEBool,
-                OriginalV,OriginalEl);
+  RemoveDeleted(Pos3D, Connectivity, DeletedVBool, DeletedEBool, OriginalV,
+                OriginalEl);
+}
+
+template <class ScalarType>
+int RemoveSmallConnectedComponents(
+    std::vector<Geo::Point3<ScalarType>> &Vert,
+    std::vector<std::vector<int>> &Elements, 
+    int ThrVert, int ThrFace,
+    std::vector<int> &OriginalEl, 
+    std::vector<int> &OriginalV) {
+  std::vector<std::vector<int>> ComponentF, ComponentV;
+  FFConnectedComponenent(Elements, ComponentF, ComponentV);
+  assert(ComponentF.size() == ComponentV.size());
+  if (ComponentF.size() == 1)
+    return 0;
+  std::vector<int> ToDeleteF;
+  int deleted_num=0;
+  for (size_t i = 0; i < ComponentF.size(); i++) {
+    if ((ComponentV[i].size() < ThrVert) || (ComponentF[i].size() < ThrFace))
+    {
+      ToDeleteF.insert(ToDeleteF.end(), ComponentF[i].begin(),
+                       ComponentF[i].end());
+      deleted_num++;
+    }
+  }
+  std::vector<int> ToDeleteV;
+
+  RemoveDeleted<ScalarType>(Vert, Elements, ToDeleteV, ToDeleteF, OriginalV, OriginalEl);
+  RemoveUnfererencedVert(Vert,Elements,OriginalV);
+  return deleted_num;
 }
 
 static void InvertOrientation(std::vector<std::vector<int>> &Faces) {

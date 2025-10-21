@@ -2509,6 +2509,8 @@ public:
     elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     TimeRemovePaths += elapsed.count() * 1e-6;
 
+    //FIX ARTIFICIALLY THE WRONG PATCHES
+    PatchMan.FixWrongValencePatches();
     // PatchMan.InitVisualCornersEdges();
 
     std::cout << "<<< Decompose TIMINGS (sec) >>> " << std::endl;

@@ -297,11 +297,11 @@ ScalarType MaxSize = 0.05;
 std::vector<std::vector<std::pair<int, int>>> Separatrices;
 
 void AutoQuadEdgeSize() {
-  std::vector<ScalarType> VertSize;
+  //std::vector<ScalarType> VertSize;
   ScalarType MinAggrSize = MeshBox.Diag() * MinSize;
   ScalarType MaxAggrSize = MeshBox.Diag() * MaxSize;
   ScalarType CurrSize = Geo::RemeshSize<ScalarType>::RemeshSizeFeatures(VertPos, Connectivity, Features,
-                                                                         MinAggrSize, MaxAggrSize, VertSize);
+                                                                         MinAggrSize, MaxAggrSize);// VertSize);
   QuadSize = CurrSize / MeshBox.Diag();
   QuadSize/=2;
   std::cout<<"QuadSize: "<<QuadSize<<std::endl;

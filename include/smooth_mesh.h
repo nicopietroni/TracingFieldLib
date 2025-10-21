@@ -1182,6 +1182,11 @@ void ReprojectIfNeeded(const SmoothParam<ScalarType> &SParam,
                        (SParam.ReprojFaces != NULL));
 
   bool post_project = (do_reproject && SParam.post_project);
+  
+  //save the fixed one
+  std::vector<Geo::Point3<ScalarType>> FixedPos;
+  for (size_t i=0;i<SParam.FixedVert.size();i++)
+    FixedPos.push_back(VertPos[SParam.FixedVert[i]]);
 
   if (post_project)
     Geo::AttractProject<ScalarType>(*SParam.ReprojVert, VertPos, Faces);
@@ -1190,6 +1195,9 @@ void ReprojectIfNeeded(const SmoothParam<ScalarType> &SParam,
     Geo::ProjectOn<ScalarType>(VertPos, Faces, ReprojFeatureV,
                                *SParam.ReprojVert, *SParam.ReprojFaces, TriGrid,
                                FeatureSegs, SegGrid);
+  //restore the fixed one
+  for (size_t i=0;i<SParam.FixedVert.size();i++)
+    VertPos[SParam.FixedVert[i]]=FixedPos[i];
 }
 
 

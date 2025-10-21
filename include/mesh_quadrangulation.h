@@ -98,7 +98,7 @@ template <class ScalarType> class MeshQuadrangulator {
   Geo::PatchManaging<ScalarType> PatchM;
   Geo::PatchDecomposer<ScalarType> PDeco;
   typename Geo::DualPatch<ScalarType>::DualParameter DualParam;
-  Geo::SmoothParam<ScalarType> SParamQuadSmooth;
+  //Geo::SmoothParam<ScalarType> SParamQuadSmooth;
   Geo::QuadrangulationLUT<ScalarType> Q_LUT;
   bool has_problematic_patches;
   std::vector<int> QuadPatch;
@@ -278,9 +278,12 @@ template <class ScalarType> class MeshQuadrangulator {
     std::vector<std::vector<int>> PerDualPatchFaceIDX;
     std::vector<std::vector<int>> PerDualPatchCornerIDX;
 
+    int num_problematic_patches =
     Geo::DualPatch<ScalarType>::ExtractDual(
         PData, DualParam, DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
         PerDualPatchCornerIDX);
+
+    has_problematic_patches|=(num_problematic_patches!=0);
 
     std::vector<int> PrimalCorners;
     Geo::DualPatch<ScalarType>::RetrieveDualFeatures(
@@ -344,24 +347,24 @@ template <class ScalarType> class MeshQuadrangulator {
     // QuadCorners=NewQuadCorners;
   }
 
-  void Init3DSmooth() {
-    SParamQuadSmooth.Clear();
+  // void Init3DSmooth() {
+  //   SParamQuadSmooth.Clear();
 
-    SParamQuadSmooth.Features = QuadFeatures;
-    SParamQuadSmooth.FixedVert = QuadCorners;
+  //   SParamQuadSmooth.Features = QuadFeatures;
+  //   SParamQuadSmooth.FixedVert = QuadCorners;
 
-    std::vector<std::pair<int, int>> BorderE;
-    Geo::getBorderEdges(QuadFaces, BorderE);
-    for (size_t i = 0; i < BorderE.size(); i++) {
-      SParamQuadSmooth.FixedVert.push_back(BorderE[i].first);
-      SParamQuadSmooth.FixedVert.push_back(BorderE[i].second);
-    }
+  //   std::vector<std::pair<int, int>> BorderE;
+  //   Geo::getBorderEdges(QuadFaces, BorderE);
+  //   for (size_t i = 0; i < BorderE.size(); i++) {
+  //     SParamQuadSmooth.FixedVert.push_back(BorderE[i].first);
+  //     SParamQuadSmooth.FixedVert.push_back(BorderE[i].second);
+  //   }
 
-    SParamQuadSmooth.ReprojVert = &TriVertPos;
-    SParamQuadSmooth.ReprojFaces = &TriConnectivity;
-    SParamQuadSmooth.Damp = 0.5;
-    SParamQuadSmooth.post_project = true;
-  }
+  //   SParamQuadSmooth.ReprojVert = &TriVertPos;
+  //   SParamQuadSmooth.ReprojFaces = &TriConnectivity;
+  //   SParamQuadSmooth.Damp = 0.5;
+  //   SParamQuadSmooth.post_project = true;
+  // }
 
   // void SmoothCentroidMesh3D() {
 
@@ -446,7 +449,7 @@ template <class ScalarType> class MeshQuadrangulator {
     
     std::cout << "INIT SMOOTHING" << std::endl;
 
-    has_problematic_patches=(num_problematic_patches>0);
+    has_problematic_patches|=(num_problematic_patches>0);
 
     RemoveDuplicatedVert(QuadVert, QuadFaces);
 
@@ -455,7 +458,7 @@ template <class ScalarType> class MeshQuadrangulator {
     // Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
     //                                 QuadVertNormals);
     UpdateQuadFeatures();
-    Init3DSmooth();
+    //Init3DSmooth();
   }
 
   void SolveDoublets() {
@@ -463,21 +466,61 @@ template <class ScalarType> class MeshQuadrangulator {
         QuadVert, QuadFaces, QuadFeatures, QuadCorners, QuadPatch);
   }
 
-  void SmoothQuadMeshSeparatrix() {
+  // void SmoothQuadMeshSeparatrix() {
 
-    typename Geo::QuadMeshSeparatrixSmooth<ScalarType>::SeparatrixSmoothParam
-        Sep_SParam;
-    Sep_SParam.Fixed = QuadCorners;
-    Sep_SParam.FeatureLines = QuadFeatures;
-    Sep_SParam.Damp = 0.5;
-    Sep_SParam.Steps = QuadSmoothSteps / 2;
-    Sep_SParam.fixBorder = true;
-    Sep_SParam.post_project=!(has_problematic_patches);
-    Sep_SParam.ReprojVert = &TriVertPos;
-    Sep_SParam.ReprojFaces = &TriConnectivity;
-    Sep_SParam.ReprojFeatureLines = TriFeatures;
-    Geo::QuadMeshSeparatrixSmooth<ScalarType>::Smooth(QuadVert, QuadFaces,
-                                                      Sep_SParam);
+  //   typename Geo::QuadMeshSeparatrixSmooth<ScalarType>::SeparatrixSmoothParam
+  //       Sep_SParam;
+  //   Sep_SParam.Fixed = QuadCorners;
+  //   Sep_SParam.FeatureLines = QuadFeatures;
+  //   Sep_SParam.Damp = 0.5;
+  //   Sep_SParam.Steps = QuadSmoothSteps / 2;
+  //   Sep_SParam.fixBorder = true;
+  //   Sep_SParam.post_project=!(has_problematic_patches);
+  //   Sep_SParam.ReprojVert = &TriVertPos;
+  //   Sep_SParam.ReprojFaces = &TriConnectivity;
+  //   Sep_SParam.ReprojFeatureLines = TriFeatures;
+  //   Geo::QuadMeshSeparatrixSmooth<ScalarType>::Smooth(QuadVert, QuadFaces,
+  //                                                     Sep_SParam);
+  // }
+
+  void CleanQuadMesh(int MinV=4,int MinF=4,bool RemDoublets=true)
+  {
+    std::vector<int> OriginalEl,OriginalV;
+    bool has_split=SplitNonManifoldBorderV(QuadVert, QuadFaces);
+    int deleted_num=RemoveSmallConnectedComponents(QuadVert, QuadFaces, MinV,MinF,OriginalEl,OriginalV);
+    if (deleted_num>0)
+    {
+      std::map<int,int> OrigToNewV;//,OrigToNewF;
+      for (size_t i=0;i<OriginalV.size();i++)
+        OrigToNewV[OriginalV[i]]=i;
+      for (size_t i=0;i<QuadFeatures.size();i++)
+      {
+        int IndexV0=QuadFeatures[i].first;
+        int IndexV1=QuadFeatures[i].second;
+        assert(OrigToNewV.count(IndexV0)>0);
+        assert(OrigToNewV.count(IndexV1)>0);
+        QuadFeatures[i].first=OrigToNewV[IndexV0];
+        QuadFeatures[i].second=OrigToNewV[IndexV1];
+      }
+      for (size_t i=0;i<QuadCorners.size();i++)
+      {
+        int IndexV=QuadCorners[i];
+        assert(OrigToNewV.count(IndexV)>0);
+        QuadCorners[i]=OrigToNewV[IndexV];
+      }
+      std::vector<int> NewQuadPatch(QuadFaces.size(),-1);
+      for (size_t i=0;i<QuadFaces.size();i++)
+      {
+        int OldF=OriginalEl[i];
+        assert(OldF>=0);
+        assert(OldF<QuadPatch.size());
+        int IndexP=QuadPatch[OldF];
+        NewQuadPatch[i]=IndexP;
+      }
+    }
+    //QuadFeatures, QuadCorners, QuadPatch
+    SolveDoublets();
+
   }
 
   void SmoothLaplacian() {
@@ -488,21 +531,32 @@ template <class ScalarType> class MeshQuadrangulator {
     SParamQuadSmooth.Features = QuadFeatures;
     SParamQuadSmooth.FixedVert = QuadCorners;
 
-    std::vector<std::pair<int, int>> BorderE;
-    Geo::getBorderEdges(QuadFaces, BorderE);
-    for (size_t i = 0; i < BorderE.size(); i++) {
-      SParamQuadSmooth.FixedVert.push_back(BorderE[i].first);
-      SParamQuadSmooth.FixedVert.push_back(BorderE[i].second);
-    }
+    // std::vector<std::pair<int, int>> BorderE;
+    // Geo::getBorderEdges(QuadFaces, BorderE);
+    // for (size_t i = 0; i < BorderE.size(); i++) {
+    //   SParamQuadSmooth.FixedVert.push_back(BorderE[i].first);
+    //   SParamQuadSmooth.FixedVert.push_back(BorderE[i].second);
+    // }
 
     SParamQuadSmooth.ReprojVert = &TriVertPos;
     SParamQuadSmooth.ReprojFaces = &TriConnectivity;
     SParamQuadSmooth.Damp = 0.5;
     SParamQuadSmooth.post_project = !(has_problematic_patches);
+    //SParamQuadSmooth.post_project = true;
     SParamQuadSmooth.ReprojFeatures = TriFeatures;
     SParamQuadSmooth.NumIte = QuadSmoothSteps / 2;
-    //SParamQuadSmooth.SType = Geo::SMLaplacian;
-    SParamQuadSmooth.SType = Geo::SMBestPoly;
+    SParamQuadSmooth.SType = Geo::SMLaplacian;
+    SParamQuadSmooth.line_border=true;
+    //fix the border in such a cces
+    if (has_problematic_patches)
+    {
+      std::vector<int> BorderV;
+      Geo::getBorderVert(QuadFaces,BorderV);
+      SParamQuadSmooth.FixedVert.insert(SParamQuadSmooth.FixedVert.end(),
+                                        BorderV.begin(),BorderV.end());
+    }
+    
+    //SParamQuadSmooth.SType = Geo::SMBestPoly;
     SParamQuadSmooth.check_AspectR = false;
 
     Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
@@ -577,13 +631,17 @@ public:
     PathSampl.dynamicUpdates = dynamicUpdates;
     PathSampl.NumSamples = num_samples;
 
+    has_problematic_patches=false;
+
     InitializeData();
 
     DecomposePatches();
 
     Quadrangulate();
 
-    SolveDoublets();
+    //SolveDoublets();
+
+    CleanQuadMesh();
 
     SmoothQuadrangulation();
   }

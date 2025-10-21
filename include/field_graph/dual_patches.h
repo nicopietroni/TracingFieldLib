@@ -310,11 +310,10 @@ private:
 
     std::vector<Geo::Point3<ScalarType>> VertPos0 = VertPos;
     std::vector<std::vector<int>> PatchFaces0 = PatchFaces;
-
     RefineMesh<ScalarType>::SplitMeshWithUVPolylines(
         VertPos, PatchUV, PatchFaces, SplitPoly, NewEdges);
-    Geo::RemoveDegenerateFaces<ScalarType>(VertPos, PatchFaces);
 
+    Geo::CleanMesh<ScalarType>::RemoveDegenerateFaces(VertPos, PatchFaces);
     bool IsManifE = EdgeManifold(VertPos, PatchFaces);
     assert(IsManifE);
     bool IsManifV = VertManifold(VertPos, PatchFaces);
@@ -1254,6 +1253,7 @@ public:
     bool FixSingPos;
     bool JointBorder;
     int MaxIte;
+    int MaxValence;
     RegType RType;
     // int SmoothSteps;
 
@@ -1263,6 +1263,7 @@ public:
       FixSingPos = false;
       JointBorder = true;
       MaxIte = 5;
+      MaxValence = 6;
       // RType = RT_UVDist_Tutte;
       RType = RT_UVDist_LSC;
       //RType = RT_CCability;
@@ -1305,7 +1306,7 @@ public:
     }
   }
 
-  static bool ExtractDual(PrimalPatchData &PData, DualParameter &DualParam,
+  static int ExtractDual(PrimalPatchData &PData, DualParameter &DualParam,
                           std::vector<Geo::Point3<ScalarType>> &DualVertPos,
                           std::vector<std::vector<int>> &DualFaces,
                           std::vector<std::vector<int>> &PerPatchFaceIDX,
@@ -1318,7 +1319,8 @@ public:
     PerPatchFaceIDX.clear();
     // PerPatchVertIDX.clear();
     PerPatchCornerIDX.clear();
-
+    
+    int problematic_patches=0;
     int NumPatches = PData.PatchFaces.size();
 
     std::vector<int> CentralV(NumPatches, -1);
@@ -1342,8 +1344,10 @@ public:
     for (size_t i = 0; i < NumPatches; i++) {
 
       if (!MatchPatchPreconditions(PData, i))
+      {
+        problematic_patches++;
         continue;
-
+      }
       SplitPatchIfNeeded(PData, i);
 
       // no need to split quads if not required
@@ -1510,10 +1514,13 @@ public:
       // if (PM.PData.PatchCorners[i].size() != 1)
       if (PData.PatchCorners[i].size() != 1)
         continue;
-
+      
       // avoid valence 2 (or smaller) paches
       // if (PM.PData.PatchCorners[i][0].size() < 3)
       if (PData.PatchCorners[i][0].size() < 3)
+        continue;
+
+       if (PData.PatchCorners[i][0].size() > DualParam.MaxValence)
         continue;
 
       // tutte embedding
@@ -1541,6 +1548,7 @@ public:
 
         // split with TUTTE to ensure bijectivity
         std::vector<int> NewCornerIdX;
+        
         SplitPatchWith(PatchVertPos, PatchFaces, PatchVertUVTutte[i],
                        CentralV[i], SplEdgesIDX[i], NewCornerIdX);
 
@@ -1660,7 +1668,7 @@ public:
     }
     //
     std::cout << "DONE" << std::endl;
-    return true;
+    return problematic_patches;
   }
 
   static void

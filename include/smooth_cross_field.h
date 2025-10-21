@@ -471,7 +471,7 @@ void SmoothGlobalPolyvector(
 
   PolyVectorField::Construct(V, F, FaceI, FaceD, SParam.GlobalSmoothVal,
                              roSyWeight, alignWeights, Ndir, output_field);
-
+  
   // directional::polyvector_field(V, F, FaceI, FaceD, SParam.GlobalSmoothVal,
   //                               roSyWeight, alignWeights, Ndir,
   //                               output_field);
@@ -482,7 +482,8 @@ void SmoothGlobalPolyvector(
                    normals); // Compute a local orthogonal reference system for
                              // each triangle in the given mesh
   PolyVectorField::PolyvectorToField(B1, B2, output_field, Ndir, rawOutField);
-
+  
+    
   assert(output_field.rows() == Faces.size());
   // finally update the principal directions
   for (size_t i = 0; i < Faces.size(); i++) {
