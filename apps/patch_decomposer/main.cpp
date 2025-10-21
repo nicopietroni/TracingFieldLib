@@ -1911,9 +1911,16 @@ void SetExportBar() {
 
     if (ImGui::Button("Save ALL"))
       SaveAll();
+    if (ImGui::Button("Save Loops")) {
+      std::string LoopsFilename = ProjectName;
+      LoopsFilename.append("_loops.txt");
+      WriteCrossGraphPath<ScalarType>(LoopsFilename,VertPos,PathSampl.SelectedPaths);
+    }
     if (ImGui::Button("Save Cycles")) {
-      PDeco.SaveCurveCycleData(std::string("test"));
-      PDeco.SaveSeparateSubMeshes(std::string("test"), std::string("off"));
+      std::string CyclesFilename = ProjectName;
+      CyclesFilename.append("_cycles.txt");
+      PDeco.SaveCurveCycleData(CyclesFilename);
+      //PDeco.SaveSeparateSubMeshes(std::string("test"), std::string("off"));
     }
   }
 

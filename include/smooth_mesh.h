@@ -990,7 +990,7 @@ template <class ScalarType> struct SmoothParam {
     ReprojVert = NULL;
     ReprojFaces = NULL;
     post_project = false;
-    // ReprojStep = 5;
+    ReprojStep = 1;
     SType = SMLaplacian;
     check_AspectR = false;
   }

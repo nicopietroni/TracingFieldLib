@@ -571,10 +571,10 @@ public:
     for (size_t i = 0; i < FixedPathsV.size(); i++) {
       int IndexP = FixedPathsV[i];
       std::vector<int> CurrFeatureEl;
-      Field::CrossFieldGraph::ElemsOfNode(
-          PathSampl.SelectedPaths[IndexP], CurrFeatureEl);
+      Field::CrossFieldGraph::ElemsOfNode(PathSampl.SelectedPaths[IndexP],
+                                          CurrFeatureEl);
       FeatureElem.insert(FeatureElem.end(), CurrFeatureEl.begin(),
-                          CurrFeatureEl.end());
+                         CurrFeatureEl.end());
     }
   }
 
@@ -712,7 +712,7 @@ public:
 
     if (end_features) {
       std::vector<int> ArrivalFeatures;
-      //GetFeatureOrtho(ArrivalFeatures); //, false);
+      // GetFeatureOrtho(ArrivalFeatures); //, false);
       GetFeatureElem(ArrivalFeatures);
 
       PathSampl.SetBorderCanPassToExit(ArrivalFeatures);
@@ -2509,7 +2509,7 @@ public:
     elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     TimeRemovePaths += elapsed.count() * 1e-6;
 
-    //FIX ARTIFICIALLY THE WRONG PATCHES
+    // FIX ARTIFICIALLY THE WRONG PATCHES
     PatchMan.FixWrongValencePatches();
     // PatchMan.InitVisualCornersEdges();
 
@@ -3039,6 +3039,54 @@ public:
     }
   }
 
+  // bool SaveCurveCycleData(const std::string PathSave) {
+  //   std::vector<CurveData> Curves;
+  //   std::vector<CycleData> Cycles;
+  //   GetCurveCycleData(Curves, Cycles);
+
+  //   // first save the curves
+  //   std::string CurveF = PathSave;
+  //   CurveF += std::string(".curve");
+
+  //   std::ofstream fout(CurveF.c_str());
+  //   if (!fout)
+  //     return false;
+
+  //   fout << Curves.size() << "\n";
+
+  //   for (size_t i = 0; i < Curves.size(); i++) {
+  //     int NumPos = Curves[i].Pos.size();
+  //     int NumPatches = Curves[i].NumPatches;
+  //     fout << NumPos << " 0 " << NumPatches << "\n";
+  //     for (size_t j = 0; j < NumPos; j++) {
+  //       Geo::Point3<ScalarType> CurrP = Curves[i].Pos[j];
+  //       fout << CurrP.X << " " << CurrP.Y << " " << CurrP.Z << "\n";
+  //     }
+  //   }
+  //   fout.close();
+
+  //   // then save the cycles
+  //   std::string CycleF = PathSave;
+  //   CycleF += std::string(".cycle");
+
+  //   std::ofstream fout_2(CycleF.c_str());
+  //   if (!fout_2)
+  //     return false;
+
+  //   fout_2 << Cycles.size() << "\n";
+  //   for (size_t i = 0; i < Cycles.size(); i++) {
+  //     fout_2 << Cycles[i].CurveSeq.size() << "\n";
+  //     for (size_t j = 0; j < Cycles[i].CurveSeq.size(); j++) {
+  //       int IndexCurv = Cycles[i].CurveSeq[j][0];
+  //       int VerseCurv = Cycles[i].CurveSeq[j][1];
+  //       int IndexP = Cycles[i].CurveSeq[j][2];
+  //       fout_2 << IndexCurv << " " << VerseCurv << " " << IndexP << "\n";
+  //     }
+  //   }
+  //   fout_2.close();
+  //   return true;
+  // }
+
   bool SaveCurveCycleData(const std::string PathSave) {
     std::vector<CurveData> Curves;
     std::vector<CycleData> Cycles;
@@ -3046,44 +3094,58 @@ public:
 
     // first save the curves
     std::string CurveF = PathSave;
-    CurveF += std::string(".curve");
 
     std::ofstream fout(CurveF.c_str());
     if (!fout)
       return false;
 
-    fout << Curves.size() << "\n";
+    std::vector<Geo::Point3<ScalarType>> VertPos;
+    std::map<Geo::Point3<ScalarType>, int> VertIdx;
+    std::vector<std::vector<int>> PathIdx;
 
-    for (size_t i = 0; i < Curves.size(); i++) {
-      int NumPos = Curves[i].Pos.size();
-      int NumPatches = Curves[i].NumPatches;
-      fout << NumPos << " 0 " << NumPatches << "\n";
-      for (size_t j = 0; j < NumPos; j++) {
-        Geo::Point3<ScalarType> CurrP = Curves[i].Pos[j];
-        fout << CurrP.X << " " << CurrP.Y << " " << CurrP.Z << "\n";
+    for (size_t i = 0; i < PatchMan.PData.SubPatchVertPos.size(); i++) {
+
+      std::vector<Geo::Point3<ScalarType>> SubPVert =
+          PatchMan.PData.SubPatchVertPos[i];
+      std::vector<std::vector<int>> SubPFace = PatchMan.PData.SubPatchFaces[i];
+
+      // then get the outer loops
+      std::vector<std::vector<int>> BorderVIdxL;
+      getBorderSequncesVert(SubPFace, BorderVIdxL);
+
+      PathIdx.resize(PathIdx.size() + 1);
+
+      assert(BorderVIdxL.size() == 1);
+      for (size_t j = 0; j < BorderVIdxL[0].size(); j++) {
+        int IndexV = BorderVIdxL[0][j];
+        Geo::Point3<ScalarType> LoopPos = SubPVert[IndexV];
+        int CurrVertIdx = -1;
+        if (VertIdx.count(LoopPos) == 0) {
+          VertPos.push_back(LoopPos);
+          CurrVertIdx = VertPos.size() - 1;
+          VertIdx[LoopPos] = CurrVertIdx;
+        } else {
+          CurrVertIdx = VertIdx[LoopPos];
+        }
+        PathIdx.back().push_back(CurrVertIdx);
+      }
+    }
+    fout << "numV " << VertPos.size() << "\n";
+    for (size_t i = 0; i < VertPos.size(); i++) {
+      Geo::Point3<ScalarType> CurrPos = VertPos[i];
+      fout << "v " << CurrPos.X << " " << CurrPos.Y << " " << CurrPos.Z << "\n";
+    }
+
+    fout << "numP " << PathIdx.size() << "\n";
+    for (size_t i = 0; i < PathIdx.size(); i++) {
+      fout << "p " << i << "\n";
+      fout << "numV " << PathIdx[i].size() << "\n";
+      for (size_t j = 0; j < PathIdx[i].size(); j++) {
+        fout << PathIdx[i][j] << "\n";
       }
     }
     fout.close();
 
-    // then save the cycles
-    std::string CycleF = PathSave;
-    CycleF += std::string(".cycle");
-
-    std::ofstream fout_2(CycleF.c_str());
-    if (!fout_2)
-      return false;
-
-    fout_2 << Cycles.size() << "\n";
-    for (size_t i = 0; i < Cycles.size(); i++) {
-      fout_2 << Cycles[i].CurveSeq.size() << "\n";
-      for (size_t j = 0; j < Cycles[i].CurveSeq.size(); j++) {
-        int IndexCurv = Cycles[i].CurveSeq[j][0];
-        int VerseCurv = Cycles[i].CurveSeq[j][1];
-        int IndexP = Cycles[i].CurveSeq[j][2];
-        fout_2 << IndexCurv << " " << VerseCurv << " " << IndexP << "\n";
-      }
-    }
-    fout_2.close();
     return true;
   }
 

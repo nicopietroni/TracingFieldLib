@@ -531,21 +531,28 @@ template <class ScalarType> class MeshQuadrangulator {
     SParamQuadSmooth.Features = QuadFeatures;
     SParamQuadSmooth.FixedVert = QuadCorners;
 
-    // std::vector<std::pair<int, int>> BorderE;
-    // Geo::getBorderEdges(QuadFaces, BorderE);
-    // for (size_t i = 0; i < BorderE.size(); i++) {
-    //   SParamQuadSmooth.FixedVert.push_back(BorderE[i].first);
-    //   SParamQuadSmooth.FixedVert.push_back(BorderE[i].second);
-    // }
+    //add border edges as features
+    std::vector<std::pair<int, int>> BorderEQuad;
+    Geo::getBorderEdges(QuadFaces, BorderEQuad);
+    for (size_t i = 0; i < BorderEQuad.size(); i++) {
+      SParamQuadSmooth.Features.push_back(BorderEQuad[i]);
+    }
+
+    SParamQuadSmooth.ReprojFeatures = TriFeatures;
+
+    std::vector<std::pair<int, int>> BorderETris;
+    Geo::getBorderEdges(TriConnectivity,BorderETris);
+    for (size_t i = 0; i < BorderETris.size(); i++) {
+      SParamQuadSmooth.ReprojFeatures.push_back(BorderETris[i]);
+    }
 
     SParamQuadSmooth.ReprojVert = &TriVertPos;
     SParamQuadSmooth.ReprojFaces = &TriConnectivity;
     SParamQuadSmooth.Damp = 0.5;
     SParamQuadSmooth.post_project = !(has_problematic_patches);
     //SParamQuadSmooth.post_project = true;
-    SParamQuadSmooth.ReprojFeatures = TriFeatures;
     SParamQuadSmooth.NumIte = QuadSmoothSteps / 2;
-    SParamQuadSmooth.SType = Geo::SMLaplacian;
+    SParamQuadSmooth.SType = Geo::SMBestPoly;
     SParamQuadSmooth.line_border=true;
     //fix the border in such a cces
     if (has_problematic_patches)
