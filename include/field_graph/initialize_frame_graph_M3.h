@@ -33,6 +33,10 @@ namespace Geo {
 
 template <class ScalarType> class M3LabelGraphInitialize {
 
+public:
+  enum LinkType { DisableOppDir, WeightOppDir, DisableOppNorm, WeightOppNorm };
+
+private:
   static void
   GetExternalEdges(const std::vector<std::vector<int>> &TetraInternalFaces,
                    const std::vector<int> &FaceMap,
@@ -70,14 +74,14 @@ template <class ScalarType> class M3LabelGraphInitialize {
     }
   };
 
-  //return a data strucrture that contains for each edge
-  //a unique frame and all the faces sharing the edge
+  // return a data strucrture that contains for each edge
+  // a unique frame and all the faces sharing the edge
   static void InitEdgeFrameInfo(
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
       std::vector<EdgeFrameInfo> &EdgeFrames) {
 
-    // get interpolated frames, 
+    // get interpolated frames,
     // a map that says for each edge
     // the interpolated frame
     std::map<std::pair<int, int>, Field::FrameField<ScalarType>> EdgeFrame;
@@ -132,53 +136,53 @@ template <class ScalarType> class M3LabelGraphInitialize {
       std::vector<EdgeNodesInfo> &EdgeInfo) {
     EdgeInfo.clear();
 
-    //get one frame for each edge and the set of faces that
-    //share those edges
+    // get one frame for each edge and the set of faces that
+    // share those edges
     std::vector<EdgeFrameInfo> EdgeFrames;
     InitEdgeFrameInfo(TetraInternalFaces, FacesFrameField, EdgeFrames);
 
-    //for each edge
+    // for each edge
     for (size_t i = 0; i < EdgeFrames.size(); i++) {
       int IndexV0 = EdgeFrames[i].V0;
       int IndexV1 = EdgeFrames[i].V1;
 
-      //set the two vertices of the edge
+      // set the two vertices of the edge
       EdgeInfo.resize(EdgeInfo.size() + 1);
       EdgeInfo.back().V0 = IndexV0;
       EdgeInfo.back().V1 = IndexV1;
 
-      //get the frame field of such edge
+      // get the frame field of such edge
       Field::FrameField<ScalarType> EdgeF = EdgeFrames[i].F;
 
       // then cycle over all faces
       for (size_t j = 0; j < EdgeFrames[i].FacesEdge.size(); j++) {
-        //get the current face
+        // get the current face
         int IndexF = EdgeFrames[i].FacesEdge[j].first;
-        //the edge with respect to that face (which is the label)
+        // the edge with respect to that face (which is the label)
         int Label = EdgeFrames[i].FacesEdge[j].second;
 
         // for each direction
         for (size_t d = 0; d < 3; d++) {
           int IndexDir = d;
-          //get the index of the node given face and direction
+          // get the index of the node given face and direction
           int IndexNode =
               Field::FrameFieldM3Graph::NodeOfElemDir(IndexF, IndexDir);
 
-          //get the direction of such a face
+          // get the direction of such a face
           Geo::Point3<ScalarType> TargetD =
               FacesFrameField[IndexF].GetDirection(IndexDir);
 
-          // get the best aligned with respect 
+          // get the best aligned with respect
           // to the frame on the shared edge
           int IndexTargetD = EdgeF.BestM3DirectionI(TargetD);
           assert(IndexTargetD >= 0);
           assert(IndexTargetD < 3);
 
-          // then set that for that edge for that 
+          // then set that for that edge for that
           // direction of the edge that node is tangent
           EdgeInfo.back().TangentN[IndexTargetD].push_back(IndexNode);
-          //also that for that node, the corresponding 
-          // face has the edge number is label (0..2)
+          // also that for that node, the corresponding
+          //  face has the edge number is label (0..2)
           EdgeInfo.back().NodeLabel[IndexTargetD].push_back(Label);
         }
       }
@@ -194,7 +198,7 @@ template <class ScalarType> class M3LabelGraphInitialize {
                      const std::set<std::pair<int, int>> &ExtEdges) {
 
     int BorderE = 0;
-    //for each node
+    // for each node
     for (size_t i = 0; i < Facegraph.NumNodes(); i++) {
       int IndexN = i;
       int IndexF = Field::FrameFieldM3Graph::ElemOfNode(IndexN);
@@ -206,7 +210,7 @@ template <class ScalarType> class M3LabelGraphInitialize {
       if (FaceMap[IndexF] != -1)
         Facegraph.NodeBorderF[IndexN] = true;
 
-      //for each edge
+      // for each edge
       for (size_t j = 0; j < 3; j++) {
         int IndexV0 = TetraInternalFaces[IndexF][j];
 
@@ -306,7 +310,7 @@ template <class ScalarType> class M3LabelGraphInitialize {
       if (Facegraph.NodeBorderF[NodeIdx])
         continue;
 
-      //for each label
+      // for each label
       for (size_t e = 0; e < 3; e++) {
         int IndexLabel = e;
         if (!Facegraph.NodeBorderE[NodeIdx][IndexLabel])
@@ -324,54 +328,81 @@ template <class ScalarType> class M3LabelGraphInitialize {
   //                                    Geo::Point3<ScalarType> &NormFace0,
   //                                    Geo::Point3<ScalarType> &NormFace1)
 
-  ///CHECK MAYBE PUT HIGH WEIGHT
+  /// CHECK MAYBE PUT HIGH WEIGHT
   static bool CanConnectM3(
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
       const Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
-      const int &Node0, const int &Node1, ScalarType &Weight) {
-    
-    //get the two faces
+      const int &Node0, const int &Node1, const LinkType LType,
+      ScalarType &Weight) {
+
+    // get the two faces
     int IndexF0 = Field::FrameFieldM3Graph::ElemOfNode(Node0);
     int IndexF1 = Field::FrameFieldM3Graph::ElemOfNode(Node1);
 
-    //get the two directions of the nodes, 
-    //which direction of the field it represent
+    // get the two directions of the nodes,
+    // which direction of the field it represent
     int IndexD0 = Field::FrameFieldM3Graph::DirOfNode(Node0);
     int IndexD1 = Field::FrameFieldM3Graph::DirOfNode(Node1);
 
-    //consider that the mesh is not manifold, not orientable,
-    //so it has to be computed coherently for two faces 
+    // consider that the mesh is not manifold, not orientable,
+    // so it has to be computed coherently for two faces
     Geo::Point3<ScalarType> NormFace0, NormFace1;
     bool coherent = ComputeCoherentNormal(VertPos, TetraInternalFaces[IndexF0],
                                           TetraInternalFaces[IndexF1],
                                           NormFace0, NormFace1);
     assert(coherent);
 
-    //get the two directions of the faces
+    // get the two directions of the faces
     Geo::Point3<ScalarType> DirF0 =
         FacesFrameField[IndexF0].GetDirection(IndexD0);
     Geo::Point3<ScalarType> DirF1 =
         FacesFrameField[IndexF1].GetDirection(IndexD1);
-    
-    //orient the directions coherently
-    //with respect to each face Normal (coherent)
+
+    // orient the directions coherently
+    // with respect to each face Normal (coherent)
     if (Dot(NormFace0, DirF0) < 0)
       DirF0 = -DirF0;
     if (Dot(NormFace1, DirF1) < 0)
       DirF1 = -DirF1;
 
-    // then check if there is inversion
-    if (Dot(DirF0, DirF1) < 0)
-      return false;
+    ScalarType DotNorm = Dot(NormFace0, NormFace1);
+    bool coherentNorm = (DotNorm > 0);
+    ScalarType DotDir = Dot(DirF0, DirF0);
+    bool coherentDir = (DotDir > 0);
 
-    //otherwise compute the angle fo deviation
-    Geo::Point3<ScalarType> avgNorm = (NormFace0 + NormFace1);
-    avgNorm.Normalize();
-    Geo::Point3<ScalarType> avgDir = (DirF0 + DirF1);
-    avgDir.Normalize();
-    Weight = Geo::AngleDeg(avgNorm, avgDir) / 90;
+    // DisableOppDir,
+    // WeightOppDir,
+    // DisableOppNorm,
+    // WeightOppNorm
+    if ((!coherentDir) && (LType == DisableOppDir))
+      return false;
+    if ((!coherentNorm) && (LType == DisableOppNorm))
+      return false;
+    // if(coherentNorm!=coherentDir)
+    // {
+    //   std::cout<<"Coherent Norm: "<<coherentNorm<<std::endl;
+    //   std::cout<<"Coherent Dir: "<<coherentDir<<std::endl;
+    //   std::cout<<"Dot Norm: "<<Dot(NormFace0, NormFace1)<<std::endl;
+    //   std::cout<<"Dot Dir: "<<Dot(DirF0, DirF1)<<std::endl;
+    // }
+
+    // // then check if there is inversion
+    // if (Dot(DirF0, DirF1) < 0)
+    //   return false;
+
+    // otherwise compute the angle fo deviation
+
+    if ((LType == DisableOppDir) || (LType == WeightOppDir)) {
+      Geo::Point3<ScalarType> avgNorm = (NormFace0 + NormFace1);
+      avgNorm.Normalize();
+      Geo::Point3<ScalarType> avgDir = (DirF0 + DirF1);
+      avgDir.Normalize();
+      Weight = Geo::AngleDeg(avgNorm, avgDir) / 180;
+    } else {
+      Weight = Geo::AngleDeg(NormFace0, NormFace1) / 180;
+    }
     return true;
   }
 
@@ -598,7 +629,8 @@ template <class ScalarType> class M3LabelGraphInitialize {
       const std::vector<std::pair<int, int>> &SurfConcaveE,
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
       const std::vector<std::vector<int>> &TetraInternalFaces,
-      const std::vector<Field::FrameField<ScalarType>> &FacesFrameField) {
+      const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+      const LinkType &LType) {
 
     std::vector<std::vector<std::pair<int, int>>> ConvexFeatureEdgeFaces,
         ConvexFeatureEdgExtFaces;
@@ -733,10 +765,10 @@ template <class ScalarType> class M3LabelGraphInitialize {
         ScalarType Weight;
         bool CanConn0 =
             CanConnectM3(VertPos, Facegraph, TetraInternalFaces,
-                         FacesFrameField, IndexN0, IndexNTest0, Weight);
+                         FacesFrameField, IndexN0, IndexNTest0, LType,Weight);
         bool CanConn1 =
             CanConnectM3(VertPos, Facegraph, TetraInternalFaces,
-                         FacesFrameField, IndexN1, IndexNTest1, Weight);
+                         FacesFrameField, IndexN1, IndexNTest1, LType,Weight);
         if (CanConn0) {
           Facegraph.SetExit(IndexNTest0, IndexL);
           Facegraph.NodeType(IndexNTest0) = Geo::Internal;
@@ -994,19 +1026,19 @@ template <class ScalarType> class M3LabelGraphInitialize {
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
-      const std::set<std::pair<int, int>> &ExtEdges) {
+      const std::set<std::pair<int, int>> &ExtEdges, const LinkType LType) {
 
-    //this data structure has for each edge  
-    //and for each direction of the edge the 
-    //corresponding nodes and the label 
-    //of edge wrt to the corresponging face 
+    // this data structure has for each edge
+    // and for each direction of the edge the
+    // corresponding nodes and the label
+    // of edge wrt to the corresponging face
     std::vector<EdgeNodesInfo> EdgeInfo;
-    
+
     GetM3EdgeNodesInfo(TetraInternalFaces, FacesFrameField, EdgeInfo);
 
     Facegraph.InternalTangentConstr.clear();
     Facegraph.BorderTangentConstr.clear();
-    //then cycle all the possible edges
+    // then cycle all the possible edges
     for (size_t i = 0; i < EdgeInfo.size(); i++) {
       int IndexV0 = EdgeInfo[i].V0;
       int IndexV1 = EdgeInfo[i].V1;
@@ -1015,55 +1047,54 @@ template <class ScalarType> class M3LabelGraphInitialize {
       assert(IndexV0 < VertPos.size());
       assert(IndexV1 < VertPos.size());
 
-      //check if possible exit edge (one on the surface)
+      // check if possible exit edge (one on the surface)
       std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
                                std::max(IndexV0, IndexV1));
       bool IsExit = (ExtEdges.count(KeyE) > 0);
 
-      //then explore the three direction of the face
+      // then explore the three direction of the face
       for (size_t d = 0; d < 3; d++) {
         std::vector<int> TangentN;
         std::vector<int> NodeLabel;
 
-        //check that for each node there is the 
-        //corresponding label (edge of corresponding face)
+        // check that for each node there is the
+        // corresponding label (edge of corresponding face)
         assert(EdgeInfo[i].TangentN[d].size() ==
                EdgeInfo[i].NodeLabel[d].size());
 
-        //if there is only one node 
-        //then it cannot be connectec
+        // if there is only one node
+        // then it cannot be connectec
         if (EdgeInfo[i].TangentN[d].size() < 2)
           continue;
-
 
         // int Node0 = EdgeInfo[i].TangentN[d][0];
         // int Label0 = EdgeInfo[i].NodeLabel[d][0];
 
-        //then go over all the node for each direction of 
-        //that frame on the edge
+        // then go over all the node for each direction of
+        // that frame on the edge
         for (size_t j = 0; j < EdgeInfo[i].TangentN[d].size(); j++) {
           int CurrN = EdgeInfo[i].TangentN[d][j];
           int CurrL = EdgeInfo[i].NodeLabel[d][j];
 
-          //check if enabled
+          // check if enabled
           if (!Facegraph.IsEnabled(CurrN))
             continue;
-          //check if tangent
+          // check if tangent
           if (Facegraph.NodeType(CurrN) == TangentDomain)
             continue;
 
-          //collect all nodes and their label
+          // collect all nodes and their label
           TangentN.push_back(CurrN);
           NodeLabel.push_back(CurrL);
         }
 
-        //if there is only one there is nothing to link
+        // if there is only one there is nothing to link
         if (TangentN.size() < 2)
           continue;
 
-        //here check if exit or not, this used to see
-        //if we need to set up internal constraints or
-        //if is an edge label
+        // here check if exit or not, this used to see
+        // if we need to set up internal constraints or
+        // if is an edge label
         if (!IsExit)
           Facegraph.InternalTangentConstr.push_back(TangentN);
         else
@@ -1080,14 +1111,17 @@ template <class ScalarType> class M3LabelGraphInitialize {
             assert(IndexN0 != IndexN1);
             ScalarType Weight = 1;
 
-            //then check if the two faces can be connected
+            // then check if the two faces can be connected
             bool canConnect =
                 CanConnectM3(VertPos, Facegraph, TetraInternalFaces,
-                             FacesFrameField, IndexN0, IndexN1, Weight);
-            if (!canConnect)
+                             FacesFrameField, IndexN0, IndexN1, LType, Weight);
+            if (!canConnect) {
+              // Facegraph.AddReverseNeighbour(IndexN0, IndexN1, Label0);
+              // Facegraph.AddReverseNeighbour(IndexN1, IndexN0, Label1);
               continue;
-            
-            //add the connections if they can be connected
+            }
+
+            // add the connections if they can be connected
             Facegraph.AddNeighbour(IndexN0, IndexN1, Label0, Weight);
             Facegraph.AddNeighbour(IndexN1, IndexN0, Label1, Weight);
           }
@@ -1103,6 +1137,7 @@ public:
          const std::vector<Geo::Point3<ScalarType>> &SurfVertPos,
          const std::vector<std::vector<int>> &SurfFaces,
          const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+         const LinkType LType = DisableOppDir,
          const std::vector<std::pair<int, int>> &SurfConvexE =
              std::vector<std::pair<int, int>>(),
          const std::vector<std::pair<int, int>> &SurfConcaveE =
@@ -1164,14 +1199,14 @@ public:
     if ((SurfConvexE.size() > 0) || (SurfConcaveE.size() > 0))
       AddFeatureEdges(Facegraph, SurfVertPos, SurfFaces, SurfConvexE,
                       SurfConcaveE, VertPos, TetraInternalFaces,
-                      FacesFrameField);
+                      FacesFrameField,LType);
 
     std::vector<int> TangentN;
 
     std::cout << "Initializing Connections " << std::endl;
 
     InitConnections(Facegraph, VertPos, TetraInternalFaces, FacesFrameField,
-                    ExtEdges);
+                    ExtEdges, LType);
 
     std::cout << "Sorting and make them unique " << std::endl;
 
@@ -1187,7 +1222,8 @@ public:
     std::cout << "Testing " << std::endl;
 
     // get the empty label
-    int NumBefore = LabelGraphFuctions<ScalarType>::ActiveInternalNodes(Facegraph);
+    int NumBefore =
+        LabelGraphFuctions<ScalarType>::ActiveInternalNodes(Facegraph);
     std::vector<int> SelectedNodes;
     LabelGraphFuctions<ScalarType>::GetInternalNodesWithEmptyLabel(
         Facegraph, SelectedNodes);

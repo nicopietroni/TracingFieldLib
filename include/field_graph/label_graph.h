@@ -68,6 +68,9 @@ public:
   // for each node, for each label (edge 0..2) the set of neightbors
   std::vector<std::vector<std::vector<NeighInfo>>> N;
 
+  // // for each node, for each label (edge 0..2) the set of reverse neighbors
+  // std::vector<std::vector<std::vector<int>>> RevN;
+
   //this set if for a node for a label (edge 0..2) 
   // if can exit (reach surface orthogonally)
   std::vector<std::vector<bool>> IsExit;
@@ -173,6 +176,18 @@ public:
     assert(IndexLabel < (int)N[IndexN0].size());
     N[IndexN0][IndexLabel].push_back(NeighInfo(IndexN1, W, true));
   }
+
+  // void AddReverseNeighbour(const int &IndexN0, 
+  //                          const int &IndexN1,
+  //                          const int &IndexLabel) {
+  //   assert(IndexN0 >= 0);
+  //   assert(IndexN0 < (int)RevN.size());
+  //   assert(IndexN1 >= 0);
+  //   assert(IndexN1 < (int)RevN.size());
+  //   assert(IndexLabel >= 0);
+  //   assert(IndexLabel < (int)RevN[IndexN0].size());
+  //   RevN[IndexN0][IndexLabel].push_back(IndexN1);
+  // }
 
   void AddNeighbour(const int &IndexN0, const int &IndexN1,
                     const int &IndexLabel, const ScalarType &W,
@@ -415,6 +430,8 @@ public:
   void AllocateNodes(int NumNodes, int NumLabel) {
     N.clear();
     N.resize(NumNodes);
+    // RevN.clear();
+    // RevN.resize(NumNodes);
     IsExit.clear();
     IsExit.resize(NumNodes);
 
@@ -422,6 +439,10 @@ public:
       N[i].resize(NumLabel);
       IsExit[i].resize(NumLabel, false);
     }
+    // for (size_t i = 0; i < RevN.size(); i++) {
+    //   RevN[i].resize(NumLabel);
+    // }
+
     NT.clear();
     NT.resize(NumNodes, Internal);
 

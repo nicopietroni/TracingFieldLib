@@ -885,9 +885,9 @@ public:
       BorderTangentM3 = true;
       //GlobalNeigh=true;
       Gap = 0.1;
-      OType = FaceOBJ;
+      //OType = FaceOBJ;
       // OType = ConnOBJ;
-      // OType =FaceConnOBJ;
+      OType =FaceConnOBJ;
     }
   };
 
