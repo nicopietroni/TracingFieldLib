@@ -369,7 +369,7 @@ private:
 
     ScalarType DotNorm = Dot(NormFace0, NormFace1);
     bool coherentNorm = (DotNorm > 0);
-    ScalarType DotDir = Dot(DirF0, DirF0);
+    ScalarType DotDir = Dot(DirF0, DirF1);
     bool coherentDir = (DotDir > 0);
 
     // DisableOppDir,
@@ -399,9 +399,9 @@ private:
       avgNorm.Normalize();
       Geo::Point3<ScalarType> avgDir = (DirF0 + DirF1);
       avgDir.Normalize();
-      Weight = Geo::AngleDeg(avgNorm, avgDir) / 180;
+      Weight = Geo::AngleDeg(avgNorm, avgDir) / 90;
     } else {
-      Weight = Geo::AngleDeg(NormFace0, NormFace1) / 180;
+      Weight = Geo::AngleDeg(NormFace0, NormFace1) / 90;
     }
     return true;
   }

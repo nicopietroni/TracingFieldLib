@@ -4,6 +4,7 @@
 #include "IO/io_obj.h"
 #include "IO/io_path.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdlib>
 #include <iostream>
@@ -31,6 +32,7 @@
 #include <patch_side_discretization.h>
 
 #include "edge_mesh_functions.h"
+#include "mesh_mapping.h"
 #include "smooth_mesh.h"
 #include <quad_mesh_functions.h>
 #include <quadmesh_smooth_separatrix.h>
@@ -307,19 +309,48 @@ template <class ScalarType> class MeshQuadrangulator {
     DualParam.InitSingPos = true;
     DualParam.FixSingPos = false;
     DualParam.JointBorder = true;
-    // DualParam.RType=Geo::DualPatch<ScalarType>::RT_CCability;
+    //DualParam.RType=Geo::DualPatch<ScalarType>::RT_CCability;
   }
 
   void UpdateQuadFeatures() {
-    std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
-        FeatureData;
+    
+    // std::vector<Geo::Point3<ScalarType>> EdgeMPos;
+    // std::vector<std::vector<int>> EdgesIdx;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromVertPairs(DualVertPos,DualConnectivity,DualFeatures,EdgeMPos,EdgesIdx);
+    // WriteOBJ("testedge_dual.obj",EdgeMPos,EdgesIdx);
+    // exit(0);
+
+    
+    std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> FeatureData;
+
     SideD.GetFeaturesQuadrData(DualVertPos, DualFeatures, FeatureData);
 
-    QuadFeatures.clear();
-    bool has_mapped = FindEdgePosCorrespondences(QuadVert, QuadFaces,
-                                                 FeatureData, QuadFeatures);
-    assert(has_mapped);
+    // std::vector<Geo::Point3<ScalarType>> EdgeMeshVertPos;
+    // std::vector<std::vector<int>> ConnectivityEdges;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromPosPairs(FeatureData,EdgeMeshVertPos,ConnectivityEdges);
+  
+    // WriteOBJ("testedge_dual_pairs.obj",EdgeMeshVertPos,ConnectivityEdges);
+  
 
+    QuadFeatures.clear();
+    // bool has_mapped = FindEdgePosCorrespondences(QuadVert, QuadFaces,
+    //                                              FeatureData, QuadFeatures);
+    // if (!has_mapped){std::cout<<"DEEEE"<<std::endl;exit(0);}
+    bool has_mapped = Geo::FindEdgePosCorrespondences(QuadVert, QuadFaces,
+                                                 FeatureData, QuadFeatures);
+    
+    // WriteOBJ("extractedQuad.obj",QuadVert,QuadFaces);
+    
+    // std::vector<Geo::Point3<ScalarType>> EdgeMPos;
+    // std::vector<std::vector<int>> EdgesIdx;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromVertPairs(QuadVert,QuadFaces,QuadFeatures,EdgeMPos,EdgesIdx);
+    // WriteOBJ("testedge_quad.obj",EdgeMPos,EdgesIdx);
+    
+    // exit(0);
+    if (!has_problematic_patches)
+    {
+      assert(has_mapped);
+    }
     // find the corners
     QuadCorners.clear();
    
@@ -450,14 +481,18 @@ template <class ScalarType> class MeshQuadrangulator {
     std::cout << "INIT SMOOTHING" << std::endl;
 
     has_problematic_patches|=(num_problematic_patches>0);
-
+    
     RemoveDuplicatedVert(QuadVert, QuadFaces);
-
+    
     RemoveUnfererencedVert(QuadVert, QuadFaces);
 
-    // Geo::ComputeNormals<ScalarType>(QuadVert, QuadFaces, QuadFaceNormals,
-    //                                 QuadVertNormals);
     UpdateQuadFeatures();
+    
+    for (size_t i=0;i<QuadFeatures.size();i++)
+    {
+      assert(QuadFeatures[i].first>=0);
+      assert(QuadFeatures[i].second>=0);
+    }
     //Init3DSmooth();
   }
 
@@ -465,23 +500,6 @@ template <class ScalarType> class MeshQuadrangulator {
     Geo::QuadPatchFunctions<ScalarType>::RemoveDoublets(
         QuadVert, QuadFaces, QuadFeatures, QuadCorners, QuadPatch);
   }
-
-  // void SmoothQuadMeshSeparatrix() {
-
-  //   typename Geo::QuadMeshSeparatrixSmooth<ScalarType>::SeparatrixSmoothParam
-  //       Sep_SParam;
-  //   Sep_SParam.Fixed = QuadCorners;
-  //   Sep_SParam.FeatureLines = QuadFeatures;
-  //   Sep_SParam.Damp = 0.5;
-  //   Sep_SParam.Steps = QuadSmoothSteps / 2;
-  //   Sep_SParam.fixBorder = true;
-  //   Sep_SParam.post_project=!(has_problematic_patches);
-  //   Sep_SParam.ReprojVert = &TriVertPos;
-  //   Sep_SParam.ReprojFaces = &TriConnectivity;
-  //   Sep_SParam.ReprojFeatureLines = TriFeatures;
-  //   Geo::QuadMeshSeparatrixSmooth<ScalarType>::Smooth(QuadVert, QuadFaces,
-  //                                                     Sep_SParam);
-  // }
 
   void CleanQuadMesh(int MinV=4,int MinF=4,bool RemDoublets=true)
   {
@@ -521,17 +539,111 @@ template <class ScalarType> class MeshQuadrangulator {
     //QuadFeatures, QuadCorners, QuadPatch
     SolveDoublets();
 
+    RemoveUnfererencedVert(QuadVert, QuadFaces);
   }
+
+  void SetFixQuadVertices(Geo::SmoothParam<ScalarType> &SParamQuadSmooth)
+  {
+    SParamQuadSmooth.FixedVert = QuadCorners;
+    std::sort(SParamQuadSmooth.FixedVert.begin(),SParamQuadSmooth.FixedVert.end());
+
+    std::vector<int> Valence1Idx;
+    Geo::MeshFeatures<ScalarType>::VerticesWithValence1(QuadFeatures,Valence1Idx);
+    std::sort(Valence1Idx.begin(),Valence1Idx.end());
+    
+    //std::cout<<"There are "<<Valence1Idx.size()<<" valence 1 vert"<<std::endl;
+    std::vector<int> resultDiff;
+    std::set_difference(SParamQuadSmooth.FixedVert.begin(), SParamQuadSmooth.FixedVert.end(),
+                        Valence1Idx.begin(), Valence1Idx.end(),
+                        std::back_inserter(resultDiff));
+    SParamQuadSmooth.FixedVert = std::move(resultDiff);
+
+    //fix the border in such a cces
+    if (has_problematic_patches)
+    {
+      std::vector<int> BorderV;
+      Geo::getBorderVert(QuadFaces,BorderV);
+      SParamQuadSmooth.FixedVert.insert(SParamQuadSmooth.FixedVert.end(),
+                                        BorderV.begin(),BorderV.end());
+    }
+  }
+
+  // void SmoothLaplacian() {
+  //   Geo::SmoothParam<ScalarType> SParamQuadSmooth;
+
+  //   SParamQuadSmooth.Clear();
+
+  //   SParamQuadSmooth.Features = QuadFeatures;
+
+  //   // SParamQuadSmooth.FixedVert = QuadCorners;
+  //   // std::sort(SParamQuadSmooth.FixedVert.begin(),SParamQuadSmooth.FixedVert.end());
+
+  //   // std::vector<int> Valence1Idx;
+  //   // Geo::MeshFeatures<ScalarType>::VerticesWithValence1(QuadFeatures,Valence1Idx);
+  //   // std::sort(Valence1Idx.begin(),Valence1Idx.end());
+    
+  //   // std::vector<int> result;
+  //   // std::set_difference(a.begin(), a.end(),
+  //   //                     b.begin(), b.end(),
+  //   //                     std::back_inserter(result));
+  //   // a = std::move(result);
+
+  //   // std::set<int> Valence1IdxSet(Valence1Idx.begin(),Valence1Idx.end());
+  //   // std::vector<int> NewQuadCorners;
+  //   // for (size_t i = 0; i < QuadCorners.size(); i++) {
+  //   //   if (Valence1IdxSet.count(QuadCorners[i])>0)continue;  
+  //   //   NewQuadCorners.push_back(i);
+  //   // }
+  //   // QuadCorners=NewQuadCorners;
+
+  //   //add border edges as features
+  //   std::vector<std::pair<int, int>> BorderEQuad;
+  //   Geo::getBorderEdges(QuadFaces, BorderEQuad);
+  //   for (size_t i = 0; i < BorderEQuad.size(); i++) {
+  //     SParamQuadSmooth.Features.push_back(BorderEQuad[i]);
+  //   }
+
+  //   SParamQuadSmooth.ReprojFeatures = TriFeatures;
+
+  //   std::vector<std::pair<int, int>> BorderETris;
+  //   Geo::getBorderEdges(TriConnectivity,BorderETris);
+  //   for (size_t i = 0; i < BorderETris.size(); i++) {
+  //     SParamQuadSmooth.ReprojFeatures.push_back(BorderETris[i]);
+  //   }
+
+  //   SParamQuadSmooth.ReprojVert = &TriVertPos;
+  //   SParamQuadSmooth.ReprojFaces = &TriConnectivity;
+  //   SParamQuadSmooth.Damp = 0.5;
+  //   SParamQuadSmooth.post_project = !(has_problematic_patches);
+  //   //SParamQuadSmooth.post_project = true;
+  //   SParamQuadSmooth.NumIte = QuadSmoothSteps / 2;
+  //   SParamQuadSmooth.SType = Geo::SMBestPoly;
+  //   SParamQuadSmooth.line_border=true;
+
+  //   //SetFixQuadVertices(SParamQuadSmooth);
+
+  //   //SParamQuadSmooth.SType = Geo::SMBestPoly;
+  //   SParamQuadSmooth.check_AspectR = false;
+
+  //   Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
+  // }
 
   void SmoothLaplacian() {
     Geo::SmoothParam<ScalarType> SParamQuadSmooth;
 
     SParamQuadSmooth.Clear();
 
+    for (size_t i=0;i<QuadFeatures.size();i++)
+    {
+      assert(QuadFeatures[i].first>=0);
+      assert(QuadFeatures[i].second>=0);
+    }
+
     SParamQuadSmooth.Features = QuadFeatures;
-    SParamQuadSmooth.FixedVert = QuadCorners;
 
     //add border edges as features
+    //std::cout<<"DE 0"<<std::endl;
+
     std::vector<std::pair<int, int>> BorderEQuad;
     Geo::getBorderEdges(QuadFaces, BorderEQuad);
     for (size_t i = 0; i < BorderEQuad.size(); i++) {
@@ -550,24 +662,44 @@ template <class ScalarType> class MeshQuadrangulator {
     SParamQuadSmooth.ReprojFaces = &TriConnectivity;
     SParamQuadSmooth.Damp = 0.5;
     SParamQuadSmooth.post_project = !(has_problematic_patches);
-    //SParamQuadSmooth.post_project = true;
-    SParamQuadSmooth.NumIte = QuadSmoothSteps / 2;
-    SParamQuadSmooth.SType = Geo::SMBestPoly;
+    SParamQuadSmooth.NumIte = QuadSmoothSteps;
+    SParamQuadSmooth.SType = Geo::SMCentroid;
     SParamQuadSmooth.line_border=true;
-    //fix the border in such a cces
-    if (has_problematic_patches)
-    {
-      std::vector<int> BorderV;
-      Geo::getBorderVert(QuadFaces,BorderV);
-      SParamQuadSmooth.FixedVert.insert(SParamQuadSmooth.FixedVert.end(),
-                                        BorderV.begin(),BorderV.end());
-    }
-    
-    //SParamQuadSmooth.SType = Geo::SMBestPoly;
     SParamQuadSmooth.check_AspectR = false;
+    //SParamQuadSmooth.line_neight_features=true;
+    SetFixQuadVertices(SParamQuadSmooth);
 
+    // std::vector<Geo::Point3<ScalarType>> EdgeMPos;
+    // std::vector<std::vector<int>> EdgesIdx;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromVertPairs(QuadVert,QuadFaces,SParamQuadSmooth.Features,EdgeMPos,EdgesIdx);
+    // WriteOBJ("testedge.obj",EdgeMPos,EdgesIdx);
+
+    // std::vector<Geo::Point3<ScalarType>> EdgeMPos1;
+    // std::vector<std::vector<int>> EdgesIdx1;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromVertPairs((*SParamQuadSmooth.ReprojVert),(*SParamQuadSmooth.ReprojFaces),SParamQuadSmooth.ReprojFeatures,EdgeMPos1,EdgesIdx1);
+    // WriteOBJ("testedge1.obj",EdgeMPos1,EdgesIdx1);
+
+    //exit(0);
     Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
   }
+
+  // void SmoothQuadMeshSeparatrix() {
+
+  //   typename Geo::QuadMeshSeparatrixSmooth<ScalarType>::SeparatrixSmoothParam
+  //       Sep_SParam;
+  //   Sep_SParam.Fixed = QuadCorners;
+  //   Sep_SParam.FeatureLines = QuadFeatures;
+  //   Sep_SParam.Damp = 0.5;
+  //   Sep_SParam.Steps = QuadSmoothSteps / 2;
+  //   Sep_SParam.fixBorder = true;
+  //   Sep_SParam.post_project=!(has_problematic_patches);
+  //   Sep_SParam.ReprojVert = &TriVertPos;
+  //   Sep_SParam.ReprojFaces = &TriConnectivity;
+  //   Sep_SParam.ReprojFeatureLines = TriFeatures;
+    
+  //   Geo::QuadMeshSeparatrixSmooth<ScalarType>::Smooth(QuadVert, QuadFaces,
+  //                                                     Sep_SParam);
+  // }
 
   void SmoothQuadrangulation() {
     // keep more field
@@ -613,7 +745,7 @@ public:
     feature_corner_angle = 45;
     QuadSize = 0.02;
 
-    QuadSmoothSteps = 10;
+    QuadSmoothSteps = 50;
     force_parity = true;
     RegVsIso = 1.0;
 
@@ -646,9 +778,21 @@ public:
 
     Quadrangulate();
 
+    //  std::vector<Geo::Point3<ScalarType>> EdgeMPos;
+    // std::vector<std::vector<int>> EdgesIdx;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromVertPairs(QuadVert,QuadFaces,QuadFeatures,EdgeMPos,EdgesIdx);
+    // WriteOBJ("testedge.obj",EdgeMPos,EdgesIdx);
+
+    //exit(0);
     //SolveDoublets();
 
     CleanQuadMesh();
+
+    // std::vector<Geo::Point3<ScalarType>> EdgeMPos1;
+    // std::vector<std::vector<int>> EdgesIdx1;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromVertPairs(QuadVert,QuadFaces,QuadFeatures,EdgeMPos1,EdgesIdx1);
+    // WriteOBJ("testedge.obj2",EdgeMPos1,EdgesIdx1);
+
 
     SmoothQuadrangulation();
   }

@@ -190,7 +190,7 @@ ScalarType MaxSize = 0.05;
 Geo::Box3<ScalarType> TriMeshBox;
 
 
-ScalarType initial_feature_angle = 30;
+ScalarType initial_feature_angle = 60;
 int ero_steps = 3;
 int dil_steps = 3;
 bool compute_features = true;
@@ -326,10 +326,12 @@ int main(int argc, char *argv[]) {
     if ((!has_features)&&(!has_cross_field))
     {
       std::cout<<"CLEANING MESH"<<std::endl;
-      Geo::CleanMesh<ScalarType>::CollapseBadShapeFaces(TriVertPos, TriConnectivity,0.01);
+      Geo::CleanMesh<ScalarType>::CollapseBadShapeFaces(TriVertPos, TriConnectivity,0.1);
       std::cout<<"CLEANING FOLDS"<<std::endl;
       int steps_clean=Geo::CleanMesh<ScalarType>::SolveFolds(TriVertPos, TriConnectivity);
       std::cout<<"Performed:"<<steps_clean<<" unfold steps"<<std::endl;
+      // WriteOBJ("clean.obj",TriVertPos, TriConnectivity);
+      // exit(0);
     }
 
     std::cout << "BATCH PROCESSING" << std::endl;

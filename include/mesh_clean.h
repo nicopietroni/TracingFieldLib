@@ -175,6 +175,10 @@ public:
       }
       exp_step++;
     } while (has_fold && (exp_step < 3));
+
+    std::vector<std::pair<int, int>> FoldedF_E_Remain;
+    GetFolds(Pos, Faces, FoldedF_E_Remain, MinDot);
+    if (FoldedF_E_Remain.size()>0)std::cout<<"Sitll "<<FoldedF_E_Remain.size()<<" folds"<<std::endl;
     return exp_step;
   }
 

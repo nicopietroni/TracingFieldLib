@@ -280,7 +280,7 @@ public:
       assert(IndexV1 < VertMap.size());
       int NewIndexV0 = VertMap[IndexV0];
       int NewIndexV1 = VertMap[IndexV1];
-      if ((NewIndexV0 == -1) && (NewIndexV0 == -1))
+      if ((NewIndexV0 == -1) || (NewIndexV1 == -1))
         continue;
 
       std::pair<int, int> NewFeat(std::min(NewIndexV0, NewIndexV1),

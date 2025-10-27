@@ -299,16 +299,17 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action,
 }
 
 void UpdateFeatureCorners() {
-  Geo::FeatureCorners(VertPos, Connectivity, 
-        initial_feature_angle, 
-    Features,Corners);
+  Geo::MeshFeatures<ScalarType>::FeatureCorners(VertPos, Connectivity, 
+        initial_feature_angle,Features,Corners);
 
-  Geo::RemoveSingleFaceFeatures(Connectivity,Features);
+  Geo::MeshFeatures<ScalarType>::RemoveSingleFaceFeatures(Connectivity,Features);
 
   if ((ero_steps>0)||(dil_steps>0))
   {
-    Geo::ErodeDilateFeatures(ero_steps,dil_steps,Features) ;
-    Geo::Corners<ScalarType>(VertPos, Features, initial_feature_angle, Corners);
+    Geo::MeshFeatures<ScalarType>::ErodeDilateFeatures(ero_steps,dil_steps,Features);
+    
+    Geo::MeshFeatures<ScalarType>::FeatureCorners(VertPos, Connectivity, 
+        initial_feature_angle,Features,Corners);
   }
   
 }
