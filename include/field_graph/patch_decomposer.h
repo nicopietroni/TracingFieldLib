@@ -2237,8 +2237,11 @@ public:
       return;
     std::vector<Geo::Point3<ScalarType>> EdgeVertPos;
     std::vector<std::pair<int, int>> Edges;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractFromFeatures(
+    //     PatchMan.VertPos, PatchMan.Faces, Features, EdgeVertPos, Edges);
     Geo::EdgeMeshFunctions<ScalarType>::ExtractFromFeatures(
-        PatchMan.VertPos, PatchMan.Faces, Features, EdgeVertPos, Edges);
+        PatchMan.VertPos, Features, EdgeVertPos, Edges);
+
     std::vector<std::vector<int>> Sequences;
     Geo::EdgeMeshFunctions<ScalarType>::ExtractSortedNodesSequences(
         EdgeVertPos, Edges, Sequences);
@@ -2259,8 +2262,10 @@ public:
     // transform into sequences
     int Index0 = PathSampl.SelectedPaths.size();
     // std::cout<<"SEQ NUM:"<<Sequences.size()<<std::endl;
-    // for (size_t i = 0; i < Sequences[0].size(); i++)
-    //   std::cout<<"V"<<Sequences[0][i]<<std::endl;
+    // std::cout<<"FEAT NUM:"<<Features.size()<<std::endl;
+
+    // // for (size_t i = 0; i < Sequences[0].size(); i++)
+    // //   std::cout<<"V"<<Sequences[0][i]<<std::endl;
     // exit(0);
 
     PathSampl.AddFeaturePathsFromVert(Sequences);

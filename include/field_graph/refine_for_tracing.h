@@ -853,7 +853,7 @@ public:
                            To_splitPos[1]);
     GetInternalVertBorderN(Pos3D, Faces, FeatureE, To_splitE[2],
                            To_splitPos[2]);
-
+   
     // add the first one
     std::vector<std::pair<int, int>> AllSplitE = To_splitE[0];
     std::vector<Geo::Point3<ScalarType>> AllSplitPos = To_splitPos[0];

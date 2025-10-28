@@ -1,5 +1,6 @@
 #include <IO/file_path_functions.h>
 #include <cassert>
+#include <cstddef>
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
@@ -179,9 +180,19 @@ void BatchProcessField() {
   RefineForTracing();
   SParam.FixedCross.clear();
   InitFieldByCurvature();
+
   SmoothGlobal();
-  
+
   RefineForTracingConnectivity();
+
+  for (size_t i=0;i<TriFeatures.size();i++)
+  {
+    if (TriFeatures[i].first>TriFeatures[i].second)
+    std::swap(TriFeatures[i].first,TriFeatures[i].second);
+  }
+  std::sort(TriFeatures.begin(), TriFeatures.end());
+  auto last = std::unique(TriFeatures.begin(), TriFeatures.end());
+  TriFeatures.erase(last, TriFeatures.end());
 }
 
 ScalarType MinSize = 0.005;
@@ -194,7 +205,7 @@ ScalarType initial_feature_angle = 60;
 int ero_steps = 3;
 int dil_steps = 3;
 bool compute_features = true;
-int smooth_steps=30;
+int smooth_steps=50;
 std::string folderProjectName;
 std::string commandLine;
 
@@ -326,7 +337,7 @@ int main(int argc, char *argv[]) {
     if ((!has_features)&&(!has_cross_field))
     {
       std::cout<<"CLEANING MESH"<<std::endl;
-      Geo::CleanMesh<ScalarType>::CollapseBadShapeFaces(TriVertPos, TriConnectivity,0.1);
+      Geo::CleanMesh<ScalarType>::CollapseBadShapeFaces(TriVertPos, TriConnectivity,0.05);
       std::cout<<"CLEANING FOLDS"<<std::endl;
       int steps_clean=Geo::CleanMesh<ScalarType>::SolveFolds(TriVertPos, TriConnectivity);
       std::cout<<"Performed:"<<steps_clean<<" unfold steps"<<std::endl;
@@ -343,8 +354,7 @@ int main(int argc, char *argv[]) {
       has_features = true;
     }
 
-    if (!has_cross_field) {
-      std::cout << "** COMPUTING FIELD **" << std::endl;
+    if (!has_cross_field) {   
       BatchProcessField();
     }
 
@@ -362,8 +372,9 @@ int main(int argc, char *argv[]) {
 
     MQuad.QuadSmoothSteps = smooth_steps;
     // MQuad.RegVsIso=0.1;
-    MQuad.CCAbility = 0.5;
-    // MQuad.num_samples=10000;
+    MQuad.CCAbility = 0.5;//25;
+    MQuad.num_samples=3000;
+
     MQuad.ExtractQuad(TriFeatures);
 
     CreateOutputFolder();

@@ -8,6 +8,7 @@
 #include "edge_mesh_functions.h"
 #include "mesh_features.h"
 #include "point3.h"
+#include "polyhedra_mesh_functions.h"
 #include "segment3.h"
 #include <cassert>
 #include <cstddef>
@@ -139,7 +140,10 @@ void GetToReprojectVert(
   Geo::InitFromMeshFeatures<ScalarType>(ReprojPos, ReprojFeatures, FeatureSegs,
                                         SegGrid);
 
+  int Index0=CandidatesIDX.size();
   GetToReprojectVert(To_ReprojPos, CandidatesIDX, FeatureSegs, SegGrid, Thr);
+  int Index1=CandidatesIDX.size();
+  std::cout<<"Missing: "<<Index0-Index1<<" projecting vertices"<<std::endl;
 }
 
 template <class ScalarType>
@@ -224,11 +228,14 @@ template <class ScalarType> class FeatureReprojector {
                        CandidateIdx.end());
 
     // then get the closest sequence
+    Geo::Box3<ScalarType> BBox;
+    BBox.Init(VertPos);
     const ScalarType Thr = 0.000001;
     toReprojVert.clear();
     toReprojSeqIdx.clear();
 
     // for each candidate
+    int non_mapped=0;
     for (size_t i = 0; i < CandidateIdx.size(); i++) {
       int IndexV = CandidateIdx[i];
       if (branchIDX.count(IndexV) > 0)
@@ -239,6 +246,7 @@ template <class ScalarType> class FeatureReprojector {
       int closestS = -1;
 
       // for each grid
+      bool found=false;
       for (size_t j = 0; j < SequenceSegIndex.size(); j++) {
         SequenceSegIndex[j].GridClosest(SequenceSegs[j], CurrPos, Thr, closestS,
                                         closestPt);
@@ -247,11 +255,19 @@ template <class ScalarType> class FeatureReprojector {
 
         toReprojVert.push_back(IndexV);
         toReprojSeqIdx.push_back(j);
+        found=true;
         break;
       }
+
+      if (!found)non_mapped++;
     }
-    // std::cout<<"Found "<<toReprojVert.size()<<" reprojection base out of "<<CandidateIdx.size()<<std::endl;
-    // exit(0);
+    std::cout<<"Testing Size "<<CandidateIdx.size()<<std::endl;
+    std::cout<<"Branch Size "<<branchIDX.size()<<std::endl;
+    std::cout<<"Non Mapped "<<non_mapped<<std::endl;
+    std::cout<<"Mapped "<<toReprojVert.size()<<std::endl;
+    
+
+    //exit(0);
   }
 
 public:
@@ -290,8 +306,11 @@ public:
     InitNoReprojTargetPos();
 
     // split the edge mesh in subsequences
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractFromFeatures(
+    //     TargetVertPos, PatchMan.Faces, TargetFeatures, EdgeVertPos, Edges);
+
     std::vector<std::vector<int>> subsequences;
-    Geo::EdgeMeshFunctions<ScalarType>::ExtractSortedNodesSequences(
+    Geo::EdgeMeshFunctions<ScalarType>::ExtractSortedNodesSequencesMap(
         TargetVertPos, TargetFeatures, subsequences);
 
     // int numE=0;
@@ -299,7 +318,7 @@ public:
     // numE+=subsequences[i].size()-1;
     
     // std::cout<<"Original Features Num:"<<TargetFeatures.size()<<std::endl;
-    // std::cout<<"Subsequence Features Num:"<<numE<<std::endl;
+    // std::cout<<"Subsequences Num:"<<subsequences.size()<<std::endl;
     // exit(0);
     
     // then initialize the grids with subsequences
