@@ -34,7 +34,7 @@ namespace Geo {
 template <class ScalarType> class M3LabelGraphInitialize {
 
 public:
-  enum LinkType { DisableOppDir, WeightOppDir, DisableOppNorm, WeightOppNorm };
+  //enum LinkType { DisableOppDir, WeightOppDir, DisableOppNorm, WeightOppNorm };
 
 private:
   static void
@@ -328,14 +328,75 @@ private:
   //                                    Geo::Point3<ScalarType> &NormFace0,
   //                                    Geo::Point3<ScalarType> &NormFace1)
 
+  // /// CHECK MAYBE PUT HIGH WEIGHT
+  // static bool CanConnectM3(
+  //     const std::vector<Geo::Point3<ScalarType>> &VertPos,
+  //     const Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
+  //     const std::vector<std::vector<int>> &TetraInternalFaces,
+  //     const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+  //     const int &Node0, const int &Node1, const LinkType LType,
+  //     ScalarType &Weight) {
+
+  //   // get the two faces
+  //   int IndexF0 = Field::FrameFieldM3Graph::ElemOfNode(Node0);
+  //   int IndexF1 = Field::FrameFieldM3Graph::ElemOfNode(Node1);
+
+  //   // get the two directions of the nodes,
+  //   // which direction of the field it represent
+  //   int IndexD0 = Field::FrameFieldM3Graph::DirOfNode(Node0);
+  //   int IndexD1 = Field::FrameFieldM3Graph::DirOfNode(Node1);
+
+  //   // consider that the mesh is not manifold, not orientable,
+  //   // so it has to be computed coherently for two faces
+  //   Geo::Point3<ScalarType> NormFace0, NormFace1;
+  //   bool coherent = ComputeCoherentNormal(VertPos, TetraInternalFaces[IndexF0],
+  //                                         TetraInternalFaces[IndexF1],
+  //                                         NormFace0, NormFace1);
+  //   assert(coherent);
+
+  //   // get the two directions of the faces
+  //   Geo::Point3<ScalarType> DirF0 =
+  //       FacesFrameField[IndexF0].GetDirection(IndexD0);
+  //   Geo::Point3<ScalarType> DirF1 =
+  //       FacesFrameField[IndexF1].GetDirection(IndexD1);
+
+  //   // orient the directions coherently
+  //   // with respect to each face Normal (coherent)
+  //   if (Dot(NormFace0, DirF0) < 0)
+  //     DirF0 = -DirF0;
+  //   if (Dot(NormFace1, DirF1) < 0)
+  //     DirF1 = -DirF1;
+
+  //   ScalarType DotNorm = Dot(NormFace0, NormFace1);
+  //   bool coherentNorm = (DotNorm > 0);
+  //   ScalarType DotDir = Dot(DirF0, DirF1);
+  //   bool coherentDir = (DotDir > 0);
+
+  //   if ((!coherentDir) && (LType == DisableOppDir))
+  //     return false;
+  //   if ((!coherentNorm) && (LType == DisableOppNorm))
+  //     return false;
+
+  //   if ((LType == DisableOppDir) || (LType == WeightOppDir)) {
+  //     Geo::Point3<ScalarType> avgNorm = (NormFace0 + NormFace1);
+  //     avgNorm.Normalize();
+  //     Geo::Point3<ScalarType> avgDir = (DirF0 + DirF1);
+  //     avgDir.Normalize();
+  //     Weight = Geo::AngleDeg(avgNorm, avgDir) / 90;
+  //   } else {
+  //     Weight = Geo::AngleDeg(NormFace0, NormFace1) / 90;
+  //   }
+  //   return true;
+  // }
+
   /// CHECK MAYBE PUT HIGH WEIGHT
-  static bool CanConnectM3(
+  static void ConnectM3Weight(
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
       const Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
-      const int &Node0, const int &Node1, const LinkType LType,
-      ScalarType &Weight) {
+      const int &Node0, const int &Node1, 
+      bool &IsOpposite, ScalarType &Weight) {
 
     // get the two faces
     int IndexF0 = Field::FrameFieldM3Graph::ElemOfNode(Node0);
@@ -367,43 +428,31 @@ private:
     if (Dot(NormFace1, DirF1) < 0)
       DirF1 = -DirF1;
 
-    ScalarType DotNorm = Dot(NormFace0, NormFace1);
-    bool coherentNorm = (DotNorm > 0);
+    // ScalarType DotNorm = Dot(NormFace0, NormFace1);
+    // bool coherentNorm = (DotNorm > 0);
     ScalarType DotDir = Dot(DirF0, DirF1);
     bool coherentDir = (DotDir > 0);
 
-    // DisableOppDir,
-    // WeightOppDir,
-    // DisableOppNorm,
-    // WeightOppNorm
-    if ((!coherentDir) && (LType == DisableOppDir))
-      return false;
-    if ((!coherentNorm) && (LType == DisableOppNorm))
-      return false;
-    // if(coherentNorm!=coherentDir)
-    // {
-    //   std::cout<<"Coherent Norm: "<<coherentNorm<<std::endl;
-    //   std::cout<<"Coherent Dir: "<<coherentDir<<std::endl;
-    //   std::cout<<"Dot Norm: "<<Dot(NormFace0, NormFace1)<<std::endl;
-    //   std::cout<<"Dot Dir: "<<Dot(DirF0, DirF1)<<std::endl;
-    // }
-
-    // // then check if there is inversion
-    // if (Dot(DirF0, DirF1) < 0)
+    // if ((!coherentDir) && (LType == DisableOppDir))
+    //   return false;
+    // if ((!coherentNorm) && (LType == DisableOppNorm))
     //   return false;
 
-    // otherwise compute the angle fo deviation
-
-    if ((LType == DisableOppDir) || (LType == WeightOppDir)) {
-      Geo::Point3<ScalarType> avgNorm = (NormFace0 + NormFace1);
-      avgNorm.Normalize();
-      Geo::Point3<ScalarType> avgDir = (DirF0 + DirF1);
-      avgDir.Normalize();
-      Weight = Geo::AngleDeg(avgNorm, avgDir) / 90;
-    } else {
-      Weight = Geo::AngleDeg(NormFace0, NormFace1) / 90;
-    }
-    return true;
+    IsOpposite=(!coherentDir);
+    
+    Weight = Facegraph.NodeW[Node0];
+    Weight += Facegraph.NodeW[Node1];
+    Weight /=2;
+    // if ((LType == DisableOppDir) || (LType == WeightOppDir)) {
+    //   Geo::Point3<ScalarType> avgNorm = (NormFace0 + NormFace1);
+    //   avgNorm.Normalize();
+    //   Geo::Point3<ScalarType> avgDir = (DirF0 + DirF1);
+    //   avgDir.Normalize();
+    //   Weight = Geo::AngleDeg(avgNorm, avgDir) / 90;
+    // } else {
+    //   Weight = Geo::AngleDeg(NormFace0, NormFace1) / 90;
+    // }
+    // return true;
   }
 
   static void InitAlignW(
@@ -630,196 +679,197 @@ private:
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
-      const LinkType &LType) {
+      const bool DisableOpp)
+      //const LinkType &LType) {
+    {
+    // std::vector<std::vector<std::pair<int, int>>> ConvexFeatureEdgeFaces,
+    //     ConvexFeatureEdgExtFaces;
+    // std::vector<std::vector<int>> ConvexFeatureEdgeVertFaces;
 
-    std::vector<std::vector<std::pair<int, int>>> ConvexFeatureEdgeFaces,
-        ConvexFeatureEdgExtFaces;
-    std::vector<std::vector<int>> ConvexFeatureEdgeVertFaces;
+    // GetFeaturesFaces(SurfVertPos, SurfFaces, SurfConvexE, VertPos,
+    //                  TetraInternalFaces, ConvexFeatureEdgExtFaces,
+    //                  ConvexFeatureEdgeFaces, ConvexFeatureEdgeVertFaces);
 
-    GetFeaturesFaces(SurfVertPos, SurfFaces, SurfConvexE, VertPos,
-                     TetraInternalFaces, ConvexFeatureEdgExtFaces,
-                     ConvexFeatureEdgeFaces, ConvexFeatureEdgeVertFaces);
+    // assert(ConvexFeatureEdgeFaces.size() == ConvexFeatureEdgeVertFaces.size());
+    // assert(ConvexFeatureEdgeFaces.size() == ConvexFeatureEdgExtFaces.size());
+    // assert(SurfConvexE.size() == ConvexFeatureEdgExtFaces.size());
 
-    assert(ConvexFeatureEdgeFaces.size() == ConvexFeatureEdgeVertFaces.size());
-    assert(ConvexFeatureEdgeFaces.size() == ConvexFeatureEdgExtFaces.size());
-    assert(SurfConvexE.size() == ConvexFeatureEdgExtFaces.size());
+    // std::vector<std::vector<std::pair<int, int>>> ConcaveFeatureEdgeFaces,
+    //     ConcaveFeatureEdgExtFaces;
+    // std::vector<std::vector<int>> ConcaveFeatureEdgeVertFaces;
 
-    std::vector<std::vector<std::pair<int, int>>> ConcaveFeatureEdgeFaces,
-        ConcaveFeatureEdgExtFaces;
-    std::vector<std::vector<int>> ConcaveFeatureEdgeVertFaces;
+    // GetFeaturesFaces(SurfVertPos, SurfFaces, SurfConcaveE, VertPos,
+    //                  TetraInternalFaces, ConcaveFeatureEdgExtFaces,
+    //                  ConcaveFeatureEdgeFaces, ConcaveFeatureEdgeVertFaces);
 
-    GetFeaturesFaces(SurfVertPos, SurfFaces, SurfConcaveE, VertPos,
-                     TetraInternalFaces, ConcaveFeatureEdgExtFaces,
-                     ConcaveFeatureEdgeFaces, ConcaveFeatureEdgeVertFaces);
+    // Facegraph.NodesOnConvexE.clear();
+    // Facegraph.NodesOnConcaveE.clear();
+    // Facegraph.NodesOnConvexEByV.clear();
+    // Facegraph.NodesOnConcaveEByV.clear();
 
-    Facegraph.NodesOnConvexE.clear();
-    Facegraph.NodesOnConcaveE.clear();
-    Facegraph.NodesOnConvexEByV.clear();
-    Facegraph.NodesOnConcaveEByV.clear();
+    // // set default as internal
+    // for (size_t i = 0; i < ConvexFeatureEdgeVertFaces.size(); i++)
+    //   for (size_t j = 0; j < ConvexFeatureEdgeVertFaces[i].size(); j++) {
+    //     int IndexF = ConvexFeatureEdgeVertFaces[i][j];
+    //     assert(IndexF >= 0);
+    //     assert(IndexF < TetraInternalFaces.size());
 
-    // set default as internal
-    for (size_t i = 0; i < ConvexFeatureEdgeVertFaces.size(); i++)
-      for (size_t j = 0; j < ConvexFeatureEdgeVertFaces[i].size(); j++) {
-        int IndexF = ConvexFeatureEdgeVertFaces[i][j];
-        assert(IndexF >= 0);
-        assert(IndexF < TetraInternalFaces.size());
+    //     std::vector<int> IndexN;
+    //     Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
+    //     // set by default all as internal
+    //     for (size_t k = 0; k < IndexN.size(); k++) {
+    //       int CurrN = IndexN[k];
+    //       Facegraph.NodeType(CurrN) = Geo::Internal;
+    //     }
+    //   }
 
-        std::vector<int> IndexN;
-        Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
-        // set by default all as internal
-        for (size_t k = 0; k < IndexN.size(); k++) {
-          int CurrN = IndexN[k];
-          Facegraph.NodeType(CurrN) = Geo::Internal;
-        }
-      }
+    // // then set the tangent ones
+    // std::vector<Geo::Point3<ScalarType>> FaceNormals;
+    // Geo::ComputeFaceNormals<ScalarType>(VertPos, TetraInternalFaces,
+    //                                     FaceNormals);
 
-    // then set the tangent ones
-    std::vector<Geo::Point3<ScalarType>> FaceNormals;
-    Geo::ComputeFaceNormals<ScalarType>(VertPos, TetraInternalFaces,
-                                        FaceNormals);
+    // for (size_t i = 0; i < ConvexFeatureEdgeVertFaces.size(); i++) {
+    //   // 2 faces sharing the edge
+    //   //  std::cout<<"Size:"<<ConvexFeatureEdgExtFaces[i].size()<<std::endl;
+    //   assert(ConvexFeatureEdgExtFaces[i].size() == 2);
+    //   int IndexF0 = ConvexFeatureEdgExtFaces[i][0].first;
+    //   int IndexF1 = ConvexFeatureEdgExtFaces[i][1].first;
+    //   Geo::Point3<ScalarType> Norm0 = FaceNormals[IndexF0];
+    //   Geo::Point3<ScalarType> Norm1 = FaceNormals[IndexF1];
 
-    for (size_t i = 0; i < ConvexFeatureEdgeVertFaces.size(); i++) {
-      // 2 faces sharing the edge
-      //  std::cout<<"Size:"<<ConvexFeatureEdgExtFaces[i].size()<<std::endl;
-      assert(ConvexFeatureEdgExtFaces[i].size() == 2);
-      int IndexF0 = ConvexFeatureEdgExtFaces[i][0].first;
-      int IndexF1 = ConvexFeatureEdgExtFaces[i][1].first;
-      Geo::Point3<ScalarType> Norm0 = FaceNormals[IndexF0];
-      Geo::Point3<ScalarType> Norm1 = FaceNormals[IndexF1];
+    //   for (size_t j = 0; j < ConvexFeatureEdgeVertFaces[i].size(); j++) {
+    //     int IndexF = ConvexFeatureEdgeVertFaces[i][j];
+    //     assert(IndexF >= 0);
+    //     assert(IndexF < TetraInternalFaces.size());
+    //     int IndexN0 =
+    //         Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
+    //             FacesFrameField, IndexF, Norm0);
+    //     int IndexN1 =
+    //         Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
+    //             FacesFrameField, IndexF, Norm1);
+    //     // Facegraph.ClearExit(IndexN0);
+    //     Facegraph.NodeType(IndexN0) = Geo::TangentDomain;
+    //     // Facegraph.ClearExit(IndexN1);
+    //     Facegraph.NodeType(IndexN1) = Geo::TangentDomain;
 
-      for (size_t j = 0; j < ConvexFeatureEdgeVertFaces[i].size(); j++) {
-        int IndexF = ConvexFeatureEdgeVertFaces[i][j];
-        assert(IndexF >= 0);
-        assert(IndexF < TetraInternalFaces.size());
-        int IndexN0 =
-            Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
-                FacesFrameField, IndexF, Norm0);
-        int IndexN1 =
-            Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
-                FacesFrameField, IndexF, Norm1);
-        // Facegraph.ClearExit(IndexN0);
-        Facegraph.NodeType(IndexN0) = Geo::TangentDomain;
-        // Facegraph.ClearExit(IndexN1);
-        Facegraph.NodeType(IndexN1) = Geo::TangentDomain;
+    //     Facegraph.NodesOnConvexEByV.push_back(IndexN0);
+    //     Facegraph.NodesOnConvexEByV.push_back(IndexN1);
+    //   }
+    // }
 
-        Facegraph.NodesOnConvexEByV.push_back(IndexN0);
-        Facegraph.NodesOnConvexEByV.push_back(IndexN1);
-      }
-    }
+    // std::vector<std::pair<int, int>> MappedFeatureE;
+    // MapFeatureE(SurfVertPos, SurfConcaveE, VertPos, TetraInternalFaces,
+    //             MappedFeatureE);
+    // assert(MappedFeatureE.size() == ConcaveFeatureEdgeFaces.size());
 
-    std::vector<std::pair<int, int>> MappedFeatureE;
-    MapFeatureE(SurfVertPos, SurfConcaveE, VertPos, TetraInternalFaces,
-                MappedFeatureE);
-    assert(MappedFeatureE.size() == ConcaveFeatureEdgeFaces.size());
+    // // set exit or tangent (Only for Concave Features!)
+    // for (size_t i = 0; i < ConcaveFeatureEdgeFaces.size(); i++) {
+    //   std::pair<int, int> KeyE = MappedFeatureE[i];
+    //   // get inciding faces
+    //   assert(ConcaveFeatureEdgExtFaces[i].size() == 2);
+    //   int IndexF0 = ConcaveFeatureEdgExtFaces[i][0].first;
+    //   int IndexF1 = ConcaveFeatureEdgExtFaces[i][1].first;
+    //   // and relative nodes
+    //   // get the nodes
+    //   Geo::Point3<ScalarType> Norm0 = FaceNormals[IndexF0];
+    //   Geo::Point3<ScalarType> Norm1 = FaceNormals[IndexF1];
 
-    // set exit or tangent (Only for Concave Features!)
-    for (size_t i = 0; i < ConcaveFeatureEdgeFaces.size(); i++) {
-      std::pair<int, int> KeyE = MappedFeatureE[i];
-      // get inciding faces
-      assert(ConcaveFeatureEdgExtFaces[i].size() == 2);
-      int IndexF0 = ConcaveFeatureEdgExtFaces[i][0].first;
-      int IndexF1 = ConcaveFeatureEdgExtFaces[i][1].first;
-      // and relative nodes
-      // get the nodes
-      Geo::Point3<ScalarType> Norm0 = FaceNormals[IndexF0];
-      Geo::Point3<ScalarType> Norm1 = FaceNormals[IndexF1];
+    //   int IndexN0 = Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
+    //       FacesFrameField, IndexF0, Norm0);
+    //   int IndexN1 = Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
+    //       FacesFrameField, IndexF1, Norm1);
 
-      int IndexN0 = Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
-          FacesFrameField, IndexF0, Norm0);
-      int IndexN1 = Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
-          FacesFrameField, IndexF1, Norm1);
+    //   for (size_t j = 0; j < ConcaveFeatureEdgeFaces[i].size(); j++) {
+    //     int IndexF = ConcaveFeatureEdgeFaces[i][j].first;
 
-      for (size_t j = 0; j < ConcaveFeatureEdgeFaces[i].size(); j++) {
-        int IndexF = ConcaveFeatureEdgeFaces[i][j].first;
+    //     assert(IndexF >= 0);
+    //     assert(IndexF < TetraInternalFaces.size());
+    //     // get which edge on the feature
+    //     int IndexL = ConcaveFeatureEdgeFaces[i][j].second;
+    //     // WhichEdge(TetraInternalFaces[IndexF], KeyE.first, KeyE.second);
+    //     assert(IndexL >= 0);
 
-        assert(IndexF >= 0);
-        assert(IndexF < TetraInternalFaces.size());
-        // get which edge on the feature
-        int IndexL = ConcaveFeatureEdgeFaces[i][j].second;
-        // WhichEdge(TetraInternalFaces[IndexF], KeyE.first, KeyE.second);
-        assert(IndexL >= 0);
+    //     // set by default all to tangent
+    //     std::vector<int> IndexN;
+    //     Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
+    //     for (size_t k = 0; k < IndexN.size(); k++) {
+    //       int CurrN = IndexN[k];
+    //       Facegraph.ClearExit(CurrN, IndexL);
+    //       Facegraph.NodeType(CurrN) = Geo::TangentDomain;
+    //       Facegraph.NodesOnConcaveE.push_back(CurrN);
+    //     }
 
-        // set by default all to tangent
-        std::vector<int> IndexN;
-        Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
-        for (size_t k = 0; k < IndexN.size(); k++) {
-          int CurrN = IndexN[k];
-          Facegraph.ClearExit(CurrN, IndexL);
-          Facegraph.NodeType(CurrN) = Geo::TangentDomain;
-          Facegraph.NodesOnConcaveE.push_back(CurrN);
-        }
+    //     if ((IndexF == IndexF0) || (IndexF == IndexF1))
+    //       continue;
 
-        if ((IndexF == IndexF0) || (IndexF == IndexF1))
-          continue;
+    //     // get the best aligned nodes
+    //     int IndexNTest0 =
+    //         Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
+    //             FacesFrameField, IndexF, Norm0);
 
-        // get the best aligned nodes
-        int IndexNTest0 =
-            Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
-                FacesFrameField, IndexF, Norm0);
+    //     int IndexNTest1 =
+    //         Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
+    //             FacesFrameField, IndexF, Norm1);
 
-        int IndexNTest1 =
-            Field::FrameFieldM3Graph::GetM3NodeAlignedWith<ScalarType>(
-                FacesFrameField, IndexF, Norm1);
+    //     // see if they can connect with edge node
+    //     ScalarType Weight;
+    //     bool CanConn0 =
+    //         CanConnectM3(VertPos, Facegraph, TetraInternalFaces,
+    //                      FacesFrameField, IndexN0, IndexNTest0, LType,Weight);
+    //     bool CanConn1 =
+    //         CanConnectM3(VertPos, Facegraph, TetraInternalFaces,
+    //                      FacesFrameField, IndexN1, IndexNTest1, LType,Weight);
+    //     if (CanConn0) {
+    //       Facegraph.SetExit(IndexNTest0, IndexL);
+    //       Facegraph.NodeType(IndexNTest0) = Geo::Internal;
+    //       // Facegraph.NodesOnConcaveE.push_back(IndexNTest0);
+    //     }
+    //     if (CanConn1) {
+    //       Facegraph.SetExit(IndexNTest1, IndexL);
+    //       Facegraph.NodeType(IndexNTest1) = Geo::Internal;
+    //       // Facegraph.NodesOnConcaveE.push_back(IndexNTest1);
+    //     }
+    //   }
+    // }
 
-        // see if they can connect with edge node
-        ScalarType Weight;
-        bool CanConn0 =
-            CanConnectM3(VertPos, Facegraph, TetraInternalFaces,
-                         FacesFrameField, IndexN0, IndexNTest0, LType,Weight);
-        bool CanConn1 =
-            CanConnectM3(VertPos, Facegraph, TetraInternalFaces,
-                         FacesFrameField, IndexN1, IndexNTest1, LType,Weight);
-        if (CanConn0) {
-          Facegraph.SetExit(IndexNTest0, IndexL);
-          Facegraph.NodeType(IndexNTest0) = Geo::Internal;
-          // Facegraph.NodesOnConcaveE.push_back(IndexNTest0);
-        }
-        if (CanConn1) {
-          Facegraph.SetExit(IndexNTest1, IndexL);
-          Facegraph.NodeType(IndexNTest1) = Geo::Internal;
-          // Facegraph.NodesOnConcaveE.push_back(IndexNTest1);
-        }
-      }
-    }
+    // // set the rest as internal
+    // for (size_t i = 0; i < ConcaveFeatureEdgeVertFaces.size(); i++) {
 
-    // set the rest as internal
-    for (size_t i = 0; i < ConcaveFeatureEdgeVertFaces.size(); i++) {
+    //   for (size_t j = 0; j < ConcaveFeatureEdgeVertFaces[i].size(); j++) {
+    //     int IndexF = ConcaveFeatureEdgeVertFaces[i][j];
 
-      for (size_t j = 0; j < ConcaveFeatureEdgeVertFaces[i].size(); j++) {
-        int IndexF = ConcaveFeatureEdgeVertFaces[i][j];
+    //     assert(IndexF >= 0);
+    //     assert(IndexF < TetraInternalFaces.size());
 
-        assert(IndexF >= 0);
-        assert(IndexF < TetraInternalFaces.size());
+    //     // set by default all to tangent
+    //     std::vector<int> IndexN;
+    //     Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
+    //     for (size_t k = 0; k < IndexN.size(); k++) {
+    //       int CurrN = IndexN[k];
+    //       Facegraph.NodeType(CurrN) = Geo::Internal;
+    //       Facegraph.NodesOnConcaveEByV.push_back(CurrN);
+    //     }
+    //   }
+    // }
 
-        // set by default all to tangent
-        std::vector<int> IndexN;
-        Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
-        for (size_t k = 0; k < IndexN.size(); k++) {
-          int CurrN = IndexN[k];
-          Facegraph.NodeType(CurrN) = Geo::Internal;
-          Facegraph.NodesOnConcaveEByV.push_back(CurrN);
-        }
-      }
-    }
-
-    // set as tangent the one sharing the edge
-    for (size_t i = 0; i < ConvexFeatureEdgeFaces.size(); i++)
-      for (size_t j = 0; j < ConvexFeatureEdgeFaces[i].size(); j++) {
-        int IndexF = ConvexFeatureEdgeFaces[i][j].first;
-        int IndexL = ConvexFeatureEdgeFaces[i][j].second;
-        assert(IndexF >= 0);
-        assert(IndexF < TetraInternalFaces.size());
-        assert(IndexL >= 0);
-        assert(IndexL < TetraInternalFaces[IndexF].size());
-        std::vector<int> IndexN;
-        Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
-        for (size_t k = 0; k < IndexN.size(); k++) {
-          int CurrN = IndexN[k];
-          Facegraph.ClearExit(CurrN);
-          Facegraph.NodeType(CurrN) = Geo::TangentDomain;
-          Facegraph.NodesOnConvexE.push_back(CurrN);
-        }
-      }
+    // // set as tangent the one sharing the edge
+    // for (size_t i = 0; i < ConvexFeatureEdgeFaces.size(); i++)
+    //   for (size_t j = 0; j < ConvexFeatureEdgeFaces[i].size(); j++) {
+    //     int IndexF = ConvexFeatureEdgeFaces[i][j].first;
+    //     int IndexL = ConvexFeatureEdgeFaces[i][j].second;
+    //     assert(IndexF >= 0);
+    //     assert(IndexF < TetraInternalFaces.size());
+    //     assert(IndexL >= 0);
+    //     assert(IndexL < TetraInternalFaces[IndexF].size());
+    //     std::vector<int> IndexN;
+    //     Field::FrameFieldM3Graph::NodesOfElem(IndexF, IndexN);
+    //     for (size_t k = 0; k < IndexN.size(); k++) {
+    //       int CurrN = IndexN[k];
+    //       Facegraph.ClearExit(CurrN);
+    //       Facegraph.NodeType(CurrN) = Geo::TangentDomain;
+    //       Facegraph.NodesOnConvexE.push_back(CurrN);
+    //     }
+    //   }
   }
 
   // static void AddFeatureEdges(
@@ -1026,7 +1076,9 @@ private:
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
-      const std::set<std::pair<int, int>> &ExtEdges, const LinkType LType) {
+      const std::set<std::pair<int, int>> &ExtEdges,
+      const bool DisableOpp){
+      //, const LinkType LType) {
 
     // this data structure has for each edge
     // and for each direction of the edge the
@@ -1066,9 +1118,6 @@ private:
         // then it cannot be connectec
         if (EdgeInfo[i].TangentN[d].size() < 2)
           continue;
-
-        // int Node0 = EdgeInfo[i].TangentN[d][0];
-        // int Label0 = EdgeInfo[i].NodeLabel[d][0];
 
         // then go over all the node for each direction of
         // that frame on the edge
@@ -1112,18 +1161,17 @@ private:
             ScalarType Weight = 1;
 
             // then check if the two faces can be connected
-            bool canConnect =
-                CanConnectM3(VertPos, Facegraph, TetraInternalFaces,
-                             FacesFrameField, IndexN0, IndexN1, LType, Weight);
-            if (!canConnect) {
-              // Facegraph.AddReverseNeighbour(IndexN0, IndexN1, Label0);
-              // Facegraph.AddReverseNeighbour(IndexN1, IndexN0, Label1);
-              continue;
-            }
+            
+            bool areOpposite;
+            ConnectM3Weight(VertPos, Facegraph, TetraInternalFaces,
+                             FacesFrameField, IndexN0, IndexN1, 
+                             areOpposite, Weight);
+
+            if ((DisableOpp)&&(areOpposite)) continue;
 
             // add the connections if they can be connected
-            Facegraph.AddNeighbour(IndexN0, IndexN1, Label0, Weight);
-            Facegraph.AddNeighbour(IndexN1, IndexN0, Label1, Weight);
+            Facegraph.AddNeighbour(IndexN0, IndexN1, Label0, Weight,areOpposite);
+            Facegraph.AddNeighbour(IndexN1, IndexN0, Label1, Weight,areOpposite);
           }
       }
     }
@@ -1137,11 +1185,10 @@ public:
          const std::vector<Geo::Point3<ScalarType>> &SurfVertPos,
          const std::vector<std::vector<int>> &SurfFaces,
          const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
-         const LinkType LType = DisableOppDir,
-         const std::vector<std::pair<int, int>> &SurfConvexE =
-             std::vector<std::pair<int, int>>(),
-         const std::vector<std::pair<int, int>> &SurfConcaveE =
-             std::vector<std::pair<int, int>>()) {
+         const bool DisableOpp=false,
+         const std::vector<std::pair<int, int>> &SurfConvexE = std::vector<std::pair<int, int>>(),
+         const std::vector<std::pair<int, int>> &SurfConcaveE = std::vector<std::pair<int, int>>()) 
+  {
 
     Facegraph.Clear();
 
@@ -1199,14 +1246,17 @@ public:
     if ((SurfConvexE.size() > 0) || (SurfConcaveE.size() > 0))
       AddFeatureEdges(Facegraph, SurfVertPos, SurfFaces, SurfConvexE,
                       SurfConcaveE, VertPos, TetraInternalFaces,
-                      FacesFrameField,LType);
+                      FacesFrameField,DisableOpp);
 
-    std::vector<int> TangentN;
+    //std::vector<int> TangentN;
+    
+    // init Node Weight for the already established connections
+    InitAlignW(Facegraph, VertPos, TetraInternalFaces, FacesFrameField);
 
     std::cout << "Initializing Connections " << std::endl;
 
     InitConnections(Facegraph, VertPos, TetraInternalFaces, FacesFrameField,
-                    ExtEdges, LType);
+                    ExtEdges, DisableOpp);
 
     std::cout << "Sorting and make them unique " << std::endl;
 
@@ -1232,8 +1282,8 @@ public:
     std::cout << "WARNING " << Ratio * 100 << " perc of nodes with empty label"
               << std::endl;
 
-    // init Node Weight for the already established connections
-    InitAlignW(Facegraph, VertPos, TetraInternalFaces, FacesFrameField);
+    // // init Node Weight for the already established connections
+    // InitAlignW(Facegraph, VertPos, TetraInternalFaces, FacesFrameField);
   }
 };
 

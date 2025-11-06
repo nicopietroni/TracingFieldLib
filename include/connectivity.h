@@ -731,6 +731,23 @@ void getVVAdjacency(const std::vector<std::pair<int, int>> &Edges,
   }
 }
 
+void getEVAdjacency(const std::vector<std::vector<int>> &Faces,
+                    std::map<std::pair<int, int>,std::vector<std::pair<int, int>>> &EdgeFaceMap) {
+  EdgeFaceMap.clear();
+  for (size_t i = 0; i < Faces.size(); i++)
+    for (size_t j = 0; j < Faces[i].size(); j++) {
+      int SizeE = Faces[i].size();
+      int IndexV0 = Faces[i][j];
+      int IndexV1 = Faces[i][(j + 1) % SizeE];
+
+      std::pair<int, int> Key(std::min(IndexV0, IndexV1),
+                              std::max(IndexV0, IndexV1));
+
+      std::pair<int, int> FaceE(i, j);
+      EdgeFaceMap[Key].push_back(FaceE);
+    }
+}
+
 void getVVStar(const std::vector<std::vector<int>> &Faces,
                const std::vector<std::vector<int>> &VF,
                const std::vector<std::vector<int>> &VFIndex, const int &IndexV,
@@ -1084,20 +1101,18 @@ void GetEdgeElem(
 void FacesOfVertices(const std::vector<std::vector<int>> &connections,
                      const std::vector<std::vector<int>> &VF,
                      const std::vector<int> &vertidx,
-                     std::vector<int> &faces_idx)
-{
+                     std::vector<int> &faces_idx) {
   faces_idx.clear();
-  for (size_t i=0;i<vertidx.size();i++)
-  {
-    int CurrVIndex=vertidx[i];
-    assert(CurrVIndex>=0);
-    assert(CurrVIndex<VF.size());
-    faces_idx.insert(faces_idx.end(),
-                    VF[CurrVIndex].begin(),
+  for (size_t i = 0; i < vertidx.size(); i++) {
+    int CurrVIndex = vertidx[i];
+    assert(CurrVIndex >= 0);
+    assert(CurrVIndex < VF.size());
+    faces_idx.insert(faces_idx.end(), VF[CurrVIndex].begin(),
                      VF[CurrVIndex].end());
   }
   std::sort(faces_idx.begin(), faces_idx.end());
-  faces_idx.erase(std::unique(faces_idx.begin(), faces_idx.end()), faces_idx.end());
+  faces_idx.erase(std::unique(faces_idx.begin(), faces_idx.end()),
+                  faces_idx.end());
 }
 
 } // namespace Geo
