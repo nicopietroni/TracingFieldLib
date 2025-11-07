@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <iostream>
 #include <set>
+#include <map>
 #include "solve/least_squares_lin_constraint_solver.h"
 #include <stack>
 //#include <sys/_types/_size_t.h>
@@ -22,17 +23,10 @@ void GetLaplacianNeighbours(std::vector<Geo::Point3<ScalarType>> &VertPos,
                             const std::vector<std::vector<int>> &Faces,
                             std::vector<std::vector<int>> &Neighbors,
                             const std::vector<std::pair<int, int>> &LineSmooth =
-                                std::vector<std::pair<int, int>>()) {
+                                std::vector<std::pair<int, int>>(),
+                            const bool avoidLineEndPoints=true) {
   Neighbors.clear();
   Neighbors.resize(VertPos.size());
-
-  // for (size_t i = 0; i < Faces.size(); i++) {
-  //   for (size_t j = 0; j < Faces[i].size(); j++) {
-  //     int IndexV = Faces[i][j];
-  //     Neighbors[IndexV].insert(Neighbors[IndexV].end(), Faces[i].begin(),
-  //                              Faces[i].end());
-  //   }
-  // }
   
   for (size_t i = 0; i < Faces.size(); i++) {
     for (size_t j = 0; j < Faces[i].size(); j++)
@@ -46,31 +40,37 @@ void GetLaplacianNeighbours(std::vector<Geo::Point3<ScalarType>> &VertPos,
     }
   }
 
-  // for (size_t i = 0; i < Faces.size(); i++) {
-  //   for (size_t j = 0; j < Faces[i].size(); j++) {
-  //     int IndexV0 = Faces[i][j];
-  //     int IndexV1 = Faces[i][(j+1)%Faces[i].size()];
-  //     Neighbors[IndexV1].push_back(IndexV0);
-  //     Neighbors[IndexV0].push_back(IndexV1);
-  //   }
-  // }
-
   // set all features
   std::set<std::pair<int, int>> LineSmoothSet;
-  std::set<int> FeatureV;
+  //number of edges for each feature vert
+
+  std::map<int,int> FeatureV;
   for (size_t i = 0; i < LineSmooth.size(); i++) {
     std::pair<int, int> KeyE = LineSmooth[i];
     if (KeyE.first > KeyE.second)
       std::swap(KeyE.first, KeyE.second);
     LineSmoothSet.insert(KeyE);
-    FeatureV.insert(KeyE.first);
-    FeatureV.insert(KeyE.second);
+
+    if (FeatureV.count(KeyE.first)==0)
+      FeatureV[KeyE.first]=0;
+    if (FeatureV.count(KeyE.second)==0)
+      FeatureV[KeyE.second]=0;
+
+    FeatureV[KeyE.first]++;
+    FeatureV[KeyE.second]++;
   }
 
+  
   // otherwise filter neighbours
   for (size_t i = 0; i < Neighbors.size(); i++) {
     // if not a feature all neighbours
     if (FeatureV.count(i) == 0)
+      continue;
+
+    assert(FeatureV[i]>0);
+    
+    //remove endpoints if needed
+    if ((avoidLineEndPoints)&&(FeatureV[i] == 1))
       continue;
 
     // filters with features

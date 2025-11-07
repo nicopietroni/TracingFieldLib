@@ -297,11 +297,11 @@ ScalarType MaxSize = 0.05;
 std::vector<std::vector<std::pair<int, int>>> Separatrices;
 
 void AutoQuadEdgeSize() {
-  std::vector<ScalarType> VertSize;
+  //std::vector<ScalarType> VertSize;
   ScalarType MinAggrSize = MeshBox.Diag() * MinSize;
   ScalarType MaxAggrSize = MeshBox.Diag() * MaxSize;
   ScalarType CurrSize = Geo::RemeshSize<ScalarType>::RemeshSizeFeatures(VertPos, Connectivity, Features,
-                                                                         MinAggrSize, MaxAggrSize, VertSize);
+                                                                         MinAggrSize, MaxAggrSize);// VertSize);
   QuadSize = CurrSize / MeshBox.Diag();
   QuadSize/=2;
   std::cout<<"QuadSize: "<<QuadSize<<std::endl;
@@ -1911,9 +1911,16 @@ void SetExportBar() {
 
     if (ImGui::Button("Save ALL"))
       SaveAll();
+    if (ImGui::Button("Save Loops")) {
+      std::string LoopsFilename = ProjectName;
+      LoopsFilename.append("_loops.txt");
+      WriteCrossGraphPath<ScalarType>(LoopsFilename,VertPos,PathSampl.SelectedPaths);
+    }
     if (ImGui::Button("Save Cycles")) {
-      PDeco.SaveCurveCycleData(std::string("test"));
-      PDeco.SaveSeparateSubMeshes(std::string("test"), std::string("off"));
+      std::string CyclesFilename = ProjectName;
+      CyclesFilename.append("_cycles.txt");
+      PDeco.SaveCurveCycleData(CyclesFilename);
+      //PDeco.SaveSeparateSubMeshes(std::string("test"), std::string("off"));
     }
   }
 

@@ -379,6 +379,35 @@ void FFExternalMesh(const std::vector<std::vector<int>> &Connectivity,
     }
 }
 
+void FFExternalVertices(const std::vector<std::vector<int>> &Connectivity,
+                        const std::vector<std::vector<int>> &NextP,
+                        const std::vector<std::vector<int>> &NextF,
+                        std::vector<int> &ExtVertices) {
+  ExtVertices.clear();
+
+  for (size_t i = 0; i < NextP.size(); i++)
+    for (size_t f = 0; f < NextP[i].size(); f++) {
+      assert(NextP[i].size() == 4); // works with tetra this version
+      if (NextP[i][f] != -1)
+        continue;
+
+      std::vector<int> ExtV;
+      FaceVert(Connectivity, i,f, ExtV);
+
+      ExtVertices.insert(ExtVertices.end(), ExtV.begin(), ExtV.end());
+    }
+  std::sort(ExtVertices.begin(), ExtVertices.end());
+  ExtVertices.erase(std::unique(ExtVertices.begin(), ExtVertices.end()),
+                    ExtVertices.end());
+}
+
+void FFExternalVertices(const std::vector<std::vector<int>> &Connectivity,
+                        std::vector<int> &ExtVertices) {
+  std::vector<std::vector<int>> NextP, NextF;
+  GetPPAdjacency(Connectivity, NextP, NextF);
+  FFExternalVertices(Connectivity, NextP, NextF, ExtVertices);
+}
+
 void FFExternalPolys(const std::vector<std::vector<int>> &NextP,
                      const std::vector<std::vector<int>> &NextF,
                      std::vector<int> &ExtPoly) {
@@ -459,10 +488,9 @@ void TetraInternalFaces(const std::vector<Geo::Point3<ScalarType>> &VertPos,
   FTIndex.clear();
   std::vector<std::vector<int>> NextT, NextF;
   GetPPAdjacency(TetraConnectivity, NextT, NextF);
-  //std::cout<<"Size NextP 0 "<<NextT.size()<<std::endl;
-  for (size_t i = 0; i < NextT.size(); i++)
-  {
-    assert(NextT[i].size()==4);
+  // std::cout<<"Size NextP 0 "<<NextT.size()<<std::endl;
+  for (size_t i = 0; i < NextT.size(); i++) {
+    assert(NextT[i].size() == 4);
     for (size_t j = 0; j < NextT[i].size(); j++) {
       int T0 = i;
       int IndexF0 = j;
@@ -470,7 +498,7 @@ void TetraInternalFaces(const std::vector<Geo::Point3<ScalarType>> &VertPos,
       int IndexF1 = NextF[i][j];
       if ((T1 != -1) && (T1 < T0))
         continue;
-      assert(T1!=T0);
+      assert(T1 != T0);
       std::vector<int> FaceV;
       FaceVert(TetraConnectivity, T0, IndexF0, FaceV);
       TetraInternalFaces.push_back(FaceV);

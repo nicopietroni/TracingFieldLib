@@ -1,5 +1,7 @@
 #include <IO/file_path_functions.h>
 #include <cassert>
+#include <cstddef>
+#include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -19,6 +21,7 @@
 std::string PathMesh;
 std::string PathField;
 std::string ProjectName;
+std::string Outfolder;
 
 typedef double ScalarType;
 
@@ -86,17 +89,17 @@ void InitFieldByCurvature() {
   has_cross_field = true;
 }
 
-void SaveMesh() {
-  assert(!PathMesh.empty());
-  std::string PathRemMesh = RemoveExtension(PathMesh);
-  PathRemMesh += std::string("_remesh.obj");
-  std::cout << "Saving Field on file " << PathRemMesh.c_str() << std::endl;
-  bool Saved = WriteOBJ(PathRemMesh, TriVertPos, TriConnectivity);
-  if (!Saved) {
-    std::cout << "ERROR SAVING FIELD FILE " << std::endl;
-    exit(0);
-  }
-}
+// void SaveMesh() {
+//   assert(!PathMesh.empty());
+//   std::string PathRemMesh = RemoveExtension(PathMesh);
+//   PathRemMesh += std::string("_remesh.obj");
+//   std::cout << "Saving Field on file " << PathRemMesh.c_str() << std::endl;
+//   bool Saved = WriteOBJ(PathRemMesh, TriVertPos, TriConnectivity);
+//   if (!Saved) {
+//     std::cout << "ERROR SAVING FIELD FILE " << std::endl;
+//     exit(0);
+//   }
+// }
 
 void SaveField() {
   assert(!PathMesh.empty());
@@ -140,10 +143,12 @@ void SmoothGlobal(bool iterative = false) {
   // else
   //   SmoothCrossIterative(VertPos, Connectivity, FaceNormals, FaceCurv,
   //   SParam);
-
+  
   GetFaceSingularities(FaceCurv, TriVertPos, TriConnectivity, NextF, NextE,
                        SingIndex, SingValue);
-
+  
+  ComputeNormals(TriVertPos, TriConnectivity, TriFaceNormal, TriVertNormal);
+  
   SetVertCrossFromFace(TriVertPos, TriConnectivity, TriVertNormal, FaceCurv,
                        VertCurv);
 
@@ -172,12 +177,21 @@ void RefineForTracingConnectivity() {
 void BatchProcessField() {
 
   RefineForTracing();
-
   SParam.FixedCross.clear();
   InitFieldByCurvature();
+
   SmoothGlobal();
 
   RefineForTracingConnectivity();
+
+  for (size_t i=0;i<TriFeatures.size();i++)
+  {
+    if (TriFeatures[i].first>TriFeatures[i].second)
+    std::swap(TriFeatures[i].first,TriFeatures[i].second);
+  }
+  std::sort(TriFeatures.begin(), TriFeatures.end());
+  auto last = std::unique(TriFeatures.begin(), TriFeatures.end());
+  TriFeatures.erase(last, TriFeatures.end());
 }
 
 ScalarType MinSize = 0.005;
@@ -186,11 +200,11 @@ ScalarType MaxSize = 0.05;
 Geo::Box3<ScalarType> TriMeshBox;
 
 
-ScalarType initial_feature_angle = 30;
+ScalarType initial_feature_angle = 60;
 int ero_steps = 3;
 int dil_steps = 3;
 bool compute_features = true;
-int smooth_steps=30;
+int smooth_steps=50;
 std::string folderProjectName;
 std::string commandLine;
 
@@ -220,6 +234,29 @@ void AutoQuadEdgeSize() {
   std::cout << "Quad Size: " << QuadSize << std::endl;
 }
 
+void CreateOutputFolder() {
+
+  Outfolder = GetDirectory(PathMesh);
+  Outfolder += std::string("/quadrangulated/");
+
+  try {
+    // Check if the folder already exists
+    if (!std::filesystem::exists(Outfolder))
+      std::filesystem::create_directory(Outfolder);
+  } catch (const std::exception &e) {
+    std::cerr << "Error creating folder: " << e.what() << std::endl;
+  }
+  // exit(0);
+}
+
+void SaveMesh() {
+  std::string RemFile = Outfolder;
+  RemFile += std::string(GetFilanameNoExtension(PathMesh));
+  RemFile.append("_quad.obj");
+  std::cout << "Saving on:" << RemFile.c_str() << std::endl;
+  WriteOBJ(RemFile, QuadVert, QuadFaces);
+}
+
 int main(int argc, char *argv[]) {
   std::stringstream commandLineStr;
 
@@ -241,7 +278,7 @@ int main(int argc, char *argv[]) {
   for (int i = 1; i < argc; i++) {
     if (GetFileExtension(std::string(argv[i])) == std::string("obj")) {
       PathMesh = std::string(argv[1]);
-      has_loaded_mesh = LoadMesh(PathMesh);
+      has_loaded_mesh = LoadMesh(PathMesh); 
       // has_loaded_mesh = LoadMesh(PathMesh);
       if (!has_loaded_mesh) {
         std::cout << "ERROR LOADING INPUT MESH" << std::endl;
@@ -296,6 +333,17 @@ int main(int argc, char *argv[]) {
 
   if (has_loaded_mesh) {
 
+    if ((!has_features)&&(!has_cross_field))
+    {
+      std::cout<<"CLEANING MESH"<<std::endl;
+      Geo::CleanMesh<ScalarType>::CollapseBadShapeFaces(TriVertPos, TriConnectivity,0.05);
+      std::cout<<"CLEANING FOLDS"<<std::endl;
+      int steps_clean=Geo::CleanMesh<ScalarType>::SolveFolds(TriVertPos, TriConnectivity);
+      std::cout<<"Performed:"<<steps_clean<<" unfold steps"<<std::endl;
+      // WriteOBJ("clean.obj",TriVertPos, TriConnectivity);
+      // exit(0);
+    }
+
     std::cout << "BATCH PROCESSING" << std::endl;
     if ((!has_features) && (compute_features)) {
       std::cout << "** COMPUTING FEATURES **" << std::endl;
@@ -305,8 +353,7 @@ int main(int argc, char *argv[]) {
       has_features = true;
     }
 
-    if (!has_cross_field) {
-      std::cout << "** COMPUTING FIELD **" << std::endl;
+    if (!has_cross_field) {   
       BatchProcessField();
     }
 
@@ -324,15 +371,18 @@ int main(int argc, char *argv[]) {
 
     MQuad.QuadSmoothSteps = smooth_steps;
     // MQuad.RegVsIso=0.1;
-    MQuad.CCAbility = 0.5;
-    // MQuad.num_samples=10000;
+    MQuad.CCAbility = 0.5;//25;
+    MQuad.num_samples=3000;
+
     MQuad.ExtractQuad(TriFeatures);
 
-    ProjectName = GetFilanameNoExtension(PathMesh);
-    ProjectName += std::string("_quad.obj");
-    std::cout << "Writing:" << ProjectName << std::endl;
+    CreateOutputFolder();
+    SaveMesh();
+    // ProjectName = GetFilanameNoExtension(PathMesh);
+    // ProjectName += std::string("_quad.obj");
+    // std::cout << "Writing:" << ProjectName << std::endl;
 
-    WriteOBJ(ProjectName.c_str(), QuadVert, QuadFaces);
+    // WriteOBJ(ProjectName.c_str(), QuadVert, QuadFaces);
   }
 
   return 0;

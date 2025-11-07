@@ -610,8 +610,6 @@ public:
       PosSingNEW.insert(Pos[IndexV]);
     }
 
-    std::cout<<"Test 0"<<std::endl;
-
     // assert(ValuesSingOLD.size() == PosSingOLD.size());
     // assert(SingIndex.size()==PosSingOLD.size());
     // assert(SingIndex.size()==ValuesSingOLD.size());
@@ -633,7 +631,6 @@ public:
       FeatureSingIndex.push_back(IndexV);
       FeatureSingValue.push_back(ValuesSingOLD[i]);
     }
-    std::cout<<"Test 1"<<std::endl;
 
     NewBorderV.clear();
     Geo::getBorderVert(Faces, BorderV);

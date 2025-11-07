@@ -786,8 +786,10 @@ public:
         ToRefine.push_back(PolyL[i][0]);
         ToRefine.push_back(PolyL[i].back());
         std::vector<int> RefinedIdx;
+        
         bool has_added = RefineMeshWithUVPoints(Pos3D, PosUV, Faces, ToRefine,
                                                 RefinedIdx, minAlpha);
+
         if (has_added)
           for (size_t i = 0; i < RefinedIdx.size(); i++)
             RefinedPos.push_back(PosUV[RefinedIdx[i]]);
@@ -798,8 +800,11 @@ public:
     }
     for (size_t i = 0; i < PolyL.size(); i++) {
       // std::cout<<"Splitting Polyline:"<<i<<std::endl;
+      //std::cout<<"Splitting Inside"<<i<<std::endl;
+
       RefineEdgesWithPolyLine(Pos3D, PosUV, Faces, PolyL[i], RefinedPos,
                               MarkedE, minAlpha);
+      //std::cout<<"done"<<std::endl;
     }
 
     for (size_t i = 0; i < Faces.size(); i++)

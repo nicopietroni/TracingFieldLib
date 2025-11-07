@@ -1473,7 +1473,7 @@ template <class ScalarType> class OrientFLowGraph {
     // only once
     for (size_t i = 0; i < CycleRes.results.size(); i++) {
       NodeRoute CurrR = CycleRes.results[i].second;
-      assert(CurrR.kind != NodeRoute::SRC_TO_SINK);
+      //assert(CurrR.kind != NodeRoute::SRC_TO_SINK);
       if (CurrR.kind == NodeRoute::CYCLE) {
         assert(CurrR.nodes[0] == CurrR.nodes.back());
         CurrR.nodes.pop_back();

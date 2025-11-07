@@ -466,8 +466,8 @@ class TriangleEdgeCollapseOperation : public Geo::LocalOperation<ScalarType> {
     return Pos;
   }
 
-  ScalarType MaxNormVariation;
-  ScalarType MinARatioDeficit;
+  // ScalarType MaxNormVariation;
+  // ScalarType MinARatioDeficit;
   // bool check_QCollapse;
   // ScalarType MinAspectRatio;
   //  int MaxValence;
@@ -621,7 +621,7 @@ public:
 
     if (!FeatureFeasible())
       return false;
-    if (!QuadricFeasible())
+    if ((this->VertQ.size() > 0)&&(!QuadricFeasible()))
       return false;
     if (!TriangleEdgeCollapse<ScalarType>::LinkConditions(
             V0, V1, V01, IsBorderE, IsBorderV0, IsBorderV1))
@@ -703,10 +703,11 @@ public:
     if (UpdateStructures) {
       int IndexV0 = this->pos.V;
       int IndexV1 = this->pos.VFlip(this->Faces);
-      assert(IndexV0 < this->VertQ.size());
-      assert(IndexV1 < this->VertQ.size());
+     
 
       if (this->VertQ.size() > 0) {
+        assert(IndexV0 < this->VertQ.size());
+        assert(IndexV1 < this->VertQ.size());
         // this->VertQ[IndexV0].first+= this->VertQ[IndexV1].first;
         Quadric<ScalarType> Q0 = this->VertQ[IndexV0].first;
         Quadric<ScalarType> Q1 = this->VertQ[IndexV1].first;
@@ -751,6 +752,8 @@ public:
   //   //MinAspectRatio=0.2;
   //   // MaxValence = 8;
   // }
+  ScalarType MaxNormVariation;
+  ScalarType MinARatioDeficit;
 
   TriangleEdgeCollapseOperation(
       Pos3 _pos, std::vector<std::vector<int>> &_Faces,

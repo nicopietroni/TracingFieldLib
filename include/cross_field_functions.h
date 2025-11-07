@@ -1,7 +1,9 @@
 #ifndef CROSS_FIELD_FUNCTIONS
 #define CROSS_FIELD_FUNCTIONS
 
+#include <cassert>
 #include <cmath>
+#include <iostream>
 #include <vector>
 #include <stdio.h>
 #include "point3.h"
@@ -197,6 +199,13 @@ void SetVertCrossFromFace(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                           bool weightByQuality = true)
 {
     assert(FaceCurv.size()==Faces.size());
+    assert(VertPos.size()==VertNormals.size());
+
+    for (size_t i = 0; i < VertNormals.size(); i++)
+    {
+        ScalarType Eps=0.0001;
+        assert(fabs(VertNormals[i].Norm()-1)<Eps);
+    }
     VertCurv.resize(VertPos.size());
     for (size_t i = 0; i < VertPos.size(); i++)
         VertCurv[i].Pos = VertPos[i];

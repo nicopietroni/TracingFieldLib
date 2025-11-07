@@ -16,6 +16,7 @@
 #include "pos3.h"
 #include "point3.h"
 #include "triangle3.h"
+#include "Space_Query/point_grid_3D.h"
 
 namespace Geo {
 
@@ -142,12 +143,13 @@ bool FindEdgePosCorrespondences(
     VertIdx[Vert[i]]=i;
 
   EdgeIdx.clear();
+  bool all_mapped=true;
   for (size_t i=0;i<EdgePos.size();i++)
   {
     Geo::Point3<ScalarType> P0=EdgePos[i].first;
     Geo::Point3<ScalarType> P1=EdgePos[i].second;
-    if (VertIdx.count(P0)==0)return false;
-    if (VertIdx.count(P1)==0)return false;
+    if (VertIdx.count(P0)==0)all_mapped=false;
+    if (VertIdx.count(P1)==0)all_mapped=false;
     int IndexV0=VertIdx[P0];
     int IndexV1=VertIdx[P1];
     
@@ -157,7 +159,48 @@ bool FindEdgePosCorrespondences(
   std::sort(EdgeIdx.begin(), EdgeIdx.end());
   EdgeIdx.erase(std::unique(EdgeIdx.begin(), EdgeIdx.end()),
                      EdgeIdx.end());
-  return true;
+  return all_mapped;
+}
+
+template <class ScalarType>
+bool FindCloseEdgePosCorrespondences(
+    const std::vector<Geo::Point3<ScalarType> > &Vert,
+    const std::vector<std::vector<int> > &Faces,
+    const std::vector<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &EdgePos,
+    std::vector<std::pair<int,int> > &EdgeIdx) 
+{
+  
+  // std::map<Geo::Point3<ScalarType>,int> VertIdx;
+  // for (size_t i=0;i<Vert.size();i++)
+  //   VertIdx[Vert[i]]=i;
+  PointSpatialIndex<ScalarType> PointSpatial;
+  PointSpatial.Init(Vert);
+
+  EdgeIdx.clear();
+  ScalarType Thr=0.000001;
+  bool all_mapped=true;
+  for (size_t i=0;i<EdgePos.size();i++)
+  {
+    Geo::Point3<ScalarType> P0=EdgePos[i].first;
+    Geo::Point3<ScalarType> P1=EdgePos[i].second;
+    int IndexV0=-1;
+    bool found0=PointSpatial.GridClosest(Vert, P0,Thr,IndexV0);
+    
+    int IndexV1=-1;
+    bool found1=PointSpatial.GridClosest(Vert, P1,Thr,IndexV1);
+    
+    if (!found1)all_mapped=false;
+    if (!found0)all_mapped=false;
+    if (IndexV0==-1)all_mapped=false;
+    if (IndexV1==-1)all_mapped=false;
+    
+    EdgeIdx.push_back(std::pair<int,int>(std::min(IndexV0,IndexV1),
+                                         std::max(IndexV0,IndexV1)));
+  }
+  std::sort(EdgeIdx.begin(), EdgeIdx.end());
+  EdgeIdx.erase(std::unique(EdgeIdx.begin(), EdgeIdx.end()),
+                     EdgeIdx.end());
+  return all_mapped;
 }
 
 };

@@ -336,6 +336,75 @@ public:
     LLoydRalaxSampleseRadius3D(Samples, RadiusStar, Selected, RelaxStep);
   }
 
+  static int
+  SampleCloseToBarycenter(const std::vector<Geo::Point3<ScalarType>> &VertPos) {
+    //then select the one close to barycenter
+      Geo::Point3<ScalarType> Bary(0,0,0);
+      for (size_t i=0;i<VertPos.size();i++)
+        Bary+=VertPos[i];
+      Bary/=VertPos.size();
+
+      int MinIdx=-1;
+      ScalarType MinD=std::numeric_limits<ScalarType>::max();
+      for (size_t i=0;i<VertPos.size();i++)
+      {
+        ScalarType CurrD=(Bary-VertPos[i]).Norm();
+        if (CurrD>MinD)continue;
+        MinD=CurrD;
+        MinIdx=i;
+      }
+      assert(MinIdx>=0);
+      return MinIdx;
+  }
+
+  static void
+  SampleFarthestIterative(const std::vector<std::vector<int> > &Elems,
+                          const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                          const std::vector<int> &Boundary, 
+                          const int NumSamples,
+                          std::vector<int> &Selected) {
+
+    std::set<int> CurrBound(Boundary.begin(),Boundary.end());
+
+    if (CurrBound.size()==0)
+    {
+      int InitialSample=SampleCloseToBarycenter(VertPos);
+      CurrBound.insert(InitialSample);
+      Selected.push_back(InitialSample);
+    }
+   
+    std::vector<std::vector<int>> VVAdj;
+    Geo::FindVertexStar(Elems, VVAdj);
+
+    Geo::TMark TempMark;
+    typename Geo::Geodesic<ScalarType>::GeodesicParam GParam;
+    bool has_added=true;
+    while((Selected.size()!=NumSamples)&& has_added)
+    {
+      has_added=false;
+
+      GParam.Seeds=std::vector<int>(CurrBound.begin(),CurrBound.end());
+      Geo::Geodesic<ScalarType>::NodeDijkstra(VertPos, VVAdj,TempMark, GParam);
+      //then get the farthest
+      ScalarType MaxD=0;
+      int MaxDIndex=-1;
+      
+      for (size_t i=0;i<GParam.Dist.size();i++)
+      {
+        if (GParam.Dist[i]<=MaxD)continue;
+        MaxD=GParam.Dist[i];
+        MaxDIndex=i;
+      }
+      if ((MaxDIndex!=-1)&&
+          (CurrBound.count(MaxDIndex)==0))
+      {
+        CurrBound.insert(MaxDIndex);
+        Selected.push_back(MaxDIndex);
+        has_added=true;
+      }
+    }
+  }
+
   static void SampleBordersRegularly(const std::vector<std::vector<int>> &Faces,
                                      const std::vector<std::vector<int>> &NextF,
                                      const std::vector<std::vector<int>> &NextE,

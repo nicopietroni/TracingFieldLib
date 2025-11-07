@@ -39,9 +39,9 @@ void GetPolylineFromSing(
     Geo::Point3<ScalarType> Col(0, 1, 0);
 
     if (FrameSingValue[i] > 0)
-      Col = Geo::Point3<ScalarType>(1, 0, 0);
+      Col = Geo::Point3<ScalarType>(0.3,0.3,0.3);
     if (FrameSingValue[i] < 0)
-      Col = Geo::Point3<ScalarType>(1, 1, 0);
+      Col = Geo::Point3<ScalarType>(0.3,0.3,0.3);
 
     PolyColorSing[i] = Col;
   }

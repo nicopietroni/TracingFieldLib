@@ -357,6 +357,7 @@ public:
 
       // only if the patch corner side is 4
       if (PatchCornerIdx[i].size() != 4) {
+        std::cout<<"Warning Quadrangulation of Patch with Corner Num !=4"<<std::endl;
         problematic_patches++;
         continue;
       }

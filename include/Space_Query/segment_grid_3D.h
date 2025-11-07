@@ -7,6 +7,7 @@
 #include "../segment3.h"
 #include "grid_basics_2D.h"
 #include "grid_basics_3D.h"
+#include <cassert>
 #include <iostream>
 #include <utility>
 #include <vector>
@@ -324,6 +325,26 @@ void InitFromMeshFeatures(const std::vector<Geo::Point3<ScalarType>> &VertPos,
   for (size_t i = 0; i < Features.size(); i++) {
     int IndexV0 = Features[i].first;
     int IndexV1 = Features[i].second;
+    Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
+    Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
+    Segs.push_back(Geo::Segment3<ScalarType>(P0, P1));
+  }
+  SegIndex.Init(Segs);
+}
+
+template <class ScalarType>
+void InitFromSequence(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                      const std::vector<int> &VertSeq,
+                      std::vector<Geo::Segment3<ScalarType>> &Segs,
+                      Geo::SegmentSpatialIndex<ScalarType> &SegIndex) {
+  Segs.clear();
+  for (size_t i = 0; i < VertSeq.size()-1; i++) {
+    int IndexV0 = VertSeq[i];
+    int IndexV1 = VertSeq[i+1];
+    assert(IndexV0>=0);
+    assert(IndexV1>=0);
+    assert(IndexV0<VertPos.size());
+    assert(IndexV1<VertPos.size());
     Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
     Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
     Segs.push_back(Geo::Segment3<ScalarType>(P0, P1));

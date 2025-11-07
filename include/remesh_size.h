@@ -56,8 +56,11 @@ template <class ScalarType> class RemeshSize {
         SubMeshFeatures.end());
 
     std::vector<std::pair<int, int>> EdgesPair;
-    Geo::EdgeMeshFunctions<ScalarType>::ExtractFromFeatures(
-        SubMeshVertPos, SubMeshFaces, SubMeshFeatures, SubEdgeVertPos,
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractFromFeatures(
+    //     SubMeshVertPos, SubMeshFaces, SubMeshFeatures, SubEdgeVertPos,
+    //     EdgesPair);
+     Geo::EdgeMeshFunctions<ScalarType>::ExtractFromFeatures(
+        SubMeshVertPos, SubMeshFeatures, SubEdgeVertPos,
         EdgesPair);
 
     for (size_t i = 0; i < EdgesPair.size(); i++) {
