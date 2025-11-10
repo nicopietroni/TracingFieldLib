@@ -3044,55 +3044,55 @@ public:
     }
   }
 
-  // bool SaveCurveCycleData(const std::string PathSave) {
-  //   std::vector<CurveData> Curves;
-  //   std::vector<CycleData> Cycles;
-  //   GetCurveCycleData(Curves, Cycles);
-
-  //   // first save the curves
-  //   std::string CurveF = PathSave;
-  //   CurveF += std::string(".curve");
-
-  //   std::ofstream fout(CurveF.c_str());
-  //   if (!fout)
-  //     return false;
-
-  //   fout << Curves.size() << "\n";
-
-  //   for (size_t i = 0; i < Curves.size(); i++) {
-  //     int NumPos = Curves[i].Pos.size();
-  //     int NumPatches = Curves[i].NumPatches;
-  //     fout << NumPos << " 0 " << NumPatches << "\n";
-  //     for (size_t j = 0; j < NumPos; j++) {
-  //       Geo::Point3<ScalarType> CurrP = Curves[i].Pos[j];
-  //       fout << CurrP.X << " " << CurrP.Y << " " << CurrP.Z << "\n";
-  //     }
-  //   }
-  //   fout.close();
-
-  //   // then save the cycles
-  //   std::string CycleF = PathSave;
-  //   CycleF += std::string(".cycle");
-
-  //   std::ofstream fout_2(CycleF.c_str());
-  //   if (!fout_2)
-  //     return false;
-
-  //   fout_2 << Cycles.size() << "\n";
-  //   for (size_t i = 0; i < Cycles.size(); i++) {
-  //     fout_2 << Cycles[i].CurveSeq.size() << "\n";
-  //     for (size_t j = 0; j < Cycles[i].CurveSeq.size(); j++) {
-  //       int IndexCurv = Cycles[i].CurveSeq[j][0];
-  //       int VerseCurv = Cycles[i].CurveSeq[j][1];
-  //       int IndexP = Cycles[i].CurveSeq[j][2];
-  //       fout_2 << IndexCurv << " " << VerseCurv << " " << IndexP << "\n";
-  //     }
-  //   }
-  //   fout_2.close();
-  //   return true;
-  // }
-
   bool SaveCurveCycleData(const std::string PathSave) {
+    std::vector<CurveData> Curves;
+    std::vector<CycleData> Cycles;
+    GetCurveCycleData(Curves, Cycles);
+
+    // first save the curves
+    std::string CurveF = PathSave;
+    CurveF += std::string(".curve");
+
+    std::ofstream fout(CurveF.c_str());
+    if (!fout)
+      return false;
+
+    fout << Curves.size() << "\n";
+
+    for (size_t i = 0; i < Curves.size(); i++) {
+      int NumPos = Curves[i].Pos.size();
+      int NumPatches = Curves[i].NumPatches;
+      fout << NumPos << " 0 " << NumPatches << "\n";
+      for (size_t j = 0; j < NumPos; j++) {
+        Geo::Point3<ScalarType> CurrP = Curves[i].Pos[j];
+        fout << CurrP.X << " " << CurrP.Y << " " << CurrP.Z << "\n";
+      }
+    }
+    fout.close();
+
+    // then save the cycles
+    std::string CycleF = PathSave;
+    CycleF += std::string(".cycle");
+
+    std::ofstream fout_2(CycleF.c_str());
+    if (!fout_2)
+      return false;
+
+    fout_2 << Cycles.size() << "\n";
+    for (size_t i = 0; i < Cycles.size(); i++) {
+      fout_2 << Cycles[i].CurveSeq.size() << "\n";
+      for (size_t j = 0; j < Cycles[i].CurveSeq.size(); j++) {
+        int IndexCurv = Cycles[i].CurveSeq[j][0];
+        int VerseCurv = Cycles[i].CurveSeq[j][1];
+        int IndexP = Cycles[i].CurveSeq[j][2];
+        fout_2 << IndexCurv << " " << VerseCurv << " " << IndexP << "\n";
+      }
+    }
+    fout_2.close();
+    return true;
+  }
+
+  bool SaveCycleData(const std::string PathSave) {
     std::vector<CurveData> Curves;
     std::vector<CycleData> Cycles;
     GetCurveCycleData(Curves, Cycles);

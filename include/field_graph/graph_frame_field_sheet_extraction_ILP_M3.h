@@ -29,6 +29,7 @@ template <class ScalarType> class SheetExtractorILPM3 {
 public:
   // different types of energy minimization
   enum ObjType { FaceOBJ, ConnOBJ, FaceConnOBJ };
+  enum ContinuityType { FaceBased, EdgeBased };
 
   struct ExtractParam {
     std::vector<int> HardNodes;
@@ -48,10 +49,14 @@ public:
     bool BorderTangentM3;
     bool SoftBorderTangentM3;
 
+    bool SoftAvoidConnectionsM3;
+
     ScalarType Gap;
     ObjType OType;
     bool FeasiblityOnly;
     bool OptimizeObj;
+
+    ContinuityType CType;
 
     ExtractParam() {
       SingleFConstrM3 = true;
@@ -70,6 +75,9 @@ public:
       SoftTwiceEdgeConstrM3 = false;
       SoftInternalTangentM3 = false;
       SoftBorderTangentM3 = false;
+      SoftAvoidConnectionsM3 = false;
+
+      CType = FaceBased;
     }
   };
 
@@ -78,13 +86,15 @@ private:
 
   std::vector<std::vector<int>> &InternalFaces;
 
-  // for each node the variable on the Gurobi solve
+  // NODE VARIABLES
+  //  for each node the variable on the Gurobi solve
   std::vector<int> M3NodeToVar;
 
   // for each variable on the Gurobi solve to the node
   std::vector<int> M3VarToNode;
 
-  // for each connection Var the list of nodes
+  // LINK VARIABLES IF USED IN THE OBJECTIVE FUNCTION
+  //  for each connection Var the list of nodes
   std::vector<std::pair<int, int>> M3LinkVarToNodes;
 
   // its weigth
@@ -93,24 +103,35 @@ private:
   // for each pair of nodes the variable (this is when link variable used)
   std::map<std::pair<int, int>, int> M3NodesToLinkVar;
 
-  // only one single istance of the face can be chosen (one face might
-  // correspont to multiple nodes)
+  // MANIFOLD CONSTRAINTS
+  //  only one single istance of the face can be chosen (one face might
+  //  correspont to multiple nodes)
   std::vector<std::vector<int>> SingleF_ConstrM3;
 
   // the edge can be transversed only twice maximum (SET CORRECT VALENCE with
   // Borders/Convex/Concave)
   std::vector<std::vector<int>> TwiceEdge_ConstrM3;
 
+  // nodes which are tangent internally for each edge (valence 0 or 2)
+  std::vector<std::vector<int>> Internal_TangentNodes_Constr;
+
+  // nodes which are tangent on border for each edge (valence 0 or 1)
+  std::vector<std::vector<int>> Border_TangentNodes_Constr;
+
+  // APPROACH 1, EXPLICIT NEIGHBOURS AND CONSTRAINTS
+  // list of pairs for each node the continuation, the first one
+  // is repeated three times because the three labels
+  std::vector<std::pair<int, std::vector<int>>> EdgeLabel_Continuation_Constr;
+
+  // APPROACH 2, ON GROUP OF EDGES AND PROHIBITED NEIGH
+  // the connections that are disabled on a group of faces sharing the edge
+  std::vector<std::pair<int, int>> Avoid_Connections;
+
   // exit M3 should be only one for exit edge
-  std::vector<std::vector<int>> M3_Exit_Constr;
+  // std::vector<std::vector<int>> M3_Exit_Constr;
 
-  // Continuing M3 Label such that one face should trigger the next
-  std::vector<std::vector<int>> M3_Label_Cont_Constr;
-
-  // only one times for each direction for each node
-  std::vector<std::pair<int, std::vector<int>>> EdgeLabel_Constr;
-  //  // Prohibited Neighbors
-  // std::vector<std::pair<int,int>> M3_Not_Legal_Connections;
+  // // Continuing M3 Label such that one face should trigger the next
+  // std::vector<std::vector<int>> M3_Label_Cont_Constr;
 
   bool IsVariableM3(int IndexN) const {
     // return false;
@@ -121,28 +142,28 @@ private:
     return true;
   }
 
-  void ConstraintStats(const std::vector<std::vector<int>> &Constraint,
-                       int &MaxSize, ScalarType &AVGSize) {
-    AVGSize = 0;
-    MaxSize = 0;
-    for (size_t i = 0; i < Constraint.size(); i++) {
-      MaxSize = std::max(MaxSize, (int)Constraint[i].size());
-      AVGSize += (ScalarType)Constraint[i].size();
-    }
-    AVGSize /= (ScalarType)Constraint.size();
-  }
+  // void ConstraintStats(const std::vector<std::vector<int>> &Constraint,
+  //                      int &MaxSize, ScalarType &AVGSize) {
+  //   AVGSize = 0;
+  //   MaxSize = 0;
+  //   for (size_t i = 0; i < Constraint.size(); i++) {
+  //     MaxSize = std::max(MaxSize, (int)Constraint[i].size());
+  //     AVGSize += (ScalarType)Constraint[i].size();
+  //   }
+  //   AVGSize /= (ScalarType)Constraint.size();
+  // }
 
-  void ConstraintStats(
-      const std::vector<std::pair<int, std::vector<int>>> &Constraint,
-      int &MaxSize, ScalarType &AVGSize) {
-    AVGSize = 0;
-    MaxSize = 0;
-    for (size_t i = 0; i < Constraint.size(); i++) {
-      MaxSize = std::max(MaxSize, (int)Constraint[i].second.size());
-      AVGSize += (ScalarType)Constraint[i].second.size();
-    }
-    AVGSize /= (ScalarType)Constraint.size();
-  }
+  // void ConstraintStats(
+  //     const std::vector<std::pair<int, std::vector<int>>> &Constraint,
+  //     int &MaxSize, ScalarType &AVGSize) {
+  //   AVGSize = 0;
+  //   MaxSize = 0;
+  //   for (size_t i = 0; i < Constraint.size(); i++) {
+  //     MaxSize = std::max(MaxSize, (int)Constraint[i].second.size());
+  //     AVGSize += (ScalarType)Constraint[i].second.size();
+  //   }
+  //   AVGSize /= (ScalarType)Constraint.size();
+  // }
 
   void InitVariableMap() {
 
@@ -234,6 +255,44 @@ private:
 
   // }
 
+  //  for (size_t i = 0; i < M3Graph.InternalTangentConstr.size(); i++) {
+  //     std::vector<int> CurrTangVar;
+  //     for (size_t j = 0; j < M3Graph.InternalTangentConstr[i].size(); j++) {
+  //       int IndexN = M3Graph.InternalTangentConstr[i][j];
+  //       if (!IsVariableM3(IndexN))
+  //         continue;
+
+  void InitAvoidConnection_ConstrM3() {
+    Avoid_Connections.clear();
+    for (size_t i = 0; i < M3Graph.InternalTangentConstr.size(); i++) {
+      // for each pair
+      for (size_t j = 0; j < M3Graph.InternalTangentConstr[i].size() - 1; j++)
+        for (size_t k = (j + 1); k < M3Graph.InternalTangentConstr[i].size();
+             k++) {
+          int IndexN0 = M3Graph.InternalTangentConstr[i][j];
+          int IndexN1 = M3Graph.InternalTangentConstr[i][k];
+          if (!IsVariableM3(IndexN0))
+            continue;
+          if (!IsVariableM3(IndexN1))
+            continue;
+          assert(IndexN0 != IndexN1);
+          if (M3Graph.IsActiveNeighbour(IndexN0, IndexN1))
+            continue;
+          int IndexVar0 = M3NodeToVar[IndexN0];
+          int IndexVar1 = M3NodeToVar[IndexN1];
+          assert(IndexVar0 >= 0);
+          assert(IndexVar1 >= 0);
+          Avoid_Connections.push_back(std::pair<int, int>(
+              std::min(IndexVar0, IndexVar1), std::max(IndexVar0, IndexVar1)));
+        }
+    }
+
+    std::sort(Avoid_Connections.begin(), Avoid_Connections.end());
+    Avoid_Connections.erase(
+        std::unique(Avoid_Connections.begin(), Avoid_Connections.end()),
+        Avoid_Connections.end());
+  }
+
   void InitSingleF_ConstrM3() {
     SingleF_ConstrM3.clear();
 
@@ -310,8 +369,6 @@ private:
 
   // // for the border edges a different kind of constraint
   // std::vector<std::vector<int>> EdgeLabel_ExitConstr;
-  std::vector<std::vector<int>> Internal_TangentNodes_Constr,
-      Border_TangentNodes_Constr;
 
   void InitInternalTangentNodes_Constr() {
     Internal_TangentNodes_Constr.clear();
@@ -355,7 +412,7 @@ private:
 
   void InitSingleLabelF_Constr() {
 
-    EdgeLabel_Constr.clear();
+    EdgeLabel_Continuation_Constr.clear();
 
     for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
 
@@ -401,9 +458,10 @@ private:
         bool IsExitNodeLab = M3Graph.IsExitLabel(IndexN0, j);
         // if no exit separate them so different constraint
         if (!IsExitNodeLab) {
-          EdgeLabel_Constr.resize(EdgeLabel_Constr.size() + 1);
-          EdgeLabel_Constr.back().first = IndexVar0;
-          EdgeLabel_Constr.back().second = LabelVars[j];
+          EdgeLabel_Continuation_Constr.resize(
+              EdgeLabel_Continuation_Constr.size() + 1);
+          EdgeLabel_Continuation_Constr.back().first = IndexVar0;
+          EdgeLabel_Continuation_Constr.back().second = LabelVars[j];
         }
       }
     }
@@ -625,18 +683,19 @@ private:
     }
   }
 
-  void AddFoilContinuityConstraint(GRBModel &model,
-                                   const std::vector<GRBVar> &M3NodeVars,
-                                   bool SoftConstr) {
+  void AddFoilFaceContinuityConstraint(GRBModel &model,
+                                       const std::vector<GRBVar> &M3NodeVars,
+                                       bool SoftConstr) {
     // ADD EDGE LABEL CONSTRAINT IF SELECTED A FACE SHOULD SELECT NEIGHBOURS
-    for (size_t i = 0; i < EdgeLabel_Constr.size(); i++) {
+    for (size_t i = 0; i < EdgeLabel_Continuation_Constr.size(); i++) {
       GRBLinExpr upper_bound;
-      int IndexVar0 = EdgeLabel_Constr[i].first;
+      int IndexVar0 = EdgeLabel_Continuation_Constr[i].first;
       assert(IndexVar0 < M3NodeVars.size());
       assert(IndexVar0 >= 0);
 
-      for (size_t j = 0; j < EdgeLabel_Constr[i].second.size(); j++) {
-        int IndexVar1 = EdgeLabel_Constr[i].second[j];
+      for (size_t j = 0; j < EdgeLabel_Continuation_Constr[i].second.size();
+           j++) {
+        int IndexVar1 = EdgeLabel_Continuation_Constr[i].second[j];
         assert(IndexVar0 != IndexVar1);
         assert(IndexVar1 < M3NodeVars.size());
         assert(IndexVar1 >= 0);
@@ -669,8 +728,13 @@ private:
       if (!SoftConstr) {
         model.addConstr(lin_constr <= 1, "Single F M3" + std::to_string(i));
       } else {
-        GRBVar relax = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY, GRB_BINARY,
-                                    "Single F M3 relax" + std::to_string(i));
+        // GRBVar relax = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY,
+        // GRB_BINARY,
+        //                             "Single F M3 relax" + std::to_string(i));
+        GRBVar relax =
+            model.addVar(0.0, GRB_INFINITY, SOFT_CONSTR_PENALTY, GRB_INTEGER,
+                         "Single F M3 relax" + std::to_string(i));
+
         model.addConstr(lin_constr <= 1 + relax,
                         "Single F M3 Soft" + std::to_string(i));
       }
@@ -691,9 +755,13 @@ private:
       if (!SoftConstr) {
         model.addConstr(twice_constr <= 4, "Twice M3 " + std::to_string(i));
       } else {
-        GRBVar slack = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY, GRB_BINARY,
-                                    "slack_twice_" + std::to_string(i));
-        model.addConstr(twice_constr <= 4 + slack,
+        // GRBVar slack = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY,
+        // GRB_BINARY,
+        //                             "slack_twice_" + std::to_string(i));
+        GRBVar relax =
+            model.addVar(0.0, GRB_INFINITY, SOFT_CONSTR_PENALTY, GRB_INTEGER,
+                         "Twice E M3 relax" + std::to_string(i));
+        model.addConstr(twice_constr <= 4 + relax,
                         "Soft_TwiceM3_" + std::to_string(i));
       }
     }
@@ -701,7 +769,7 @@ private:
 
   void AddInternalTangentConstraint(GRBModel &model,
                                     const std::vector<GRBVar> &M3NodeVars,
-                                    bool SoftConstr) {
+                                    bool ImposeContinuity, bool SoftConstr) {
 
     for (size_t i = 0; i < Internal_TangentNodes_Constr.size(); i++) {
 
@@ -717,14 +785,37 @@ private:
         assert(IndexVar >= 0);
         upper_bound += M3NodeVars[IndexVar];
       }
-      if (!SoftConstr) {
-        model.addConstr(upper_bound <= 2,
-                        "Internal Tangent C " + std::to_string(i));
-      } else {
-        GRBVar slack = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY, GRB_BINARY,
-                                    "slack_internal_" + std::to_string(i));
-        model.addConstr(upper_bound <= 2 + slack,
-                        "Soft_InternalM3_" + std::to_string(i));
+      // in this case also can be 1 ,continuity imposed elsewhere
+      if (!ImposeContinuity) {
+        if (!SoftConstr) {
+          model.addConstr(upper_bound <= 2,
+                          "Internal Tangent C " + std::to_string(i));
+        } else {
+
+          GRBVar relax =
+              model.addVar(0.0, GRB_INFINITY, SOFT_CONSTR_PENALTY, GRB_INTEGER,
+                           "Internal relax" + std::to_string(i));
+          model.addConstr(upper_bound <= 2 + relax,
+                          "Soft_InternalM3_" + std::to_string(i));
+        }
+      } else // in this case can be 0 or 2
+      // because should ensure continuity (then need to avoid disabled
+      // connections)
+      {
+        // add one more variable to ensure that the sum is even
+        GRBVar evenVar =
+            model.addVar(0.0, 1.0, 0, GRB_BINARY, "relax_" + std::to_string(i));
+        if (!SoftConstr) {
+          model.addConstr(upper_bound == 2 * evenVar,
+                          "Even Continuation " + std::to_string(i));
+        } else {
+
+          GRBVar relax =
+              model.addVar(0.0, GRB_INFINITY, SOFT_CONSTR_PENALTY, GRB_INTEGER,
+                           "Even relax" + std::to_string(i));
+          model.addConstr(upper_bound == 2 * evenVar + relax,
+                          "Soft Even Continuation " + std::to_string(i));
+        }
       }
     }
   }
@@ -750,10 +841,43 @@ private:
         model.addConstr(upper_bound <= 1,
                         "Border Tangent C " + std::to_string(i));
       } else {
-        GRBVar slack = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY, GRB_BINARY,
-                                    "slack_border_" + std::to_string(i));
-        model.addConstr(upper_bound <= 1 + slack,
+        // GRBVar slack = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY,
+        // GRB_BINARY,
+        //                             "slack_border_" + std::to_string(i));
+        GRBVar relax =
+            model.addVar(0.0, GRB_INFINITY, SOFT_CONSTR_PENALTY, GRB_INTEGER,
+                         "Border relax" + std::to_string(i));
+        model.addConstr(upper_bound <= 1 + relax,
                         "Soft_BorderM3_" + std::to_string(i));
+      }
+    }
+  }
+
+  void AddAvoidConnectionsConstraint(GRBModel &model,
+                                     const std::vector<GRBVar> &M3NodeVars,
+                                     bool SoftConstr) {
+
+    for (size_t i = 0; i < Avoid_Connections.size(); i++) {
+      int IndexVar0 = Avoid_Connections[i].first;
+      int IndexVar1 = Avoid_Connections[i].second;
+
+      assert(IndexVar0 >= 0);
+      assert(IndexVar1 >= 0);
+      assert(IndexVar0 < M3NodeVars.size());
+      assert(IndexVar1 < M3NodeVars.size());
+
+      GRBLinExpr no_twice_constr;
+      no_twice_constr += M3NodeVars[IndexVar0];
+      no_twice_constr += M3NodeVars[IndexVar1];
+
+      if (!SoftConstr) {
+        model.addConstr(no_twice_constr <= 1,
+                        "Avoid Connection M3 " + std::to_string(i));
+      } else {
+        GRBVar relax = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY, GRB_BINARY,
+                                    "relax_" + std::to_string(i));
+        model.addConstr(no_twice_constr <= 1 + relax,
+                        "Soft Avoid Connection M3 " + std::to_string(i));
       }
     }
   }
@@ -817,9 +941,6 @@ private:
       if ((ExtrP.OType == ConnOBJ) || (ExtrP.OType == FaceConnOBJ))
         InitLinkVariables(ExtrP, model, M3NodeVars, M3LinkVars);
 
-      AddFoilContinuityConstraint(model, M3NodeVars,
-                                  ExtrP.SoftSurfaceContrinuationM3);
-
       // ADD SINGLE NODE FOR M3 FACE CONSTRAINT
       if (ExtrP.SingleFConstrM3) {
         std::cout << " ** Adding Single F Constraint" << std::endl;
@@ -833,12 +954,26 @@ private:
       }
 
       // ADD internal Label CONSTR
-      if (ExtrP.InternalTangentM3) {
-        std::cout << " ** Adding Internal Tangent Constraint" << std::endl;
-        AddInternalTangentConstraint(model, M3NodeVars,
-                                     ExtrP.SoftInternalTangentM3);
-      }
+      if (ExtrP.CType == FaceBased) {
 
+        AddFoilFaceContinuityConstraint(model, M3NodeVars,
+                                        ExtrP.SoftSurfaceContrinuationM3);
+
+        if (ExtrP.InternalTangentM3) {
+          std::cout << " ** Adding Internal Tangent Constraint" << std::endl;
+          AddInternalTangentConstraint(model, M3NodeVars, false,
+                                       ExtrP.SoftInternalTangentM3);
+        }
+      } else {
+        std::cout << " ** Adding Internal Tangent Constraint with Continuity"
+                  << std::endl;
+        AddInternalTangentConstraint(model, M3NodeVars, true,
+                                     ExtrP.SoftInternalTangentM3);
+
+        std::cout << " ** Adding Avoid Connections" << std::endl;
+        AddAvoidConnectionsConstraint(model, M3NodeVars,
+                                      ExtrP.SoftAvoidConnectionsM3);
+      }
       // ADD Exit Label CONSTR
       if (ExtrP.BorderTangentM3) {
         std::cout << " ** Adding Border Tangent Constraint" << std::endl;
@@ -1002,40 +1137,48 @@ public:
     M3Solution = std::vector<bool>(M3VarToNode.size(), false);
     std::cout << "Num M3 Nodes Variables: " << M3VarToNode.size() << std::endl;
 
-    int MaxSize;
-    ScalarType AVGSize;
+    // int MaxSize;
+    // ScalarType AVGSize;
 
     SingleF_ConstrM3.clear();
     InitSingleF_ConstrM3();
     std::cout << "Initialized " << SingleF_ConstrM3.size()
               << " single face constraint" << std::endl;
-    ConstraintStats(SingleF_ConstrM3, MaxSize, AVGSize);
-    std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize << std::endl;
+    // ConstraintStats(SingleF_ConstrM3, MaxSize, AVGSize);
+    // std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize <<
+    // std::endl;
 
     TwiceEdge_ConstrM3.clear();
     InitTwiceEdge_Constr();
     std::cout << "Initialized " << TwiceEdge_ConstrM3.size()
               << " M3 twice edge constraint" << std::endl;
-    ConstraintStats(TwiceEdge_ConstrM3, MaxSize, AVGSize);
-    std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize << std::endl;
+    // ConstraintStats(TwiceEdge_ConstrM3, MaxSize, AVGSize);
+    // std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize <<
+    // std::endl;
 
-    EdgeLabel_Constr.clear();
+    EdgeLabel_Continuation_Constr.clear();
     Internal_TangentNodes_Constr.clear();
     Border_TangentNodes_Constr.clear();
 
     InitSingleLabelF_Constr();
 
     InitInternalTangentNodes_Constr();
-    std::cout << "Initialized " << EdgeLabel_Constr.size()
+    std::cout << "Initialized " << EdgeLabel_Continuation_Constr.size()
               << " edge label constraint" << std::endl;
-    ConstraintStats(EdgeLabel_Constr, MaxSize, AVGSize);
-    std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize << std::endl;
+
+    InitAvoidConnection_ConstrM3();
+    std::cout << "Initialized " << Avoid_Connections.size()
+              << " connection avoid constraint" << std::endl;
+    // ConstraintStats(EdgeLabel_Continuation_Constr, MaxSize, AVGSize);
+    // std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize <<
+    // std::endl;
 
     InitBorderTangentNodes_Constr();
     std::cout << "Initialized " << Border_TangentNodes_Constr.size()
               << " border tangent constraint" << std::endl;
-    ConstraintStats(Border_TangentNodes_Constr, MaxSize, AVGSize);
-    std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize << std::endl;
+    // ConstraintStats(Border_TangentNodes_Constr, MaxSize, AVGSize);
+    // std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize <<
+    // std::endl;
   }
 
   std::vector<bool> M3Solution;
@@ -1107,9 +1250,10 @@ public:
   int NumConstraints() {
     int size_constr = SingleF_ConstrM3.size();
     size_constr += TwiceEdge_ConstrM3.size();
-    size_constr += M3_Exit_Constr.size();
-    size_constr += M3_Label_Cont_Constr.size();
-    size_constr += EdgeLabel_Constr.size();
+    size_constr += EdgeLabel_Continuation_Constr.size();
+    size_constr += Internal_TangentNodes_Constr.size();
+    size_constr += Border_TangentNodes_Constr.size();
+    size_constr += Avoid_Connections.size();
     return size_constr;
   }
 
@@ -1126,17 +1270,24 @@ public:
       MaxVal = std::max(MaxVal, (int)TwiceEdge_ConstrM3[i].size());
       AvgVal += (ScalarType)TwiceEdge_ConstrM3[i].size();
     }
-    for (size_t i = 0; i < M3_Exit_Constr.size(); i++) {
-      MaxVal = std::max(MaxVal, (int)M3_Exit_Constr[i].size());
-      AvgVal += (ScalarType)M3_Exit_Constr[i].size();
+    for (size_t i = 0; i < Internal_TangentNodes_Constr.size(); i++) {
+      MaxVal = std::max(MaxVal, (int)Internal_TangentNodes_Constr[i].size());
+      AvgVal += (ScalarType)Internal_TangentNodes_Constr[i].size();
     }
-    for (size_t i = 0; i < M3_Label_Cont_Constr.size(); i++) {
-      MaxVal = std::max(MaxVal, (int)M3_Label_Cont_Constr[i].size());
-      AvgVal += (ScalarType)M3_Label_Cont_Constr[i].size();
+    for (size_t i = 0; i < Border_TangentNodes_Constr.size(); i++) {
+      MaxVal = std::max(MaxVal, (int)Border_TangentNodes_Constr[i].size());
+      AvgVal += (ScalarType)Border_TangentNodes_Constr[i].size();
     }
-    for (size_t i = 0; i < EdgeLabel_Constr.size(); i++) {
-      MaxVal = std::max(MaxVal, (int)EdgeLabel_Constr[i].second.size());
-      AvgVal += (ScalarType)EdgeLabel_Constr[i].second.size();
+
+    for (size_t i = 0; i < EdgeLabel_Continuation_Constr.size(); i++) {
+      MaxVal =
+          std::max(MaxVal, (int)EdgeLabel_Continuation_Constr[i].second.size());
+      AvgVal += (ScalarType)EdgeLabel_Continuation_Constr[i].second.size();
+    }
+
+    for (size_t i = 0; i < Avoid_Connections.size(); i++) {
+      MaxVal = std::max(MaxVal, 2);
+      AvgVal += (ScalarType)2;
     }
     if (Num > 0)
       AvgVal /= Num;

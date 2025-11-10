@@ -140,6 +140,51 @@ public:
     return false;
   }
 
+  bool IsActiveNeighbour(const int &IndexN0,const int IndexL,const int IndexN1)const
+  {
+    assert(IndexN0!=IndexN1);
+    assert(IndexN0<N.size());
+    assert(IndexN1<N.size());
+    assert(IndexN0>=0);
+    assert(IndexN1>=0);
+    assert(IndexL>=0);
+    assert(IndexL< N[IndexN0].size());
+    
+    for (size_t i = 0; i < N[IndexN0][IndexL].size(); i++)
+    {
+      if (( N[IndexN0][IndexL][i].N==IndexN1)&&
+          ( N[IndexN0][IndexL][i].Enabled ))
+          return true;
+    }
+    return false;
+  }
+
+  bool IsNeighbour(const int &IndexN0,const int IndexN1)const
+  {
+    assert(IndexN0!=IndexN1);
+    assert(IndexN0<N.size());
+    assert(IndexN1<N.size());
+    assert(IndexN0>=0);
+    assert(IndexN1>=0);
+    for (size_t l = 0; l < N[IndexN0].size(); l++)
+      if (IsNeighbour(IndexN0,l,IndexN1))return true;
+    
+    return false;
+  }
+
+  bool IsActiveNeighbour(const int &IndexN0,const int IndexN1)const
+  {
+    assert(IndexN0!=IndexN1);
+    assert(IndexN0<N.size());
+    assert(IndexN1<N.size());
+    assert(IndexN0>=0);
+    assert(IndexN1>=0);
+    for (size_t l = 0; l < N[IndexN0].size(); l++)
+      if (IsActiveNeighbour(IndexN0,l,IndexN1))return true;
+    
+    return false;
+  }
+
   void SetExit(const int &IndexN, const int &IndexL) {
     assert(IndexN >= 0);
     assert(IndexN < (int)IsExit.size());
