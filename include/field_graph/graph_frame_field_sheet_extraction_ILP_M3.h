@@ -21,7 +21,8 @@
 #include <utility>
 #include <vector>
 
-#define SOFT_SEED_CONST_M3 100000 // 10000 // 10000
+#define SOFT_SEED_CONST_M3 100000
+#define SOFT_CONSTR_PENALTY 1000
 #define POW_EXP 4
 
 template <class ScalarType> class SheetExtractorILPM3 {
@@ -32,14 +33,24 @@ public:
   struct ExtractParam {
     std::vector<int> HardNodes;
     std::vector<int> SoftNodes;
+
+    bool SoftSurfaceContrinuationM3;
+
     bool SingleFConstrM3;
+    bool SoftSingleFConstrM3;
+
     bool TwiceEdgeConstrM3;
+    bool SoftTwiceEdgeConstrM3;
+
     bool InternalTangentM3;
+    bool SoftInternalTangentM3;
+
     bool BorderTangentM3;
+    bool SoftBorderTangentM3;
+
     ScalarType Gap;
     ObjType OType;
     bool FeasiblityOnly;
-    bool SoftConstraints;
     bool OptimizeObj;
 
     ExtractParam() {
@@ -52,8 +63,13 @@ public:
       Gap = 0.1;
       OType = FaceOBJ;
       FeasiblityOnly = false;
-      SoftConstraints = false;
-      OptimizeObj= true;
+      OptimizeObj = true;
+
+      SoftSurfaceContrinuationM3 = false;
+      SoftSingleFConstrM3 = false;
+      SoftTwiceEdgeConstrM3 = false;
+      SoftInternalTangentM3 = false;
+      SoftBorderTangentM3 = false;
     }
   };
 
@@ -74,7 +90,7 @@ private:
   // its weigth
   std::vector<ScalarType> M3LinkVarWeight;
 
-  // for each pair of nodes the variable
+  // for each pair of nodes the variable (this is when link variable used)
   std::map<std::pair<int, int>, int> M3NodesToLinkVar;
 
   // only one single istance of the face can be chosen (one face might
@@ -337,8 +353,6 @@ private:
     }
   }
 
-  void InitLingNode_Constr() {}
-
   void InitSingleLabelF_Constr() {
 
     EdgeLabel_Constr.clear();
@@ -499,15 +513,14 @@ private:
            objCoeffs.size();
   }
 
-  void RescaleObjFunctions(GRBModel &model, 
-                           const double maxConstraintCoeff,
+  void RescaleObjFunctions(GRBModel &model, const double maxConstraintCoeff,
                            const double maxObjCoeff,
-                           bool breaks_symmetry=true) {
+                           bool breaks_symmetry = false) {
 
     // compute scaling factor
     double maxVal = std::max(maxConstraintCoeff, maxObjCoeff);
     if (maxVal < 1e-12) {
-      std::cout << "⚠️  maxVal troppo piccolo, skip scaling." << std::endl;
+      std::cout << "⚠️  maxVal too small skip scaling." << std::endl;
       return;
     }
 
@@ -519,7 +532,7 @@ private:
     int nVars = model.get(GRB_IntAttr_NumVars);
 
     // rescale all objective values
-    ScalarType SymmStep=(ScalarType)1/(ScalarType)nVars;
+    ScalarType SymmStep = (ScalarType)1 / (ScalarType)nVars;
 
     for (int i = 0; i < nVars; ++i) {
       GRBVar v = model.getVar(i);
@@ -527,19 +540,19 @@ private:
       if (!breaks_symmetry)
         v.set(GRB_DoubleAttr_Obj, 1 + c * scale);
       else
-        v.set(GRB_DoubleAttr_Obj, SymmStep * i  + c * scale);
+        v.set(GRB_DoubleAttr_Obj, SymmStep * i + c * scale);
     }
 
-    // 3️⃣ get all constraints and rescale RHS
-    int nConstrs = model.get(GRB_IntAttr_NumConstrs);
-    if (nConstrs > 0) {
-      GRBConstr *constrs = model.getConstrs();
-      for (int i = 0; i < nConstrs; ++i) {
-        double rhs = constrs[i].get(GRB_DoubleAttr_RHS);
-        constrs[i].set(GRB_DoubleAttr_RHS, rhs * scale);
-      }
-      delete[] constrs;
-    }
+    // // 3️⃣ get all constraints and rescale RHS
+    // int nConstrs = model.get(GRB_IntAttr_NumConstrs);
+    // if (nConstrs > 0) {
+    //   GRBConstr *constrs = model.getConstrs();
+    //   for (int i = 0; i < nConstrs; ++i) {
+    //     double rhs = constrs[i].get(GRB_DoubleAttr_RHS);
+    //     constrs[i].set(GRB_DoubleAttr_RHS, rhs * scale);
+    //   }
+    //   delete[] constrs;
+    // }
 
     // update model
     model.update();
@@ -613,14 +626,14 @@ private:
   }
 
   void AddFoilContinuityConstraint(GRBModel &model,
-                                   const std::vector<GRBVar> &M3NodeVars) {
+                                   const std::vector<GRBVar> &M3NodeVars,
+                                   bool SoftConstr) {
     // ADD EDGE LABEL CONSTRAINT IF SELECTED A FACE SHOULD SELECT NEIGHBOURS
     for (size_t i = 0; i < EdgeLabel_Constr.size(); i++) {
       GRBLinExpr upper_bound;
       int IndexVar0 = EdgeLabel_Constr[i].first;
       assert(IndexVar0 < M3NodeVars.size());
       assert(IndexVar0 >= 0);
-      // assert(EdgeLabel_Constr[i].second.size() > 0);
 
       for (size_t j = 0; j < EdgeLabel_Constr[i].second.size(); j++) {
         int IndexVar1 = EdgeLabel_Constr[i].second[j];
@@ -630,28 +643,43 @@ private:
         upper_bound += M3NodeVars[IndexVar1];
       }
 
-      // value of a node less then neighbur for a label
-      // means if select it should select one neighbour
-      model.addConstr(M3NodeVars[IndexVar0] <= upper_bound,
-                      "LowerBound" + std::to_string(i));
-      // model.addConstr(upper_bound <= 1, "UpperBund" + std::to_string(i));
+      // SOFT_CONSTR_PENALTY
+      //  value of a node less then neighbur for a label
+      //  means if select it should select one neighbour
+      if (!SoftConstr) {
+        model.addConstr(M3NodeVars[IndexVar0] <= upper_bound,
+                        "LowerBound" + std::to_string(i));
+      } else {
+        GRBVar relax = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY, GRB_BINARY,
+                                    "relax_" + std::to_string(i));
+        model.addConstr(M3NodeVars[IndexVar0] <= upper_bound + relax);
+      }
     }
   }
 
   void AddSingleFaceConstraint(GRBModel &model,
-                               const std::vector<GRBVar> &M3NodeVars) {
+                               const std::vector<GRBVar> &M3NodeVars,
+                               bool SoftConstr) {
     for (size_t i = 0; i < SingleF_ConstrM3.size(); i++) {
       GRBLinExpr lin_constr;
       for (size_t j = 0; j < SingleF_ConstrM3[i].size(); j++) {
         int IndexV = SingleF_ConstrM3[i][j];
         lin_constr += M3NodeVars[IndexV];
       }
-      model.addConstr(lin_constr <= 1, "Single F M3" + std::to_string(i));
+      if (!SoftConstr) {
+        model.addConstr(lin_constr <= 1, "Single F M3" + std::to_string(i));
+      } else {
+        GRBVar relax = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY, GRB_BINARY,
+                                    "Single F M3 relax" + std::to_string(i));
+        model.addConstr(lin_constr <= 1 + relax,
+                        "Single F M3 Soft" + std::to_string(i));
+      }
     }
   }
 
   void AddTwiceEdgeConstraint(GRBModel &model,
-                              const std::vector<GRBVar> &M3NodeVars) {
+                              const std::vector<GRBVar> &M3NodeVars,
+                              bool SoftConstr) {
     for (size_t i = 0; i < TwiceEdge_ConstrM3.size(); i++) {
       GRBLinExpr twice_constr;
       for (size_t j = 0; j < TwiceEdge_ConstrM3[i].size(); j++) {
@@ -660,12 +688,20 @@ private:
         assert(IndexVar < M3NodeVars.size());
         twice_constr += M3NodeVars[IndexVar];
       }
-      model.addConstr(twice_constr <= 4, "Twice M3 " + std::to_string(i));
+      if (!SoftConstr) {
+        model.addConstr(twice_constr <= 4, "Twice M3 " + std::to_string(i));
+      } else {
+        GRBVar slack = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY, GRB_BINARY,
+                                    "slack_twice_" + std::to_string(i));
+        model.addConstr(twice_constr <= 4 + slack,
+                        "Soft_TwiceM3_" + std::to_string(i));
+      }
     }
   }
 
   void AddInternalTangentConstraint(GRBModel &model,
-                                    const std::vector<GRBVar> &M3NodeVars) {
+                                    const std::vector<GRBVar> &M3NodeVars,
+                                    bool SoftConstr) {
 
     for (size_t i = 0; i < Internal_TangentNodes_Constr.size(); i++) {
 
@@ -681,13 +717,21 @@ private:
         assert(IndexVar >= 0);
         upper_bound += M3NodeVars[IndexVar];
       }
-      model.addConstr(upper_bound <= 2,
-                      "Internal Tangent C " + std::to_string(i));
+      if (!SoftConstr) {
+        model.addConstr(upper_bound <= 2,
+                        "Internal Tangent C " + std::to_string(i));
+      } else {
+        GRBVar slack = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY, GRB_BINARY,
+                                    "slack_internal_" + std::to_string(i));
+        model.addConstr(upper_bound <= 2 + slack,
+                        "Soft_InternalM3_" + std::to_string(i));
+      }
     }
   }
 
   void AddBorderTangentConstraint(GRBModel &model,
-                                  const std::vector<GRBVar> &M3NodeVars) {
+                                  const std::vector<GRBVar> &M3NodeVars,
+                                  bool SoftConstr) {
     for (size_t i = 0; i < Border_TangentNodes_Constr.size(); i++) {
 
       // if (EdgeLabel_ExitConstr[i].size() <= 1)
@@ -702,13 +746,19 @@ private:
         assert(IndexVar >= 0);
         upper_bound += M3NodeVars[IndexVar];
       }
-      model.addConstr(upper_bound <= 1,
-                      "Border Tangent C " + std::to_string(i));
+      if (!SoftConstr) {
+        model.addConstr(upper_bound <= 1,
+                        "Border Tangent C " + std::to_string(i));
+      } else {
+        GRBVar slack = model.addVar(0.0, 1.0, SOFT_CONSTR_PENALTY, GRB_BINARY,
+                                    "slack_border_" + std::to_string(i));
+        model.addConstr(upper_bound <= 1 + slack,
+                        "Soft_BorderM3_" + std::to_string(i));
+      }
     }
   }
 
-  void OptimizeCoefficients(GRBModel &model) 
-  {
+  void OptimizeCoefficients(GRBModel &model) {
 
     model.update();
 
@@ -767,23 +817,34 @@ private:
       if ((ExtrP.OType == ConnOBJ) || (ExtrP.OType == FaceConnOBJ))
         InitLinkVariables(ExtrP, model, M3NodeVars, M3LinkVars);
 
-      AddFoilContinuityConstraint(model, M3NodeVars);
+      AddFoilContinuityConstraint(model, M3NodeVars,
+                                  ExtrP.SoftSurfaceContrinuationM3);
 
       // ADD SINGLE NODE FOR M3 FACE CONSTRAINT
-      if (ExtrP.SingleFConstrM3)
-        AddSingleFaceConstraint(model, M3NodeVars);
+      if (ExtrP.SingleFConstrM3) {
+        std::cout << " ** Adding Single F Constraint" << std::endl;
+        AddSingleFaceConstraint(model, M3NodeVars, ExtrP.SoftSingleFConstrM3);
+      }
 
       // ADD TWICE EDGE CONSTR M3
-      if (ExtrP.TwiceEdgeConstrM3)
-        AddTwiceEdgeConstraint(model, M3NodeVars);
+      if (ExtrP.TwiceEdgeConstrM3) {
+        std::cout << " ** Adding Twice E Constraint" << std::endl;
+        AddTwiceEdgeConstraint(model, M3NodeVars, ExtrP.SoftTwiceEdgeConstrM3);
+      }
 
       // ADD internal Label CONSTR
-      if (ExtrP.InternalTangentM3)
-        AddInternalTangentConstraint(model, M3NodeVars);
+      if (ExtrP.InternalTangentM3) {
+        std::cout << " ** Adding Internal Tangent Constraint" << std::endl;
+        AddInternalTangentConstraint(model, M3NodeVars,
+                                     ExtrP.SoftInternalTangentM3);
+      }
 
       // ADD Exit Label CONSTR
-      if (ExtrP.BorderTangentM3)
-        AddBorderTangentConstraint(model, M3NodeVars);
+      if (ExtrP.BorderTangentM3) {
+        std::cout << " ** Adding Border Tangent Constraint" << std::endl;
+        AddBorderTangentConstraint(model, M3NodeVars,
+                                   ExtrP.SoftBorderTangentM3);
+      }
 
       if (!ExtrP.FeasiblityOnly)
         model.set(GRB_DoubleParam_MIPGap, ExtrP.Gap); // gap
@@ -799,7 +860,6 @@ private:
       model.set(GRB_IntParam_Seed, 42);
       model.set(GRB_IntParam_AggFill, 5); // riduce fill-in nel presolve
 
-    
       if (ExtrP.OptimizeObj)
         OptimizeCoefficients(model);
 
@@ -1026,6 +1086,63 @@ public:
                                          ReprojectFaces, FeatureE, Corners,
                                          SmoothSteps);
   }
+
+  //   // only one single istance of the face can be chosen (one face might
+  // // correspont to multiple nodes)
+  // std::vector<std::vector<int>> SingleF_ConstrM3;
+
+  // // the edge can be transversed only twice maximum (SET CORRECT VALENCE with
+  // // Borders/Convex/Concave)
+  // std::vector<std::vector<int>> TwiceEdge_ConstrM3;
+
+  // // exit M3 should be only one for exit edge
+  // std::vector<std::vector<int>> M3_Exit_Constr;
+
+  // // Continuing M3 Label such that one face should trigger the next
+  // std::vector<std::vector<int>> M3_Label_Cont_Constr;
+
+  // // only one times for each direction for each node
+  // std::vector<std::pair<int, std::vector<int>>> EdgeLabel_Constr;
+
+  int NumConstraints() {
+    int size_constr = SingleF_ConstrM3.size();
+    size_constr += TwiceEdge_ConstrM3.size();
+    size_constr += M3_Exit_Constr.size();
+    size_constr += M3_Label_Cont_Constr.size();
+    size_constr += EdgeLabel_Constr.size();
+    return size_constr;
+  }
+
+  void ConstraintsStats(ScalarType &AvgVal, int &MaxVal) {
+    MaxVal = 0;
+    AvgVal = 0;
+    ScalarType Num = NumConstraints();
+
+    for (size_t i = 0; i < SingleF_ConstrM3.size(); i++) {
+      MaxVal = std::max(MaxVal, (int)SingleF_ConstrM3[i].size());
+      AvgVal += (ScalarType)SingleF_ConstrM3[i].size();
+    }
+    for (size_t i = 0; i < TwiceEdge_ConstrM3.size(); i++) {
+      MaxVal = std::max(MaxVal, (int)TwiceEdge_ConstrM3[i].size());
+      AvgVal += (ScalarType)TwiceEdge_ConstrM3[i].size();
+    }
+    for (size_t i = 0; i < M3_Exit_Constr.size(); i++) {
+      MaxVal = std::max(MaxVal, (int)M3_Exit_Constr[i].size());
+      AvgVal += (ScalarType)M3_Exit_Constr[i].size();
+    }
+    for (size_t i = 0; i < M3_Label_Cont_Constr.size(); i++) {
+      MaxVal = std::max(MaxVal, (int)M3_Label_Cont_Constr[i].size());
+      AvgVal += (ScalarType)M3_Label_Cont_Constr[i].size();
+    }
+    for (size_t i = 0; i < EdgeLabel_Constr.size(); i++) {
+      MaxVal = std::max(MaxVal, (int)EdgeLabel_Constr[i].second.size());
+      AvgVal += (ScalarType)EdgeLabel_Constr[i].second.size();
+    }
+    if (Num > 0)
+      AvgVal /= Num;
+  }
+
+  int NumVariables() { return M3VarToNode.size(); }
 
   bool Solve(const ExtractParam &ExtrP, std::vector<int> &ChosenF,
              std::vector<bool> &MatchedSeed)

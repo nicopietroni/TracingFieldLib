@@ -436,7 +436,9 @@ public:
   static void
   SimplifyGraphConnections(const std::vector<std::vector<int>> &Faces,
                            LabelNeighOrientedGraph<ScalarType> &Graph,
-                           int MinNeigh, bool two_way_edge) {
+                           bool only_reverse_connections,
+                           int MinNeigh, 
+                           bool two_way_edge) {
     struct ConnW {
       ScalarType W;
       bool ReverseDir;
@@ -510,7 +512,7 @@ public:
 
       assert(IndexN0!=IndexN1);
       
-      if (!Connections[i].ReverseDir)continue;
+      if ((only_reverse_connections)&&(!Connections[i].ReverseDir))continue;
 
       if (!CanRemoveByConnections(Graph, IndexN0, IndexN1, MinNeigh))
         continue;

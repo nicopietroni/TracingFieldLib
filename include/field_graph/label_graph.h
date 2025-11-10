@@ -671,6 +671,14 @@ public:
     return (N.size());
   }
 
+  int NumEnabledNodes() const {
+    int NumEnabled = 0;
+    for (size_t i = 0; i < NumNodes(); i++)
+      if (IsEnabled(i))
+        NumEnabled++;
+    return NumEnabled;
+  }
+
   int NumDisabledNodes() const {
     int NumDis = 0;
     for (size_t i = 0; i < NumNodes(); i++)
@@ -684,9 +692,19 @@ public:
     for (size_t i = 0; i < NumNodes(); i++)
       for (size_t l = 0; l < N[i].size(); l++)
         for (size_t j = 0; j < N[i][l].size(); j++)
-          if (!ActiveLink(i, j))
+          if (!ActiveLink(i, l,j))
             NumDis++;
     return NumDis;
+  }
+
+  int NumEnabledArcs() const {
+    int NumEnabledArcs = 0;
+    for (size_t i = 0; i < NumNodes(); i++)
+      for (size_t l = 0; l < N[i].size(); l++)
+        for (size_t j = 0; j < N[i][l].size(); j++)
+          if (ActiveLink(i, l,j))
+            NumEnabledArcs++;
+    return NumEnabledArcs;
   }
 
   void GetNodeOfType(const NType &TypeNode, std::vector<int> &IdxNode) const {
