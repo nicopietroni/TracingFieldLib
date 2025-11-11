@@ -8,7 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <point3.h>
+#include "../point3.h"
 #include "../cross_field.h"
 #include "../frame_field.h"
 #include "../cross_field_functions.h"

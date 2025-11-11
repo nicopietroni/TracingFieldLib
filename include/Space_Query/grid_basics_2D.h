@@ -1,9 +1,9 @@
 ﻿#ifndef GRID_BASICS_2D
 #define GRID_BASICS_2D
 
-#include "segment2.h"
-#include <point2.h>
-#include <box2.h>
+#include "../segment2.h"
+#include "../point2.h"
+#include "../box2.h"
 
 namespace Geo{
 

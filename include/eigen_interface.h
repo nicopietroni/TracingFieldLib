@@ -10,6 +10,19 @@
 #include <vector>
 // #include "mesh_functions.h"
 
+//namespace Eigen {
+//    template<typename Scalar>
+//    using Vector3 = Eigen::Matrix<Scalar, 3, 1>;
+//    template<typename Scalar>
+//    using Matrix3 = Eigen::Matrix<Scalar, 3, 3>;
+//    template<typename Scalar>
+//    using Matrix4 = Eigen::Matrix<Scalar, 4, 4>;
+//    template<typename Scalar>
+//    using VectorX = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
+//    template<typename Scalar>
+//    using MatrixX = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+//}
+
 // return mesh as vector of vertices and faces
 template <class ScalarType> class EigenInterface {
 

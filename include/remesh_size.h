@@ -17,7 +17,6 @@
 #include "mesh_sampling.h"
 #include "smooth_mesh.h"
 #include "mesh_features.h"
-#include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
 

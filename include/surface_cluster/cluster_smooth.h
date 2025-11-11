@@ -16,7 +16,7 @@
 #include <limits>
 #include <map>
 #include <set>
-#include <solve/least_squares_lin_constraint_solver.h>
+#include "../solve/least_squares_lin_constraint_solver.h"
 #include <stack>
 #include <type_traits>
 #include <vector>

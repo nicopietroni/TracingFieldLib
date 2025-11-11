@@ -2,7 +2,7 @@
 #define FIELD_GRAPH
 
 #include "graph_cross_field.h"
-#include "triangle2.h"
+#include "../triangle2.h"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -10,7 +10,7 @@
 #include <iostream>
 #include <set>
 #include <stdio.h>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
 #include <unordered_set>
 #include <utility>
 #include <vector>

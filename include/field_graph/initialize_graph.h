@@ -4,15 +4,15 @@
 #include "../cross_field.h"
 #include "../frame_field.h"
 #include "../point3.h"
-#include "best_rotation.h"
-#include "connectivity.h"
+#include "../best_rotation.h"
+#include "../connectivity.h"
 #include "graph.h"
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
-#include "mesh_functions.h"
-#include "mesh_mapping.h"
+#include "../mesh_functions.h"
+#include "../mesh_mapping.h"
 #include "patch_basic.h"
-#include "polyhedra_mesh_functions.h"
+#include "../polyhedra_mesh_functions.h"
 
 #include <algorithm>
 #include <cassert>

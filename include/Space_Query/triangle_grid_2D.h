@@ -3,10 +3,10 @@
 
 #include <vector>
 #include "grid_basics_2D.h"
-#include <point2.h>
-#include <point3.h>
-#include <box2.h>
-#include <triangle2.h>
+#include "../point2.h"
+#include "../point3.h"
+#include "../box2.h"
+#include "../triangle2.h"
 
 namespace  Geo{
 

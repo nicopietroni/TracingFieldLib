@@ -4,8 +4,8 @@
 #include <vector>
 #include "../point3.h"
 #include "../mesh_functions.h"
-#include "connectivity.h"
-#include <pos3.h>
+#include "../connectivity.h"
+#include "../pos3.h"
 
 namespace Geo
 {

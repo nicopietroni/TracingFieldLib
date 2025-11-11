@@ -12,7 +12,6 @@
 #include <map>
 #include <queue>
 #include <set>
-#include <sys/_types/_size_t.h>
 #include <type_traits>
 #include <utility>
 #include <vector>

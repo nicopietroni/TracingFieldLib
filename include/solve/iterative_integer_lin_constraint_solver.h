@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
-#include <eigen_interface.h>
+#include "../eigen_interface.h"
 #include <iostream>
 #include <utility>
 #include <vector>

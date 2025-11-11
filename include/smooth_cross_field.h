@@ -6,11 +6,11 @@
 #include "point3.h"
 #include "smoothing_graph.h"
 #include <cmath>
-#include <cross_field_functions.h>
+#include "cross_field_functions.h"
 #include <iostream>
 #include <set>
 #include <stdio.h>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
 ////igl related stuff
@@ -21,7 +21,7 @@
 #include <directional/polyvector_field.h>
 #include <directional/polyvector_to_raw.h>
 #else
-#include <polyvector_field.h>
+#include "polyvector_field.h"
 #endif
 
 template <class ScalarType>

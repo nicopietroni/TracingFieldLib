@@ -9,8 +9,8 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <point3.h>
-#include <IO/file_path_functions.h>
+#include "../point3.h"
+#include "file_path_functions.h"
 
 void parseFaceLine(const std::string& line, std::vector<int>& vertexIndices) 
 {

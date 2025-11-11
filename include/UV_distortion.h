@@ -4,18 +4,18 @@
 //#include <vcg/complex/algorithms/parametrization/tangent_field_operators.h>
 //#include <Eigen/Dense>
 
-#include <point2.h>
-#include <point3.h>
+#include "point2.h"
+#include "point3.h"
 //#include <igl/lscm.h>
 //#include <igl/arap.h>
 //#include <eigen_interface.h>
 //#include <box3.h>
 //#include <box2.h>
 #include <Eigen/Dense>
-#include <mesh_functions.h>
-#include <connectivity.h>
-#include <triangle3.h>
-#include <triangle2.h>
+#include "mesh_functions.h"
+#include "connectivity.h"
+#include "triangle3.h"
+#include "triangle2.h"
 
 namespace Geo {
 

@@ -1,13 +1,13 @@
 #ifndef IO_FEATURES
 #define IO_FEATURES
 
-#include <IO/file_path_functions.h>
+#include "file_path_functions.h"
 #include <algorithm>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <point3.h>
+#include "../point3.h"
 #include <sstream>
 #include <string>
 #include <vector>

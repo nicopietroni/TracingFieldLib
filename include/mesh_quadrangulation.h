@@ -12,25 +12,25 @@
 #include <utility>
 #include <vector>
 
-#include <connectivity.h>
-#include <cross_field.h>
-#include <field_graph/mesh_preprocess.h>
-#include <mesh_features.h>
-#include <point3.h>
+#include "connectivity.h"
+#include "cross_field.h"
+#include "field_graph/mesh_preprocess.h"
+#include "mesh_features.h"
+#include "point3.h"
 
-#include <field_graph/dual_patches.h>
-#include <field_graph/graph.h>
-#include <field_graph/graph_tracing.h>
-#include <field_graph/initialize_graph.h>
-#include <field_graph/mesh_preprocess.h>
-#include <field_graph/patch_decomposer.h>
-#include <field_graph/patch_managing.h>
-#include <field_graph/patch_optimize.h>
-#include <field_graph/path_functions.h>
-#include <field_graph/path_sampling.h>
-#include <field_graph/tracing_interface.h>
+#include "field_graph/dual_patches.h"
+#include "field_graph/graph.h"
+#include "field_graph/graph_tracing.h"
+#include "field_graph/initialize_graph.h"
+#include "field_graph/mesh_preprocess.h"
+#include "field_graph/patch_decomposer.h"
+#include "field_graph/patch_managing.h"
+#include "field_graph/patch_optimize.h"
+#include "field_graph/path_functions.h"
+#include "field_graph/path_sampling.h"
+#include "field_graph/tracing_interface.h"
 
-#include <patch_side_discretization.h>
+#include "patch_side_discretization.h "
 
 #include "edge_mesh_functions.h"
 #include "mesh_mapping.h"

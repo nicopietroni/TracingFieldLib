@@ -4,15 +4,15 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <connectivity.h>
+#include "connectivity.h"
 #include "point3.h"
 #include <cstddef>
 #include <iostream>
 #include <set>
 #include <map>
-#include <solve/least_squares_lin_constraint_solver.h>
+#include "solve/least_squares_lin_constraint_solver.h"
 #include <stack>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
 #include <utility>
 #include <vector>
 

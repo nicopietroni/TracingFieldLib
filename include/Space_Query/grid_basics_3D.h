@@ -1,8 +1,8 @@
 ﻿#ifndef GRID_BASICS
 #define GRID_BASICS
 
-#include <point3.h>
-#include <box3.h>
+#include "../point3.h"
+#include "../box3.h"
 #include "../segment3.h"
 
 namespace Geo{
