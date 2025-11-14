@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.5)
 project(patch_decomposer)
 
 # Set the C++ standard to C++17
@@ -9,7 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -flto" )
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -flto" )
 
 set(IMGUI_DIR "/Users/134750/Desktop/imgui/" CACHE INTERNAL "")
 #set(GLEWPATH "/Users/134750/Desktop/code/lib/glew" CACHE INTERNAL "")
@@ -56,8 +56,8 @@ add_executable(${PROJECT_NAME} main.cpp
                )
 find_package(Threads REQUIRED)
 
-# target_compile_options(patch_decomposer PRIVATE -fsanitize=address -fsanitize=undefined -g -O1)
-# target_link_options(patch_decomposer PRIVATE -fsanitize=address -fsanitize=undefined)
+#target_compile_options(patch_decomposer PRIVATE -fsanitize=address -fsanitize=undefined -g -O1)
+#target_link_options(patch_decomposer PRIVATE -fsanitize=address -fsanitize=undefined)
 
 #target_link_libraries(patch_decomposer PRIVATE Threads::Threads)
                

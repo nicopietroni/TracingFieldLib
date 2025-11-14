@@ -1,3 +1,29 @@
+/*
+ * //Non-Commercial License Agreement
+ * //Copyright (c) 2025, Nico Pietroni
+ * //
+ * //1. Permission is hereby granted to use, copy, modify, and distribute
+ * //   this software for academic research, teaching, and personal
+ * //   non-commercial purposes, provided that this copyright notice is
+ * //   included in all copies or substantial portions of the software.
+ * //
+ * //2. Commercial use of this software, including but not limited to use in
+ * //   commercial products, services, tools, or consulting, is strictly
+ * //   prohibited without prior written permission from the copyright holder.
+ * //
+ * //3. This software is provided "as is", without warranty of any kind,
+ * //   express or implied, including but not limited to the warranties of
+ * //   merchantability, fitness for a particular purpose, and
+ * //   noninfringement. In no event shall the authors or copyright holders
+ * //   be liable for any claim, damages, or other liability, arising from,
+ * //   out of, or in connection with the software or the use or other
+ * //   dealings in the software.
+ * //
+ * //4. For commercial licensing, please contact:
+ * //   Nico Pietroni
+ * //   Email: nico.pietroni@gmail.com
+ */
+
 #ifndef INITIALIZE_M3_GRAPH
 #define INITIALIZE_M3_GRAPH
 
@@ -1089,7 +1115,11 @@ private:
     GetM3EdgeNodesInfo(TetraInternalFaces, FacesFrameField, EdgeInfo);
 
     Facegraph.InternalTangentConstr.clear();
+    Facegraph.InternalTangentConstrEdges.clear();
+
     Facegraph.BorderTangentConstr.clear();
+    Facegraph.BorderTangentConstrEdges.clear();
+
     // then cycle all the possible edges
     for (size_t i = 0; i < EdgeInfo.size(); i++) {
       int IndexV0 = EdgeInfo[i].V0;
@@ -1145,9 +1175,15 @@ private:
         // if we need to set up internal constraints or
         // if is an edge label
         if (!IsExit)
+        {
           Facegraph.InternalTangentConstr.push_back(TangentN);
+          Facegraph.InternalTangentConstrEdges.push_back(KeyE);
+        }
         else
+        {
           Facegraph.BorderTangentConstr.push_back(TangentN);
+          Facegraph.BorderTangentConstrEdges.push_back(KeyE);
+        }
 
         // then set all possible connections between
         // all pairs of nodes
@@ -1167,11 +1203,14 @@ private:
                              FacesFrameField, IndexN0, IndexN1, 
                              areOpposite, Weight);
 
-            if ((DisableOpp)&&(areOpposite)) continue;
-
+            
             // add the connections if they can be connected
-            Facegraph.AddNeighbour(IndexN0, IndexN1, Label0, Weight,areOpposite);
-            Facegraph.AddNeighbour(IndexN1, IndexN0, Label1, Weight,areOpposite);
+            bool IsEnabledN=true;
+            if((DisableOpp)&&(areOpposite))IsEnabledN=false;
+            
+            Facegraph.AddNeighbour(IndexN0, IndexN1, Label0, Weight,IsEnabledN,areOpposite);
+            Facegraph.AddNeighbour(IndexN1, IndexN0, Label1, Weight,IsEnabledN,areOpposite);
+            
           }
       }
     }

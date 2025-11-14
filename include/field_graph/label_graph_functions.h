@@ -1,3 +1,29 @@
+/*
+ * //Non-Commercial License Agreement
+ * //Copyright (c) 2025, Nico Pietroni
+ * //
+ * //1. Permission is hereby granted to use, copy, modify, and distribute
+ * //   this software for academic research, teaching, and personal
+ * //   non-commercial purposes, provided that this copyright notice is
+ * //   included in all copies or substantial portions of the software.
+ * //
+ * //2. Commercial use of this software, including but not limited to use in
+ * //   commercial products, services, tools, or consulting, is strictly
+ * //   prohibited without prior written permission from the copyright holder.
+ * //
+ * //3. This software is provided "as is", without warranty of any kind,
+ * //   express or implied, including but not limited to the warranties of
+ * //   merchantability, fitness for a particular purpose, and
+ * //   noninfringement. In no event shall the authors or copyright holders
+ * //   be liable for any claim, damages, or other liability, arising from,
+ * //   out of, or in connection with the software or the use or other
+ * //   dealings in the software.
+ * //
+ * //4. For commercial licensing, please contact:
+ * //   Nico Pietroni
+ * //   Email: nico.pietroni@gmail.com
+ */
+
 #ifndef LABEL_GRAPH_FUNCTIONS
 #define LABEL_GRAPH_FUNCTIONS
 
@@ -6,6 +32,7 @@
 #include "../point3.h"
 #include "best_rotation.h"
 #include "connectivity.h"
+#include "geodesic.h"
 #include "graph.h"
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
@@ -328,8 +355,8 @@ public:
   // return the shared edge if exist as pair of vertices
   // return -1 and -1 in case no shared e
   static std::pair<int, int>
-  GetNodesSharedE(const std::vector<std::vector<int>> &Faces, 
-                  int IndexN0,int IndexN1) {
+  GetNodesSharedE(const std::vector<std::vector<int>> &Faces, int IndexN0,
+                  int IndexN1) {
     int indexF0 = Field::FrameFieldM3Graph::ElemOfNode(IndexN0);
     int indexF1 = Field::FrameFieldM3Graph::ElemOfNode(IndexN1);
     assert(indexF0 >= 0);
@@ -343,13 +370,13 @@ public:
     if (IndexE0 == -1) {
       assert(IndexE1 == -1);
       return std::pair<int, int>(-1, -1);
-    }
-    else {
-      assert(IndexE0>=0);
-      assert(IndexE0<Faces[indexF0].size());
-      int IndexV0=Faces[indexF0][IndexE0];
-      int IndexV1=Faces[indexF0][(IndexE0+1)%Faces[indexF0].size()];
-      return (std::pair<int, int>(std::min(IndexV0,IndexV1),std::max(IndexV0,IndexV1)));
+    } else {
+      assert(IndexE0 >= 0);
+      assert(IndexE0 < Faces[indexF0].size());
+      int IndexV0 = Faces[indexF0][IndexE0];
+      int IndexV1 = Faces[indexF0][(IndexE0 + 1) % Faces[indexF0].size()];
+      return (std::pair<int, int>(std::min(IndexV0, IndexV1),
+                                  std::max(IndexV0, IndexV1)));
     }
   }
 
@@ -377,9 +404,9 @@ public:
 
         // CHECK TO SEE IF IS EXIT?
         if (NumNeigh0 == 0)
-          continue;//return false;
+          continue; // return false;
         if (NumNeigh1 == 0)
-          continue;//return false;
+          continue; // return false;
 
         if (NumNeigh0 > 1)
           continue; // multiple choices so it is ok
@@ -392,9 +419,9 @@ public:
         assert(IndexNeigh0.size() == 1);
         assert(IndexNeigh1.size() == 1);
 
-        //check if the two corresponding faces are the same
-        int IndexF0= Field::FrameFieldM3Graph::ElemOfNode(IndexNeigh0[0]);
-        int IndexF1= Field::FrameFieldM3Graph::ElemOfNode(IndexNeigh1[0]);
+        // check if the two corresponding faces are the same
+        int IndexF0 = Field::FrameFieldM3Graph::ElemOfNode(IndexNeigh0[0]);
+        int IndexF1 = Field::FrameFieldM3Graph::ElemOfNode(IndexNeigh1[0]);
         if (IndexF0 == IndexF1)
           return false;
       }
@@ -404,8 +431,8 @@ public:
   // for each pair of vertices return all nodes on it
   static void GetEdgeNodesLabelMap(
       const std::vector<std::vector<int>> &Faces,
-      std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> &EdgeNodesKernel) 
-  {
+      std::map<std::pair<int, int>, std::vector<std::pair<int, int>>>
+          &EdgeNodesKernel) {
     EdgeNodesKernel.clear();
 
     // get edge to face connectivity
@@ -428,7 +455,7 @@ public:
           NodesE.push_back(std::pair<int, int>(CurrFaceNodes[j], CurrE));
       }
       // add all the nodes to the map
-      assert(EdgeNodesKernel.count(EdgeK)==0);
+      assert(EdgeNodesKernel.count(EdgeK) == 0);
       EdgeNodesKernel[EdgeK] = (NodesE);
     }
   }
@@ -436,8 +463,7 @@ public:
   static void
   SimplifyGraphConnections(const std::vector<std::vector<int>> &Faces,
                            LabelNeighOrientedGraph<ScalarType> &Graph,
-                           bool only_reverse_connections,
-                           int MinNeigh, 
+                           bool only_reverse_connections, int MinNeigh,
                            bool two_way_edge) {
     struct ConnW {
       ScalarType W;
@@ -458,13 +484,13 @@ public:
         return false;
       }
 
-      ConnW(const int &_IndexN0, const int &_IndexN1,
-            const ScalarType &_W,const bool _ReverseDir) {
+      ConnW(const int &_IndexN0, const int &_IndexN1, const ScalarType &_W,
+            const bool _ReverseDir) {
         IndexN0 = std::min(_IndexN0, _IndexN1);
         IndexN1 = std::max(_IndexN0, _IndexN1);
         assert(IndexN0 != IndexN1);
         W = _W;
-        ReverseDir=_ReverseDir;
+        ReverseDir = _ReverseDir;
       }
     };
     int labelNum = 3;
@@ -485,13 +511,13 @@ public:
         std::vector<int> IndexNeigh;
         std::vector<ScalarType> WeightNeigh;
         std::vector<bool> Reverse;
-        Graph.ActiveNeigh(IndexN0, IndexLab, IndexNeigh, WeightNeigh,Reverse);
-        assert(IndexNeigh.size()==WeightNeigh.size());
-        assert(WeightNeigh.size()==Reverse.size());
+        Graph.ActiveNeigh(IndexN0, IndexLab, IndexNeigh, WeightNeigh, Reverse);
+        assert(IndexNeigh.size() == WeightNeigh.size());
+        assert(WeightNeigh.size() == Reverse.size());
         for (size_t k = 0; k < IndexNeigh.size(); k++) {
           int IndexN1 = IndexNeigh[k];
           ScalarType CurrW = WeightNeigh[k];
-          Connections.push_back(ConnW(IndexN0, IndexN1, CurrW,Reverse[k]));
+          Connections.push_back(ConnW(IndexN0, IndexN1, CurrW, Reverse[k]));
         }
       }
     }
@@ -505,29 +531,29 @@ public:
     std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> EdgeNodeMap;
     GetEdgeNodesLabelMap(Faces, EdgeNodeMap);
 
-    int Disabled=0;
+    int Disabled = 0;
     for (size_t i = 0; i < Connections.size(); i++) {
       int IndexN0 = Connections[i].IndexN0;
       int IndexN1 = Connections[i].IndexN1;
 
-      assert(IndexN0!=IndexN1);
-      
-      if ((only_reverse_connections)&&(!Connections[i].ReverseDir))continue;
+      assert(IndexN0 != IndexN1);
+
+      if ((only_reverse_connections) && (!Connections[i].ReverseDir))
+        continue;
 
       if (!CanRemoveByConnections(Graph, IndexN0, IndexN1, MinNeigh))
         continue;
 
       Graph.SetEnableLink(IndexN0, IndexN1, false);
-      
-      if (!two_way_edge)
-      {
+
+      if (!two_way_edge) {
         Disabled++;
         continue;
       }
-      //get the two vertices shared by the nodes
-      std::pair<int, int> EdgeK=GetNodesSharedE(Faces, IndexN0, IndexN1);
-      assert(EdgeK.first!=-1);
-      assert(EdgeK.second!=-1);
+      // get the two vertices shared by the nodes
+      std::pair<int, int> EdgeK = GetNodesSharedE(Faces, IndexN0, IndexN1);
+      assert(EdgeK.first != -1);
+      assert(EdgeK.second != -1);
 
       assert(EdgeNodeMap.count(EdgeK) > 0);
 
@@ -540,9 +566,10 @@ public:
       else
         Disabled++;
     }
-    std::cout<<"Disabled : "<<Disabled<<" out of "<<Connections.size()<<std::endl;
+    std::cout << "Disabled : " << Disabled << " out of " << Connections.size()
+              << std::endl;
     // std::cout<<"Disabled 1: "<<Disabled1<<std::endl;
-    Graph.RemoveNonActiveNeigh();
+   //Graph.RemoveNonActiveNeigh();
   }
 
   static void WeightNodeLowQuality(LabelNeighOrientedGraph<ScalarType> &Graph,
@@ -554,9 +581,10 @@ public:
         continue;
       ScalarType Q = Graph.NodeW[IndexN];
 
-      if (Q<MaxW)continue;
-      
-      Graph.NodeW[IndexN]=PenalizationW;
+      if (Q < MaxW)
+        continue;
+
+      Graph.NodeW[IndexN] = PenalizationW;
     }
   }
 
@@ -760,6 +788,95 @@ public:
         Geo::Point3<ScalarType> Pos1 = VertPos[IndexV1];
         Geo::Point3<ScalarType> MidP = Pos0 * 0.5 + Pos1 * 0.5;
         MidPointExit.push_back(MidP);
+      }
+    }
+  }
+
+  typedef typename Geo::Geodesic<ScalarType>::GeodesicParam GeodesicParam;
+  typedef typename Geo::Geodesic<ScalarType>::NodeDist NodeDist;
+
+  // -----------------------------------------------------------------------------
+  // Multi-source Dijkstra with optional target.
+  // Disabled nodes in EnabledN will get distance = -1.
+  // Distances are returned through the reference vector 'dist'.
+  // -----------------------------------------------------------------------------
+  static void Dijkstra(const LabelNeighOrientedGraph<ScalarType> &Graph,
+                Geo::TMark &TempMark,
+                GeodesicParam &GeoP) {
+    
+    TempMark.AllocateIfNeeded(Graph.NumNodes());
+    TempMark.UnMarkAll();
+
+    GeoP.Reset(Graph.NumNodes());
+
+    std::vector<NodeDist> Heap;
+    for (size_t i = 0; i < GeoP.Seeds.size(); i++) {
+      int IndexN = GeoP.Seeds[i];
+      assert(!TempMark.IsMarked(IndexN));
+      GeoP.Dist[IndexN] = 0;
+      GeoP.Source[IndexN] = IndexN;
+      GeoP.Father[IndexN] = -1;
+      GeoP.Steps[IndexN] = 0;
+      TempMark.Mark(IndexN);
+      GeoP.InInterval.insert(IndexN);
+      Heap.push_back(NodeDist(IndexN, 0));
+    }
+
+    std::make_heap(Heap.begin(), Heap.end());
+
+    while (!Heap.empty()) {
+      pop_heap(Heap.begin(), Heap.end());
+
+      int CurrNode = (Heap.back()).IndexNode;
+
+      if (GeoP.Target.count(CurrNode) > 0)
+        return;
+      Heap.pop_back();
+
+      assert(CurrNode >= 0);
+      assert(CurrNode < Graph.NumNodes());
+      std::vector<int> NextNodes;
+      std::vector<ScalarType> WeightNeigh;
+      Graph.ActiveNeigh(CurrNode, NextNodes, WeightNeigh);
+
+      for (size_t i = 0; i < NextNodes.size(); i++) {
+        int NextNode = NextNodes[i];
+        if (NextNode == -1)
+          continue;
+
+        if (GeoP.Avoid.count(NextNode) > 0)
+          continue;
+
+        assert(CurrNode >= 0);
+        assert(CurrNode < GeoP.Dist.size());
+        assert(CurrNode < GeoP.Steps.size());
+        assert(CurrNode < Graph.NumNodes());
+
+        assert(NextNode >= 0);
+        assert(NextNode < Graph.NumNodes());
+
+        ScalarType Delta = WeightNeigh[i];
+        if (GeoP.unitary_dist)
+          Delta = 1;
+
+        ScalarType nextDist = GeoP.Dist[CurrNode] + Delta;
+
+        int nextStep = GeoP.Steps[CurrNode] + 1;
+
+        if ((nextDist < GeoP.MaxD) && (nextStep < GeoP.MaxSteps) &&
+            (!TempMark.IsMarked(NextNode) || nextDist < GeoP.Dist[NextNode])) {
+          GeoP.Dist[NextNode] = nextDist;
+          TempMark.Mark(NextNode);
+
+          Heap.push_back(NodeDist(NextNode, nextDist));
+
+          push_heap(Heap.begin(), Heap.end());
+
+          GeoP.InInterval.insert(NextNode);
+          GeoP.Source[NextNode] = GeoP.Source[CurrNode];
+          GeoP.Steps[NextNode] = nextStep;
+          GeoP.Father[NextNode] = CurrNode;
+        }
       }
     }
   }

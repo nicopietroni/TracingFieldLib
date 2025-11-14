@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.5)
 project(arapDeformer)
 
 # Set the C++ standard to C++17
@@ -14,7 +14,9 @@ set(GLEWPATH "/Users/134750/Desktop/code/lib/glew" CACHE INTERNAL "")
 set(TRACEFIELD_DIR = "../../include" CACHE INTERNAL "")
 set(EIGENPATH  = "../../external_lib/eigen-3.4.0/" CACHE INTERNAL "")
 set(BROWS_DIR  = "../../external_lib/FileBrowser/" CACHE INTERNAL "")
+set(IGLLIB  = "../../external_lib/libigl/include/" CACHE INTERNAL "")
 
+include_directories(${IGLLIB})
 include_directories(${TRACEFIELD_DIR})
 include_directories(${IMGUI_DIR})
 include_directories(${IMGUI_DIR}/backends)

@@ -14,10 +14,19 @@ endif()
 
 set(TRACEFIELD_DIR = "../../include" CACHE INTERNAL "")
 set(EIGENPATH  = "../../external_lib/eigen-3.4.0/" CACHE INTERNAL "")
-
 set(IGLLIB  = "../../external_lib/libigl/include/" CACHE INTERNAL "")
 
 include_directories(${TRACEFIELD_DIR})
 include_directories(${EIGENPATH})
 include_directories(${IGLLIB})
+
 add_executable( ${PROJECT_NAME} main.cpp)
+
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+
+if(ipo_supported)
+    set_property(TARGET tri_remesh PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+else()
+    message(WARNING "IPO not supported: ${ipo_error}")
+endif()

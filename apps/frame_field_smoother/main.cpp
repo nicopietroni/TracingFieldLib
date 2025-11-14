@@ -1,4 +1,28 @@
-#include "ImGuiFileBrowser.h"
+// //Non-Commercial License Agreement
+// //Copyright (c) 2025, Nico Pietroni
+// //
+// //1. Permission is hereby granted to use, copy, modify, and distribute
+// //   this software for academic research, teaching, and personal
+// //   non-commercial purposes, provided that this copyright notice is
+// //   included in all copies or substantial portions of the software.
+// //
+// //2. Commercial use of this software, including but not limited to use in
+// //   commercial products, services, tools, or consulting, is strictly
+// //   prohibited without prior written permission from the copyright holder.
+// //
+// //3. This software is provided "as is", without warranty of any kind,
+// //   express or implied, including but not limited to the warranties of
+// //   merchantability, fitness for a particular purpose, and
+// //   noninfringement. In no event shall the authors or copyright holders
+// //   be liable for any claim, damages, or other liability, arising from,
+// //   out of, or in connection with the software or the use or other
+// //   dealings in the software.
+// //
+// //4. For commercial licensing, please contact:
+// //   Nico Pietroni
+// //   Email: nico.pietroni@gmail.com
+
+#include "../../external_lib/FileBrowser/ImGuiFileBrowser.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl2.h"
@@ -108,7 +132,7 @@ std::vector<std::vector<int>> NextF, NextE;
 int Nring = 3;
 
 int anglePercThr = 5;
-SmoothParam<UsedScalarType> SParamCross;
+FieldSmoothParam<UsedScalarType> SParamCross;
 int GlobSmoothI = (int)SParamCross.GlobalSmoothVal;
 
 // SmoothFrameParam<UsedScalarType> SParamFrame;
@@ -649,7 +673,7 @@ void SetRenderBar() {
     initial_feature_angle = valueA0;
     if (old_initial_feature_angle != initial_feature_angle) {
       
-      Geo::FeatureCorners(SurfVertPos, SurfExtFace, 
+      Geo::MeshFeatures<UsedScalarType>::FeatureCorners(SurfVertPos, SurfExtFace, 
                           initial_feature_angle, 
                           SParamCross.Features,
                           CornersIdx);

@@ -1,5 +1,5 @@
 #cmake_minimum_required(VERSION 3.1)
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.5)
 project(lut_creator)
 
 # Set the C++ standard to C++17

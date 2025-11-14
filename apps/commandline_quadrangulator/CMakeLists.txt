@@ -1,6 +1,8 @@
 #cmake_minimum_required(VERSION 3.1)
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.5)
 project(quad_commandline)
+
+cmake_policy(SET CMP0069 NEW)
 
 # Set the C++ standard to C++17
 set(CMAKE_CXX_STANDARD 17)
@@ -42,10 +44,10 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 set(TRACEFIELD_DIR = "../../include" CACHE INTERNAL "")
 set(EIGENPATH  = "../../external_lib/eigen-3.4.0/" CACHE INTERNAL "")
 
-option(USE_DIRECTIONAL "Use directional feature" OFF)
-if(USE_DIRECTIONAL)
-set(DIRECTIONALPATH  = "../../external_lib/Directional/include/" CACHE INTERNAL "")
-endif()
+#option(USE_DIRECTIONAL "Use directional feature" OFF)
+#if(USE_DIRECTIONAL)
+#set(DIRECTIONALPATH  = "../../external_lib/Directional/include/" CACHE INTERNAL "")
+#endif()
 set(IGLLIB  = "../../external_lib/libigl/include/" CACHE INTERNAL "")
 
 include_directories(${TRACEFIELD_DIR})
@@ -56,6 +58,15 @@ include_directories(${EIGENPATH})
 #endif()
 include_directories(${IGLLIB})
 add_executable( ${PROJECT_NAME} main.cpp)
+
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+
+if(ipo_supported)
+    set_property(TARGET quad_commandline PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+else()
+    message(WARNING "IPO not supported: ${ipo_error}")
+endif()
 
 #target_compile_options(quad_commandline PRIVATE -fsanitize=address -fsanitize=undefined -g -O1)
 #target_link_options(quad_commandline PRIVATE -fsanitize=address -fsanitize=undefined)

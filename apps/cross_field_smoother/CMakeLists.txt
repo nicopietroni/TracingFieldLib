@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.5)
 project(cross_field_smoother)
 
 # Set the C++ standard to C++17
@@ -14,28 +14,23 @@ set(TRACEFIELD_DIR = "../../include" CACHE INTERNAL "")
 set(GLDRAW_DIR = "../include/GLFunctions/" CACHE INTERNAL "")
 set(EIGENPATH  = "../../external_lib/eigen-3.4.0/" CACHE INTERNAL "")
 
-option(USE_DIRECTIONAL "Use directional feature" OFF)
-if(USE_DIRECTIONAL)
-    set(DIRECTIONALPATH  = "../../external_lib/Directional/include/" CACHE INTERNAL "")
-endif()
+#option(USE_DIRECTIONAL "Use directional feature" OFF)
+#if(USE_DIRECTIONAL)
+#    set(DIRECTIONALPATH  = "../../external_lib/Directional/include/" CACHE INTERNAL "")
+#endif()
 
-set(SANITIZE_FLAGS "-fsanitize=address -fsanitize=undefined")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${SANITIZE_FLAGS} -g -O1")
-set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} ${SANITIZE_FLAGS}")
+#set(SANITIZE_FLAGS "-fsanitize=address -fsanitize=undefined")
+#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${SANITIZE_FLAGS} -g -O1")
+#set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} ${SANITIZE_FLAGS}")
 
 set(IGLLIB  = "../../external_lib/libigl/include/" CACHE INTERNAL "")
-#set(BROWS_DIR  = "../../external_lib/FileBrowser" CACHE INTERNAL "")
 
 include_directories(${TRACEFIELD_DIR})
 include_directories(${IMGUI_DIR})
 include_directories(${IMGUI_DIR}/backends)
 include_directories(/opt/homebrew/include)
-#include_directories(${GLEWPATH}/include)
 include_directories(${EIGENPATH})
 
-if(USE_DIRECTIONAL)
-    include_directories(${DIRECTIONALPATH})
-endif()
 
 include_directories(${IGLLIB})
 
