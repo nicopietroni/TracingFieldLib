@@ -35,6 +35,7 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 // #include "connectivity.h"
 // #include "normal.h"
@@ -55,32 +56,12 @@ static int VofF(const int &indexF, const int &indexV) {
   return (facevert[indexF][indexV]);
 }
 
-// static int EofV(const int &indexV, const int &indexE)
-//{
-//     assert((indexE < 3) && (indexV < 4));
-//     static int vertedge[4][3] = {{0, 1, 2},
-//                                  {0, 3, 4},
-//                                  {5, 1, 3},
-//                                  {4, 5, 2}};
-//     return vertedge[indexV][indexE];
-// }
-
 // edge of a Face
 static int EofF(const int &indexF, const int &indexE) {
   assert((indexF < 4) && (indexE < 3));
   static int faceedge[4][3] = {{0, 3, 1}, {2, 4, 0}, {1, 5, 2}, {4, 5, 3}};
   return faceedge[indexF][indexE];
 }
-
-// static int FofV(const int &indexV, const int &indexF)
-//{
-//     assert((indexV < 4) && (indexF < 3));
-//     static int vertface[4][3] = {{0, 1, 2},
-//                                  {0, 3, 1},
-//                                  {0, 2, 3},
-//                                  {1, 3, 2}};
-//     return vertface[indexV][indexF];
-// }
 
 static int FofE(const int &indexE, const int &indexSide) {
   assert((indexE < 6) && (indexSide < 2));
@@ -98,140 +79,10 @@ static int VofEE(const int &indexE0, const int &indexE1) {
   return (edgesvert[indexE0][indexE1]);
 }
 
-// static int VofFFF(const int &indexF0, const int &indexF1, const int &indexF2)
-//{
-//     assert((indexF0 < 4) && (indexF0 >= 0));
-//     assert((indexF1 < 4) && (indexF1 >= 0));
-//     assert((indexF2 < 4) && (indexF2 >= 0));
-//     static int facesvert[4][4][4] = {
-//         {//0
-//          {-1, -1, -1, -1},
-//          {-1, -1, 0, 1},
-//          {-1, 0, -1, 2},
-//          {-1, 1, 2, -1}},
-//         {//1
-//          {-1, -1, 0, 1},
-//          {-1, -1, -1, -1},
-//          {0, -1, -1, 3},
-//          {1, -1, 3, -1}},
-//         {//2
-//          {-1, 0, -1, 2},
-//          {0, -1, -1, 3},
-//          {-1, -1, -1, -1},
-//          {2, 3, -1, -1}},
-//         {//3
-//          {-1, 1, 2, -1},
-//          {1, -1, 3, -1},
-//          {2, 3, -1, -1},
-//          {-1, -1, -1, -1}}};
-//     return facesvert[indexF0][indexF1][indexF2];
-// }
-
-// static int EofFF(const int &indexF0, const int &indexF1)
-//{
-//     assert((indexF0 < 4) && (indexF0 >= 0));
-//     assert((indexF1 < 4) && (indexF1 >= 0));
-//     static int facesedge[4][4] = {{-1, 0, 1, 3},
-//                                   {0, -1, 2, 4},
-//                                   {1, 2, -1, 5},
-//                                   {3, 4, 5, -1}};
-//     return (facesedge[indexF0][indexF1]);
-// }
-
-// static int EofVV(const int &indexV0, const int &indexV1)
-//{
-//     assert((indexV0 < 4) && (indexV0 >= 0));
-//     assert((indexV1 < 4) && (indexV1 >= 0));
-//     static int verticesedge[4][4] = {{-1, 0, 1, 2},
-//                                      {0, -1, 3, 4},
-//                                      {1, 3, -1, 5},
-//                                      {2, 4, 5, -1}};
-
-//    return verticesedge[indexV0][indexV1];
-//}
-
-// static int FofVVV(const int &indexV0, const int &indexV1, const int &indexV2)
-//{
-
-//    assert((indexV0 < 4) && (indexV0 >= 0));
-//    assert((indexV1 < 4) && (indexV1 >= 0));
-//    assert((indexV2 < 4) && (indexV2 >= 0));
-
-//    static int verticesface[4][4][4] = {
-//        {//0
-//         {-1, -1, -1, -1},
-//         {-1, -1, 0, 1},
-//         {-1, 0, -1, 2},
-//         {-1, 1, 2, -1}},
-//        {//1
-//         {-1, -1, 0, 1},
-//         {-1, -1, -1, -1},
-//         {0, -1, -1, 3},
-//         {1, -1, 3, -1}},
-//        {//2
-//         {-1, 0, -1, 2},
-//         {0, -1, -1, 3},
-//         {-1, -1, -1, -1},
-//         {2, 3, -1, -1}},
-//        {//3
-//         {-1, 1, 2, -1},
-//         {1, -1, 3, -1},
-//         {2, 3, -1, -1},
-//         {-1, -1, -1, -1}}};
-//    return verticesface[indexV0][indexV1][indexV2];
-//}
-
-// static int FofEE(const int &indexE0, const int &indexE1)
-//{
-//     assert((indexE0 < 6) && (indexE0 >= 0));
-//     assert((indexE1 < 6) && (indexE1 >= 0));
-//     static int edgesface[6][6] = {{-1, 0, 1, 0, 1, -1},
-//                                   {0, -1, 2, 0, -1, 2},
-//                                   {1, 2, -1, -1, 1, 2},
-//                                   {0, 0, -1, -1, 3, 3},
-//                                   {1, -1, 1, 3, -1, 3},
-//                                   {-1, 2, 2, 3, 3, -1}};
-
-//    return edgesface[indexE0][indexE1];
-//}
-
-// static int FoppositeV (const int & indexV)
-//{
-//     assert(indexV < 4 && indexV >= 0);
-//     static int oppFaces[4] = { 3, 2, 1, 0 };
-
-//    return oppFaces[indexV];
-//}
-
-// static int VoppositeF (const int & indexF)
-//{
-//     assert(indexF < 4 && indexF >= 0);
-//     static int oppVerts[4] = { 3, 2, 1, 0 };
-
-//    return oppVerts[indexF];
-//}
-
 static int EoppositeE(const int &indexE) {
   assert(indexE < 6 && indexE >= 0);
   return 5 - indexE;
 }
-
-// void Get
-// template <class ScalarType>
-// bool GetBoundingBox(const std::vector<std::vector<ScalarType> > &VertPos,
-//                     std::vector<ScalarType> &MinP,
-//                     std::vector<ScalarType> &MaxP)
-//{
-
-//}
-
-// template <class ScalarType>
-// bool GetBoundingBox(const std::vector<std::vector<ScalarType> > &VertPos,
-//                     std::vector<ScalarType> &MinP,
-//                     std::vector<ScalarType> &MaxP)
-//{
-
-//}
 
 static int WhichEdge(const std::vector<int> &TetraV, const int &indexV0,
                      const int &indexV1) {
@@ -309,10 +160,6 @@ void GetPPAdjacency(const std::vector<std::vector<int>> &Connectivity,
     NextP[TF1.first][TF1.second] = TF0.first;
     NextF[TF1.first][TF1.second] = TF0.second;
 
-    //        Adjacency[TF0.first][TF0.second].first=TF1.first;
-    //        Adjacency[TF0.first][TF0.second].second=TF1.second;
-    //        Adjacency[TF1.first][TF1.second].first=TF0.first;
-    //        Adjacency[TF1.first][TF1.second].second=TF0.second;
   }
 }
 
@@ -403,6 +250,43 @@ void FFExternalMesh(const std::vector<std::vector<int>> &Connectivity,
       PolyIndex.push_back(i);
       PolyFace.push_back(f);
     }
+}
+
+void FFExternalEdges(const std::vector<std::vector<int>> &Connectivity,
+                     const std::vector<std::vector<int>> &NextP,
+                     const std::vector<std::vector<int>> &NextF,
+                     std::vector<std::pair<int,int>> &ExtEdges) {
+ 
+  std::vector<int>  PolyIndex,PolyFace;
+  std::vector<std::vector<int>> ExtFaces;
+  FFExternalMesh(Connectivity,NextP,NextF,ExtFaces,PolyIndex,PolyFace);
+  ExtEdges.clear();
+  for (size_t i=0;i<ExtFaces.size();i++)
+  {
+    int sizeF=ExtFaces[i].size();
+    for (size_t j=0;j<sizeF;j++)
+    {
+      int IndexV0=ExtFaces[i][j];
+      int IndexV1=ExtFaces[i][(j+1)%sizeF];
+      assert(IndexV0!=IndexV1);
+      assert(IndexV0>=0);
+      assert(IndexV1>=0);
+      std::pair<int,int> key(std::min(IndexV0,IndexV1),
+                             std::max(IndexV0,IndexV1));
+      ExtEdges.push_back(key);
+    }
+  }
+  std::sort(ExtEdges.begin(),ExtEdges.end());
+  ExtEdges.erase(std::unique(ExtEdges.begin(),ExtEdges.end()),
+                   ExtEdges.end());
+}
+
+void FFExternalEdges(const std::vector<std::vector<int>> &Connectivity,
+                    std::vector<std::pair<int,int>> &ExtEdges)
+{
+  std::vector<std::vector<int>> NextP,NextF;
+  GetPPAdjacency(Connectivity,NextP,NextF);
+  FFExternalEdges(Connectivity,NextP,NextF,ExtEdges);
 }
 
 void FFExternalVertices(const std::vector<std::vector<int>> &Connectivity,

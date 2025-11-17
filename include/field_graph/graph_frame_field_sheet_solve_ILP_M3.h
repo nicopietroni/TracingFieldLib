@@ -32,6 +32,7 @@
 #include "graph.h"
 #include "graph_cross_field.h"
 #include "graph_frame_field.h"
+#include "graph_frame_field_sheet_extraction_M3.h"
 #include "smooth_mesh.h"
 #include "smooth_sheet_surfaces.h"
 #include <algorithm>
@@ -51,7 +52,7 @@
 #define SOFT_CONSTR_PENALTY 1000
 #define POW_EXP 4
 
-template <class ScalarType> class SheetExtractorILPM3 {
+template <class ScalarType> class SheetSolveILPM3 {
 public:
   // different types of energy minimization
   enum ObjType { FaceOBJ, ConnOBJ, FaceConnOBJ };
@@ -110,7 +111,7 @@ public:
 private:
   Geo::LabelNeighOrientedGraph<ScalarType> &M3Graph;
 
-  std::vector<std::vector<int>> &InternalFaces;
+  const std::vector<std::vector<int>> &InternalFaces;
 
   // NODE VARIABLES
   //  for each node the variable on the Gurobi solve
@@ -159,6 +160,18 @@ private:
   // // Continuing M3 Label such that one face should trigger the next
   // std::vector<std::vector<int>> M3_Label_Cont_Constr;
 
+  // std::vector<ScalarType> DistFunct;
+
+  // void InitSeedDistance(const std::vector<int> &Seeds) {
+  //   Geo::TMark TempMark;
+  //   typename Geo::Geodesic<ScalarType>::GeodesicParam GeoP;
+  //   //GeoP.Seeds = Seeds;
+  //   M3Graph.NodesWithExitLabel(GeoP.Seeds);
+  //   Geo::LabelGraphFuctions<ScalarType>::Dijkstra(M3Graph, TempMark, GeoP);
+  //   DistFunct = GeoP.Dist;
+  //   assert(DistFunct.size() == M3Graph.NumNodes());
+  // }
+
   bool IsVariableM3(int IndexN) const {
     // return false;
     if (!M3Graph.IsEnabled(IndexN))
@@ -167,29 +180,6 @@ private:
       return false;
     return true;
   }
-
-  // void ConstraintStats(const std::vector<std::vector<int>> &Constraint,
-  //                      int &MaxSize, ScalarType &AVGSize) {
-  //   AVGSize = 0;
-  //   MaxSize = 0;
-  //   for (size_t i = 0; i < Constraint.size(); i++) {
-  //     MaxSize = std::max(MaxSize, (int)Constraint[i].size());
-  //     AVGSize += (ScalarType)Constraint[i].size();
-  //   }
-  //   AVGSize /= (ScalarType)Constraint.size();
-  // }
-
-  // void ConstraintStats(
-  //     const std::vector<std::pair<int, std::vector<int>>> &Constraint,
-  //     int &MaxSize, ScalarType &AVGSize) {
-  //   AVGSize = 0;
-  //   MaxSize = 0;
-  //   for (size_t i = 0; i < Constraint.size(); i++) {
-  //     MaxSize = std::max(MaxSize, (int)Constraint[i].second.size());
-  //     AVGSize += (ScalarType)Constraint[i].second.size();
-  //   }
-  //   AVGSize /= (ScalarType)Constraint.size();
-  // }
 
   void InitVariableMap() {
 
@@ -247,46 +237,6 @@ private:
       }
     }
   }
-
-  // void InitNotLegalConnections_ConstrM3() {
-  //   M3_Not_Legal_Connections.clear();
-  //   for (size_t i=0;i<M3Graph.NumNodes();i++)
-  //   {
-  //     int IndexN0=i;
-  //     if (!IsVariableM3(IndexN0))continue;
-  //     //get active neighbours
-  //     std::vector<int> ActiveNeigh;
-  //     std::vector<ScalarType> WeightNeigh;
-  //     M3Graph.ActiveNeigh(IndexN0, ActiveNeigh, WeightNeigh);
-  //     std::set<int> ActiveNeighSet(ActiveNeigh.begin(),ActiveNeigh.end());
-  //     assert(IndexN0<=M3Graph.InternalTangentConstr.size());
-  //     std::vector<int> AllNeigh=M3Graph.InternalTangentConstr[IndexN0];
-  //     // std::set<int> AllNeighSet(AllNeigh.begin(),AllNeigh.end());
-
-  //     //  for (size_t j = 0; j < AllNeigh.size(); j++) {
-  //     //    int IndexN1=AllNeigh[j];
-  //     //    if (!IsVariableM3(IndexN1))continue;
-  //     //    if (ActiveNeighSet.count(IndexN1))continue;
-  //     //    std::pair<int,int>
-  //     AvoidConn(std::min(IndexN0,IndexN1),std::max(IndexN0,IndexN1));
-  //     //    M3_Not_Legal_Connections.push_back(AvoidConn);
-  //     //  }
-  //   }
-
-  //   std::sort(M3_Not_Legal_Connections.begin(),
-  //   M3_Not_Legal_Connections.end());
-  //   M3_Not_Legal_Connections.erase(std::unique(M3_Not_Legal_Connections.begin(),
-  //                                             M3_Not_Legal_Connections.end()),
-  //                                             M3_Not_Legal_Connections.end());
-
-  // }
-
-  //  for (size_t i = 0; i < M3Graph.InternalTangentConstr.size(); i++) {
-  //     std::vector<int> CurrTangVar;
-  //     for (size_t j = 0; j < M3Graph.InternalTangentConstr[i].size(); j++) {
-  //       int IndexN = M3Graph.InternalTangentConstr[i][j];
-  //       if (!IsVariableM3(IndexN))
-  //         continue;
 
   void InitAvoidConnection_ConstrM3() {
     Avoid_Connections.clear();
@@ -657,6 +607,7 @@ private:
     for (int i = 0; i < M3VarToNode.size(); ++i) {
       int IndexN = M3VarToNode[i];
       ScalarType ObjW = pow(M3Graph.NodeW[IndexN], POW_EXP);
+      //ScalarType ObjW = DistFunct[IndexN];
 
       // in this case only weight the links
       if (ExtrP.OType == ConnOBJ)
@@ -1219,59 +1170,28 @@ public:
       const std::vector<std::vector<int>> &ReprojectFaces,
       const std::vector<std::pair<int, int>> &FeatureE,
       const std::vector<int> &Corners, int SmoothSteps = 20) {
+    
+    std::vector<bool> CompleteM3Solution(M3Graph.NumNodes(), false);
+    for (size_t i = 0; i < M3Solution.size(); i++) {
+      if (M3Solution[i]) {
+        int IndexN = M3VarToNode[i];
+        CompleteM3Solution[IndexN] = true;
+      }
+    }
 
-    ExtractSubMeshes(OriginalVertPos, FoilVertices, FoilFaces, OriginalFaceIdx,
-                     OriginalVertIdx);
+    SheetExtractorM3<ScalarType>::ExtractSubMeshes(M3Graph,CompleteM3Solution,
+                                                    InternalFaces,
+                                                    OriginalVertPos, FoilVertices,
+                                                    FoilFaces, OriginalFaceIdx,
+                                                    OriginalVertIdx);
 
     if (SmoothSteps == 0)
       return;
-
-    // // concatenate to a single surface
-    // std::vector<Geo::Point3<ScalarType>> NonManifV;
-    // std::vector<std::vector<int>> NonManifFaces;
-    // AppendMeshes<ScalarType>(NonManifV, NonManifFaces, FoilVertices,
-    // FoilFaces); RemoveDuplicatedVert(NonManifV, NonManifFaces);
-
-    // std::map<Geo::Point3<ScalarType>, int> PosIdxMap;
-    // for (size_t i = 0; i < NonManifV.size(); i++)
-    //   PosIdxMap[NonManifV[i]] = i;
-
-    // SmoothReprojectSubMeshes(NonManifV, NonManifFaces, ReprojectV,
-    //                          ReprojectFaces, FeatureE, Corners,
-    //                          SmoothSteps);
-
-    // // copy back positions
-    // for (size_t i = 0; i < FoilVertices.size(); i++)
-    //   for (size_t j = 0; j < FoilVertices[i].size(); j++) {
-    //     Geo::Point3<ScalarType> VertP = FoilVertices[i][j];
-    //     assert(PosIdxMap.count(VertP) > 0);
-    //     int IndexNonManif = PosIdxMap[VertP];
-    //     assert(IndexNonManif >= 0);
-    //     assert(IndexNonManif < NonManifV.size());
-    //     FoilVertices[i][j] = NonManifV[IndexNonManif];
-    //   }
 
     FoilsSmooth<ScalarType>::SmoothFoils(FoilVertices, FoilFaces, ReprojectV,
                                          ReprojectFaces, FeatureE, Corners,
                                          SmoothSteps);
   }
-
-  //   // only one single istance of the face can be chosen (one face might
-  // // correspont to multiple nodes)
-  // std::vector<std::vector<int>> SingleF_ConstrM3;
-
-  // // the edge can be transversed only twice maximum (SET CORRECT VALENCE with
-  // // Borders/Convex/Concave)
-  // std::vector<std::vector<int>> TwiceEdge_ConstrM3;
-
-  // // exit M3 should be only one for exit edge
-  // std::vector<std::vector<int>> M3_Exit_Constr;
-
-  // // Continuing M3 Label such that one face should trigger the next
-  // std::vector<std::vector<int>> M3_Label_Cont_Constr;
-
-  // // only one times for each direction for each node
-  // std::vector<std::pair<int, std::vector<int>>> EdgeLabel_Constr;
 
   int NumConstraints() {
     int size_constr = SingleF_ConstrM3.size();
@@ -1333,6 +1253,8 @@ public:
     std::vector<int> Seeds = ExtrP.SoftNodes;
     Seeds.insert(Seeds.end(), ExtrP.HardNodes.begin(), ExtrP.HardNodes.end());
     MatchedSeed.clear();
+
+    //InitSeedDistance(Seeds);
 
     if (ExtrP.SoftNodes.size() > 0)
       MatchedSeed = std::vector<bool>(ExtrP.SoftNodes.size(), false);
@@ -1396,7 +1318,7 @@ public:
     return solved;
   }
 
-  SheetExtractorILPM3(Geo::LabelNeighOrientedGraph<ScalarType> &_M3Graph,
+  SheetSolveILPM3(Geo::LabelNeighOrientedGraph<ScalarType> &_M3Graph,
                       std::vector<std::vector<int>> &_InternalFaces)
       : M3Graph(_M3Graph), InternalFaces(_InternalFaces) {}
 };

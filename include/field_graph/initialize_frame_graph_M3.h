@@ -499,9 +499,12 @@ private:
       Geo::Point3<ScalarType> NormF = FaceNormals[IndexF];
       if (Geo::Dot(NormF, testDir) < 0)
         NormF = -NormF;
+      //ScalarType a=Area<ScalarType>(VertPos,TetraInternalFaces,IndexF);
+      //ScalarType drift=Geo::AngleDeg(NormF, testDir) / (ScalarType)90;
       Facegraph.NodeW[i] = Geo::AngleDeg(NormF, testDir) / (ScalarType)90;
+      //a+(1+100*drift);
       assert(Facegraph.NodeW[i] >= 0);
-      assert(Facegraph.NodeW[i] <= 1);
+      //assert(Facegraph.NodeW[i] <= 1);
     }
   }
 

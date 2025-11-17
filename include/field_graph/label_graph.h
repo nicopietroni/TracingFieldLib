@@ -568,6 +568,26 @@ public:
     }
   }
 
+  void AllNeigh(const int &IndexN, 
+                const int &IndexLabel,
+                std::vector<int> &IndexNeigh,
+                std::vector<ScalarType> &WeightNeigh) const {
+    assert(IndexN >= 0);
+    assert(IndexN < (int)N.size());
+    assert(IndexLabel >= 0);
+    assert(IndexLabel < (int)N[IndexN].size());
+
+    IndexNeigh.clear();
+    WeightNeigh.clear();
+
+      for (size_t i = 0; i < N[IndexN][IndexLabel].size(); i++) {
+        int CurrNeigh = N[IndexN][IndexLabel][i].N;
+
+        IndexNeigh.push_back(CurrNeigh);
+        WeightNeigh.push_back(N[IndexN][IndexLabel][i].W);
+      }
+  }
+
   void AllNeigh(const int &IndexN, std::vector<int> &IndexNeigh,
                 std::vector<ScalarType> &WeightNeigh) const {
     assert(IndexN >= 0);

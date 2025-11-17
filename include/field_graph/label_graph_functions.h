@@ -569,7 +569,7 @@ public:
     std::cout << "Disabled : " << Disabled << " out of " << Connections.size()
               << std::endl;
     // std::cout<<"Disabled 1: "<<Disabled1<<std::endl;
-   //Graph.RemoveNonActiveNeigh();
+    // Graph.RemoveNonActiveNeigh();
   }
 
   static void WeightNodeLowQuality(LabelNeighOrientedGraph<ScalarType> &Graph,
@@ -801,9 +801,8 @@ public:
   // Distances are returned through the reference vector 'dist'.
   // -----------------------------------------------------------------------------
   static void Dijkstra(const LabelNeighOrientedGraph<ScalarType> &Graph,
-                Geo::TMark &TempMark,
-                GeodesicParam &GeoP) {
-    
+                       Geo::TMark &TempMark, GeodesicParam &GeoP) {
+
     TempMark.AllocateIfNeeded(Graph.NumNodes());
     TempMark.UnMarkAll();
 
@@ -878,6 +877,40 @@ public:
           GeoP.Father[NextNode] = CurrNode;
         }
       }
+    }
+  }
+
+  static void SmoothSignal(LabelNeighOrientedGraph<ScalarType> &Graph,
+                           std::vector<ScalarType> &PerNodeSignal,
+                           std::vector<int> &FixedNodes,
+                           int NumIterations = 10) {
+    assert(PerNodeSignal.size() == Graph.NumNodes());
+    std::set<int> FixedSet;
+    for (size_t i = 0; i < FixedNodes.size(); i++)
+      FixedSet.insert(FixedNodes[i]);
+    for (size_t iter = 0; iter < NumIterations; iter++) {
+      std::vector<ScalarType> NewSignal = PerNodeSignal;
+      for (size_t i = 0; i < Graph.NumNodes(); i++) {
+        int IndexN = i;
+        if (!Graph.IsEnabled(IndexN))
+          continue;
+        if (FixedSet.count(IndexN) > 0)
+          continue;
+        std::vector<int> IndexNeigh;
+        std::vector<ScalarType> WeightNeigh;
+        Graph.ActiveNeigh(IndexN, IndexNeigh, WeightNeigh);
+        ScalarType SumW = 0;
+        ScalarType SumSignal = 0;
+        for (size_t j = 0; j < IndexNeigh.size(); j++) {
+          int NeighN = IndexNeigh[j];
+          //ScalarType W = WeightNeigh[j];
+          SumW += 1;
+          SumSignal += PerNodeSignal[NeighN];// * W;
+        }
+        if (SumW > 0)
+          NewSignal[IndexN] = SumSignal / SumW;
+      }
+      PerNodeSignal = NewSignal;
     }
   }
 };
