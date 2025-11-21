@@ -325,11 +325,37 @@ public:
     for (size_t i = 0; i < Graph.NumNodes(); i++) {
       if (ActiveNodes.count(i) > 0)
         continue;
-      if (Graph.IsEnabled(i))
+      if (!Graph.IsEnabled(i))
         continue;
       Graph.DisableNode(i);
       DisabledN.push_back(i);
     }
+  }
+
+  static void
+  FilterSelectedFromSeed(LabelNeighOrientedGraph<ScalarType> &Graph,
+                            const std::vector<int> &SeedNodes,
+                            std::vector<bool> &SelectedNodes) 
+  {
+    //save thecurrent disabled nodes
+    std::vector<bool> SwapEnabled=Graph.EnabledN;
+    //disable all nodes
+    Graph.EnabledN=std::vector<bool>(Graph.NumNodes(),false);
+    //enable only the selected nodes
+    for(size_t i=0;i<SelectedNodes.size();i++)
+    {
+      if(SelectedNodes[i])  
+        Graph.EnabledN[i]=true;
+    }
+    //then update the selected nodes based on connectivity from seeds
+    std::set<int> ActiveNodes;
+    GetActiveFrom(Graph, SeedNodes, ActiveNodes);
+    for (size_t i = 0; i < Graph.NumNodes(); i++) {
+      if (ActiveNodes.count(i) == 0)
+        SelectedNodes[i] = false;
+    }
+    //restore the previous enabled nodes
+    Graph.EnabledN=SwapEnabled;
   }
 
   static bool CanRemoveByConnections(LabelNeighOrientedGraph<ScalarType> &Graph,

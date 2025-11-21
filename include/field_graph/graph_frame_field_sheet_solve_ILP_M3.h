@@ -30,7 +30,7 @@
 #include "../connectivity.h"
 #include "../mesh_functions.h"
 #include "graph.h"
-#include "graph_cross_field.h"
+#include "graph_frame_constraints_M3.h"
 #include "graph_frame_field.h"
 #include "graph_frame_field_sheet_extraction_M3.h"
 #include "smooth_mesh.h"
@@ -56,7 +56,7 @@ template <class ScalarType> class SheetSolveILPM3 {
 public:
   // different types of energy minimization
   enum ObjType { FaceOBJ, ConnOBJ, FaceConnOBJ };
-  enum ContinuityType { FaceBased, EdgeBased };
+  //enum ContinuityType { FaceBased, EdgeBased };
 
   struct ExtractParam {
     std::vector<int> HardNodes;
@@ -83,7 +83,7 @@ public:
     bool FeasiblityOnly;
     bool OptimizeObj;
 
-    ContinuityType CType;
+    typename SheetSolve_ConstraintsM3<ScalarType>::ContinuityType CType;
 
     ExtractParam() {
       SingleFConstrM3 = true;
@@ -104,355 +104,20 @@ public:
       SoftBorderTangentM3 = false;
       SoftAvoidConnectionsM3 = false;
 
-      CType = FaceBased;
+      //CType = FaceBased;
+      CType=SheetSolve_ConstraintsM3<ScalarType>::FaceBased;
     }
   };
 
 private:
+  const SheetSolve_ConstraintsM3<ScalarType> &M3Constraints;
+
   Geo::LabelNeighOrientedGraph<ScalarType> &M3Graph;
 
   const std::vector<std::vector<int>> &InternalFaces;
 
-  // NODE VARIABLES
-  //  for each node the variable on the Gurobi solve
-  std::vector<int> M3NodeToVar;
-
-  // for each variable on the Gurobi solve to the node
-  std::vector<int> M3VarToNode;
-
-  // LINK VARIABLES IF USED IN THE OBJECTIVE FUNCTION
-  //  for each connection Var the list of nodes
-  std::vector<std::pair<int, int>> M3LinkVarToNodes;
-
-  // its weigth
-  std::vector<ScalarType> M3LinkVarWeight;
-
-  // for each pair of nodes the variable (this is when link variable used)
-  std::map<std::pair<int, int>, int> M3NodesToLinkVar;
-
-  // MANIFOLD CONSTRAINTS
-  //  only one single istance of the face can be chosen (one face might
-  //  correspont to multiple nodes)
-  std::vector<std::vector<int>> SingleF_ConstrM3;
-
-  // the edge can be transversed only twice maximum (SET CORRECT VALENCE with
-  // Borders/Convex/Concave)
-  std::vector<std::vector<int>> TwiceEdge_ConstrM3;
-
-  // nodes which are tangent internally for each edge (valence 0 or 2)
-  std::vector<std::vector<int>> Internal_TangentNodes_Constr;
-
-  // nodes which are tangent on border for each edge (valence 0 or 1)
-  std::vector<std::vector<int>> Border_TangentNodes_Constr;
-
-  // APPROACH 1, EXPLICIT NEIGHBOURS AND CONSTRAINTS
-  // list of pairs for each node the continuation, the first one
-  // is repeated three times because the three labels
-  std::vector<std::pair<int, std::vector<int>>> EdgeLabel_Continuation_Constr;
-
-  // APPROACH 2, ON GROUP OF EDGES AND PROHIBITED NEIGH
-  // the connections that are disabled on a group of faces sharing the edge
-  std::vector<std::pair<int, int>> Avoid_Connections;
-
-  // exit M3 should be only one for exit edge
-  // std::vector<std::vector<int>> M3_Exit_Constr;
-
-  // // Continuing M3 Label such that one face should trigger the next
-  // std::vector<std::vector<int>> M3_Label_Cont_Constr;
-
-  // std::vector<ScalarType> DistFunct;
-
-  // void InitSeedDistance(const std::vector<int> &Seeds) {
-  //   Geo::TMark TempMark;
-  //   typename Geo::Geodesic<ScalarType>::GeodesicParam GeoP;
-  //   //GeoP.Seeds = Seeds;
-  //   M3Graph.NodesWithExitLabel(GeoP.Seeds);
-  //   Geo::LabelGraphFuctions<ScalarType>::Dijkstra(M3Graph, TempMark, GeoP);
-  //   DistFunct = GeoP.Dist;
-  //   assert(DistFunct.size() == M3Graph.NumNodes());
-  // }
-
-  bool IsVariableM3(int IndexN) const {
-    // return false;
-    if (!M3Graph.IsEnabled(IndexN))
-      return false;
-    if (M3Graph.NodeType(IndexN) == Geo::TangentDomain)
-      return false;
-    return true;
-  }
-
-  void InitVariableMap() {
-
-    M3NodeToVar = std::vector<int>(M3Graph.NumNodes(), -1);
-    M3VarToNode.clear();
-
-    int CurrV = 0;
-    for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
-      int IndexN = i;
-      if (!IsVariableM3(IndexN))
-        continue;
-
-      M3NodeToVar[IndexN] = CurrV;
-      M3VarToNode.push_back(IndexN);
-      CurrV++;
-    }
-
-    M3LinkVarToNodes.clear();
-    M3NodesToLinkVar.clear();
-    M3LinkVarWeight.clear();
-
-    // for each node
-    for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
-      int IndexN = i;
-      if (!IsVariableM3(IndexN))
-        continue;
-      // get all active neighbours
-      std::vector<int> IndexNeigh;
-      std::vector<ScalarType> WeightNeigh;
-      M3Graph.ActiveNeigh(IndexN, IndexNeigh, WeightNeigh);
-      for (size_t j = 0; j < IndexNeigh.size(); j++) {
-        {
-          int CurrNeigh = IndexNeigh[j];
-          assert(CurrNeigh != IndexN);
-          assert(CurrNeigh >= 0);
-          assert(CurrNeigh < M3Graph.NumNodes());
-          if (!IsVariableM3(CurrNeigh))
-            continue;
-          // then get the variables
-          int IndexVar0 = M3NodeToVar[IndexN];
-          int IndexVar1 = M3NodeToVar[CurrNeigh];
-          assert(IndexVar0 >= 0);
-          assert(IndexVar0 < M3VarToNode.size());
-          assert(IndexVar1 >= 0);
-          assert(IndexVar1 < M3VarToNode.size());
-          std::pair<int, int> KeyLink(std::min(IndexVar0, IndexVar1),
-                                      std::max(IndexVar0, IndexVar1));
-          if (M3NodesToLinkVar.count(KeyLink) > 0)
-            continue;
-          // add new variable
-          M3NodesToLinkVar[KeyLink] = M3LinkVarToNodes.size();
-          M3LinkVarToNodes.push_back(KeyLink);
-          M3LinkVarWeight.push_back(WeightNeigh[j]);
-        }
-      }
-    }
-  }
-
-  void InitAvoidConnection_ConstrM3() {
-    Avoid_Connections.clear();
-    for (size_t i = 0; i < M3Graph.InternalTangentConstr.size(); i++) {
-      // for each pair
-      for (size_t j = 0; j < M3Graph.InternalTangentConstr[i].size() - 1; j++)
-        for (size_t k = (j + 1); k < M3Graph.InternalTangentConstr[i].size();
-             k++) {
-          int IndexN0 = M3Graph.InternalTangentConstr[i][j];
-          int IndexN1 = M3Graph.InternalTangentConstr[i][k];
-          if (!IsVariableM3(IndexN0))
-            continue;
-          if (!IsVariableM3(IndexN1))
-            continue;
-          assert(IndexN0 != IndexN1);
-          if (M3Graph.IsActiveNeighbour(IndexN0, IndexN1))
-            continue;
-          int IndexVar0 = M3NodeToVar[IndexN0];
-          int IndexVar1 = M3NodeToVar[IndexN1];
-          assert(IndexVar0 >= 0);
-          assert(IndexVar1 >= 0);
-          Avoid_Connections.push_back(std::pair<int, int>(
-              std::min(IndexVar0, IndexVar1), std::max(IndexVar0, IndexVar1)));
-        }
-    }
-
-    std::sort(Avoid_Connections.begin(), Avoid_Connections.end());
-    Avoid_Connections.erase(
-        std::unique(Avoid_Connections.begin(), Avoid_Connections.end()),
-        Avoid_Connections.end());
-  }
-
-  void InitSingleF_ConstrM3() {
-    SingleF_ConstrM3.clear();
-
-    for (size_t i = 0; i < InternalFaces.size(); i++) {
-      std::vector<int> NodesIdx;
-      Field::FrameFieldM3Graph::NodesOfElem(i, NodesIdx);
-      std::vector<int> VarNodesForF;
-      for (size_t j = 0; j < NodesIdx.size(); j++) {
-        int testN = NodesIdx[j];
-        if (!IsVariableM3(testN))
-          continue;
-        VarNodesForF.push_back(testN);
-      }
-      // no need if there is zero or none active
-      // variable for such a face
-      if (VarNodesForF.size() <= 1)
-        continue;
-
-      // otherwise add a new constraint
-      SingleF_ConstrM3.resize(SingleF_ConstrM3.size() + 1);
-      for (size_t j = 0; j < VarNodesForF.size(); j++) {
-        int IndexN = VarNodesForF[j];
-
-        assert(IsVariableM3(IndexN));
-        assert(IndexN >= 0);
-        assert(IndexN < M3NodeToVar.size());
-
-        int IndexVar = M3NodeToVar[IndexN];
-        assert(IndexVar >= 0);
-        SingleF_ConstrM3.back().push_back(IndexVar);
-      }
-    }
-  }
-
-  void InitTwiceEdge_Constr() {
-
-    TwiceEdge_ConstrM3.clear();
-
-    std::map<std::pair<int, int>, std::vector<int>> EdgeNodesM3;
-
-    for (size_t i = 0; i < InternalFaces.size(); i++)
-      for (size_t j = 0; j < InternalFaces[i].size(); j++) {
-        int IndexV0 = InternalFaces[i][j];
-        int IndexV1 = InternalFaces[i][(j + 1) % InternalFaces[i].size()];
-
-        std::vector<int> NodesIdxM3;
-        Field::FrameFieldM3Graph::NodesOfElem(i, NodesIdxM3);
-        assert(NodesIdxM3.size() == 3);
-        std::pair<int, int> Key(std::min(IndexV0, IndexV1),
-                                std::max(IndexV0, IndexV1));
-
-        for (size_t k = 0; k < NodesIdxM3.size(); k++) {
-          int IndexN = NodesIdxM3[k];
-          if (!IsVariableM3(IndexN))
-            continue;
-
-          int IndexVar = M3NodeToVar[IndexN];
-          assert(IndexVar >= 0);
-          EdgeNodesM3[Key].push_back(IndexVar);
-        }
-      }
-
-    std::map<std::pair<int, int>, std::vector<int>>::iterator IteMap;
-    for (IteMap = EdgeNodesM3.begin(); IteMap != EdgeNodesM3.end(); IteMap++) {
-      std::vector<int> NodesOfEdge = (*IteMap).second;
-      std::sort(NodesOfEdge.begin(), NodesOfEdge.end());
-      NodesOfEdge.erase(std::unique(NodesOfEdge.begin(), NodesOfEdge.end()),
-                        NodesOfEdge.end());
-      if (NodesOfEdge.size() < 3)
-        continue;
-      TwiceEdge_ConstrM3.push_back(NodesOfEdge);
-    }
-  }
-
-  // // for the border edges a different kind of constraint
-  // std::vector<std::vector<int>> EdgeLabel_ExitConstr;
-
-  void InitInternalTangentNodes_Constr() {
-    Internal_TangentNodes_Constr.clear();
-    for (size_t i = 0; i < M3Graph.InternalTangentConstr.size(); i++) {
-      std::vector<int> CurrTangVar;
-      for (size_t j = 0; j < M3Graph.InternalTangentConstr[i].size(); j++) {
-        int IndexN = M3Graph.InternalTangentConstr[i][j];
-        if (!IsVariableM3(IndexN))
-          continue;
-        int IndexVar = M3NodeToVar[IndexN];
-        assert(IndexVar >= 0);
-        assert(IndexVar < M3VarToNode.size());
-        CurrTangVar.push_back(IndexVar);
-      }
-
-      if (CurrTangVar.size() <= 1)
-        continue;
-      Internal_TangentNodes_Constr.push_back(CurrTangVar);
-    }
-  }
-
-  void InitBorderTangentNodes_Constr() {
-    Border_TangentNodes_Constr.clear();
-    for (size_t i = 0; i < M3Graph.BorderTangentConstr.size(); i++) {
-      std::vector<int> CurrTangVar;
-      for (size_t j = 0; j < M3Graph.BorderTangentConstr[i].size(); j++) {
-        int IndexN = M3Graph.BorderTangentConstr[i][j];
-        if (!IsVariableM3(IndexN))
-          continue;
-        int IndexVar = M3NodeToVar[IndexN];
-        assert(IndexVar >= 0);
-        assert(IndexVar < M3VarToNode.size());
-        CurrTangVar.push_back(IndexVar);
-      }
-
-      if (CurrTangVar.size() <= 1)
-        continue;
-      Border_TangentNodes_Constr.push_back(CurrTangVar);
-    }
-  }
-
-  void InitSingleLabelF_Constr() {
-
-    EdgeLabel_Continuation_Constr.clear();
-
-    for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
-
-      int IndexN0 = i;
-      if (!IsVariableM3(IndexN0))
-        continue;
-
-      std::vector<std::vector<int>> LabelVars;
-      int IndexVar0 = M3NodeToVar[IndexN0];
-      assert(IndexVar0 >= 0);
-
-      // one label for each edge
-      LabelVars.resize(3);
-
-      for (size_t l = 0; l < 3; l++) {
-
-        int IndexLab = l;
-        std::vector<int> IndexNeigh;
-        std::vector<ScalarType> WeightNeigh;
-        M3Graph.ActiveNeigh(IndexN0, IndexLab, IndexNeigh, WeightNeigh);
-
-        for (size_t j = 0; j < IndexNeigh.size(); j++) {
-          int IndexN1 = IndexNeigh[j];
-          assert(IndexLab >= 0);
-          assert(IndexLab < 3);
-          // if (!IsVariableM3(IndexN1))
-          //   continue;
-          assert(IsVariableM3(IndexN1));
-
-          int IndexVar1 = M3NodeToVar[IndexN1];
-          assert(IndexVar1 >= 0);
-          LabelVars[IndexLab].push_back(IndexVar1);
-        }
-      }
-
-      for (size_t j = 0; j < LabelVars.size(); j++) {
-        // if (LabelVars[j].size() < 2)
-        //   continue;
-
-        std::set<int> LabelVarsSet(LabelVars[j].begin(), LabelVars[j].end());
-        assert(LabelVarsSet.size() == LabelVars[j].size());
-
-        bool IsExitNodeLab = M3Graph.IsExitLabel(IndexN0, j);
-        // if no exit separate them so different constraint
-        if (!IsExitNodeLab) {
-          EdgeLabel_Continuation_Constr.resize(
-              EdgeLabel_Continuation_Constr.size() + 1);
-          EdgeLabel_Continuation_Constr.back().first = IndexVar0;
-          EdgeLabel_Continuation_Constr.back().second = LabelVars[j];
-        }
-      }
-    }
-  }
-
-  bool PrintSolution() {
-    std::cout << "** M3 **" << std::endl;
-    for (size_t i = 0; i < M3Solution.size(); i++) {
-      if (!M3Solution[i])
-        continue;
-      std::cout << "Chosen M3 Variable " << i << std::endl;
-      std::cout << "Corresponding to M3 Node " << M3VarToNode[i] << std::endl;
-    }
-  }
-
+  // OPTIMIZATION OF COEFFICIENT FOR GUROBI SOLVE
+  // this one check if there are some big non optimized weight
   void CheckBigM(GRBModel &model) {
     for (int i = 0; i < model.get(GRB_IntAttr_NumConstrs); i++) {
       GRBConstr c = model.getConstr(i);
@@ -477,6 +142,7 @@ private:
     }
   }
 
+  // check distribution of coefficients of constraints
   void CoeffDistribution(GRBModel &model, ScalarType &minC, ScalarType &maxC,
                          ScalarType &avgC) {
     minC = 0;
@@ -519,6 +185,7 @@ private:
     avgC = std::accumulate(coeffs.begin(), coeffs.end(), 0.0) / coeffs.size();
   }
 
+  // check distribution of objective function
   void ObjDistribution(GRBModel &model, ScalarType &minC, ScalarType &maxC,
                        ScalarType &avgC) {
     minC = 0;
@@ -547,6 +214,7 @@ private:
            objCoeffs.size();
   }
 
+  // rescale the objective function for better gurobi performance
   void RescaleObjFunctions(GRBModel &model, const double maxConstraintCoeff,
                            const double maxObjCoeff,
                            bool breaks_symmetry = false) {
@@ -594,8 +262,10 @@ private:
     std::cout << "✅ Model rescaled successfully." << std::endl;
   }
 
+  // initialize the node variables for Gurobi solve
   void InitNodeVariables(const ExtractParam &ExtrP, GRBModel &model,
                          std::vector<GRBVar> &M3NodeVars) {
+
     std::set<int> HardConstrNodesSet(ExtrP.HardNodes.begin(),
                                      ExtrP.HardNodes.end());
     std::set<int> SoftConstrNodesSet(ExtrP.SoftNodes.begin(),
@@ -603,11 +273,12 @@ private:
 
     // *** VARIABLE DECLARATION ***
     // add M3 variables
-    M3NodeVars = std::vector<GRBVar>(M3VarToNode.size());
-    for (int i = 0; i < M3VarToNode.size(); ++i) {
-      int IndexN = M3VarToNode[i];
+    M3NodeVars = std::vector<GRBVar>(M3Constraints.M3VarToNode.size());
+
+    for (int i = 0; i < M3Constraints.M3VarToNode.size(); ++i) {
+      int IndexN = M3Constraints.M3VarToNode[i];
       ScalarType ObjW = pow(M3Graph.NodeW[IndexN], POW_EXP);
-      //ScalarType ObjW = DistFunct[IndexN];
+      // ScalarType ObjW = DistFunct[IndexN];
 
       // in this case only weight the links
       if (ExtrP.OType == ConnOBJ)
@@ -630,20 +301,22 @@ private:
     }
   }
 
+  // initialize the node-to-node link variables
+  //  for Gurobi solve (in case used)
   void InitLinkVariables(const ExtractParam &ExtrP, GRBModel &model,
                          const std::vector<GRBVar> &M3NodeVars,
                          std::vector<GRBVar> &M3LinkVars) {
-    M3LinkVars.resize(M3LinkVarToNodes.size());
+    M3LinkVars.resize(M3Constraints.M3LinkVarToNodes.size());
     for (int i = 0; i < M3LinkVars.size(); ++i) {
-      ScalarType LinkW = pow(M3LinkVarWeight[i], POW_EXP);
+      ScalarType LinkW = pow(M3Constraints.M3LinkVarWeight[i], POW_EXP);
       M3LinkVars[i] = model.addVar(0.0, 1.0, LinkW, GRB_BINARY,
                                    "Link_W" + std::to_string(i));
     }
 
     // *** link the variables to connections in case need for weighting ***
-    for (size_t i = 0; i < M3LinkVarToNodes.size(); i++) {
-      int IndexVarM3Node0 = M3LinkVarToNodes[i].first;
-      int IndexVarM3Node1 = M3LinkVarToNodes[i].second;
+    for (size_t i = 0; i < M3Constraints.M3LinkVarToNodes.size(); i++) {
+      int IndexVarM3Node0 = M3Constraints.M3LinkVarToNodes[i].first;
+      int IndexVarM3Node1 = M3Constraints.M3LinkVarToNodes[i].second;
       int IndexVarLink = i;
       assert(IndexVarLink <= M3LinkVars.size());
       assert(IndexVarM3Node0 <= M3NodeVars.size());
@@ -664,15 +337,18 @@ private:
                                        const std::vector<GRBVar> &M3NodeVars,
                                        bool SoftConstr) {
     // ADD EDGE LABEL CONSTRAINT IF SELECTED A FACE SHOULD SELECT NEIGHBOURS
-    for (size_t i = 0; i < EdgeLabel_Continuation_Constr.size(); i++) {
+    for (size_t i = 0; i < M3Constraints.EdgeLabel_Continuation_Constr.size();
+         i++) {
       GRBLinExpr upper_bound;
-      int IndexVar0 = EdgeLabel_Continuation_Constr[i].first;
+      int IndexVar0 = M3Constraints.EdgeLabel_Continuation_Constr[i].first;
       assert(IndexVar0 < M3NodeVars.size());
       assert(IndexVar0 >= 0);
 
-      for (size_t j = 0; j < EdgeLabel_Continuation_Constr[i].second.size();
+      for (size_t j = 0;
+           j < M3Constraints.EdgeLabel_Continuation_Constr[i].second.size();
            j++) {
-        int IndexVar1 = EdgeLabel_Continuation_Constr[i].second[j];
+        int IndexVar1 =
+            M3Constraints.EdgeLabel_Continuation_Constr[i].second[j];
         assert(IndexVar0 != IndexVar1);
         assert(IndexVar1 < M3NodeVars.size());
         assert(IndexVar1 >= 0);
@@ -696,10 +372,10 @@ private:
   void AddSingleFaceConstraint(GRBModel &model,
                                const std::vector<GRBVar> &M3NodeVars,
                                bool SoftConstr) {
-    for (size_t i = 0; i < SingleF_ConstrM3.size(); i++) {
+    for (size_t i = 0; i < M3Constraints.SingleF_ConstrM3.size(); i++) {
       GRBLinExpr lin_constr;
-      for (size_t j = 0; j < SingleF_ConstrM3[i].size(); j++) {
-        int IndexV = SingleF_ConstrM3[i][j];
+      for (size_t j = 0; j < M3Constraints.SingleF_ConstrM3[i].size(); j++) {
+        int IndexV = M3Constraints.SingleF_ConstrM3[i][j];
         lin_constr += M3NodeVars[IndexV];
       }
       if (!SoftConstr) {
@@ -721,10 +397,10 @@ private:
   void AddTwiceEdgeConstraint(GRBModel &model,
                               const std::vector<GRBVar> &M3NodeVars,
                               bool SoftConstr) {
-    for (size_t i = 0; i < TwiceEdge_ConstrM3.size(); i++) {
+    for (size_t i = 0; i < M3Constraints.TwiceEdge_ConstrM3.size(); i++) {
       GRBLinExpr twice_constr;
-      for (size_t j = 0; j < TwiceEdge_ConstrM3[i].size(); j++) {
-        int IndexVar = TwiceEdge_ConstrM3[i][j];
+      for (size_t j = 0; j < M3Constraints.TwiceEdge_ConstrM3[i].size(); j++) {
+        int IndexVar = M3Constraints.TwiceEdge_ConstrM3[i][j];
         assert(IndexVar >= 0);
         assert(IndexVar < M3NodeVars.size());
         twice_constr += M3NodeVars[IndexVar];
@@ -748,15 +424,17 @@ private:
                                     const std::vector<GRBVar> &M3NodeVars,
                                     bool ImposeContinuity, bool SoftConstr) {
 
-    for (size_t i = 0; i < Internal_TangentNodes_Constr.size(); i++) {
+    for (size_t i = 0; i < M3Constraints.Internal_TangentNodes_Constr.size();
+         i++) {
 
       // if (EdgeLabel_ExitConstr[i].size() <= 1)
-      if (Internal_TangentNodes_Constr[i].size() <= 1)
+      if (M3Constraints.Internal_TangentNodes_Constr[i].size() <= 1)
         continue;
       GRBLinExpr upper_bound;
 
-      for (size_t j = 0; j < Internal_TangentNodes_Constr[i].size(); j++) {
-        int IndexVar = Internal_TangentNodes_Constr[i][j];
+      for (size_t j = 0;
+           j < M3Constraints.Internal_TangentNodes_Constr[i].size(); j++) {
+        int IndexVar = M3Constraints.Internal_TangentNodes_Constr[i][j];
 
         assert(IndexVar < M3NodeVars.size());
         assert(IndexVar >= 0);
@@ -800,15 +478,17 @@ private:
   void AddBorderTangentConstraint(GRBModel &model,
                                   const std::vector<GRBVar> &M3NodeVars,
                                   bool SoftConstr) {
-    for (size_t i = 0; i < Border_TangentNodes_Constr.size(); i++) {
+    for (size_t i = 0; i < M3Constraints.Border_TangentNodes_Constr.size();
+         i++) {
 
       // if (EdgeLabel_ExitConstr[i].size() <= 1)
-      if (Border_TangentNodes_Constr[i].size() <= 1)
+      if (M3Constraints.Border_TangentNodes_Constr[i].size() <= 1)
         continue;
       GRBLinExpr upper_bound;
 
-      for (size_t j = 0; j < Border_TangentNodes_Constr[i].size(); j++) {
-        int IndexVar = Border_TangentNodes_Constr[i][j];
+      for (size_t j = 0; j < M3Constraints.Border_TangentNodes_Constr[i].size();
+           j++) {
+        int IndexVar = M3Constraints.Border_TangentNodes_Constr[i][j];
 
         assert(IndexVar < M3NodeVars.size());
         assert(IndexVar >= 0);
@@ -834,9 +514,9 @@ private:
                                      const std::vector<GRBVar> &M3NodeVars,
                                      bool SoftConstr) {
 
-    for (size_t i = 0; i < Avoid_Connections.size(); i++) {
-      int IndexVar0 = Avoid_Connections[i].first;
-      int IndexVar1 = Avoid_Connections[i].second;
+    for (size_t i = 0; i < M3Constraints.Avoid_Connections.size(); i++) {
+      int IndexVar0 = M3Constraints.Avoid_Connections[i].first;
+      int IndexVar1 = M3Constraints.Avoid_Connections[i].second;
 
       assert(IndexVar0 >= 0);
       assert(IndexVar1 >= 0);
@@ -890,10 +570,8 @@ private:
               << "  ratio=" << maxObjC / std::max(minObjC, 1e-9) << std::endl;
   }
 
-  bool SolveGurobi(const ExtractParam &ExtrP, std::vector<int> &ChosenF,
-                   std::vector<int> &M3Nodes) {
+  bool SolveGurobi(const ExtractParam &ExtrP, std::vector<int> &M3Nodes) {
 
-    ChosenF.clear();
     M3Nodes.clear();
 
     ScalarType DeltaMin = 0.00000001;
@@ -931,7 +609,7 @@ private:
       }
 
       // ADD internal Label CONSTR
-      if (ExtrP.CType == FaceBased) {
+      if (ExtrP.CType == SheetSolve_ConstraintsM3<ScalarType>::FaceBased) {
 
         AddFoilFaceContinuityConstraint(model, M3NodeVars,
                                         ExtrP.SoftSurfaceContrinuationM3);
@@ -977,6 +655,7 @@ private:
 
       model.optimize();
 
+      int ChosenN = 0;
       // COLLECT THE RESULT
       if (model.get(GRB_IntAttr_Status) == GRB_OPTIMAL) {
         std::cout << "Optimal solution found:\n";
@@ -989,16 +668,17 @@ private:
 
           if (ValueVar > 0.5) {
             M3Solution.push_back(true);
-            int IndexN = M3VarToNode[i];
+            int IndexN = M3Constraints.M3VarToNode[i];
             M3Nodes.push_back(IndexN);
             int IndexF = Field::FrameFieldM3Graph::ElemOfNode(IndexN);
-            ChosenF.push_back(IndexF);
+            // ChosenF.push_back(IndexF);
+            ChosenN++;
           } else {
             M3Solution.push_back(false);
           }
         }
 
-        std::cout << "Chosen " << ChosenF.size() << " faces" << std::endl;
+        std::cout << "Chosen " << ChosenN << " faces" << std::endl;
 
         // PrintSolution();
         // CheckSolution();
@@ -1017,147 +697,7 @@ private:
     return false;
   }
 
-  void ExtractSubMeshes(
-      const std::vector<Geo::Point3<ScalarType>> &OriginalVertPos,
-      std::vector<std::vector<Geo::Point3<ScalarType>>> &FoilVertices,
-      std::vector<std::vector<std::vector<int>>> &FoilFaces,
-      std::vector<std::vector<int>> &OriginalFaceIdx,
-      std::vector<std::vector<int>> &OriginalVertIdx) {
-    FoilFaces.clear();
-    FoilVertices.clear();
-    OriginalFaceIdx.clear();
-    OriginalVertIdx.clear();
-
-    // get the selected nodes
-    std::set<int> SelectedNodes;
-    for (size_t i = 0; i < M3Solution.size(); i++) {
-      if (!M3Solution[i])
-        continue;
-      int IndexN = M3VarToNode[i];
-      SelectedNodes.insert(IndexN);
-    }
-
-    // split into parts
-    std::set<int> VisitedNodes;
-    std::vector<std::vector<int>> Groups;
-    for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
-      // if not selected
-      if (SelectedNodes.count(i) == 0)
-        continue;
-
-      // if already visited
-      if (VisitedNodes.count(i) > 0)
-        continue;
-
-      // then create a new group
-      Groups.resize(Groups.size() + 1);
-
-      // then get connected components
-      std::vector<int> ExplStack;
-      ExplStack.push_back(i);
-      do {
-        int CurrN = ExplStack.back();
-        ExplStack.pop_back();
-        int CurrF = Field::FrameFieldM3Graph::ElemOfNode(CurrN);
-        // push current node
-        Groups.back().push_back(CurrF);
-        VisitedNodes.insert(CurrN);
-
-        // explore neighbours
-        std::vector<int> IndexNeigh;
-        std::vector<ScalarType> WeightNeigh;
-        // Field::FrameFieldGraph::OrthoNodesFrameField(int IndexN, int
-        // &OrthoN)
-        M3Graph.ActiveNeigh(CurrN, IndexNeigh, WeightNeigh);
-        for (size_t j = 0; j < IndexNeigh.size(); j++) {
-
-          // // if not enabled link
-          // if (!Graph.IsEnabledL(CurrN, j))
-          //   continue;
-          int NeighNode = IndexNeigh[j]; // Graph.NeighNode(CurrN, j);
-
-          // if not active
-          if (SelectedNodes.count(NeighNode) == 0)
-            continue;
-
-          // if already explored
-          if (VisitedNodes.count(NeighNode) > 0)
-            continue;
-
-          // otherwise push in the stack
-          ExplStack.push_back(NeighNode);
-        }
-
-      } while (!ExplStack.empty());
-    }
-
-    // transform groups into faces
-    for (size_t i = 0; i < Groups.size(); i++) {
-      FoilFaces.resize(FoilFaces.size() + 1);
-      FoilVertices.resize(FoilVertices.size() + 1);
-      OriginalFaceIdx.resize(OriginalFaceIdx.size() + 1);
-      OriginalVertIdx.resize(OriginalVertIdx.size() + 1);
-
-      std::sort(Groups[i].begin(), Groups[i].end());
-      Groups[i].erase(std::unique(Groups[i].begin(), Groups[i].end()),
-                      Groups[i].end());
-
-      CopySubMesh<ScalarType>(OriginalVertPos, InternalFaces, Groups[i],
-                              FoilVertices.back(), FoilFaces.back(),
-                              OriginalVertIdx.back(), OriginalFaceIdx.back());
-    }
-  }
-
 public:
-  void InitConstraints() {
-    InitVariableMap();
-    M3Solution = std::vector<bool>(M3VarToNode.size(), false);
-    std::cout << "Num M3 Nodes Variables: " << M3VarToNode.size() << std::endl;
-
-    // int MaxSize;
-    // ScalarType AVGSize;
-
-    SingleF_ConstrM3.clear();
-    InitSingleF_ConstrM3();
-    std::cout << "Initialized " << SingleF_ConstrM3.size()
-              << " single face constraint" << std::endl;
-    // ConstraintStats(SingleF_ConstrM3, MaxSize, AVGSize);
-    // std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize <<
-    // std::endl;
-
-    TwiceEdge_ConstrM3.clear();
-    InitTwiceEdge_Constr();
-    std::cout << "Initialized " << TwiceEdge_ConstrM3.size()
-              << " M3 twice edge constraint" << std::endl;
-    // ConstraintStats(TwiceEdge_ConstrM3, MaxSize, AVGSize);
-    // std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize <<
-    // std::endl;
-
-    EdgeLabel_Continuation_Constr.clear();
-    Internal_TangentNodes_Constr.clear();
-    Border_TangentNodes_Constr.clear();
-
-    InitSingleLabelF_Constr();
-
-    InitInternalTangentNodes_Constr();
-    std::cout << "Initialized " << EdgeLabel_Continuation_Constr.size()
-              << " edge label constraint" << std::endl;
-
-    InitAvoidConnection_ConstrM3();
-    std::cout << "Initialized " << Avoid_Connections.size()
-              << " connection avoid constraint" << std::endl;
-    // ConstraintStats(EdgeLabel_Continuation_Constr, MaxSize, AVGSize);
-    // std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize <<
-    // std::endl;
-
-    InitBorderTangentNodes_Constr();
-    std::cout << "Initialized " << Border_TangentNodes_Constr.size()
-              << " border tangent constraint" << std::endl;
-    // ConstraintStats(Border_TangentNodes_Constr, MaxSize, AVGSize);
-    // std::cout << "MaxSize " << MaxSize << " AVGSize " << AVGSize <<
-    // std::endl;
-  }
-
   std::vector<bool> M3Solution;
 
   void ExtractSurfacesFormSolution(
@@ -1170,20 +710,18 @@ public:
       const std::vector<std::vector<int>> &ReprojectFaces,
       const std::vector<std::pair<int, int>> &FeatureE,
       const std::vector<int> &Corners, int SmoothSteps = 20) {
-    
+
     std::vector<bool> CompleteM3Solution(M3Graph.NumNodes(), false);
     for (size_t i = 0; i < M3Solution.size(); i++) {
       if (M3Solution[i]) {
-        int IndexN = M3VarToNode[i];
+        int IndexN = M3Constraints.M3VarToNode[i];
         CompleteM3Solution[IndexN] = true;
       }
     }
 
-    SheetExtractorM3<ScalarType>::ExtractSubMeshes(M3Graph,CompleteM3Solution,
-                                                    InternalFaces,
-                                                    OriginalVertPos, FoilVertices,
-                                                    FoilFaces, OriginalFaceIdx,
-                                                    OriginalVertIdx);
+    SheetExtractorM3<ScalarType>::ExtractSubMeshes(
+        M3Graph, CompleteM3Solution, InternalFaces, OriginalVertPos,
+        FoilVertices, FoilFaces, OriginalFaceIdx, OriginalVertIdx);
 
     if (SmoothSteps == 0)
       return;
@@ -1193,56 +731,7 @@ public:
                                          SmoothSteps);
   }
 
-  int NumConstraints() {
-    int size_constr = SingleF_ConstrM3.size();
-    size_constr += TwiceEdge_ConstrM3.size();
-    size_constr += EdgeLabel_Continuation_Constr.size();
-    size_constr += Internal_TangentNodes_Constr.size();
-    size_constr += Border_TangentNodes_Constr.size();
-    size_constr += Avoid_Connections.size();
-    return size_constr;
-  }
-
-  void ConstraintsStats(ScalarType &AvgVal, int &MaxVal) {
-    MaxVal = 0;
-    AvgVal = 0;
-    ScalarType Num = NumConstraints();
-
-    for (size_t i = 0; i < SingleF_ConstrM3.size(); i++) {
-      MaxVal = std::max(MaxVal, (int)SingleF_ConstrM3[i].size());
-      AvgVal += (ScalarType)SingleF_ConstrM3[i].size();
-    }
-    for (size_t i = 0; i < TwiceEdge_ConstrM3.size(); i++) {
-      MaxVal = std::max(MaxVal, (int)TwiceEdge_ConstrM3[i].size());
-      AvgVal += (ScalarType)TwiceEdge_ConstrM3[i].size();
-    }
-    for (size_t i = 0; i < Internal_TangentNodes_Constr.size(); i++) {
-      MaxVal = std::max(MaxVal, (int)Internal_TangentNodes_Constr[i].size());
-      AvgVal += (ScalarType)Internal_TangentNodes_Constr[i].size();
-    }
-    for (size_t i = 0; i < Border_TangentNodes_Constr.size(); i++) {
-      MaxVal = std::max(MaxVal, (int)Border_TangentNodes_Constr[i].size());
-      AvgVal += (ScalarType)Border_TangentNodes_Constr[i].size();
-    }
-
-    for (size_t i = 0; i < EdgeLabel_Continuation_Constr.size(); i++) {
-      MaxVal =
-          std::max(MaxVal, (int)EdgeLabel_Continuation_Constr[i].second.size());
-      AvgVal += (ScalarType)EdgeLabel_Continuation_Constr[i].second.size();
-    }
-
-    for (size_t i = 0; i < Avoid_Connections.size(); i++) {
-      MaxVal = std::max(MaxVal, 2);
-      AvgVal += (ScalarType)2;
-    }
-    if (Num > 0)
-      AvgVal /= Num;
-  }
-
-  int NumVariables() { return M3VarToNode.size(); }
-
-  bool Solve(const ExtractParam &ExtrP, std::vector<int> &ChosenF,
-             std::vector<bool> &MatchedSeed)
+  bool Solve(const ExtractParam &ExtrP, std::vector<bool> &MatchedSeed)
   // bool cut_space = false)
   {
     // InitConstraints();
@@ -1254,7 +743,7 @@ public:
     Seeds.insert(Seeds.end(), ExtrP.HardNodes.begin(), ExtrP.HardNodes.end());
     MatchedSeed.clear();
 
-    //InitSeedDistance(Seeds);
+    // InitSeedDistance(Seeds);
 
     if (ExtrP.SoftNodes.size() > 0)
       MatchedSeed = std::vector<bool>(ExtrP.SoftNodes.size(), false);
@@ -1265,7 +754,7 @@ public:
     auto time1 = std::chrono::high_resolution_clock::now();
 
     std::vector<int> M3NodesSel;
-    bool solved = SolveGurobi(ExtrP, ChosenF, M3NodesSel);
+    bool solved = SolveGurobi(ExtrP, M3NodesSel);
 
     auto time2 = std::chrono::high_resolution_clock::now();
 
@@ -1318,9 +807,10 @@ public:
     return solved;
   }
 
-  SheetSolveILPM3(Geo::LabelNeighOrientedGraph<ScalarType> &_M3Graph,
-                      std::vector<std::vector<int>> &_InternalFaces)
-      : M3Graph(_M3Graph), InternalFaces(_InternalFaces) {}
+  SheetSolveILPM3(const SheetSolve_ConstraintsM3<ScalarType> &_M3Constraints,
+                  Geo::LabelNeighOrientedGraph<ScalarType> &_M3Graph,
+                  std::vector<std::vector<int>> &_InternalFaces)
+      : M3Constraints(_M3Constraints), M3Graph(_M3Graph),
+        InternalFaces(_InternalFaces) {}
 };
-
 #endif

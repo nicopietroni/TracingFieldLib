@@ -488,13 +488,12 @@ public:
                                          SmoothSteps);
   }
 
-  void Solve(const AF_ExtractParam &_ExtrP, std::vector<int> &ChosenF,
+  void Solve(const AF_ExtractParam &_ExtrP,
              std::vector<bool> &MatchedSeed) {
     ExtrP = _ExtrP;
 
     Reset();
 
-    ChosenF.clear();
     InitSeedDistance(ExtrP);
 
     bool has_expanded = false;
