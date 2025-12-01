@@ -92,6 +92,12 @@ public:
   // for each pair of nodes the variable (this is when link variable used)
   std::map<std::pair<int, int>, int> M3NodesToLinkVar;
 
+  // current solution
+  std::vector<bool> M3Solution;
+
+  //true if the current solution is valid
+  bool BeenSolved;
+
   bool IsVariableM3(int IndexN) const {
     // return false;
     if (!M3Graph.IsEnabled(IndexN))
@@ -102,11 +108,19 @@ public:
   }
 
 private:
+  void InitBaseVariableValues(const std::vector<int> &Seeds) {
+    M3Solution = std::vector<bool>(M3Graph.NumNodes(), false);
+    for (size_t i = 0; i < Seeds.size(); i++)
+      M3Solution[Seeds[i]] = true;
+    BeenSolved=false;
+  }
+
   void InitVariableMap() {
 
     M3NodeToVar = std::vector<int>(M3Graph.NumNodes(), -1);
     M3VarToNode.clear();
 
+    // if (SortFrom.size() == 0) {
     int CurrV = 0;
     for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
       int IndexN = i;
@@ -117,6 +131,26 @@ private:
       M3VarToNode.push_back(IndexN);
       CurrV++;
     }
+    // } else {
+    //   std::vector<ScalarType> NodeDist;
+    //   InitSeedDistance(SortFrom, NodeDist);
+    //   std::vector<std::pair<ScalarType, int>> DistNode;
+    //   for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
+    //     int IndexN = i;
+    //     if (!IsVariableM3(IndexN))
+    //       continue;
+    //     assert(IndexN < NodeDist.size());
+
+    //     ScalarType CurrD = NodeDist[IndexN];
+    //     DistNode.push_back(std::pair<ScalarType, int>(CurrD, IndexN));
+    //   }
+    //   std::sort(DistNode.begin(), DistNode.end());
+    //   for (size_t i = 0; i < DistNode.size(); i++) {
+    //     int IndexN=DistNode[i].second;
+    //     M3NodeToVar[IndexN] = i;
+    //     M3VarToNode.push_back(IndexN);
+    //   }
+    // }
 
     M3LinkVarToNodes.clear();
     M3NodesToLinkVar.clear();
@@ -311,7 +345,7 @@ private:
 
         bool IsExitNodeLab = M3Graph.IsExitLabel(IndexN0, j);
         // if no exit separate them so different constraint
-        if (!IsExitNodeLab) {
+        if ((!IsExitNodeLab)&&(LabelVars[j].size()>0)) {
           EdgeLabel_Continuation_Constr.resize(
               EdgeLabel_Continuation_Constr.size() + 1);
           EdgeLabel_Continuation_Constr.back().first = IndexVar0;
@@ -362,6 +396,20 @@ private:
   }
 
 public:
+
+  ScalarType SolutionW(const std::vector<bool> &CurrentVarSol)
+  {
+    assert(CurrentVarSol.size()==M3Graph.NumNodes());
+    std::vector<int> TestNode;
+    for (size_t i=0;i<CurrentVarSol.size();i++)
+    {
+      if (!CurrentVarSol[i])continue;
+      TestNode.push_back(i);
+    }
+    ScalarType CurrW= Geo::LabelGraphFuctions<ScalarType>::NodesWeight(M3Graph,TestNode);
+    return CurrW;
+  }
+
   int NumConstraints() {
     int size_constr = SingleF_ConstrM3.size();
     size_constr += TwiceEdge_ConstrM3.size();
@@ -410,7 +458,11 @@ public:
 
   int NumVariables() { return M3VarToNode.size(); }
 
-  void InitConstraints(const std::vector<int> &Seeds) {
+  void InitConstraints(const std::vector<int> &Seeds,
+                       bool reset_curr_solution = false,
+                       int max_dist_steps = 5,
+                       bool print_info=true) 
+  {
 
     M3NodeToVar.clear();
     M3VarToNode.clear();
@@ -426,41 +478,64 @@ public:
     if (Seeds.size() > 0) {
       Geo::LabelGraphFuctions<ScalarType>::DisableNotUsefulFromSeed(
           M3Graph, Seeds, DisabledN);
-      std::cout << " Disabled " << DisabledN.size() << " out of " << NumEnabled
-                << std::endl;
+      if (print_info)
+        std::cout << " Disabled " << DisabledN.size() << " out of " << NumEnabled
+                  << std::endl;
     }
 
+    if ((!reset_curr_solution) && (M3Solution.size() == M3Graph.NumNodes()) &&
+        (max_dist_steps > 0)) {
+      std::vector<int> CurrSurfNodes;
+      for (size_t i = 0; i < M3Solution.size(); i++) {
+        if (!M3Solution[i])
+          continue;
+        CurrSurfNodes.push_back(i);
+      }
+      std::vector<int> Disabled1;
+      Geo::LabelGraphFuctions<ScalarType>::DisableDistantLinksFromSeed(M3Graph, CurrSurfNodes, 
+                                  Disabled1,max_dist_steps);
+      
+      DisabledN.insert(DisabledN.end(),Disabled1.begin(),Disabled1.end());
+    }
+
+    if ((reset_curr_solution) || (M3Solution.size() != M3Graph.NumNodes()))
+      InitBaseVariableValues(Seeds);
+
     InitVariableMap();
-    std::cout << "Num M3 Nodes Variables: " << M3VarToNode.size() << std::endl;
+    if (print_info)
+      std::cout << "Num M3 Nodes Variables: " << M3VarToNode.size() << std::endl;
 
     InitSingleF_ConstrM3();
-    std::cout << "Initialized " << SingleF_ConstrM3.size()
-              << " single face constraint" << std::endl;
+    if (print_info)
+      std::cout << "Initialized " << SingleF_ConstrM3.size()
+                << " single face constraint" << std::endl;
 
     InitInternalTangentNodes_Constr();
-    std::cout << "Initialized " << Internal_TangentNodes_Constr.size()
-              << " edge label constraint" << std::endl;
-
+    if (print_info)
+      std::cout << "Initialized " << Internal_TangentNodes_Constr.size()
+                << " edge label constraint" << std::endl;
     InitAvoidConnection_ConstrM3();
-    std::cout << "Initialized " << Avoid_Connections.size()
-              << " connection avoid constraint" << std::endl;
+    if (print_info)
+      std::cout << "Initialized " << Avoid_Connections.size()
+                << " connection avoid constraint" << std::endl;
 
     InitBorderTangentNodes_Constr();
-    std::cout << "Initialized " << Border_TangentNodes_Constr.size()
-              << " border tangent constraint" << std::endl;
-
+    if (print_info)
+      std::cout << "Initialized " << Border_TangentNodes_Constr.size()
+                << " border tangent constraint" << std::endl;
     InitLabelContinuation_Constr();
-    std::cout << "Initialized " << EdgeLabel_Continuation_Constr.size()
-              << " edge label constraint" << std::endl;
+    if (print_info)
+      std::cout << "Initialized " << EdgeLabel_Continuation_Constr.size()
+                << " edge label constraint" << std::endl;
 
     /// re-enable the disabled node that are not attached to the seed
     for (size_t i = 0; i < DisabledN.size(); i++)
       M3Graph.EnableNode(DisabledN[i]);
   }
-
+  
   SheetSolve_ConstraintsM3(Geo::LabelNeighOrientedGraph<ScalarType> &_M3Graph,
                            std::vector<std::vector<int>> &_InternalFaces)
-      : M3Graph(_M3Graph), InternalFaces(_InternalFaces) {}
+      : M3Graph(_M3Graph), InternalFaces(_InternalFaces) {BeenSolved=false;}
 };
 
 #endif

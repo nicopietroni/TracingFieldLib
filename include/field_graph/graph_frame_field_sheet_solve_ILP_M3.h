@@ -56,7 +56,7 @@ template <class ScalarType> class SheetSolveILPM3 {
 public:
   // different types of energy minimization
   enum ObjType { FaceOBJ, ConnOBJ, FaceConnOBJ };
-  //enum ContinuityType { FaceBased, EdgeBased };
+  // enum ContinuityType { FaceBased, EdgeBased };
 
   struct ExtractParam {
     std::vector<int> HardNodes;
@@ -82,6 +82,7 @@ public:
     ObjType OType;
     bool FeasiblityOnly;
     bool OptimizeObj;
+    bool warmStart;
 
     typename SheetSolve_ConstraintsM3<ScalarType>::ContinuityType CType;
 
@@ -104,13 +105,15 @@ public:
       SoftBorderTangentM3 = false;
       SoftAvoidConnectionsM3 = false;
 
-      //CType = FaceBased;
-      CType=SheetSolve_ConstraintsM3<ScalarType>::FaceBased;
+      // CType = FaceBased;
+      CType = SheetSolve_ConstraintsM3<ScalarType>::FaceBased;
+
+      warmStart = true;
     }
   };
 
 private:
-  const SheetSolve_ConstraintsM3<ScalarType> &M3Constraints;
+  SheetSolve_ConstraintsM3<ScalarType> &M3Constraints;
 
   Geo::LabelNeighOrientedGraph<ScalarType> &M3Graph;
 
@@ -298,6 +301,23 @@ private:
       } else
         M3NodeVars[i] = model.addVar(0.0, 1.0, ObjW, GRB_BINARY,
                                      "M3_N" + std::to_string(i));
+    }
+
+    if (ExtrP.warmStart) {
+      assert(M3Constraints.M3Solution.size() == M3Graph.NumNodes());
+      int NumWarm = 0;
+      for (int i = 0; i < M3Constraints.M3VarToNode.size(); ++i) {
+        int IndexN = M3Constraints.M3VarToNode[i];
+        assert(IndexN >= 0);
+        assert(IndexN < M3Constraints.M3Solution.size());
+        bool WarmVal = M3Constraints.M3Solution[IndexN];
+        if (WarmVal) {
+          M3NodeVars[i].set(GRB_DoubleAttr_Start, 1.0);
+          NumWarm++;
+        } else
+          M3NodeVars[i].set(GRB_DoubleAttr_Start, 0.0);
+      }
+      std::cout << "Warm Variables set to 1: " << NumWarm << std::endl;
     }
   }
 
@@ -569,6 +589,52 @@ private:
               << "  avg=" << avgObjC
               << "  ratio=" << maxObjC / std::max(minObjC, 1e-9) << std::endl;
   }
+// class StopOnStagnation : public GRBCallback {
+// public:
+//     double bestObj = GRB_INFINITY;   // Best incumbent
+//     double lastImproveTime = 0.0;    // Time of last significant improvement
+//     double minImprove = 1.0;         // Minimum required improvement
+//     double windowSec = 20.0;         // Allowed stagnation time
+//     bool hasSolution = false;        // Track if at least one feasible sol was found
+
+// protected:
+//     void callback() override {
+
+//         double time = getDoubleInfo(GRB_CB_RUNTIME);
+
+//         // Called when a new incumbent solution is available
+//         if (where == GRB_CB_MIPSOL) {
+
+//             double obj = getDoubleInfo(GRB_CB_MIPSOL_OBJ);
+
+//             if (!hasSolution) {
+//                 // First feasible solution — MUST NOT STOP before this
+//                 hasSolution = true;
+//                 bestObj = obj;
+//                 lastImproveTime = time;
+//                 return;
+//             }
+
+//             // Improvement check
+//             if (bestObj - obj >= minImprove) {
+//                 bestObj = obj;
+//                 lastImproveTime = time;
+//             }
+//         }
+
+//         // After first feasible solution, check stagnation periodically
+//         if (where == GRB_CB_MIP && hasSolution) {
+
+//             double since = time - lastImproveTime;
+
+//             if (since >= windowSec) {
+//                 // Safe termination
+//                 throw GRBException("Stagnation detected", 7777);
+//             }
+//         }
+//     }
+// };
+
 
   bool SolveGurobi(const ExtractParam &ExtrP, std::vector<int> &M3Nodes) {
 
@@ -653,6 +719,10 @@ private:
       if (ExtrP.OptimizeObj)
         OptimizeCoefficients(model);
 
+      // StopOnStagnation cb;
+      // cb.minImprove = 1.0;   // require at least 5 units improvement
+      // cb.windowSec  = 20.0; 
+      // model.setCallback(&cb);
       model.optimize();
 
       int ChosenN = 0;
@@ -662,19 +732,19 @@ private:
 
         // Read back the solution for the variables
         // std::vector<int> solution(n);
-        M3Solution.clear();
+        M3Constraints.M3Solution.clear();
         for (int i = 0; i < M3NodeVars.size(); ++i) {
           double ValueVar = M3NodeVars[i].get(GRB_DoubleAttr_X);
 
           if (ValueVar > 0.5) {
-            M3Solution.push_back(true);
+            M3Constraints.M3Solution.push_back(true);
             int IndexN = M3Constraints.M3VarToNode[i];
             M3Nodes.push_back(IndexN);
             int IndexF = Field::FrameFieldM3Graph::ElemOfNode(IndexN);
             // ChosenF.push_back(IndexF);
             ChosenN++;
           } else {
-            M3Solution.push_back(false);
+            M3Constraints.M3Solution.push_back(false);
           }
         }
 
@@ -698,7 +768,7 @@ private:
   }
 
 public:
-  std::vector<bool> M3Solution;
+  // std::vector<bool> M3Solution;
 
   void ExtractSurfacesFormSolution(
       const std::vector<Geo::Point3<ScalarType>> &OriginalVertPos,
@@ -711,16 +781,8 @@ public:
       const std::vector<std::pair<int, int>> &FeatureE,
       const std::vector<int> &Corners, int SmoothSteps = 20) {
 
-    std::vector<bool> CompleteM3Solution(M3Graph.NumNodes(), false);
-    for (size_t i = 0; i < M3Solution.size(); i++) {
-      if (M3Solution[i]) {
-        int IndexN = M3Constraints.M3VarToNode[i];
-        CompleteM3Solution[IndexN] = true;
-      }
-    }
-
     SheetExtractorM3<ScalarType>::ExtractSubMeshes(
-        M3Graph, CompleteM3Solution, InternalFaces, OriginalVertPos,
+        M3Graph, M3Constraints.M3Solution, InternalFaces, OriginalVertPos,
         FoilVertices, FoilFaces, OriginalFaceIdx, OriginalVertIdx);
 
     if (SmoothSteps == 0)
@@ -804,10 +866,27 @@ public:
     std::cout << "** Time Solve : " << duration1.count() << " ** seconds\n";
     std::cout << "** Time Collect : " << duration2.count() << " ** seconds\n";
 
+    std::vector<bool> CompleteM3Solution(M3Graph.NumNodes(), false);
+    for (size_t i = 0; i < M3Constraints.M3Solution.size(); i++) {
+      if (M3Constraints.M3Solution[i]) {
+        int IndexN = M3Constraints.M3VarToNode[i];
+        CompleteM3Solution[IndexN] = true;
+      }
+    }
+
+    M3Constraints.M3Solution = CompleteM3Solution;
+
+    if (solved) {
+      ScalarType CurrW = M3Constraints.SolutionW(M3Constraints.M3Solution);
+      M3Constraints.BeenSolved = true;
+      std::cout << "Energy Solution ILP:" << CurrW << std::endl;
+    } else
+      M3Constraints.BeenSolved = false;
+
     return solved;
   }
 
-  SheetSolveILPM3(const SheetSolve_ConstraintsM3<ScalarType> &_M3Constraints,
+  SheetSolveILPM3(SheetSolve_ConstraintsM3<ScalarType> &_M3Constraints,
                   Geo::LabelNeighOrientedGraph<ScalarType> &_M3Graph,
                   std::vector<std::vector<int>> &_InternalFaces)
       : M3Constraints(_M3Constraints), M3Graph(_M3Graph),

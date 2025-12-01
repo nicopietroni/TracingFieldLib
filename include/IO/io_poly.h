@@ -63,7 +63,6 @@ bool LoadTetraMesh(std::string meshFile,
     fin>>str;
     fin>>n;
     assert(str==std::string("Vertices"));
-
     VertPos.clear();
     Connectivity.clear();
 

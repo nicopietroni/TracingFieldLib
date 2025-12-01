@@ -333,29 +333,47 @@ public:
   }
 
   static void
-  FilterSelectedFromSeed(LabelNeighOrientedGraph<ScalarType> &Graph,
-                            const std::vector<int> &SeedNodes,
-                            std::vector<bool> &SelectedNodes) 
-  {
-    //save thecurrent disabled nodes
-    std::vector<bool> SwapEnabled=Graph.EnabledN;
-    //disable all nodes
-    Graph.EnabledN=std::vector<bool>(Graph.NumNodes(),false);
-    //enable only the selected nodes
-    for(size_t i=0;i<SelectedNodes.size();i++)
-    {
-      if(SelectedNodes[i])  
-        Graph.EnabledN[i]=true;
+  DisableDistantLinksFromSeed(LabelNeighOrientedGraph<ScalarType> &Graph,
+                              const std::vector<int> &FromSeed,
+                              std::vector<int> &DisabledN, int max_dist_steps) {
+    Geo::TMark TempMark;
+    typename Geo::Geodesic<ScalarType>::GeodesicParam GeoP;
+    GeoP.Seeds = FromSeed;
+    GeoP.unitary_dist = true;
+    Geo::LabelGraphFuctions<ScalarType>::Dijkstra(Graph, TempMark, GeoP);
+    assert(GeoP.Dist.size() == Graph.NumNodes());
+
+    for (size_t i = 0; i < GeoP.Dist.size(); i++) {
+      if (!Graph.EnabledN[i])
+        continue;
+      if (GeoP.Dist[i] <= max_dist_steps)
+        continue;
+      Graph.DisableNode(i);
+      DisabledN.push_back(i);
     }
-    //then update the selected nodes based on connectivity from seeds
+  }
+
+  static void FilterSelectedFromSeed(LabelNeighOrientedGraph<ScalarType> &Graph,
+                                     const std::vector<int> &SeedNodes,
+                                     std::vector<bool> &SelectedNodes) {
+    // save thecurrent disabled nodes
+    std::vector<bool> SwapEnabled = Graph.EnabledN;
+    // disable all nodes
+    Graph.EnabledN = std::vector<bool>(Graph.NumNodes(), false);
+    // enable only the selected nodes
+    for (size_t i = 0; i < SelectedNodes.size(); i++) {
+      if (SelectedNodes[i])
+        Graph.EnabledN[i] = true;
+    }
+    // then update the selected nodes based on connectivity from seeds
     std::set<int> ActiveNodes;
     GetActiveFrom(Graph, SeedNodes, ActiveNodes);
     for (size_t i = 0; i < Graph.NumNodes(); i++) {
       if (ActiveNodes.count(i) == 0)
         SelectedNodes[i] = false;
     }
-    //restore the previous enabled nodes
-    Graph.EnabledN=SwapEnabled;
+    // restore the previous enabled nodes
+    Graph.EnabledN = SwapEnabled;
   }
 
   static bool CanRemoveByConnections(LabelNeighOrientedGraph<ScalarType> &Graph,
@@ -827,7 +845,9 @@ public:
   // Distances are returned through the reference vector 'dist'.
   // -----------------------------------------------------------------------------
   static void Dijkstra(const LabelNeighOrientedGraph<ScalarType> &Graph,
-                       Geo::TMark &TempMark, GeodesicParam &GeoP) {
+                       Geo::TMark &TempMark, GeodesicParam &GeoP,
+                       bool only_active=true,
+                       const std::set<int> &UseOnlyNodes=std::set<int>()) {
 
     TempMark.AllocateIfNeeded(Graph.NumNodes());
     TempMark.UnMarkAll();
@@ -837,6 +857,11 @@ public:
     std::vector<NodeDist> Heap;
     for (size_t i = 0; i < GeoP.Seeds.size(); i++) {
       int IndexN = GeoP.Seeds[i];
+
+      if ((UseOnlyNodes.size()>0)&&
+          (UseOnlyNodes.count(IndexN)==0))
+        continue;
+
       assert(!TempMark.IsMarked(IndexN));
       GeoP.Dist[IndexN] = 0;
       GeoP.Source[IndexN] = IndexN;
@@ -846,6 +871,8 @@ public:
       GeoP.InInterval.insert(IndexN);
       Heap.push_back(NodeDist(IndexN, 0));
     }
+
+    if (Heap.size()==0)return;
 
     std::make_heap(Heap.begin(), Heap.end());
 
@@ -862,12 +889,20 @@ public:
       assert(CurrNode < Graph.NumNodes());
       std::vector<int> NextNodes;
       std::vector<ScalarType> WeightNeigh;
-      Graph.ActiveNeigh(CurrNode, NextNodes, WeightNeigh);
+
+      if (only_active)
+        Graph.ActiveNeigh(CurrNode, NextNodes, WeightNeigh);
+      else
+       Graph.AllNeigh(CurrNode, NextNodes, WeightNeigh);
 
       for (size_t i = 0; i < NextNodes.size(); i++) {
         int NextNode = NextNodes[i];
         if (NextNode == -1)
           continue;
+
+        if ((UseOnlyNodes.size()>0)&&
+          (UseOnlyNodes.count(NextNode)==0))
+        continue;
 
         if (GeoP.Avoid.count(NextNode) > 0)
           continue;
@@ -906,6 +941,19 @@ public:
     }
   }
 
+  static ScalarType
+  NodesWeight(const LabelNeighOrientedGraph<ScalarType> &Graph,
+              const std::vector<int> &TestNodes) {
+    ScalarType SumW = 0;
+    for (size_t i = 0; i < TestNodes.size(); i++)
+    {
+      assert(TestNodes[i]>=0);
+      assert(TestNodes[i]<Graph.NodeW.size());
+      SumW+=Graph.NodeW[TestNodes[i]];
+    }
+    return SumW;
+  }
+
   static void SmoothSignal(LabelNeighOrientedGraph<ScalarType> &Graph,
                            std::vector<ScalarType> &PerNodeSignal,
                            std::vector<int> &FixedNodes,
@@ -929,9 +977,9 @@ public:
         ScalarType SumSignal = 0;
         for (size_t j = 0; j < IndexNeigh.size(); j++) {
           int NeighN = IndexNeigh[j];
-          //ScalarType W = WeightNeigh[j];
+          // ScalarType W = WeightNeigh[j];
           SumW += 1;
-          SumSignal += PerNodeSignal[NeighN];// * W;
+          SumSignal += PerNodeSignal[NeighN]; // * W;
         }
         if (SumW > 0)
           NewSignal[IndexN] = SumSignal / SumW;
@@ -939,6 +987,66 @@ public:
       PerNodeSignal = NewSignal;
     }
   }
+  
+  
+  // void CopySubGraph(const LabelNeighOrientedGraph<ScalarType> &Graph,
+  //                   const std::vector<int> &SelectedNodes,
+  //                   LabelNeighOrientedGraph<ScalarType> &SubGraph)
+  // {
+  //   SubGraph.Clear();
+  //   //create a map oc variable correpondences
+  //   std::map<int,int> ToSubNodes;
+  //   for (size_t i=0;i<SelectedNodes.size();i++)
+  //   {
+
+  //   }
+  // //   // for each node, for each label (edge 0..2) the set of neightbors
+  // // std::vector<std::vector<std::vector<NeighInfo>>> N;
+
+  // // // this set if for a node for a label (edge 0..2)
+  // // //  if can exit (reach surface orthogonally)
+  // // std::vector<std::vector<bool>> IsExit;
+
+  // // // weight of a node (used only for filtering)
+  // // //  tells how much the normal of the face
+  // // // is orthogonal to the M3 plane of that nod
+  // // std::vector<ScalarType> NodeW;
+
+  // // // tells if a node falls in the border
+  // // std::vector<bool> NodeBorderF;
+
+  // // // for each node for each edge tell if it is border or not
+  // // std::vector<std::array<bool, 3>> NodeBorderE;
+  // // // for each node for each vertes tell if it is border or not
+  // // std::vector<std::array<bool, 3>> NodeBorderV;
+
+  // // // for each node the list of faces it is tangent with TB seen
+  // // std::vector<std::vector<int>> InternalTangentConstr;
+  // // std::vector<std::pair<int, int>> InternalTangentConstrEdges;
+
+  // // // for each node the list of faces it is tangent with TB seen
+  // // std::vector<std::vector<int>> BorderTangentConstr;
+  // // std::vector<std::pair<int, int>> BorderTangentConstrEdges;
+
+  // // // std::vector<BorderType> NodeBorderType;
+
+  // // // type of node
+  // // std::vector<NType> NT;
+
+  // // // set if a node is enabled or not
+  // // std::vector<bool> EnabledN;
+
+  // // // nodes on convex edges by edge
+  // // std::vector<int> NodesOnConvexE;
+  // // // nodes on concave edges by edge
+  // // std::vector<int> NodesOnConcaveE;
+
+  // // // nodes on convex edges by vert
+  // // std::vector<int> NodesOnConvexEByV;
+  // // // nodes on concave edges by vert
+  // // std::vector<int> NodesOnConcaveEByV;
+
+  // }
 };
 
 } // namespace Geo

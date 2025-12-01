@@ -588,6 +588,27 @@ public:
       }
   }
 
+   void AllNeigh(const int &IndexN, std::vector<int> &IndexNeigh,
+                std::vector<ScalarType> &WeightNeigh,
+                std::vector<bool> &ActiveLink)
+  {
+    assert(IndexN >= 0);
+    assert(IndexN < (int)N.size());
+
+    IndexNeigh.clear();
+    WeightNeigh.clear();
+    ActiveLink.clear();
+
+    for (size_t l = 0; l < N[IndexN].size(); l++)
+      for (size_t i = 0; i < N[IndexN][l].size(); i++) {
+        int CurrNeigh = N[IndexN][l][i].N;
+
+        IndexNeigh.push_back(CurrNeigh);
+        WeightNeigh.push_back(N[IndexN][l][i].W);
+        ActiveLink.push_back(N[IndexN][l][i].Enabled);
+      }
+  }
+
   void AllNeigh(const int &IndexN, std::vector<int> &IndexNeigh,
                 std::vector<ScalarType> &WeightNeigh) const {
     assert(IndexN >= 0);

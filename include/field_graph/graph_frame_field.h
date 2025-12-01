@@ -167,6 +167,19 @@ public:
       IndexN.push_back(NodeOfElemDir(IndexEl, j));
   }
 
+  static void NodesOfElems(const std::vector<int> &IndexEl, 
+                           std::vector<int> &IndexN) 
+  {
+    IndexN.clear();
+    for (size_t i = 0; i < IndexEl.size(); i++)
+    {
+      int CurrEl=IndexEl[i];
+      std::vector<int> CurrN;
+      NodesOfElem(CurrEl,CurrN);
+      IndexN.insert(IndexN.end(),CurrN.begin(),CurrN.end());
+    }
+  }
+
   // static void NodesOfSamePoly(int IndexN,std::vector<int> &IndexNodes)
   // {
   //     IndexNodes.clear();

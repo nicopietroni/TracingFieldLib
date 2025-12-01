@@ -49,6 +49,8 @@
 #include <utility>
 #include <vector>
 
+#define USE_MARTIENNE
+
 class LinearCongruentialGenerator {
 public:
   using result_type = uint32_t;
