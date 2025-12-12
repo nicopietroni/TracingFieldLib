@@ -38,7 +38,8 @@
 #include <GL/glew.h>
 #include <cassert>
 #include <iostream>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
+#include <cstddef>   // C++
 #include <vector>
 
 namespace GLGraphDraw {

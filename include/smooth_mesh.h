@@ -40,7 +40,8 @@
 #include <set>
 #include <solve/least_squares_lin_constraint_solver.h>
 #include <stack>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
+#include <cstddef>   // C++
 #include <utility>
 #include <vector>
 // #include "mesh_mapping.h"

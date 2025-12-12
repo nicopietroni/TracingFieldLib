@@ -40,7 +40,8 @@
 #include <ostream>
 #include <set>
 #include <string>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
+#include <cstddef>   // C++
 #include <utility>
 #define SMOOTH_KERNEL 2
 #include "../edge_mesh_functions.h"

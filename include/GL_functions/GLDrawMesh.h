@@ -35,7 +35,8 @@
 #include "normal.h"
 #include <GL/glew.h>
 #include <cassert>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
+#include <cstddef>   // C++
 #include <vector>
 
 namespace GLDraw {

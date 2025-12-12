@@ -43,7 +43,8 @@
 #include <set>
 #include <solve/least_squares_lin_constraint_solver.h>
 #include <stack>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
+#include <cstddef>   // C++
 #include <type_traits>
 #include <utility>
 #include <vector>

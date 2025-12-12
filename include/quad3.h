@@ -31,7 +31,8 @@
 #include <cassert>
 #include <cstddef>
 #include <iostream>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
+#include <cstddef>   // C++
 #include <vector>
 
 #include "best_rotation.h"

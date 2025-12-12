@@ -36,7 +36,8 @@
 #include <iostream>
 #include <set>
 #include <stdio.h>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
+#include <cstddef>   // C++
 #include <unordered_set>
 #include <utility>
 #include <vector>

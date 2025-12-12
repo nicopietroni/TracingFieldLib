@@ -33,7 +33,8 @@
 #include <iostream>
 #include <list>
 #include <set>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
+#include <cstddef>   // C++
 #include <vector>
 // #include "../cross_field.h"
 #include "graph_tracing.h"

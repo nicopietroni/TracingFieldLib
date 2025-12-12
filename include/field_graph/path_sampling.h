@@ -34,7 +34,8 @@
 #include <cstddef>
 #include <iostream>
 #include <ostream>
-#include <sys/_types/_size_t.h>
+//#include <sys/_types/_size_t.h>
+#include <cstddef>   // C++
 #include <utility>
 #include <vector>
 #define VERT_MARK_SIZE 2
