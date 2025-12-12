@@ -47,6 +47,7 @@ namespace Geo {
 
 template <class ScalarType> class SingleEdgeSplit {
   typedef Geo::Point3<ScalarType> CoordType;
+ 
 
 public:
   static void GetInvolvedFaces(const Pos3 &SplitP,
@@ -184,6 +185,7 @@ class EdgeSplitOperation : public Geo::LocalOperation<ScalarType> {
 
   // ScalarType TargetL;
   // ScalarType Tolerance;
+  bool FixBoundary;
   std::vector<ScalarType> *VertDens;
 
 public:
@@ -192,30 +194,43 @@ public:
 
   // to check minimal size
   bool Feasible() const override {
-    return true;
-    // int IndexF = this->pos.F;
-    // int IndexE = this->pos.E;
-    // assert(IndexF >= 0);
-    // assert(IndexF < this->Faces.size());
+    int IndexF = this->pos.F;
+    int IndexE = this->pos.E;
+    if (FixBoundary) {
+      if (this->pos.IsBorder(this->NextF))
+        return false;
+    }
+    int IndexF1 = this->NextF[IndexF][IndexE];
+    //int IndexE1 = this->NextE[IndexF][IndexE];
 
-    // int IndexV0 = this->Faces[IndexF][IndexE];
-    // int IndexV1 = this->Faces[IndexF][(IndexE + 1) % 3];
-
-    // assert(IndexV0 != IndexV1);
-    // assert(IndexV0 >= 0);
-    // assert(IndexV1 >= 0);
-    // assert(IndexV0 < this->Vert.size());
-    // assert(IndexV1 < this->Vert.size());
-
-    // // then get the mid point
-    // Geo::Point3<ScalarType> P0 = this->Vert[IndexV0];
-    // Geo::Point3<ScalarType> P1 = this->Vert[IndexV1];
-    // ScalarType CurrL = (P0 - P1).Norm();
-    // ScalarType CurrTargetL = 2 * TargetL * Tolerance;
-    // // std::cout<<"CurrL:"<<CurrL<<std::endl;
-    // // std::cout<<"TargetL:"<<(TargetL*Tolerance)<<std::endl;
-    // // return (false);
-    // return ((P0 - P1).Norm() >= CurrTargetL);
+    int IndexV0 = this->Faces[IndexF][IndexE];
+    int IndexV1 = this->Faces[IndexF][(IndexE + 1) % 3];
+    Geo::Point3<ScalarType> P0 = this->Vert[IndexV0];
+    Geo::Point3<ScalarType> P1 = this->Vert[IndexV1];
+    ScalarType CurrL = (P0 - P1).Norm();
+    ScalarType MaxL=0;
+    for (size_t i=0;i<3;i++){
+        int V0=this->Faces[IndexF][i];
+        int V1=this->Faces[IndexF][(i+1)%3];
+        Geo::Point3<ScalarType> PP0 = this->Vert[V0];
+        Geo::Point3<ScalarType> PP1 = this->Vert[V1];
+        ScalarType EL=(PP0-PP1).Norm();
+        if (EL>MaxL)
+            MaxL=EL;
+    }
+    if (IndexF1 != -1) {
+      for (size_t i=0;i<3;i++){
+        int V0=this->Faces[IndexF1][i];
+        int V1=this->Faces[IndexF1][(i+1)%3];
+        Geo::Point3<ScalarType> PP0 = this->Vert[V0];
+        Geo::Point3<ScalarType> PP1 = this->Vert[V1];
+        ScalarType EL=(PP0-PP1).Norm();
+        if (EL>MaxL)
+            MaxL=EL;
+      }
+    }
+    ScalarType Factor=1.5;
+    return (Factor * CurrL >= MaxL);
   }
 
   virtual void Do(bool UpdateStruct = true) override {
@@ -277,7 +292,7 @@ public:
     this->Vert.back() = SmoothPos;
 
     if (UpdateStruct) {
-
+      
       std::vector<int> To_UpdF = this->ModifiedF;
 
       this->VF.resize(this->Vert.size());
@@ -349,27 +364,7 @@ public:
   }
 
 public:
-  // EdgeSplitOperation(Pos3 _pos, std::vector<std::vector<int>> &_Faces,
-  //                    std::vector<CoordType> &_Vert,
-  //                    std::vector<bool> &_DeletedV, std::vector<bool>
-  //                    &_DeletedF, std::vector<std::vector<int>> &_VF,
-  //                    std::vector<std::vector<int>> &_VFIndex,
-  //                    std::vector<std::vector<int>> &_NextF,
-  //                    std::vector<std::vector<int>> &_NextE,
-  //                    std::vector<CoordType> &_VertNorm,
-  //                    std::vector<CoordType> &_FaceNorm,
-  //                    std::vector<std::pair<Quadric<ScalarType>,ScalarType> >
-  //                    &_VertQ, const ScalarType &_TargetL)
-  //     : Geo::LocalOperation<ScalarType>(_pos, _Faces, _Vert, _DeletedV,
-  //                                       _DeletedF, _VF, _VFIndex, _NextF,
-  //                                       _NextE, _VertNorm, _FaceNorm, _VertQ)
-  //                                       {
-  //   this->OpType = Geo::OpRefine;
-  //   TargetL = _TargetL;
-  //   Tolerance = 0.5;
-  //   smooth_pos = false;
-  //   reproject = false;
-  // }
+
   EdgeSplitOperation(
       Pos3 _pos, std::vector<std::vector<int>> &_Faces,
       std::vector<CoordType> &_Vert, std::vector<bool> &_DeletedV,
@@ -380,7 +375,8 @@ public:
       std::vector<std::pair<Quadric<ScalarType>, ScalarType>> &_VertQ,
       std::vector<ScalarType> *_VertDens = NULL,
       std::vector<std::vector<bool>> *_IsFaceEFeature = NULL,
-      std::vector<bool> *_IsVertCorner = NULL)
+      std::vector<bool> *_IsVertCorner = NULL,
+      bool _FixBoundary = false)
       : Geo::LocalOperation<ScalarType>(
             _pos, _Faces, _Vert, _DeletedV, _DeletedF, _VF, _VFIndex, _NextF,
             _NextE, _VertQ, _IsFaceEFeature, _IsVertCorner) {
@@ -389,6 +385,7 @@ public:
     // Tolerance = 0.5;
     // smooth_pos = false;
     // reproject = false;
+    FixBoundary = _FixBoundary;
     VertDens = _VertDens;
   }
 };

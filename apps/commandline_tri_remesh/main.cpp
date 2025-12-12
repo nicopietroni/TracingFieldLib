@@ -249,6 +249,12 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    if (std::string(argv[i]) == std::string("-fixborders")) {
+      if (argc > i) {
+        RemP.fix_borders = true;
+      }
+    }
+
     if (std::string(argv[i]) == std::string("-adapt")) {
       // RemP.max_error=BBDiag*0.001;
       RemP.adaptive = true;
@@ -302,7 +308,9 @@ int main(int argc, char *argv[]) {
   RemP.TargetL = ratio * CurrSize;
 
   std::cout << "REMESHING" << std::endl;
+  
   Geo::TriRemesh<ScalarType>(VertPos, Connectivity, RemP);
+  
   std::cout << "DONE" << std::endl;
   CreateOutputFolder();
 

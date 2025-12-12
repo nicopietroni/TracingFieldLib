@@ -467,10 +467,16 @@ public:
     M3NodeToVar.clear();
     M3VarToNode.clear();
     SingleF_ConstrM3.clear();
+    TwiceEdge_ConstrM3.clear();
     Internal_TangentNodes_Constr.clear();
     Border_TangentNodes_Constr.clear();
     Avoid_Connections.clear();
     EdgeLabel_Continuation_Constr.clear();
+    M3LinkVarToNodes.clear();
+    M3LinkVarWeight.clear();
+    M3NodesToLinkVar.clear();
+    M3Solution.clear();
+    BeenSolved = false;
 
     std::vector<int> DisabledN;
     int NumEnabled = M3Graph.NumEnabledNodes();

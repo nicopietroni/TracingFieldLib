@@ -75,7 +75,8 @@ void AllocateLocalOperations(
     std::vector<ScalarType> *VertSize,
     std::vector<std::vector<bool>> *IsFaceEFeature,
     std::vector<bool> *IsVertCorner,
-    std::vector<Geo::LocalOperation<ScalarType> *> &CurrLop) {
+    std::vector<Geo::LocalOperation<ScalarType> *> &CurrLop,
+    bool FixBoundary) {
 
   CurrLop.clear();
   Geo::LocalOperation<ScalarType> *Lop = NULL;
@@ -98,7 +99,7 @@ void AllocateLocalOperations(
   if (OpType == OpRefine)
     CurrLop.push_back(new Geo::EdgeSplitOperation<ScalarType>(
         pos, Faces, Vert, DeletedV, DeletedF, VF, VFIndex, NextF, NextE, VertQ,
-        VertSize, IsFaceEFeature, IsVertCorner));
+        VertSize, IsFaceEFeature, IsVertCorner, FixBoundary));
 
   if (OpType == OpEdgeCollapse)
     CurrLop.push_back(new Geo::TriangleEdgeCollapseOperation<ScalarType>(
@@ -218,6 +219,7 @@ template <class ScalarType> class IterativeOptimizer {
   bool addFlip;
   bool addRefine;
   bool addEdgeColl;
+  bool FixBoundary;
   bool writeMSG;
   bool adaptive;
   std::vector<ScalarType> *VertSize;
@@ -279,7 +281,7 @@ template <class ScalarType> class IterativeOptimizer {
     AllocateLocalOperations(OpType, pos, Faces, Vert, DeletedV, DeletedF, VF,
                             VFIndex, NextF, NextE, VertQ, CurrTargetL,
                             MaxNormFlipVariation, VertSizePTR, IsFaceEFeature,
-                            IsVertCorner, Lop);
+                            IsVertCorner, Lop, FixBoundary);
     
     assert(Lop.size() > 0);
 
@@ -691,7 +693,6 @@ public:
     ScalarType target_l;
     bool addSmooth, addFlip, addRefine,
         addEdgeColl; //, update_stack;//, smooth_pos,reproject_pos;
-
     ScalarType min_gain;
     ScalarType min_acceptable;
     ScalarType feature_angle;
@@ -916,7 +917,8 @@ public:
       std::vector<std::pair<Quadric<ScalarType>, ScalarType>> &_VertQ,
       std::vector<ScalarType> *_VertSize = NULL,
       std::vector<std::vector<bool>> *_IsFaceEFeature = NULL,
-      std::vector<bool> *_IsVertCorner = NULL)
+      std::vector<bool> *_IsVertCorner = NULL,
+      bool _FixBoundary = false)
       : Vert(_Vert), Faces(_Faces), VertQ(_VertQ) {
     min_gain = 0.01;
     min_acceptable = 0;
@@ -931,6 +933,7 @@ public:
     VertSize = _VertSize;
     IsFaceEFeature = _IsFaceEFeature;
     IsVertCorner = _IsVertCorner;
+    FixBoundary = _FixBoundary;
   }
 
   ~IterativeOptimizer() {
@@ -1028,12 +1031,12 @@ int RefineBigEdges(
     //                                            &TRemP.IsVertCorner);
     Geo::IterativeOptimizer<ScalarType> IteOpt(VertPos, Faces, &BigPrio, VertQ,
                                                VertSize, &TRemP.IsFaceEFeature,
-                                               &TRemP.IsVertCorner);
+                                               &TRemP.IsVertCorner, TRemP.fix_borders);                                           
     steps = IteOpt.GlobalOptimize(Oparam, false);
   } else {
     Geo::IterativeOptimizer<ScalarType> IteOpt(VertPos, Faces, &BigPrio, VertQ,
                                                VertSize, &TRemP.IsFaceEFeature,
-                                               &TRemP.IsVertCorner);
+                                               &TRemP.IsVertCorner, TRemP.fix_borders);
     steps = IteOpt.IterativelOptimize(Oparam, false);
   }
 

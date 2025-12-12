@@ -838,6 +838,18 @@ void getVFStar(const std::vector<std::vector<int>> &Faces,
   }
 }
 
+void getVFStar(const std::vector<std::vector<int>> &Faces,
+               const std::vector<std::vector<int>> &VF, 
+               const std::vector<int> &IndexV,
+               const int extend_step, std::vector<std::vector<int>> &FacesStar) 
+{
+  FacesStar.clear();
+  FacesStar.resize(IndexV.size());
+  for (size_t i = 0; i < IndexV.size(); i++) {
+    getVFStar(Faces, VF, IndexV[i], extend_step, FacesStar[i]);
+  } 
+}
+
 void getFFAdjacencyNonManifold(
     const std::vector<std::vector<int>> &Faces,
     std::vector<std::vector<std::vector<int>>> &NextF,

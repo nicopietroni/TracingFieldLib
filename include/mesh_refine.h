@@ -518,7 +518,7 @@ public:
                                                Geo::Point2<ScalarType>(0, 0));
     std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
         MarkedE;
-    bool MarkNewE;
+    bool MarkNewE=true;
     std::vector<int> OldF;
     SplitTriangleFaces(Pos, PosUV, Faces, To_split, Alpha, MarkedE, MarkNewE,
                        OldF);
@@ -537,7 +537,7 @@ public:
         MarkedE;
 
     assert(To_split.size() == NewPos.size());
-    bool MarkNewE;
+    bool MarkNewE=true;
 
     // save the remapping of positions
     std::map<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> PosRemap;

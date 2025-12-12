@@ -213,6 +213,21 @@ public:
     
     return false;
   }
+  
+  ScalarType weightNeighbour(const int &IndexN0,const int IndexN1)const
+  {
+    assert(IndexN0!=IndexN1);
+    assert(IndexN0<N.size());
+    assert(IndexN1<N.size());
+    assert(IndexN0>=0);
+    assert(IndexN1>=0);
+    for (size_t l = 0; l < N[IndexN0].size(); l++)
+    for (size_t i = 0; i < N[IndexN0][l].size(); i++)
+      if ( N[IndexN0][l][i].N==IndexN1)
+        return N[IndexN0][l][i].W;
+
+    return -1;
+  }
 
   void SetExit(const int &IndexN, const int &IndexL) {
     assert(IndexN >= 0);
@@ -563,8 +578,8 @@ public:
       ScalarType WeightL = N[IndexN][IndexLabel][i].W;
 
       IndexNeigh.push_back(CurrNeigh);
-      WeightNeigh.push_back(IsActive);
-      ActiveLink.push_back(WeightL);
+      WeightNeigh.push_back(WeightL);
+      ActiveLink.push_back(IsActive);
     }
   }
 
@@ -590,7 +605,7 @@ public:
 
    void AllNeigh(const int &IndexN, std::vector<int> &IndexNeigh,
                 std::vector<ScalarType> &WeightNeigh,
-                std::vector<bool> &ActiveLink)
+                std::vector<bool> &ActiveLink)const
   {
     assert(IndexN >= 0);
     assert(IndexN < (int)N.size());
@@ -1054,6 +1069,9 @@ public:
     int disNodes = NumDisabledN();
     std::cout << "Number of Disabled Nodes: " << disNodes << std::endl;
 
+    int disArcs = NumDisabledArcs();
+    std::cout << "Number of Disabled Arcs: " << disArcs << std::endl;
+
     // std::cout << "Average Internal Valence: " << AverageVal() << std::endl;
     std::cout << "Average Internal Label Valence: " << AverageInternalLabelVal()
               << std::endl;
@@ -1079,6 +1097,41 @@ public:
     // std::cout<<"Average Enabled Valence: "<<AverageEnabledVal()<<std::endl;
   }
 
+  void CheckConsistency() const {
+
+    for (size_t i = 0; i < NumNodes(); i++)
+    {
+      int IndexN=i;
+      if (!IsEnabled(IndexN))
+        continue;
+      std::vector<int> IndexNeigh;
+      std::vector<ScalarType> WeightNeigh;
+      std::vector<bool> ActiveLink;
+      AllNeigh(IndexN, IndexNeigh, WeightNeigh, ActiveLink);
+      for (size_t j = 0; j < IndexNeigh.size(); j++)
+      {
+        int IndexN1=IndexNeigh[j];
+        //check not self link
+        assert(IndexN1!=IndexN);
+        //check not linking to disabled node
+        if (ActiveLink[j])
+        {assert(IsEnabled(IndexN1));}
+        //check mutual link
+        assert(IsNeighbour(IndexN1, IndexN));
+
+        if (ActiveLink[j])
+         {assert(IsActiveNeighbour(IndexN1, IndexN));}
+        else
+         {assert(!IsActiveNeighbour(IndexN1, IndexN));}
+
+        ScalarType W0=WeightNeigh[j];
+        ScalarType W1=weightNeighbour(IndexN1, IndexN);
+        assert(W1>=0);
+        assert(W0==W1);
+      }
+    }
+  }
+  
   void Clear() {
     N.clear();
     IsExit.clear();
@@ -1086,7 +1139,7 @@ public:
     NT.clear();
     EnabledN.clear();
   }
-
+  
   LabelNeighOrientedGraph() {}
 };
 

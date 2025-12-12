@@ -73,45 +73,31 @@ void GetPolylineFromSing(
   }
 }
 
-// template <class ScalarType>
-// bool FrameSingularValue(const std::vector<Field::FrameField<ScalarType> >
-// &SortedFaceFrames)//,int &IndexDir)
-// {
-//     //SingVal=0;
-//     //    IndexDir=-1;
-//     //    bool IsSing=false
-//     //std::cout<<"size fan:"<<SortedFaceFrames.size()<<std::endl;
-//     for (size_t d=0;d<3;d++)
-//     {
-//         int CurrD=d;
-//         int sizeCross=SortedFaceFrames.size();
-//         for (size_t i=0;i<SortedFaceFrames.size();i++)
-//         {
-//             Field::FrameField<ScalarType> currF=SortedFaceFrames[i];
-//             Field::FrameField<ScalarType>
-//             NextF=SortedFaceFrames[(i+1)%sizeCross];
+void GetPolylineVertFromSing(
+    const std::vector<std::vector<int>> &Tetra,
+    const std::vector<Pos4> &FrameSingPos,
+    std::vector<std::vector<std::pair<int, int> > > &PolyLSingV) 
+{
 
-//             Geo::Point3<ScalarType> TargetDir=currF.GetDirection(CurrD);
-//             CurrD=NextF.BestDirectionI(TargetDir);
-//         }
+  PolyLSingV.clear();
 
-//         //get the singularity value and the one where it not variates
-//         if (CurrD>=3)
-//             CurrD-=3;
+  PolyLSingV.resize(FrameSingPos.size());
 
-//         if (CurrD!=d)
-//         {
-//             //SingVal=(CurrD-d);
-//             //IndexDir=d;
-//             return true;
-//         }
-//     }
-//     return false;
-// }
+  for (size_t i = 0; i < FrameSingPos.size(); i++) {
+    Pos4 CurrPos = FrameSingPos[i];
+
+    int IndexV0 = CurrPos.V;
+    CurrPos.FlipV(Tetra);
+    int IndexV1 = CurrPos.V;
+    assert(IndexV1 != IndexV0);
+    std::pair<int, int> EdgePair(std::min(IndexV0, IndexV1), std::max(IndexV0, IndexV1));
+
+    PolyLSingV[i].push_back(EdgePair);
+  }
+}
 
 template <class ScalarType>
-bool IsSingular(const std::vector<Field::FrameField<ScalarType>>
-                &SortedFaceFrames) //,int &IndexDir)
+bool IsSingular(const std::vector<Field::FrameField<ScalarType>> &SortedFaceFrames) 
 {
 
   int sizeCross = SortedFaceFrames.size();
@@ -140,64 +126,6 @@ bool IsSingular(const std::vector<Field::FrameField<ScalarType>>
   }
   return false;
 }
-
-// template <class ScalarType>
-// void CrossFieldFromFrame(const std::vector<Field::FrameField<ScalarType> >
-// &TetraFrames,
-//                          const std::vector<int> &TriTetraIndex,
-//                          const std::vector<std::vector<int> > &Tri,
-//                          const std::vector<Geo::Point3<ScalarType> >
-//                          &TriNorm, const std::vector<Geo::Point3<ScalarType>
-//                          > &TriPos, std::vector<Field::CrossF<ScalarType> >
-//                          &FaceCross)
-//{
-//     assert(Field::IsProperTetraFrameField(TetraFrames));
-//     assert(TriTetraIndex.size()==Tri.size());
-//     const ScalarType eps=(ScalarType)0.000000001;
-
-//    int warning_normals=0;
-//    FaceCross.resize(Tri.size());
-//    for (size_t i=0;i<TriTetraIndex.size();i++)
-//    {
-//        int IndexTetra=TriTetraIndex[i];
-//        assert(IndexTetra>=0);
-//        assert(IndexTetra<TetraFrames.size());
-
-//        Field::FrameField<ScalarType> CurrFrame=TetraFrames[IndexTetra];
-
-//        //get direction aligned with tri normal
-//        Geo::Point3<ScalarType> CurrTriNorm=TriNorm[i];
-//        int indexFrameNormal=CurrFrame.BestDirectionI(CurrTriNorm);
-//        Geo::Point3<ScalarType>
-//        NormFrame=CurrFrame.GetDirection(indexFrameNormal);
-
-//        //get the two other directions
-//        Geo::Point3<ScalarType>
-//        CrossD0=CurrFrame.GetDirection((indexFrameNormal+1)%6);
-//        Geo::Point3<ScalarType>
-//        CrossD1=CurrFrame.GetDirection((indexFrameNormal+2)%6);
-//        assert(Tri[i].size()==3);
-//        Geo::Point3<ScalarType> Pos0=TriPos[Tri[i][0]];
-//        Geo::Point3<ScalarType> Pos1=TriPos[Tri[i][1]];
-//        Geo::Point3<ScalarType> Pos2=TriPos[Tri[i][2]];
-//        Geo::Point3<ScalarType> Pos=(Pos0+Pos1+Pos2)/3;
-//        Field::CrossF<ScalarType> CopiedFrame(CrossD0,CrossD1,1,1,Pos);
-//        CopiedFrame.Q=CurrFrame.Q;
-//        CopiedFrame.MakeDirectionNormalCoherent(CurrTriNorm);
-
-//        //check
-//        if ((NormFrame-CurrTriNorm).Norm()>eps)
-//        {
-//            warning_normals++;
-//            CopiedFrame.MakeTangentTo(CurrTriNorm);
-//        }
-//        FaceCross[i]=CopiedFrame;
-//    }
-
-//    if (warning_normals>0)
-//        std::cout<<"* Warning Volume to Surface Mapping "<<warning_normals<<"
-//        faces"<<std::endl;
-//}
 
 template <class ScalarType>
 void GetFrameSingularities(
@@ -278,69 +206,5 @@ void GetFrameSingularities(
   }
 }
 
-// template <class ScalarType>
-// void SetBorderFrameFromCross(const std::vector<std::vector<int> > &Tri,
-//                     const std::vector<Field::CrossF<ScalarType> > &FaceCross,
-//                     const std::vector<int> &TriTetraIndex,
-//                     const std::vector<Geo::Point3<ScalarType> >
-//                     &TetraVertPos, const std::vector<std::vector<int> >
-//                     &Tetra, std::vector<Field::FrameField<ScalarType> >
-//                     &TetraFrames)
-//{
-//     assert(TriTetraIndex.size()>0);
-//     assert(TriTetraIndex.size()==Tri.size());
-//     assert(TriTetraIndex.size()==FaceCross.size());
-////    TetraFrames.clear();
-////    TetraFrames.resize(Tetra.size());
-//    for (size_t i=0;i<TriTetraIndex.size();i++)
-//    {
-//        int IndexT=TriTetraIndex[i];
-//        assert(IndexT>=0);
-//        assert(IndexT<TetraFrames.size());
-
-//        Geo::Point3<ScalarType> D0=FaceCross[i].D[0];
-//        Geo::Point3<ScalarType> D1=FaceCross[i].D[1];
-//        Geo::Point3<ScalarType> D2=FaceCross[i].OrthoDir();
-//        ScalarType Q=FaceCross[i].Q;
-
-//        assert(Tetra[IndexT].size()==4);
-//        Geo::Point3<ScalarType> P0=TetraVertPos[Tetra[IndexT][0]];
-//        Geo::Point3<ScalarType> P1=TetraVertPos[Tetra[IndexT][1]];
-//        Geo::Point3<ScalarType> P2=TetraVertPos[Tetra[IndexT][2]];
-//        Geo::Point3<ScalarType> P3=TetraVertPos[Tetra[IndexT][3]];
-
-//        Tetra::Tetra3<ScalarType> CurrT(P0,P1,P2,P3);
-//        TetraFrames[IndexT].D[0]=D0;
-//        TetraFrames[IndexT].D[1]=D1;
-//        TetraFrames[IndexT].D[2]=D2;
-
-//        TetraFrames[IndexT].Pos=CurrT.Barycenter();
-//        TetraFrames[IndexT].Q=Q;
-//    }
-//}
-
-// template <class ScalarType>
-// void InitDefaultFrame(const std::vector<Geo::Point3<ScalarType> >
-// &TetraVertPos,
-//                       const std::vector<std::vector<int> > &Tetra,
-//                       std::vector<Field::FrameField<ScalarType> >
-//                       &TetraFrames)
-//{
-//     TetraFrames.clear();
-//     std::vector<Geo::Point3<ScalarType> > Centers;
-//     Tetra::FindCenter(TetraVertPos,Tetra,Centers);
-//     Geo::Point3<ScalarType> D0(1,0,0);
-//     Geo::Point3<ScalarType> D1(0,1,0);
-//     Geo::Point3<ScalarType> D2(0,0,1);
-//     for (size_t i=0;i<Tetra.size();i++)
-//     {
-////        Geo::Point3<ScalarType> P0=TetraVertPos[Tetra[i][0]];
-////        Geo::Point3<ScalarType> P1=TetraVertPos[Tetra[i][1]];
-////        Geo::Point3<ScalarType> P2=TetraVertPos[Tetra[i][2]];
-////        Geo::Point3<ScalarType> P3=TetraVertPos[Tetra[i][3]];
-//        //Geo::Point3<ScalarType> Bary=(P0+P1+P2+P3)/4.0;
-//        TetraFrames.push_back(Field::FrameField<ScalarType>(D0,D1,D2,Centers[i]));
-//    }
-//}
 
 #endif

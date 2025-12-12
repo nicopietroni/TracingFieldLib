@@ -45,6 +45,8 @@ template <class ScalarType> struct TriRemParam {
   bool iterative;
   bool adaptive;
   bool writeMSG;
+  bool fix_borders;
+
   ScalarType minEdgeRatio;
   ScalarType maxEdgeRatio;
 
@@ -78,6 +80,7 @@ template <class ScalarType> struct TriRemParam {
     flip_valence=true;
     flip_quadrics=true;
     smooth_mesh=true;
+    fix_borders=false;
   }
 };
 

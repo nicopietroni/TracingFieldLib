@@ -29,10 +29,55 @@
 
 #include "./Space_Query/triangle_grid_3D.h"
 #include "Space_Query/point_grid_3D.h"
+#include "mesh_functions.h"
 #include "point3.h"
 #include "segment2.h"
 
 namespace Geo {
+
+template <class ScalarType>
+void OneWayFaceHausdorff(const std::vector<Geo::Point3<ScalarType> > &Source_VertPos,
+                     const std::vector<std::vector<int> > &Source_Faces,
+                     const std::vector<Geo::Point3<ScalarType> > &Target_VertPos,
+                     const std::vector<std::vector<int> > &Target_Faces,
+                     std::vector<ScalarType> &FaceDist)
+{
+  Geo::TriangleSpatialIndex<ScalarType> TriGrid;
+  TriGrid.Init(Target_VertPos, Target_Faces);
+
+  FaceDist.clear();
+  ScalarType maxDistQ = TriGrid.bbox.Diag();
+  std::vector<Geo::Point3<ScalarType> > BaryF;
+  ComputeFaceBarycenters<ScalarType>(Source_VertPos, Source_Faces, BaryF);
+  for (size_t i = 0; i < BaryF.size(); i++) {
+
+    Geo::Point3<ScalarType> Pos0 = BaryF[i];
+    int closestF;
+    Geo::Point3<ScalarType> closestPt;
+    TriGrid.GridClosest(Target_VertPos, Target_Faces, Pos0, maxDistQ, closestF,
+                        closestPt);
+    ScalarType CurrDist = 0;
+    if (closestF == -1)
+      CurrDist = maxDistQ;
+    else
+      CurrDist = (closestPt - Pos0).Norm();
+
+    FaceDist.push_back(CurrDist);
+  }
+}
+
+template <class ScalarType>
+void TwoWayFaceHausdorff(const std::vector<Geo::Point3<ScalarType> > &Source_VertPos,
+                     const std::vector<std::vector<int> > &Source_Faces,
+                     const std::vector<Geo::Point3<ScalarType> > &Target_VertPos,
+                     const std::vector<std::vector<int> > &Target_Faces,
+                     std::vector<ScalarType> &FaceDist0,
+                     std::vector<ScalarType> &FaceDist1)
+{
+
+  OneWayFaceHausdorff(Source_VertPos,Source_Faces,Target_VertPos,Target_Faces,FaceDist0);
+  OneWayFaceHausdorff(Target_VertPos,Target_Faces,Source_VertPos,Source_Faces,FaceDist1);
+}
 
 template <class ScalarType>
 void OneWayHausdorff(const std::vector<Geo::Point3<ScalarType> > &Source_VertPos,

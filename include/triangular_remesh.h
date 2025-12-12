@@ -31,9 +31,11 @@
 #include "./local_operations/iterative_optimizer.h"
 #include "./local_operations/tri_remesh_parameter.h"
 #include "box3.h"
+#include "eigen_interface.h"
 #include "math_utils.h"
 #include "mesh_manifold.h"
-//#include "polyhedra_mesh.h"
+// #include "polyhedra_mesh.h"
+#include "point3.h"
 #include "quadric.h"
 #include <algorithm>
 #include <cassert>
@@ -41,6 +43,16 @@
 #include <vector>
 
 namespace Geo {
+
+template <class ScalarType>
+void AddAllBoundaryAsCorner(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            const std::vector<std::vector<int>> &Faces,
+                            TriRemParam<ScalarType> &RemP) {
+  std::vector<int> BoundaryV;
+  Geo::getBorderVert(Faces, BoundaryV);
+  for (size_t i = 0; i < BoundaryV.size(); i++)
+    RemP.IsVertCorner[BoundaryV[i]] = true;
+}
 
 template <class ScalarType>
 void CorrectDefaultValues(const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -60,11 +72,11 @@ void CorrectDefaultValues(const std::vector<Geo::Point3<ScalarType>> &VertPos,
   if (RemP.TargetL <= 0)
     RemP.TargetL = AvgEdgeLen(VertPos, Faces) * 1.5;
 
-  if (RemP.IsFaceEFeature.size()==0)
-    RemP.IsFaceEFeature.resize(Faces.size(),std::vector<bool>(3,false));
-  
-  if (RemP.IsVertCorner.size()==0)
-    RemP.IsVertCorner.resize(VertPos.size(),false);
+  if (RemP.IsFaceEFeature.size() == 0)
+    RemP.IsFaceEFeature.resize(Faces.size(), std::vector<bool>(3, false));
+
+  if (RemP.IsVertCorner.size() == 0)
+    RemP.IsVertCorner.resize(VertPos.size(), false);
 }
 
 template <class ScalarType>
@@ -81,6 +93,10 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
               TriRemParam<ScalarType> &TRemParam = TriRemParam<ScalarType>()) {
 
   CorrectDefaultValues(VertPos, Faces, TRemParam);
+
+  if (TRemParam.fix_borders) {
+    AddAllBoundaryAsCorner(VertPos, Faces, TRemParam);
+  }
 
   std::vector<std::pair<Geo::Quadric<ScalarType>, ScalarType>> VertQ;
   InitQuadrics(VertPos, Faces, VertQ);
@@ -105,9 +121,9 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
   auto t1 = std::chrono::high_resolution_clock::now();
   int all_steps = 0;
 
-  //std::vector<ScalarType> VertDens;
+  // std::vector<ScalarType> VertDens;
   if (TRemParam.adaptive) {
-    assert(TRemParam.VertSize.size()==VertPos.size());
+    assert(TRemParam.VertSize.size() == VertPos.size());
     // t0 = std::chrono::high_resolution_clock::now();
     // ScalarType RadSize = 2 * AvgEdgeLen(VertPos, Faces);
     // FindDensityMap(VertPos, Faces, RadSize, VertDens);
@@ -116,7 +132,8 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
     // LinearMap(VertDens, MinLVal, MaxLVal);
     // t1 = std::chrono::high_resolution_clock::now();
     // durationComputeAdaptLen +=
-    //     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    //     std::chrono::duration_cast<std::chrono::microseconds>(t1 -
+    //     t0).count();
   }
   for (int s = 0; s < TRemParam.steps; s++) {
 
@@ -128,16 +145,16 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
     // COLLAPSE SMALL EDGES
     if (TRemParam.collapse_small) {
       t0 = std::chrono::high_resolution_clock::now();
-
-      stepsCollapseSmall =
-          CollapseSmallEdges(VertPos, Faces, VertQ, TRemParam, &TRemParam.VertSize);
+      // std::cout << "COLLAPSE SMALL EDGES" << std::endl;
+      stepsCollapseSmall = CollapseSmallEdges(VertPos, Faces, VertQ, TRemParam,
+                                              &TRemParam.VertSize);
 
       t1 = std::chrono::high_resolution_clock::now();
       durationCollapseSmall +=
           std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0)
               .count();
     }
-    
+
     if (TRemParam.adaptive) {
       assert(TRemParam.VertSize.size() == VertPos.size());
     }
@@ -145,6 +162,7 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
     // REFINE BIG ONES
     if (TRemParam.refine_big) {
       t0 = std::chrono::high_resolution_clock::now();
+      // std::cout << "REFINE BIG EDGES" << std::endl;
       stepsRefineBig =
           RefineBigEdges(VertPos, Faces, VertQ, TRemParam, &TRemParam.VertSize);
       t1 = std::chrono::high_resolution_clock::now();
@@ -160,6 +178,7 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
     // OPTIMIZE VALENCE
     if (TRemParam.flip_valence) {
       t0 = std::chrono::high_resolution_clock::now();
+      // std::cout << "OPTIMIZE VALENCE" << std::endl;
       stepsOptValence = OptimizeValence(VertPos, Faces, VertQ, TRemParam);
       t1 = std::chrono::high_resolution_clock::now();
       durationOptValence +=
@@ -182,10 +201,8 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
       // }
 
       SmoothReproject3DStep(VertPos, Faces, smooth_steps,
-                            TRemParam.feature_angle,
-                            TRemParam.IsFaceEFeature,
-                            TRemParam.IsVertCorner,
-                            VertPos0, Faces0, TriGrid);
+                            TRemParam.feature_angle, TRemParam.IsFaceEFeature,
+                            TRemParam.IsVertCorner, VertPos0, Faces0, TriGrid);
 
       t1 = std::chrono::high_resolution_clock::now();
       durationSmooth +=
@@ -222,11 +239,9 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
 
   if (TRemParam.smooth_mesh) {
     t0 = std::chrono::high_resolution_clock::now();
-    SmoothReproject3DStep(VertPos, Faces, 3, 
-                        TRemParam.feature_angle,
-                        TRemParam.IsFaceEFeature,
-                          TRemParam.IsVertCorner, VertPos0,
-                          Faces0, TriGrid);
+    SmoothReproject3DStep(VertPos, Faces, 3, TRemParam.feature_angle,
+                          TRemParam.IsFaceEFeature, TRemParam.IsVertCorner,
+                          VertPos0, Faces0, TriGrid);
     t1 = std::chrono::high_resolution_clock::now();
     durationSmooth +=
         std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
@@ -267,6 +282,72 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
   return (all_steps);
 }
 
-} // namespace Geo
+template <class ScalarType>
+int TriRemesh(Eigen::MatrixXd &vert,
+              Eigen::MatrixXi &faces,
+              TriRemParam<ScalarType> &TRemParam = TriRemParam<ScalarType>()) 
+  {
+    std::vector<Geo::Point3<ScalarType>> VertPos;
+    std::vector<std::vector<int>> FacesIndex;
+    // get the trimesh data from eigen matrices
+    EigenInterface<ScalarType>::GetTriMeshData(faces, vert, VertPos,
+                                               FacesIndex);
+    // then remesh
+    int steps = TriRemesh<ScalarType>(VertPos, FacesIndex, TRemParam);
+    // transfer back to eigen
+    EigenInterface<ScalarType>::GetTriMeshData(VertPos, FacesIndex, faces, vert);
+    return steps;
+  }
+
+  template <class ScalarType>
+int TriRemesh(Eigen::MatrixXf &vert,
+              Eigen::MatrixXi &faces,
+              TriRemParam<ScalarType> &TRemParam = TriRemParam<ScalarType>()) 
+  {
+    std::vector<Geo::Point3<ScalarType>> VertPos;
+    std::vector<std::vector<int>> FacesIndex;
+    // get the trimesh data from eigen matrices
+    EigenInterface<ScalarType>::GetTriMeshData(faces, vert, VertPos,
+                                               FacesIndex);
+    // then remesh
+    int steps = TriRemesh<ScalarType>(VertPos, FacesIndex, TRemParam);
+    // transfer back to eigen
+    EigenInterface<ScalarType>::GetTriMeshData(VertPos, FacesIndex, faces, vert);
+    return steps;
+  }
+
+  template <class ScalarType>
+  int TriRemesh(std::vector<std::vector<ScalarType>> & VertPos,
+                std::vector<std::vector<int>> & Faces,
+                TriRemParam<ScalarType> &TRemParam =
+                    TriRemParam<ScalarType>()) 
+    {
+      std::vector<Geo::Point3<ScalarType>> VertPosVect;
+      for (size_t i = 0; i < VertPos.size(); i++) {
+        Geo::Point3<ScalarType> P;
+        assert(VertPos[i].size() == 3);
+        P.X = VertPos[i][0];
+        P.Y = VertPos[i][1];
+        P.Z = VertPos[i][2];
+        VertPosVect.push_back(P);
+      }
+
+      // then remesh
+      int steps = TriRemesh<ScalarType>(VertPosVect, Faces, TRemParam);
+
+      // transfer back to vector of vectors
+      VertPos.clear();
+      for (size_t i = 0; i < VertPosVect.size(); i++) {
+        Geo::Point3<ScalarType> P;
+        P = VertPosVect[i];
+        std::vector<ScalarType> PVect(3, 0);
+        PVect[0] = P.X;
+        PVect[1] = P.Y;
+        PVect[2] = P.Z;
+        VertPos.push_back(PVect);
+      }
+      return steps;
+    }
+  } // namespace Geo
 
 #endif

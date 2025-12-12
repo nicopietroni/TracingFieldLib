@@ -116,11 +116,12 @@ public:
         DeactivatedNum++;
       }
     } while (has_deactivated);
-    int NumAfter = ActiveInternalNodes(Facegraph);
-    std::cout << "DISABLED "
-              << 100 * (ScalarType)(NumBefore - NumAfter) /
-                     (ScalarType)NumBefore
-              << " perc of Internal nodes that were dead ends" << std::endl;
+    DisableConnectionsToDisabledNodes(Facegraph);
+    // int NumAfter = ActiveInternalNodes(Facegraph);
+    // std::cout << "DISABLED "
+    //           << 100 * (ScalarType)(NumBefore - NumAfter) /
+    //                  (ScalarType)NumBefore
+    //           << " perc of Internal nodes that were dead ends" << std::endl;
   }
 
   // this function is used to symmetrize the connections
@@ -263,6 +264,27 @@ public:
     return NumNodes;
   }
 
+  static void DisableConnectionsToDisabledNodes(
+      LabelNeighOrientedGraph<ScalarType> &Graph) {
+    for (size_t i = 0; i < Graph.NumNodes(); i++) {
+      if (!Graph.IsEnabled(i)) {
+        for (size_t l = 0; l < 3; l++) {
+          for (size_t j = 0; j < Graph.N[i][l].size(); j++) {
+            Graph.N[i][l][j].Enabled = false;
+          }
+        }
+        continue;
+      }
+      for (size_t l = 0; l < 3; l++) {
+        for (size_t j = 0; j < Graph.N[i][l].size(); j++) {
+          int IndexNeigh = Graph.N[i][l][j].N;
+          if (!Graph.IsEnabled(IndexNeigh))
+            Graph.N[i][l][j].Enabled = false;
+        }
+      }
+    }
+  }
+
   static void DisableInternalNodesWithEmptyLabels(
       LabelNeighOrientedGraph<ScalarType> &Graph) {
     int NumBefore = ActiveInternalNodes(Graph);
@@ -280,11 +302,27 @@ public:
         Graph.DisableNode(SelectedNodes[i]);
 
     } while (had_disabled);
+    DisableConnectionsToDisabledNodes(Graph);
+
+    // //check consistency
+    // for (size_t i = 0; i < Graph.NumNodes(); i++) {
+    //   if (!Graph.IsEnabled(i))
+    //     continue;
+    //   for (size_t l = 0; l < 3; l++) {
+    //     for (size_t j = 0; j < Graph.N[i][l].size(); j++) {
+    //       int IndexNeigh = Graph.N[i][l][j].N;
+    //       if (!Graph.IsEnabled(IndexNeigh))
+    //        assert(Graph.N[i][l][j].Enabled == false);
+
+    //       if (Graph.N[i][l][j].Enabled)
+    //        assert(Graph.IsEnabled(IndexNeigh));
+    //     }
+    //   }
+    // }
     //  int t1=clock();
     // std::cout<<"DEDEED "<<t1-t0<<std::endl;
-    std::cout << "DISABLED "
-              << 100 * ((ScalarType)NumDisabled / (ScalarType)NumBefore)
-              << " perc of Internal nodes with empty labels" << std::endl;
+    std::cout << "DISABLED " << NumDisabled
+              << " internal nodes with empty labels in " << std::endl;
   }
 
   static void GetActiveFrom(const LabelNeighOrientedGraph<ScalarType> &Graph,
@@ -846,8 +884,8 @@ public:
   // -----------------------------------------------------------------------------
   static void Dijkstra(const LabelNeighOrientedGraph<ScalarType> &Graph,
                        Geo::TMark &TempMark, GeodesicParam &GeoP,
-                       bool only_active=true,
-                       const std::set<int> &UseOnlyNodes=std::set<int>()) {
+                       bool only_active = true,
+                       const std::set<int> &UseOnlyNodes = std::set<int>()) {
 
     TempMark.AllocateIfNeeded(Graph.NumNodes());
     TempMark.UnMarkAll();
@@ -858,8 +896,7 @@ public:
     for (size_t i = 0; i < GeoP.Seeds.size(); i++) {
       int IndexN = GeoP.Seeds[i];
 
-      if ((UseOnlyNodes.size()>0)&&
-          (UseOnlyNodes.count(IndexN)==0))
+      if ((UseOnlyNodes.size() > 0) && (UseOnlyNodes.count(IndexN) == 0))
         continue;
 
       assert(!TempMark.IsMarked(IndexN));
@@ -872,7 +909,8 @@ public:
       Heap.push_back(NodeDist(IndexN, 0));
     }
 
-    if (Heap.size()==0)return;
+    if (Heap.size() == 0)
+      return;
 
     std::make_heap(Heap.begin(), Heap.end());
 
@@ -893,16 +931,15 @@ public:
       if (only_active)
         Graph.ActiveNeigh(CurrNode, NextNodes, WeightNeigh);
       else
-       Graph.AllNeigh(CurrNode, NextNodes, WeightNeigh);
+        Graph.AllNeigh(CurrNode, NextNodes, WeightNeigh);
 
       for (size_t i = 0; i < NextNodes.size(); i++) {
         int NextNode = NextNodes[i];
         if (NextNode == -1)
           continue;
 
-        if ((UseOnlyNodes.size()>0)&&
-          (UseOnlyNodes.count(NextNode)==0))
-        continue;
+        if ((UseOnlyNodes.size() > 0) && (UseOnlyNodes.count(NextNode) == 0))
+          continue;
 
         if (GeoP.Avoid.count(NextNode) > 0)
           continue;
@@ -945,11 +982,10 @@ public:
   NodesWeight(const LabelNeighOrientedGraph<ScalarType> &Graph,
               const std::vector<int> &TestNodes) {
     ScalarType SumW = 0;
-    for (size_t i = 0; i < TestNodes.size(); i++)
-    {
-      assert(TestNodes[i]>=0);
-      assert(TestNodes[i]<Graph.NodeW.size());
-      SumW+=Graph.NodeW[TestNodes[i]];
+    for (size_t i = 0; i < TestNodes.size(); i++) {
+      assert(TestNodes[i] >= 0);
+      assert(TestNodes[i] < Graph.NodeW.size());
+      SumW += Graph.NodeW[TestNodes[i]];
     }
     return SumW;
   }
@@ -987,8 +1023,7 @@ public:
       PerNodeSignal = NewSignal;
     }
   }
-  
-  
+
   // void CopySubGraph(const LabelNeighOrientedGraph<ScalarType> &Graph,
   //                   const std::vector<int> &SelectedNodes,
   //                   LabelNeighOrientedGraph<ScalarType> &SubGraph)
