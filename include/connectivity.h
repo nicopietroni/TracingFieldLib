@@ -40,7 +40,7 @@
 
 namespace Geo {
 
-void SharedE(const std::vector<int> &Face0, const std::vector<int> &Face1,
+inline void SharedE(const std::vector<int> &Face0, const std::vector<int> &Face1,
              int &IndexE0, int &IndexE1) {
   IndexE0 = -1;
   IndexE1 = -1;
@@ -63,14 +63,14 @@ void SharedE(const std::vector<int> &Face0, const std::vector<int> &Face1,
   }
 }
 
-int WhichVert(const std::vector<int> &Face, const int &VertIndex) {
+inline int WhichVert(const std::vector<int> &Face, const int &VertIndex) {
   for (size_t i = 0; i < Face.size(); i++)
     if (Face[i] == VertIndex)
       return i;
   return -1;
 }
 
-int WhichEdge(const std::vector<int> &Face, const int &V0, const int &V1) {
+inline int WhichEdge(const std::vector<int> &Face, const int &V0, const int &V1) {
   for (size_t i = 0; i < Face.size(); i++) {
     if ((Face[i] == V0) && (Face[(i + 1) % 3] == V1))
       return i;
@@ -106,7 +106,7 @@ int WhichEdge(const std::vector<int> &Face, const int &V0, const int &V1) {
 //     }
 // }
 
-void ExtendStar(std::vector<std::vector<int>> &Kernel, int steps) {
+inline void ExtendStar(std::vector<std::vector<int>> &Kernel, int steps) {
   std::vector<std::vector<int>> Kernel0 = Kernel;
   // NewVertexKernels.resize(Kernel.size());
   for (int s = 0; s < steps; s++) {
@@ -129,7 +129,7 @@ void ExtendStar(std::vector<std::vector<int>> &Kernel, int steps) {
   }
 }
 
-void FindVertexStar(const std::vector<std::vector<int>> &connections,
+inline void FindVertexStar(const std::vector<std::vector<int>> &connections,
                     const size_t NumVert, std::vector<std::vector<int>> &Kernel,
                     const int extend_step = 0) {
   Kernel.clear();
@@ -182,7 +182,7 @@ void FindVertexStar(const std::vector<std::vector<int>> &connections,
     ExtendStar(Kernel, extend_step);
 }
 
-int FindMaxVertIdx(const std::vector<std::vector<int>> &connections) {
+inline int FindMaxVertIdx(const std::vector<std::vector<int>> &connections) {
   int NumV = 0;
   for (size_t i = 0; i < connections.size(); i++)
     for (size_t j = 0; j < connections[i].size(); j++)
@@ -190,7 +190,7 @@ int FindMaxVertIdx(const std::vector<std::vector<int>> &connections) {
   return NumV;
 }
 
-int FindMaxVertIdx(const std::vector<std::pair<int, int>> &Edges) {
+inline int FindMaxVertIdx(const std::vector<std::pair<int, int>> &Edges) {
   int NumV = 0;
   for (size_t i = 0; i < Edges.size(); i++) {
     NumV = std::max(NumV, Edges[i].first);
@@ -199,7 +199,7 @@ int FindMaxVertIdx(const std::vector<std::pair<int, int>> &Edges) {
   return NumV;
 }
 
-void FindVertexStar(const std::vector<std::vector<int>> &connections,
+inline void FindVertexStar(const std::vector<std::vector<int>> &connections,
                     std::vector<std::vector<int>> &Kernel,
                     const int extend_step = 0) {
   //    int NumV=0;
@@ -244,7 +244,7 @@ void FindVertexStar(const std::vector<std::vector<int>> &connections,
 ////        ExtendVertexStar(Kernel);
 //}
 
-void getFFAdjacency(const std::vector<std::vector<int>> &Faces,
+inline void getFFAdjacency(const std::vector<std::vector<int>> &Faces,
                     std::vector<std::vector<int>> &NextF,
                     std::vector<std::vector<int>> &NextE) {
   typedef typename std::pair<size_t, size_t> sizeTPair;
@@ -302,7 +302,7 @@ void getFFAdjacency(const std::vector<std::vector<int>> &Faces,
   }
 }
 
-bool CheckFFAdjacencyManifold(const std::vector<std::vector<int>> &Faces,
+inline bool CheckFFAdjacencyManifold(const std::vector<std::vector<int>> &Faces,
                               std::vector<std::vector<int>> &NextF,
                               std::vector<std::vector<int>> &NextE) {
   // check entries to faces
@@ -345,7 +345,7 @@ bool CheckFFAdjacencyManifold(const std::vector<std::vector<int>> &Faces,
   return true;
 }
 
-bool HasVFAdj(const std::vector<std::vector<int>> &VF, const int &VIndex,
+inline bool HasVFAdj(const std::vector<std::vector<int>> &VF, const int &VIndex,
               const int &FIndex) {
   assert(VIndex >= 0);
   assert(VIndex < (int)VF.size());
@@ -355,7 +355,7 @@ bool HasVFAdj(const std::vector<std::vector<int>> &VF, const int &VIndex,
   return (it != VF[VIndex].end());
 }
 
-void VFDetach(std::vector<std::vector<int>> &VF,
+inline void VFDetach(std::vector<std::vector<int>> &VF,
               std::vector<std::vector<int>> &VFIndex, const int &VIndex,
               const int &FIndex) {
   assert(VFIndex.size() == VF.size());
@@ -377,7 +377,7 @@ void VFDetach(std::vector<std::vector<int>> &VF,
   VFIndex[VIndex] = newVFIdx;
 }
 
-void VFDetach(const std::vector<std::vector<int>> &Faces, const int &FIndex,
+inline void VFDetach(const std::vector<std::vector<int>> &Faces, const int &FIndex,
               std::vector<std::vector<int>> &VF,
               std::vector<std::vector<int>> &VFIndex) {
   assert(FIndex >= 0);
@@ -386,7 +386,7 @@ void VFDetach(const std::vector<std::vector<int>> &Faces, const int &FIndex,
     VFDetach(VF, VFIndex, Faces[FIndex][j], FIndex);
 }
 
-void VFAttach(const std::vector<std::vector<int>> &Faces,
+inline void VFAttach(const std::vector<std::vector<int>> &Faces,
               std::vector<std::vector<int>> &VF,
               std::vector<std::vector<int>> &VFIndex, const int &VIndex,
               const int &FIndex) {
@@ -402,7 +402,7 @@ void VFAttach(const std::vector<std::vector<int>> &Faces,
   VFIndex[VIndex].push_back(LocalIdx);
 }
 
-void UpdateVF(const std::vector<std::vector<int>> &Faces,
+inline void UpdateVF(const std::vector<std::vector<int>> &Faces,
               const std::vector<int> &To_UpdF,
               std::vector<std::vector<int>> &VF,
               std::vector<std::vector<int>> &VFIndex) {
@@ -445,7 +445,7 @@ void UpdateVF(const std::vector<std::vector<int>> &Faces,
   }
 }
 
-void VFDetach(const std::vector<std::vector<int>> &Faces,
+inline void VFDetach(const std::vector<std::vector<int>> &Faces,
               const std::vector<int> &To_UpdF,
               std::vector<std::vector<int>> &VF,
               std::vector<std::vector<int>> &VFIndex) {
@@ -462,7 +462,7 @@ void VFDetach(const std::vector<std::vector<int>> &Faces,
   }
 }
 
-void VFAttach(const std::vector<std::vector<int>> &Faces,
+inline void VFAttach(const std::vector<std::vector<int>> &Faces,
               const std::vector<int> &To_UpdF,
               std::vector<std::vector<int>> &VF,
               std::vector<std::vector<int>> &VFIndex) {
@@ -581,7 +581,7 @@ void VFAttach(const std::vector<std::vector<int>> &Faces,
 //   }
 // }
 
-void UpdateFF(const std::vector<std::vector<int>> &Faces,
+inline void UpdateFF(const std::vector<std::vector<int>> &Faces,
               const std::vector<int> &To_UpdF,
               std::vector<std::vector<int>> &NextF,
               std::vector<std::vector<int>> &NextE,
@@ -681,7 +681,7 @@ void UpdateFF(const std::vector<std::vector<int>> &Faces,
   }
 }
 
-bool CheckVFAdjacency(const std::vector<std::vector<int>> &Faces,
+inline bool CheckVFAdjacency(const std::vector<std::vector<int>> &Faces,
                       const std::vector<std::vector<int>> &VF,
                       const std::vector<std::vector<int>> &VFIndex) {
   // check faces to entry
@@ -723,7 +723,7 @@ bool CheckVFAdjacency(const std::vector<std::vector<int>> &Faces,
   return true;
 }
 
-void getVFAdjacency(const std::vector<std::vector<int>> &Faces,
+inline void getVFAdjacency(const std::vector<std::vector<int>> &Faces,
                     std::vector<std::vector<int>> &VF,
                     std::vector<std::vector<int>> &VFIndex) {
   int NumV = FindMaxVertIdx(Faces);
@@ -742,7 +742,7 @@ void getVFAdjacency(const std::vector<std::vector<int>> &Faces,
   }
 }
 
-void getVVAdjacency(const std::vector<std::pair<int, int>> &Edges,
+inline void getVVAdjacency(const std::vector<std::pair<int, int>> &Edges,
                     std::vector<std::vector<int>> &VVAdj) {
   int NumV = FindMaxVertIdx(Edges);
 
@@ -757,7 +757,7 @@ void getVVAdjacency(const std::vector<std::pair<int, int>> &Edges,
   }
 }
 
-void getEVAdjacency(const std::vector<std::vector<int>> &Faces,
+inline void getEVAdjacency(const std::vector<std::vector<int>> &Faces,
                     std::map<std::pair<int, int>,std::vector<std::pair<int, int>>> &EdgeFaceMap) {
   EdgeFaceMap.clear();
   for (size_t i = 0; i < Faces.size(); i++)
@@ -774,7 +774,7 @@ void getEVAdjacency(const std::vector<std::vector<int>> &Faces,
     }
 }
 
-void getVVStar(const std::vector<std::vector<int>> &Faces,
+inline void getVVStar(const std::vector<std::vector<int>> &Faces,
                const std::vector<std::vector<int>> &VF,
                const std::vector<std::vector<int>> &VFIndex, const int &IndexV,
                std::vector<int> &VertStar) {
@@ -798,7 +798,7 @@ void getVVStar(const std::vector<std::vector<int>> &Faces,
   VertStar.erase(std::unique(VertStar.begin(), VertStar.end()), VertStar.end());
 }
 
-void getVFStar(const std::vector<std::vector<int>> &Faces,
+inline void getVFStar(const std::vector<std::vector<int>> &Faces,
                const std::vector<std::vector<int>> &VF, const int &IndexV,
                const int extend_step, std::vector<int> &FacesStar) {
   assert(IndexV >= 0);
@@ -838,7 +838,7 @@ void getVFStar(const std::vector<std::vector<int>> &Faces,
   }
 }
 
-void getVFStar(const std::vector<std::vector<int>> &Faces,
+inline void getVFStar(const std::vector<std::vector<int>> &Faces,
                const std::vector<std::vector<int>> &VF, 
                const std::vector<int> &IndexV,
                const int extend_step, std::vector<std::vector<int>> &FacesStar) 
@@ -850,7 +850,7 @@ void getVFStar(const std::vector<std::vector<int>> &Faces,
   } 
 }
 
-void getFFAdjacencyNonManifold(
+inline void getFFAdjacencyNonManifold(
     const std::vector<std::vector<int>> &Faces,
     std::vector<std::vector<std::vector<int>>> &NextF,
     std::vector<std::vector<std::vector<int>>> &NextE) {
@@ -903,7 +903,7 @@ void getFFAdjacencyNonManifold(
   }
 }
 
-void getBorderVertNonManifMesh(const std::vector<std::vector<int>> &Faces,
+inline void getBorderVertNonManifMesh(const std::vector<std::vector<int>> &Faces,
                                std::vector<size_t> &BorderV) {
   std::vector<std::vector<std::vector<int>>> NextF, NextE;
   getFFAdjacencyNonManifold(Faces, NextF, NextE);
@@ -927,7 +927,7 @@ void getBorderVertNonManifMesh(const std::vector<std::vector<int>> &Faces,
   BorderV.erase(last, BorderV.end());
 }
 
-void FindFaceStar(const std::vector<std::vector<int>> &connections,
+inline void FindFaceStar(const std::vector<std::vector<int>> &connections,
                   std::vector<std::vector<int>> &Kernel,
                   const int extend_step = 0) {
   std::vector<std::vector<int>> NextF, NextE;
@@ -944,7 +944,7 @@ void FindFaceStar(const std::vector<std::vector<int>> &connections,
   ExtendStar(Kernel, extend_step);
 }
 
-void FindFaceStar(const std::vector<std::vector<int>> &connections,
+inline void FindFaceStar(const std::vector<std::vector<int>> &connections,
                   const std::vector<int> &selected_faces,
                   std::vector<std::vector<int>> &Kernel,
                   const int extend_step = 0) {
@@ -966,7 +966,7 @@ void FindFaceStar(const std::vector<std::vector<int>> &connections,
   ExtendStar(Kernel, extend_step);
 }
 
-void getBorderVert(const std::vector<std::vector<int>> &connections,
+inline void getBorderVert(const std::vector<std::vector<int>> &connections,
                    const std::vector<std::vector<int>> &NextF,
                    std::vector<size_t> &BorderV) {
   BorderV.clear();
@@ -986,14 +986,14 @@ void getBorderVert(const std::vector<std::vector<int>> &connections,
   BorderV.erase(last, BorderV.end());
 }
 
-void getBorderVert(const std::vector<std::vector<int>> &connections,
+inline void getBorderVert(const std::vector<std::vector<int>> &connections,
                    std::vector<size_t> &BorderV) {
   std::vector<std::vector<int>> NextF, NextE;
   Geo::getFFAdjacency(connections, NextF, NextE);
   getBorderVert(connections, NextF, BorderV);
 }
 
-void getBorderVert(const std::vector<std::vector<int>> &connections,
+inline void getBorderVert(const std::vector<std::vector<int>> &connections,
                    std::vector<int> &BorderV) {
   std::vector<size_t> BorderVu;
   getBorderVert(connections, BorderVu);
@@ -1002,7 +1002,7 @@ void getBorderVert(const std::vector<std::vector<int>> &connections,
     BorderV.push_back((int)BorderVu[i]);
 }
 
-void getBorderEdges(const std::vector<std::vector<int>> &Faces,
+inline void getBorderEdges(const std::vector<std::vector<int>> &Faces,
                     const std::vector<std::vector<int>> &NextF,
                     std::vector<std::pair<int, int>> &BorderE) {
   BorderE.clear();
@@ -1048,7 +1048,7 @@ void getBorderEdges(const std::vector<std::vector<int>> &Faces,
 //   //std::cout<<"Num Bord"<<BorderE.size()<<std::endl;
 // }
 
-void getBorderEdges(const std::vector<std::vector<int>> &Faces,
+inline void getBorderEdges(const std::vector<std::vector<int>> &Faces,
                     const std::vector<std::vector<int>> &NextF,
                     std::vector<int> &IndexFBorder,
                     std::vector<int> &IndexEBorder) {
@@ -1062,14 +1062,14 @@ void getBorderEdges(const std::vector<std::vector<int>> &Faces,
     }
 }
 
-void getBorderEdges(const std::vector<std::vector<int>> &Faces,
+inline void getBorderEdges(const std::vector<std::vector<int>> &Faces,
                     std::vector<std::pair<int, int>> &BorderE) {
   std::vector<std::vector<int>> NextF, NextE;
   Geo::getFFAdjacency(Faces, NextF, NextE);
   getBorderEdges(Faces, NextF, BorderE);
 }
 
-void getBorderEdges(const std::vector<std::vector<int>> &Faces,
+inline void getBorderEdges(const std::vector<std::vector<int>> &Faces,
                     std::vector<int> &IndexFBorder,
                     std::vector<int> &IndexEBorder) {
   std::vector<std::vector<int>> NextF, NextE;
@@ -1077,7 +1077,7 @@ void getBorderEdges(const std::vector<std::vector<int>> &Faces,
   getBorderEdges(Faces, NextF, IndexFBorder, IndexEBorder);
 }
 
-void getBorderVert(const std::vector<std::vector<int>> &connections,
+inline void getBorderVert(const std::vector<std::vector<int>> &connections,
                    const std::vector<std::vector<int>> &NextF,
                    const int NumVert, std::vector<bool> &IsB) {
   std::vector<size_t> BorderV;
@@ -1092,7 +1092,7 @@ void getBorderVert(const std::vector<std::vector<int>> &connections,
   }
 }
 
-void getBorderVert(const std::vector<std::vector<int>> &connections,
+inline void getBorderVert(const std::vector<std::vector<int>> &connections,
                    std::vector<bool> &IsB) {
   std::vector<std::vector<int>> NextF, NextE;
   Geo::getFFAdjacency(connections, NextF, NextE);
@@ -1100,7 +1100,7 @@ void getBorderVert(const std::vector<std::vector<int>> &connections,
   getBorderVert(connections, NextF, NumV + 1, IsB);
 }
 
-int NumSharedFaces(const int &VIndex0, const int &VIndex1,
+inline int NumSharedFaces(const int &VIndex0, const int &VIndex1,
                    const std::vector<std::vector<int>> &VF) {
   assert(VIndex0 >= 0);
   assert(VIndex1 >= 0);
@@ -1120,7 +1120,7 @@ int NumSharedFaces(const int &VIndex0, const int &VIndex1,
 }
 
 // for each edge the element index and the index of the edge
-void GetEdgeElem(
+inline void GetEdgeElem(
     const std::vector<std::vector<int>> &connections,
     std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> &EdgeElem) {
   EdgeElem.clear();
@@ -1136,7 +1136,7 @@ void GetEdgeElem(
   }
 }
 
-void FacesOfVertices(const std::vector<std::vector<int>> &connections,
+inline void FacesOfVertices(const std::vector<std::vector<int>> &connections,
                      const std::vector<std::vector<int>> &VF,
                      const std::vector<int> &vertidx,
                      std::vector<int> &faces_idx) {

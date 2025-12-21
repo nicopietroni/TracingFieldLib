@@ -183,7 +183,7 @@ public:
 };
 
 
-void GetSortedFacesFaceFun(const Pos3 &StartPos,
+inline void GetSortedFacesFaceFun(const Pos3 &StartPos,
                            const std::vector<std::vector<int> > &Faces,
                            const std::vector<std::vector<int> > &NextF,
                            const std::vector<std::vector<int> > &NextE,
@@ -231,7 +231,7 @@ void GetSortedFacesFaceFun(const Pos3 &StartPos,
     }while ((!HasBorder));
 }
 
-void GetSortedVertStar(const Pos3 &StartPos,
+inline void GetSortedVertStar(const Pos3 &StartPos,
                        const std::vector<std::vector<int> > &Faces,
                        const std::vector<std::vector<int> > &NextF,
                        const std::vector<std::vector<int> > &NextE,
@@ -250,7 +250,7 @@ void GetSortedVertStar(const Pos3 &StartPos,
     }
 }
 
-void GetSortedVertStar(const int &IndexV,
+inline void GetSortedVertStar(const int &IndexV,
                        const std::vector<std::vector<int> > &Faces,
                        const std::vector<std::vector<int> > &VF,
                        const std::vector<std::vector<int> > &VFIndex,
@@ -273,7 +273,7 @@ void GetSortedVertStar(const int &IndexV,
    GetSortedVertStar(StartPos,Faces,NextF,NextE,VertFan,HasBorder);
 }
 
-void getBorderSequnces(const std::vector<std::vector<int> > &Faces,
+inline void getBorderSequnces(const std::vector<std::vector<int> > &Faces,
                        const std::vector<std::vector<int> > &NextF,
                        const std::vector<std::vector<int> > &NextE,
                        std::vector<std::vector<Pos3 > > &BorderPos)
@@ -309,7 +309,7 @@ void getBorderSequnces(const std::vector<std::vector<int> > &Faces,
         }
 }
 
-void getBorderSequncesVert(const std::vector<std::vector<int> > &Faces,
+inline void getBorderSequncesVert(const std::vector<std::vector<int> > &Faces,
                            const std::vector<std::vector<int> > &NextF,
                            const std::vector<std::vector<int> > &NextE,
                            std::vector<std::vector<int > > &BorderVIdx)
@@ -328,7 +328,7 @@ void getBorderSequncesVert(const std::vector<std::vector<int> > &Faces,
     }
 }
 
-void getBorderSequncesVert(const std::vector<std::vector<int> > &Faces,
+inline void getBorderSequncesVert(const std::vector<std::vector<int> > &Faces,
                            std::vector<std::vector<int > > &BorderVIdx)
 {
     std::vector<std::vector<int> > NextF,NextE;
@@ -336,7 +336,7 @@ void getBorderSequncesVert(const std::vector<std::vector<int> > &Faces,
     getBorderSequncesVert(Faces,NextF,NextE,BorderVIdx);
 }
 
-bool IsBorderVertVF(const int &IndexV,
+inline bool IsBorderVertVF(const int &IndexV,
                      const std::vector<std::vector<int>> &Faces,
                      const std::vector<std::vector<int>> &VF,
                      const std::vector<std::vector<int>> &VFIndex) 

@@ -1883,7 +1883,7 @@ int DesambiguateSamePosVertices(
 }
 
 // Coherently orient the triangle mesh
-void OrientCoherently(std::vector<std::vector<int>> &faces) {
+inline void OrientCoherently(std::vector<std::vector<int>> &faces) {
   std::map<std::pair<int, int>, int> edgeToFace;
   std::vector<bool> visited(faces.size(), false);
 

@@ -1944,8 +1944,8 @@ void SetExportBar() {
     if (ImGui::Button("Save Cycles")) {
       std::string CyclesFilename = ProjectName;
       CyclesFilename.append("_cycles.txt");
-      PDeco.SaveCycleData(CyclesFilename);
-      PDeco.SaveCurveCycleData(ProjectName);
+      // PDeco.SaveCycleData(CyclesFilename);
+      // PDeco.SaveCurveCycleData(ProjectName);
       //PDeco.SaveSeparateSubMeshes(std::string("test"), std::string("off"));
     }
   }

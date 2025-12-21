@@ -41,7 +41,7 @@
 namespace Field
 {
 
-    void OrthoCrossDirs(const int Dir, std::vector<int> &OrthoD)
+    inline void OrthoCrossDirs(const int Dir, std::vector<int> &OrthoD)
     {
         assert(Dir >= 0);
         assert(Dir < 4);
@@ -50,7 +50,7 @@ namespace Field
         OrthoD.push_back((Dir + 3) % 4);
     }
 
-    int OppositeCrossDir(const int Dir)
+    inline int OppositeCrossDir(const int Dir)
     {
         assert(Dir >= 0);
         assert(Dir < 4);
@@ -385,7 +385,7 @@ namespace Field
     };
 
     template <typename ScalarType>
-    Field::CrossF<ScalarType> InterpolateTangentCrosses(const std::vector<Field::CrossF<ScalarType> > &Crosses,
+    inline Field::CrossF<ScalarType> InterpolateTangentCrosses(const std::vector<Field::CrossF<ScalarType> > &Crosses,
                                                         const std::vector<ScalarType> &W)
     {
         assert(Crosses.size() > 0);
@@ -445,7 +445,7 @@ namespace Field
     }
 
     template <typename ScalarType>
-    Field::CrossF<ScalarType> InterpolateCross(const std::vector<Field::CrossF<ScalarType> > &Crosses,
+    inline Field::CrossF<ScalarType> InterpolateCross(const std::vector<Field::CrossF<ScalarType> > &Crosses,
                                                const Geo::Point3<ScalarType> &TargetN,
                                                const std::vector<ScalarType> &W)
     {
@@ -474,7 +474,7 @@ namespace Field
     }
 
     template <class ScalarType>
-    bool IsProperCrossField(const std::vector<Field::CrossF<ScalarType> > &FaceCross)
+    inline bool IsProperCrossField(const std::vector<Field::CrossF<ScalarType> > &FaceCross)
     {
         for (size_t i = 0; i < FaceCross.size(); i++)
             if (!FaceCross[i].IsProper())

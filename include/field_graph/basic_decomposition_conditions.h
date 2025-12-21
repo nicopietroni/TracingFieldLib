@@ -293,6 +293,12 @@ public:
         maxCornerNum=6;
     }
 
+    NumSidesCondition(int _minCornerNum,int _maxCornerNum)
+    {
+        minCornerNum=_minCornerNum;
+        maxCornerNum=_maxCornerNum;
+    }
+    
     bool Mandatory()const override
     {
         return true;

@@ -856,7 +856,7 @@ public:
 
 public:
 
-  static void RefineRequiredEdges(std::vector<Geo::Point3<ScalarType>> &Pos3D,
+  static void RefineForFieldComputation(std::vector<Geo::Point3<ScalarType>> &Pos3D,
                                   std::vector<std::vector<int>> &Faces,
                                   std::vector<std::pair<int, int>> &FeatureE,
                                   bool splitAllFedge = true,
@@ -1052,6 +1052,11 @@ public:
 
     std::cout << "Refined: " << DisconnVert.size() << " disconnected vert"
               << std::endl;
+
+    std::sort(FeatureE.begin(), FeatureE.end());
+    auto last = std::unique(FeatureE.begin(), FeatureE.end());
+    FeatureE.erase(last, FeatureE.end());
+
   }
 };
 } // namespace Geo

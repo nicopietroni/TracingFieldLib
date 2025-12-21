@@ -38,7 +38,7 @@
 #include <point3.h>
 #include <IO/file_path_functions.h>
 
-void parseFaceLine(const std::string& line, std::vector<int>& vertexIndices) 
+inline void parseFaceLine(const std::string& line, std::vector<int>& vertexIndices) 
 {
     std::stringstream ss(line);
     std::string token;

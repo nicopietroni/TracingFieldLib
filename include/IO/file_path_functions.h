@@ -29,7 +29,7 @@
 
 #include <string>
 
-std::string GetDirectory(const std::string &curr_path)
+inline std::string GetDirectory(const std::string &curr_path)
 {
     std::string projM=curr_path;
     size_t indexExt=projM.find_last_of("/");
@@ -37,7 +37,7 @@ std::string GetDirectory(const std::string &curr_path)
     return(projM);
 }
 
-std::string RemoveExtension(const std::string &curr_path)
+inline std::string RemoveExtension(const std::string &curr_path)
 {
     std::string projM=curr_path;
     size_t indexExt=projM.find_last_of(".");
@@ -45,7 +45,7 @@ std::string RemoveExtension(const std::string &curr_path)
     return(projM);
 }
 
-std::string GetFilaname(const std::string &curr_path)
+inline std::string GetFilaname(const std::string &curr_path)
 {
     std::string projM=curr_path;
     size_t indexExt=projM.find_last_of("/");
@@ -53,14 +53,14 @@ std::string GetFilaname(const std::string &curr_path)
     return(projM);
 }
 
-std::string GetFilanameNoExtension(const std::string &curr_path)
+inline std::string GetFilanameNoExtension(const std::string &curr_path)
 {
     std::string nameF=GetFilaname(curr_path);
     nameF=RemoveExtension(nameF);
     return nameF;
 }
 
-std::string GetFileExtension(const std::string &curr_path)
+inline std::string GetFileExtension(const std::string &curr_path)
 {
     size_t lastDotPos = curr_path.find_last_of(".");
 

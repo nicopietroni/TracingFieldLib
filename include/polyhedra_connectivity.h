@@ -102,7 +102,7 @@ static int WhichEdge(const std::vector<int> &TetraV, const int &indexV0,
   return -1;
 }
 
-void FaceVert(const std::vector<std::vector<int>> &Connectivity,
+inline void FaceVert(const std::vector<std::vector<int>> &Connectivity,
               const size_t &IndexT, const size_t &IndexF,
               std::vector<int> &FaceV) {
   int LocV0 = VofF(IndexF, 0);
@@ -121,7 +121,7 @@ void FaceVert(const std::vector<std::vector<int>> &Connectivity,
   FaceV.push_back(GlobV2);
 }
 
-void GetPPAdjacency(const std::vector<std::vector<int>> &Connectivity,
+inline void GetPPAdjacency(const std::vector<std::vector<int>> &Connectivity,
                     std::vector<std::vector<int>> &NextP,
                     std::vector<std::vector<int>> &NextF) {
   NextP.clear();
@@ -163,7 +163,7 @@ void GetPPAdjacency(const std::vector<std::vector<int>> &Connectivity,
   }
 }
 
-void GetVPAdjacency(
+inline void GetVPAdjacency(
     const size_t numV, const std::vector<std::vector<int>> &Connectivity,
     std::vector<std::vector<std::pair<int, int>>> &VPAdjacency) {
   VPAdjacency.clear();
@@ -178,7 +178,7 @@ void GetVPAdjacency(
     }
 }
 
-void GetPPKernelAlongVertices(const size_t numV,
+inline void GetPPKernelAlongVertices(const size_t numV,
                               const std::vector<std::vector<int>> &Connectivity,
                               std::vector<std::vector<int>> &Adjacency,
                               int diffuse_step = 0) {
@@ -222,7 +222,7 @@ void GetPPKernelAlongVertices(const size_t numV,
     Geo::ExtendStar(Adjacency, diffuse_step);
 }
 
-void GetPPKernelAlongVertices(const std::vector<std::vector<int>> &Connectivity,
+inline void GetPPKernelAlongVertices(const std::vector<std::vector<int>> &Connectivity,
                               std::vector<std::vector<int>> &Adjacency,
                               int diffuse_step = 0) {
   int NumIdx = Geo::FindMaxVertIdx(Connectivity);
@@ -230,7 +230,7 @@ void GetPPKernelAlongVertices(const std::vector<std::vector<int>> &Connectivity,
   GetPPKernelAlongVertices(NumIdx, Connectivity, Adjacency, diffuse_step);
 }
 
-void FFExternalMesh(const std::vector<std::vector<int>> &Connectivity,
+inline void FFExternalMesh(const std::vector<std::vector<int>> &Connectivity,
                     const std::vector<std::vector<int>> &NextP,
                     const std::vector<std::vector<int>> &NextF,
                     std::vector<std::vector<int>> &Faces,
@@ -252,7 +252,7 @@ void FFExternalMesh(const std::vector<std::vector<int>> &Connectivity,
     }
 }
 
-void FFExternalEdges(const std::vector<std::vector<int>> &Connectivity,
+inline void FFExternalEdges(const std::vector<std::vector<int>> &Connectivity,
                      const std::vector<std::vector<int>> &NextP,
                      const std::vector<std::vector<int>> &NextF,
                      std::vector<std::pair<int,int>> &ExtEdges) {
@@ -281,7 +281,7 @@ void FFExternalEdges(const std::vector<std::vector<int>> &Connectivity,
                    ExtEdges.end());
 }
 
-void FFExternalEdges(const std::vector<std::vector<int>> &Connectivity,
+inline void FFExternalEdges(const std::vector<std::vector<int>> &Connectivity,
                     std::vector<std::pair<int,int>> &ExtEdges)
 {
   std::vector<std::vector<int>> NextP,NextF;
@@ -289,7 +289,7 @@ void FFExternalEdges(const std::vector<std::vector<int>> &Connectivity,
   FFExternalEdges(Connectivity,NextP,NextF,ExtEdges);
 }
 
-void FFExternalVertices(const std::vector<std::vector<int>> &Connectivity,
+inline void FFExternalVertices(const std::vector<std::vector<int>> &Connectivity,
                         const std::vector<std::vector<int>> &NextP,
                         const std::vector<std::vector<int>> &NextF,
                         std::vector<int> &ExtVertices) {
@@ -311,14 +311,14 @@ void FFExternalVertices(const std::vector<std::vector<int>> &Connectivity,
                     ExtVertices.end());
 }
 
-void FFExternalVertices(const std::vector<std::vector<int>> &Connectivity,
+inline void FFExternalVertices(const std::vector<std::vector<int>> &Connectivity,
                         std::vector<int> &ExtVertices) {
   std::vector<std::vector<int>> NextP, NextF;
   GetPPAdjacency(Connectivity, NextP, NextF);
   FFExternalVertices(Connectivity, NextP, NextF, ExtVertices);
 }
 
-void FFExternalPolys(const std::vector<std::vector<int>> &NextP,
+inline void FFExternalPolys(const std::vector<std::vector<int>> &NextP,
                      const std::vector<std::vector<int>> &NextF,
                      std::vector<int> &ExtPoly) {
   ExtPoly.clear();
@@ -333,7 +333,7 @@ void FFExternalPolys(const std::vector<std::vector<int>> &NextP,
 }
 
 template <class ScalarType>
-void TetraFaceMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+inline void TetraFaceMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                    const std::vector<std::vector<int>> &Connectivity,
                    const std::vector<int> &TetraIdx,
                    const std::vector<int> &TetraFaces,
@@ -377,7 +377,7 @@ void TetraFaceMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 }
 
 template <class ScalarType>
-void BorderVertices(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+inline void BorderVertices(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                     const std::vector<std::vector<int>> &ExtFace,
                     std::vector<bool> &BorderV) {
   BorderV.clear();
@@ -388,7 +388,7 @@ void BorderVertices(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 }
 
 template <class ScalarType>
-void TetraInternalFaces(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+inline void TetraInternalFaces(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                         const std::vector<std::vector<int>> &TetraConnectivity,
                         std::vector<std::vector<int>> &TetraInternalFaces,
                         std::vector<std::vector<int>> &FT,

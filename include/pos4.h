@@ -325,7 +325,7 @@ public:
 };
 
 
-void GetSortedTetraFun(const Pos4 &StartPos,
+inline void GetSortedTetraFun(const Pos4 &StartPos,
                        const std::vector<std::vector<int> > &Tetra,
                        const std::vector<std::vector<int> > &NextT,
                        const std::vector<std::vector<int> > &NextF,
@@ -373,7 +373,7 @@ void GetSortedTetraFun(const Pos4 &StartPos,
     }while ((!HasBorder));
 }
 
-void GetOneEdgePosOfTetra(const std::vector<std::vector<int> > &Tetra,
+inline void GetOneEdgePosOfTetra(const std::vector<std::vector<int> > &Tetra,
                           const int IndexT,std::vector<Pos4> &AllPos)
 {
     AllPos.clear();
@@ -388,7 +388,7 @@ void GetOneEdgePosOfTetra(const std::vector<std::vector<int> > &Tetra,
     }
 }
 
-void GetFaceVert(const std::vector<int> &Tetra,const int &IndexF,
+inline void GetFaceVert(const std::vector<int> &Tetra,const int &IndexF,
                  int &IndexV0,int &IndexV1,int &IndexV2)
 {
 
@@ -405,7 +405,7 @@ void GetFaceVert(const std::vector<int> &Tetra,const int &IndexF,
     IndexV2=Tetra[IndexV2];
 }
 
-void GetBorderEdges(const std::vector<std::vector<int> > &Tetra,
+inline void GetBorderEdges(const std::vector<std::vector<int> > &Tetra,
                     const std::vector<std::vector<int> > &NextT,
                     const std::vector<std::vector<int> > &NextF,
                     std::vector<std::pair<int,int> > &BorderE)

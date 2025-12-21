@@ -512,7 +512,7 @@ Geo::Point3<ScalarType> operator*(const Eigen::Matrix3<ScalarType> &m,
 // }
 
 template <class ScalarType>
-void SetScale(Eigen::Matrix4<ScalarType> &m, const ScalarType sx,
+inline void SetScale(Eigen::Matrix4<ScalarType> &m, const ScalarType sx,
               const ScalarType sy, const ScalarType sz) {
   m.setZero();
   m(0, 0) = sx;
@@ -522,7 +522,7 @@ void SetScale(Eigen::Matrix4<ScalarType> &m, const ScalarType sx,
 }
 
 template <class ScalarType>
-void SetTranslate(Eigen::Matrix4<ScalarType> &m, const ScalarType tx,
+inline void SetTranslate(Eigen::Matrix4<ScalarType> &m, const ScalarType tx,
                   const ScalarType ty, const ScalarType tz) {
   m.setIdentity();
   m(0, 3) = tx;
@@ -530,7 +530,7 @@ void SetTranslate(Eigen::Matrix4<ScalarType> &m, const ScalarType tx,
   m(2, 3) = tz;
 }
 
-bool canMultiply(const Eigen::MatrixXd &A, const Eigen::VectorXd &V) {
+inline bool canMultiply(const Eigen::MatrixXd &A, const Eigen::VectorXd &V) {
   return A.cols() == V.rows();
 }
 
