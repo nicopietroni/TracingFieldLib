@@ -40,8 +40,8 @@
 #include <ostream>
 #include <set>
 #include <string>
-//#include <sys/_types/_size_t.h>
-#include <cstddef>   // C++
+// #include <sys/_types/_size_t.h>
+#include <cstddef> // C++
 #include <utility>
 #define SMOOTH_KERNEL 2
 #include "../edge_mesh_functions.h"
@@ -261,6 +261,7 @@ private:
   bool update_dart;
 
 public:
+  bool prefer_feature_features;
   bool stop_when_solved;
   bool add_only_where_needed;
   bool allow_darts;
@@ -1389,6 +1390,8 @@ public:
 
     dynamics_smooth_steps = 5;
     sing_dist_interval_step = 0;
+    
+    prefer_feature_features = true;
   }
 
   //    std::set<int> TestedRemovedPath;
@@ -1786,22 +1789,82 @@ public:
     // PathSampl.MergeCollinearPath();
   }
 
+  // bool SolveAllFeatures() // bool UpdateForce = true) {
+  // {
+  //   // std::cout<<"STEP 0"<<std::endl;
+  //   // PathSampl.Graph().PrintData();
+
+  //   PathSampl.MaxCrossJump = -1;
+  //   bool has_added = false;
+
+  //   // SetSpikeSpikeConfiguration();
+
+  //   // // then trace in the one unsolved
+  //   // RetraceOnUnsolved();
+
+  //   // has_added |=AddAllPaths();
+
+  //   // std::vector<bool> force_sample_swap;
+  //   PathSampl.force_direct = true;
+  //   // first do feature to feature
+  //   SetFeatureFeatureConfiguration();
+  //   PathSampl.PType = CrossPathSampling<ScalarType>::PrioLenW;
+
+  //   assert(IsSolvingFeatures());
+
+  //   InitSampling(add_only_where_needed);
+  //   if (add_only_where_needed)
+  //     InitMustPassEdges();
+
+  //   // if (UpdateForce)
+  //   //  std::cout<<"STEP 0.1"<<std::endl;
+  //   //  PathSampl.Graph().PrintData();
+
+  //   // then trace in the one unsolved, only the first time then use borders
+  //   // if (first_ite)
+  //   std::cout << "**TRACING first feature step **" << std::endl;
+  //   RetraceCandidates();
+
+  //   // std::cout<<"STEP 1"<<std::endl;
+  //   // PathSampl.Graph().PrintData();
+
+  //   has_added |= AddAllPaths();
+
+  //   // std::cout<<"STEP 2"<<std::endl;
+  //   // PathSampl.Graph().PrintData();
+
+  //   // set features to all possible arrival points
+  //   SetFeatureAllConfiguration();
+  //   InitSampling(add_only_where_needed);
+  //   if (add_only_where_needed)
+  //     InitMustPassEdges();
+  //   // if (!end_border)
+  //   // {
+  //   // std::cout<<"STEP 3"<<std::endl;
+  //   // PathSampl.Graph().PrintData();
+
+  //   std::cout << "**TRACING second feature step **" << std::endl;
+  //   RetraceCandidates();
+
+  //   // std::cout<<"STEP 4"<<std::endl;
+  //   // PathSampl.Graph().PrintData();
+  //   has_added |= AddAllPaths();
+
+  //   // std::cout<<"STEP 5"<<std::endl;
+  //   // PathSampl.Graph().PrintData();
+  //   //}
+  //   PathSampl.force_direct = false;
+
+  //   PathSampl.MaxCrossJump = -1;
+  //   return has_added;
+  // }
+
   bool SolveAllFeatures() // bool UpdateForce = true) {
   {
-    // std::cout<<"STEP 0"<<std::endl;
-    // PathSampl.Graph().PrintData();
 
     PathSampl.MaxCrossJump = -1;
     bool has_added = false;
 
-    // SetSpikeSpikeConfiguration();
-
-    // // then trace in the one unsolved
-    // RetraceOnUnsolved();
-
-    // has_added |=AddAllPaths();
-
-    // std::vector<bool> force_sample_swap;
     PathSampl.force_direct = true;
     // first do feature to feature
     SetFeatureFeatureConfiguration();
@@ -1813,43 +1876,32 @@ public:
     if (add_only_where_needed)
       InitMustPassEdges();
 
-    // if (UpdateForce)
-    //  std::cout<<"STEP 0.1"<<std::endl;
-    //  PathSampl.Graph().PrintData();
-
-    // then trace in the one unsolved, only the first time then use borders
-    // if (first_ite)
     std::cout << "**TRACING first feature step **" << std::endl;
     RetraceCandidates();
 
-    // std::cout<<"STEP 1"<<std::endl;
-    // PathSampl.Graph().PrintData();
-
-    has_added |= AddAllPaths();
-
-    // std::cout<<"STEP 2"<<std::endl;
-    // PathSampl.Graph().PrintData();
+    if (prefer_feature_features)
+      has_added |= AddAllPaths();
+    else
+      PathSampl.SaveSampledPaths();
+    // std::cout<<"Test 1"<<std::endl;
 
     // set features to all possible arrival points
     SetFeatureAllConfiguration();
     InitSampling(add_only_where_needed);
     if (add_only_where_needed)
       InitMustPassEdges();
-    // if (!end_border)
-    // {
-    // std::cout<<"STEP 3"<<std::endl;
-    // PathSampl.Graph().PrintData();
 
     std::cout << "**TRACING second feature step **" << std::endl;
     RetraceCandidates();
 
     // std::cout<<"STEP 4"<<std::endl;
     // PathSampl.Graph().PrintData();
+
+    if (!prefer_feature_features)
+      PathSampl.AddSavedSampledPaths();
+
     has_added |= AddAllPaths();
 
-    // std::cout<<"STEP 5"<<std::endl;
-    // PathSampl.Graph().PrintData();
-    //}
     PathSampl.force_direct = false;
 
     PathSampl.MaxCrossJump = -1;
@@ -2837,7 +2889,8 @@ public:
   // struct CurveData {
   //   std::vector<Geo::Point3<ScalarType>> Pos;
   //   int NumPatches;
-  //   typedef typename std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>
+  //   typedef typename std::pair<Geo::Point3<ScalarType>,
+  //   Geo::Point3<ScalarType>>
   //       PosPair;
 
   //   PosPair Extremes() const {
@@ -2884,7 +2937,8 @@ public:
   //     return (PosP0 < PosP1);
   //   }
 
-  //   CurveData(const std::vector<Geo::Point3<ScalarType>> &_Pos) { Pos = _Pos; }
+  //   CurveData(const std::vector<Geo::Point3<ScalarType>> &_Pos) { Pos = _Pos;
+  //   }
   // };
 
   // struct CycleData {
@@ -2963,14 +3017,15 @@ public:
   //   std::set<Geo::Point3<ScalarType>> CornerPosSet(CornerPos.begin(),
   //                                                  CornerPos.end());
 
-  //   // std::cout << "There are " << CornerPos.size() << " corners" << std::endl;
-  //   std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+  //   // std::cout << "There are " << CornerPos.size() << " corners" <<
+  //   std::endl; std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
   //       PatchSubsides;
   //   // PatchMan.GetPerPatchSubSidesWithSplitTJunction(PatchSubsides);
   //   for (size_t i = 0; i < PatchMan.PData.SubPatchVertPos.size(); i++) {
   //     std::vector<Geo::Point3<ScalarType>> SubPVert =
   //         PatchMan.PData.SubPatchVertPos[i];
-  //     std::vector<std::vector<int>> SubPFace = PatchMan.PData.SubPatchFaces[i];
+  //     std::vector<std::vector<int>> SubPFace =
+  //     PatchMan.PData.SubPatchFaces[i];
 
   //     // then get the outer loops
   //     std::vector<std::vector<int>> BorderVIdxL;
@@ -3139,7 +3194,8 @@ public:
 
   //     std::vector<Geo::Point3<ScalarType>> SubPVert =
   //         PatchMan.PData.SubPatchVertPos[i];
-  //     std::vector<std::vector<int>> SubPFace = PatchMan.PData.SubPatchFaces[i];
+  //     std::vector<std::vector<int>> SubPFace =
+  //     PatchMan.PData.SubPatchFaces[i];
 
   //     // then get the outer loops
   //     std::vector<std::vector<int>> BorderVIdxL;
@@ -3165,7 +3221,8 @@ public:
   //   fout << "numV " << VertPos.size() << "\n";
   //   for (size_t i = 0; i < VertPos.size(); i++) {
   //     Geo::Point3<ScalarType> CurrPos = VertPos[i];
-  //     fout << "v " << CurrPos.X << " " << CurrPos.Y << " " << CurrPos.Z << "\n";
+  //     fout << "v " << CurrPos.X << " " << CurrPos.Y << " " << CurrPos.Z <<
+  //     "\n";
   //   }
 
   //   fout << "numP " << PathIdx.size() << "\n";

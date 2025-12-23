@@ -1788,6 +1788,16 @@ inline int RemoveSmallConnectedComponents(
   return deleted_num;
 }
 
+template <class ScalarType>
+static void RemoveDeleted(std::vector<Geo::Point3<ScalarType>> &Pos3D,
+                          std::vector<std::vector<int>> &Connectivity,
+                          const std::vector<int> &DeletedV,
+                          const std::vector<int> &DeletedEl) 
+{
+  std::vector<int> OriginalEl,OriginalV;
+  RemoveDeleted<ScalarType>(Pos3D, Connectivity, DeletedV, DeletedEl, OriginalV, OriginalEl);
+}
+
 static void InvertOrientation(std::vector<std::vector<int>> &Faces) {
   for (size_t i = 0; i < Faces.size(); i++)
     std::reverse(Faces[i].begin(), Faces[i].end());

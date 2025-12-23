@@ -37,6 +37,7 @@
 #include <mesh_functions.h>
 #include <point3.h>
 #include <remesh_size.h>
+#include <mesh_clean.h>
 #include <string>
 #include <triangular_remesh.h>
 #include <vector>
@@ -72,6 +73,8 @@ bool LoadMesh(const std::string &path) {
     std::cout << "Loaded " << Connectivity.size() << " faces " << VertPos.size()
               << " vertices" << std::endl;
 
+    Geo::CleanMesh<ScalarType>::SolveNonManifoldByDeletingFaces(VertPos, Connectivity);
+   
     MeshBox.Init(VertPos);
     ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
     // AVGL = AvgEdgeLen(VertPos, Connectivity);

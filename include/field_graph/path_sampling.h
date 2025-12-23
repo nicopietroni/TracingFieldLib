@@ -1980,6 +1980,66 @@ public:
   //         true;
   //     return false;
   // }
+  
+ std::vector<int> StartingNodesSave;
+ std::vector<std::vector<int>> SampledPathsSave;
+ std::vector<ScalarType> SampledPathsLenghtWSave;
+ std::vector<SP_Status> SampledPaths_StatusSave;
+ std::vector<std::pair<ScalarType, int>> CandidatesSave;
+
+  void SaveSampledPaths() {
+    //save only the ones that are evaluate
+
+    for (size_t i = 0; i < SampledPaths.size(); i++) {
+      if (SampledPaths_Status[i] != SP_Evaluate)
+        continue;
+      StartingNodesSave.push_back(StartingNodes[i]);
+      SampledPathsSave.push_back(SampledPaths[i]);
+      SampledPathsLenghtWSave.push_back(SampledPathsLenghtW[i]);
+      SampledPaths_StatusSave.push_back(SampledPaths_Status[i]);
+      ScalarType Prio = Candidates[i].first;
+      CandidatesSave.push_back(std::pair<ScalarType, int>(Prio, SampledPathsSave.size() - 1));
+    }
+
+     for (size_t i = 0; i < CandidatesSave.size(); i++) {
+      assert(CandidatesSave[i].second >= 0);
+      assert(CandidatesSave[i].second < SampledPathsSave.size());
+    }
+  }
+
+  void AddSavedSampledPaths() {
+    size_t old_size = SampledPaths.size();
+    SampledPaths.insert(SampledPaths.end(), SampledPathsSave.begin(),
+                        SampledPathsSave.end());
+    SampledPathsLenghtW.insert(SampledPathsLenghtW.end(),
+                               SampledPathsLenghtWSave.begin(),
+                               SampledPathsLenghtWSave.end());
+    SampledPaths_Status.insert(SampledPaths_Status.end(),
+                               SampledPaths_StatusSave.begin(),
+                               SampledPaths_StatusSave.end());
+    StartingNodes.insert(StartingNodes.end(), StartingNodesSave.begin(),
+                         StartingNodesSave.end());
+
+   
+    for (size_t i = 0; i < CandidatesSave.size(); i++) {
+      ScalarType Prio = CandidatesSave[i].first;
+      int IdxPath = CandidatesSave[i].second;
+      assert(IdxPath >= 0);
+      assert(IdxPath < SampledPathsSave.size());
+      IdxPath += old_size;
+      assert(IdxPath < SampledPaths.size());
+      Candidates.push_back(std::pair<ScalarType, int>(Prio, IdxPath));
+    }
+    std::sort(Candidates.begin(), Candidates.end());
+    
+    // clear saved
+    CandidatesSave.clear();
+    StartingNodesSave.clear();
+    SampledPathsSave.clear();
+    SampledPathsLenghtWSave.clear();
+    SampledPaths_StatusSave.clear();
+
+  }
 
   void ClearSampledPaths() {
     StartingNodes.clear();

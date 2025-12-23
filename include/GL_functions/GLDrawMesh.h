@@ -217,10 +217,15 @@ void DrawSurfaceFill3D(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                        bool SmoothShade, TypeRendMesh TRM = TRTriangle,
                        std::vector<Geo::Point3<ScalarType>> *FaceCol = NULL,
                        std::vector<Geo::Point3<ScalarType>> *VertCol = NULL,
-                       bool use_blend = false) {
+                       bool use_blend = false,
+                       bool use_light = true) {
   assert(Connectivity.size() == FaceNormal.size());
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
+  if (use_light) {
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+  } else {
+    glDisable(GL_LIGHTING);
+  }
   for (size_t i = 0; i < Connectivity.size(); i++) {
     if (FaceCol != NULL) {
       if (use_blend)
@@ -592,7 +597,8 @@ void DrawSurfaceMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                      bool smoothShade = true, bool use_blend = true,
                      TypeRendMesh TRM = TRTriangle,
                      std::vector<Geo::Point3<ScalarType>> *FaceCol = NULL,
-                     std::vector<Geo::Point3<ScalarType>> *VertCol = NULL) {
+                     std::vector<Geo::Point3<ScalarType>> *VertCol = NULL,
+                     bool use_light = true) {
   typedef typename Geo::Point3<ScalarType> CoordType;
 
   glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -609,7 +615,7 @@ void DrawSurfaceMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
   if (drawsurface)
     DrawSurfaceFill3D<ScalarType>(VertPos, Connectivity, FaceNormal, VertNormal,
                                   smoothShade, TRM, FaceCol, VertCol,
-                                  use_blend);
+                                  use_blend,use_light);
 
   glDisable(GL_POLYGON_OFFSET_FILL);
   glEnable(GL_COLOR_MATERIAL);

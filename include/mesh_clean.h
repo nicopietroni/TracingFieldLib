@@ -127,8 +127,8 @@ public:
   }
 
   static int SolveFolds(std::vector<Geo::Point3<ScalarType>> &Pos,
-                         std::vector<std::vector<int>> &Faces,
-                         ScalarType MinDot = -0.99) {
+                        std::vector<std::vector<int>> &Faces,
+                        ScalarType MinDot = -0.99) {
     assert(MinDot < 0);
     bool has_fold = false;
     std::vector<std::vector<int>> VF, VFIndex;
@@ -204,7 +204,8 @@ public:
 
     std::vector<std::pair<int, int>> FoldedF_E_Remain;
     GetFolds(Pos, Faces, FoldedF_E_Remain, MinDot);
-    if (FoldedF_E_Remain.size()>0)std::cout<<"Sitll "<<FoldedF_E_Remain.size()<<" folds"<<std::endl;
+    if (FoldedF_E_Remain.size() > 0)
+      std::cout << "Sitll " << FoldedF_E_Remain.size() << " folds" << std::endl;
     return exp_step;
   }
 
@@ -281,6 +282,122 @@ public:
 
     std::vector<int> OriginalV, OriginalEl;
     RemoveDeleted(Pos, Faces, DeletedV, DeletedF, OriginalV, OriginalEl);
+    RemoveUnfererencedVert(Pos, Faces);
+  }
+
+  // remove isolated faces around non-manifold vertices
+  static void
+  SolveNonManifoldByDeletingFaces(std::vector<Geo::Point3<ScalarType>> &Pos,
+                                  std::vector<std::vector<int>> &Faces) {
+
+    std::vector<int> non_manifold_vert =
+        GetNonManifoldVert<ScalarType>(Pos, Faces);
+    if (non_manifold_vert.size() == 0)
+      return;
+
+    std::vector<std::vector<int>> VF;
+    std::vector<std::vector<int>> VFIndex;
+    Geo::getVFAdjacency(Faces, VF, VFIndex);
+
+    std::vector<std::vector<int>> FF;
+    std::vector<std::vector<int>> FFIndex;
+    Geo::getFFAdjacency(Faces, FF, FFIndex);
+
+    if (non_manifold_vert.size() == 0)
+      return;
+
+    std::vector<std::vector<std::vector<int>>> SortedFun;
+    GetDifferentSortedFFStar(Pos, Faces, SortedFun);
+
+    std::vector<int> FacesToDelete;
+    std::vector<int> VertsToDelete;
+
+    std::vector<std::pair<int, int>> FoldedF_E;
+    GetFolds(Pos, Faces, FoldedF_E);
+    std::set<int> FoldedFacesSet;
+    for (size_t i = 0; i < FoldedF_E.size(); i++) {
+      int IndexF0 = FoldedF_E[i].first;
+      int IndexF1 = FF[IndexF0][FoldedF_E[i].second];
+      FoldedFacesSet.insert(IndexF0);
+      FoldedFacesSet.insert(IndexF1);
+    }
+
+    for (size_t i = 0; i < non_manifold_vert.size(); i++) {
+      int IndexV = non_manifold_vert[i];
+      assert(SortedFun[IndexV].size() > 1);
+      // different components size around this vertex
+      std::vector<int> ComponentSizes;
+      for (size_t j = 0; j < SortedFun[IndexV].size(); j++) {
+        ComponentSizes.push_back(SortedFun[IndexV][j].size());
+      }
+
+      std::vector<bool> IsFoldedComponent(SortedFun[IndexV].size(), false);
+      // check if one component has folded faces
+      for (size_t j = 0; j < SortedFun[IndexV].size(); j++) {
+        for (size_t k = 0; k < SortedFun[IndexV][j].size(); k++) {
+          int IndexF = SortedFun[IndexV][j][k];
+          if (FoldedFacesSet.count(IndexF) > 0) {
+            IsFoldedComponent[j] = true;
+            break;
+          }
+        }
+      }
+
+      // num border edges in each component
+      std::vector<int> NumBorderEdges(SortedFun[IndexV].size(), 0);
+      for (size_t j = 0; j < SortedFun[IndexV].size(); j++) {
+        for (size_t k = 0; k < SortedFun[IndexV][j].size(); k++) {
+          int IndexF = SortedFun[IndexV][j][k];
+          // find local index of IndexV in IndexF
+          for (size_t e = 0; e < FF[IndexF].size(); e++) {
+            if (FF[IndexF][e] == -1)
+              NumBorderEdges[j]++;
+          }
+        }
+      }
+
+      struct ComponentInfo {
+        int Size;
+        int NumBorder;
+        bool HasFold;
+        int Index;
+        // should be ordered first the one that has folds,
+        //  then one with smallest size, then one with most border edges
+        bool operator<(const ComponentInfo &other) const {
+          // if (HasFold != other.HasFold)
+          //   return HasFold > other.HasFold;
+           if (HasFold && (!other.HasFold))
+            return true;
+
+          if ((!HasFold) && other.HasFold)
+            return false;
+
+          if (Size != other.Size)
+            return Size < other.Size;
+          
+          return NumBorder > other.NumBorder;
+        }
+      };
+      std::vector<ComponentInfo> CompInfo;
+      for (size_t j = 0; j < SortedFun[IndexV].size(); j++) {
+        ComponentInfo CI;
+        CI.Size = ComponentSizes[j];
+        CI.NumBorder = NumBorderEdges[j];
+        CI.HasFold = IsFoldedComponent[j];
+        CI.Index = (int)j;
+        CompInfo.push_back(CI);
+      }
+      std::sort(CompInfo.begin(), CompInfo.end());
+
+      // remove the first one of CompInfo
+      int CompIdx = CompInfo[0].Index;
+      for (size_t k = 0; k < SortedFun[IndexV][CompIdx].size(); k++) {
+        int IndexF = SortedFun[IndexV][CompIdx][k];
+        FacesToDelete.push_back(IndexF);
+      }
+    }
+
+    RemoveDeleted(Pos, Faces, VertsToDelete, FacesToDelete);
     RemoveUnfererencedVert(Pos, Faces);
   }
 };

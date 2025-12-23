@@ -367,6 +367,52 @@ inline bool IsBorderVertVF(const int &IndexV,
   return false;
 }
 
+template <class ScalarType>
+inline void GetDifferentSortedFFStar(
+    const std::vector<Geo::Point3<ScalarType>> &Pos3D,
+    const std::vector<std::vector<int>> &Faces,
+    std::vector<std::vector<std::vector<int>>> &SortedFun) {
+  // compute VF adjacency
+  std::vector<std::vector<int>> VF;
+  std::vector<std::vector<int>> VFIndex;
+  Geo::getVFAdjacency(Faces, VF, VFIndex);
+
+  std::vector<std::vector<int>> FF;
+  std::vector<std::vector<int>> FFIndex;
+  Geo::getFFAdjacency(Faces, FF, FFIndex);
+
+  SortedFun.clear();
+  SortedFun.resize(Pos3D.size());
+
+  for (size_t i = 0; i < Pos3D.size(); i++) {
+
+    // //get the star of faces using VF adjacency
+    std::set<int> ExploredF;
+
+    // for each element in the VF
+    for (size_t j = 0; j < VF[i].size(); j++) {
+      std::vector<Pos3> PosStarFF;
+      int InitialF = VF[i][j];
+      int InitialE = VFIndex[i][j];
+
+      if (ExploredF.count(InitialF) > 0)
+        continue;
+
+      Pos3 StartPos(InitialF, InitialE, i);
+      bool has_border = false;
+      GetSortedFacesFaceFun(StartPos, Faces, FF, FFIndex, PosStarFF,
+                            has_border);
+      std::vector<int> FacesStarFF;
+      for (size_t k = 0; k < PosStarFF.size(); k++) {
+        int IndexF = PosStarFF[k].F;
+        ExploredF.insert(IndexF);
+        FacesStarFF.push_back(IndexF);
+      }
+      SortedFun[i].push_back(FacesStarFF);
+    }
+  }
+}
+
 // bool IstBorderVertFF(const int &IndexF,
 //                      const int &LocalV,
 //                      const std::vector<std::vector<int>> &Faces,

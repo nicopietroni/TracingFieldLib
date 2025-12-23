@@ -108,6 +108,11 @@ public:
             return ((p-proj).Norm());
     }
 
+    ScalarType Distance(const CoordType &p) const
+    {
+        return fabs(SignedDistance(p));
+    }
+    
     // Function to calculate the intersection point between a plane and a line
     bool Intersection(const Line3<ScalarType> &l,CoordType &intersectionPoint)
     {

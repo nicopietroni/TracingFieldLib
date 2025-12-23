@@ -371,7 +371,7 @@ public:
   int MinSides;
   int MaxSides;
   ScalarType CCAbility;
-
+  bool prefer_feature_features;
   bool dynamicUpdates;
   int num_samples;
 
@@ -430,6 +430,7 @@ public:
     self_connection_cond = true;
     single_sing_cond = true;
     match_sing_cond = true;
+    prefer_feature_features = false;
 
     MinSides = 3;
     MaxSides = 6;
@@ -444,6 +445,7 @@ public:
 
   void ExtractPatches(std::vector<std::vector<int>> &VertPaths) {
     //TriFeatures = _TriFeatures;
+    PDeco.prefer_feature_features = prefer_feature_features;
 
     std::sort(TriFeatures.begin(), TriFeatures.end());
     auto last = std::unique(TriFeatures.begin(), TriFeatures.end());

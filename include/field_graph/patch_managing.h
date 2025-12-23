@@ -49,10 +49,10 @@
 #include "graph.h"
 #include "mesh_refine.h"
 #include "patch_basic.h"
+#include "patch_functions.h"
 #include <UV_param.h>
 #include <pos3.h>
 #include <unordered_map>
-#include "patch_functions.h"
 #define PARALLEL_PATCH_UPDATE
 
 namespace Geo {
@@ -1262,8 +1262,9 @@ private:
   }
 
 public:
-  void GetAllSideGlobalEdges(int IndexP,
-                             std::vector<std::pair<int, int>> &Boundaries)const {
+  void
+  GetAllSideGlobalEdges(int IndexP,
+                        std::vector<std::pair<int, int>> &Boundaries) const {
     Boundaries.clear();
     for (size_t i = 0; i < PData.EdgePatchSides[IndexP].size(); i++)
       for (size_t j = 0; j < PData.EdgePatchSides[IndexP][i].size(); j++)
@@ -1277,7 +1278,8 @@ public:
         }
   }
 
-  void GetAllSideGlobalEdges(std::vector<std::pair<int, int>> &Boundaries)const {
+  void
+  GetAllSideGlobalEdges(std::vector<std::pair<int, int>> &Boundaries) const {
     Boundaries.clear();
     for (size_t i = 0; i < NumPatches(); i++) {
       std::vector<std::pair<int, int>> Patch_Boundaries;
@@ -1609,6 +1611,19 @@ public:
     OriginalElem.clear();
     CopySubMesh<ScalarType>(VertPos, Faces, ToCopyFace, CopiedMeshesVert,
                             CopiedMeshesElem, OriginalVert, OriginalElem);
+  }
+
+  void getAllPatchMeshes(std::vector<std::vector<Geo::Point3<ScalarType>>> &SubMeshVert,
+                         std::vector<std::vector<std::vector<int>>> &SubMeshElem)const 
+  {
+    SubMeshVert.clear();
+    SubMeshElem.clear();
+    for (size_t i = 0; i < NumPatches(); i++) {
+      // if (isEmpty(i))
+      //   continue;
+      SubMeshVert.push_back(PData.SubPatchVertPos[i]);
+      SubMeshElem.push_back(PData.SubPatchFaces[i]);
+    }
   }
 
   void ComposeMeshFromPatches(std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -2187,10 +2202,11 @@ public:
              PData.SubPatchFaces[IndexPatch]);
   }
 
-  void WriteMesh( std::string path) const {
+  void WriteMesh(std::string path) const {
     std::vector<Geo::Point3<ScalarType>> VPos;
-    std::vector<std::vector<int>> Faces;;
-    ComposeMeshFromPatches(VPos, Faces); 
+    std::vector<std::vector<int>> Faces;
+    ;
+    ComposeMeshFromPatches(VPos, Faces);
     WriteOBJ(path, VPos, Faces);
   }
 
@@ -2368,7 +2384,7 @@ public:
     }
   }
 
-  // void FixLowValencePatch(size_t &IndexP) 
+  // void FixLowValencePatch(size_t &IndexP)
   // {
   //   assert(IndexP>=0);
   //   assert(IndexP<PData.PatchCorners.size());
@@ -2385,11 +2401,12 @@ public:
   //   {
   //     std::cout<<"0 corners.. TO BE CHECKED!!"<<std::endl;
   //     exit(0);
-  //     // //there should be 
+  //     // //there should be
   //     // //at least one sequence
   //     // assert(PData.EdgePatchSides[IndexP][0].size()==1);
-      
-  //     // std::vector<std::vector<std::pair<int, int>> EdgeSeq=PData.EdgePatchSides[IndexP][0][0];
+
+  //     // std::vector<std::vector<std::pair<int, int>>
+  //     EdgeSeq=PData.EdgePatchSides[IndexP][0][0];
 
   //     // int SeqSize=EdgeSeq.size();
   //     // int StepSize=floor((ScalarType)SeqSize/(ScalarType)4,0.5);
@@ -2398,20 +2415,23 @@ public:
   //     // int IndexV0=0;
   //     // NewPatchC.push_back(EdgeSeq[0].first);
   //     // int IndexV1=StepSize;
-  //     // std::vector<int> Seq0(EdgeSeq.begin() + IndexV0, EdgeSeq.begin() + IndexV1);
+  //     // std::vector<int> Seq0(EdgeSeq.begin() + IndexV0, EdgeSeq.begin() +
+  //     IndexV1);
 
   //     // NewPatchC.push_back(EdgeSeq[IndexV1].first);
   //     // int IndexV2=StepSize*2;
-  //     // std::vector<int> Seq1(EdgeSeq.begin() + IndexV1, EdgeSeq.begin() + IndexV2);
+  //     // std::vector<int> Seq1(EdgeSeq.begin() + IndexV1, EdgeSeq.begin() +
+  //     IndexV2);
 
   //     // NewPatchC.push_back(EdgeSeq[IndexV2].first);
   //     // int IndexV3=StepSize*3;
-      
+
   //     // std::vector<int> Seq2,Seq3;
   //     // if (IndexV3<EdgeSeq.size())
   //     // {
   //     //   NewPatchC.push_back(EdgeSeq[IndexV3].first);
-  //     //   Seq2=std::vector<int> (EdgeSeq.begin() + IndexV2, EdgeSeq.begin() + IndexV3);
+  //     //   Seq2=std::vector<int> (EdgeSeq.begin() + IndexV2, EdgeSeq.begin()
+  //     + IndexV3);
   //     //   Seq3=std::vector<int> (EdgeSeq.begin() + IndexV3, EdgeSeq.end());
   //     // }
   //     // else
@@ -2425,8 +2445,9 @@ public:
   //   if (CurrValence==2)
   //   {
   //     assert(PData.EdgePatchSides[IndexP][0].size()==2);
-  //     std::vector<std::pair<int, int>> EdgeSeq0=PData.EdgePatchSides[IndexP][0][0];
-  //     std::vector<std::pair<int, int>> EdgeSeq1=PData.EdgePatchSides[IndexP][0][1];
+  //     std::vector<std::pair<int, int>>
+  //     EdgeSeq0=PData.EdgePatchSides[IndexP][0][0]; std::vector<std::pair<int,
+  //     int>> EdgeSeq1=PData.EdgePatchSides[IndexP][0][1];
 
   //     int IndexCorn0=PData.PatchCorners[IndexP][0][0];
   //     int IndexCorn0_1=-1;
@@ -2440,7 +2461,8 @@ public:
   //       if (mid_size0==0)mid_size0++;
   //       IndexCorn0_1=EdgeSeq0[mid_size0].first;
   //       EdgeSeq0_0New.resize(mid_size0);
-  //       EdgeSeq0_1New=std::vector<std::pair<int, int>>(EdgeSeq0.begin()+mid_size0,EdgeSeq0.end());
+  //       EdgeSeq0_1New=std::vector<std::pair<int,
+  //       int>>(EdgeSeq0.begin()+mid_size0,EdgeSeq0.end());
   //     }
 
   //     int IndexCorn1=PData.PatchCorners[IndexP][0][1];
@@ -2453,7 +2475,8 @@ public:
   //       if (mid_size1==0)mid_size1++;
   //       IndexCorn1_1=EdgeSeq1[mid_size1].first;
   //       EdgeSeq1_0New.resize(mid_size1);
-  //       EdgeSeq1_1New=std::vector<std::pair<int, int>>(EdgeSeq1.begin()+mid_size1,EdgeSeq1.end());
+  //       EdgeSeq1_1New=std::vector<std::pair<int,
+  //       int>>(EdgeSeq1.begin()+mid_size1,EdgeSeq1.end());
   //     }
 
   //     std::cout<<"2 corners.. TO BE CHECKED!!"<<std::endl;
@@ -2464,61 +2487,66 @@ public:
 
   // }
 
-  void FixWrongValencePatch(size_t &IndexP,int MinVal=3,int MaxVal=6) 
-  {
-    assert(IndexP>=0);
-    assert(IndexP<PData.PatchCorners.size());
-    assert(IndexP<PData.TypeOfCorner.size());
-    //only one loop
-    assert(PData.PatchCorners[IndexP].size()==1);
-    int CurrValence=PData.PatchCorners[IndexP][0].size();
+  void FixWrongValencePatch(size_t &IndexP, int MinVal = 3, int MaxVal = 6) {
+    assert(IndexP >= 0);
+    assert(IndexP < PData.PatchCorners.size());
+    assert(IndexP < PData.TypeOfCorner.size());
+    // only one loop
+    assert(PData.PatchCorners[IndexP].size() == 1);
+    int CurrValence = PData.PatchCorners[IndexP][0].size();
 
-    if ((CurrValence>=MinVal)&&(CurrValence<=MaxVal))return;
+    if ((CurrValence >= MinVal) && (CurrValence <= MaxVal))
+      return;
 
-    //choose, if possible, 4 points uniformly
-    std::vector<int> NewPatchC=PData.PatchCorners[IndexP][0];
-    std::vector<std::vector<std::pair<int, int>> > NewEdgeSeq=PData.EdgePatchSides[IndexP][0];
+    // choose, if possible, 4 points uniformly
+    std::vector<int> NewPatchC = PData.PatchCorners[IndexP][0];
+    std::vector<std::vector<std::pair<int, int>>> NewEdgeSeq =
+        PData.EdgePatchSides[IndexP][0];
 
     // std::cout<<std::endl<<"**BEFORE**"<<std::endl;
     // std::cout<<"Size C:"<<NewPatchC.size()<<std::endl;
     // std::cout<<"Size Side:"<<NewEdgeSeq.size()<<std::endl;
     // Geo::PatchFunctions<ScalarType>::print_sides_and_corners(NewEdgeSeq,NewPatchC);
-    if (CurrValence<MinVal)
-      Geo::PatchFunctions<ScalarType>::make_four_corners_by_splitting(NewEdgeSeq,NewPatchC);
-    if (CurrValence>MaxVal)
-      Geo::PatchFunctions<ScalarType>::remove_corners_until_from_sides(NewEdgeSeq,NewPatchC,MaxVal);
+    if (CurrValence < MinVal)
+      Geo::PatchFunctions<ScalarType>::make_four_corners_by_splitting(
+          NewEdgeSeq, NewPatchC);
+    if (CurrValence > MaxVal)
+      Geo::PatchFunctions<ScalarType>::remove_corners_until_from_sides(
+          NewEdgeSeq, NewPatchC, MaxVal);
     // std::cout<<"AFTER"<<std::endl;
     // std::cout<<"Size C:"<<NewPatchC.size()<<std::endl;
-    // std::cout<<"Size Side:"<<NewEdgeSeq.size()<<std::endl<<std::endl<<std::endl;
+    // std::cout<<"Size
+    // Side:"<<NewEdgeSeq.size()<<std::endl<<std::endl<<std::endl;
 
     // Geo::PatchFunctions<ScalarType>::print_sides_and_corners(NewEdgeSeq,NewPatchC);
 
-    assert(NewPatchC.size()==NewEdgeSeq.size());
-    PData.PatchCorners[IndexP][0]=NewPatchC;
-    PData.EdgePatchSides[IndexP][0]=NewEdgeSeq;
-    PData.TypeOfCorner[IndexP][0]=std::vector<CornerType>(NewPatchC.size(),CTypeConvex);
+    assert(NewPatchC.size() == NewEdgeSeq.size());
+    PData.PatchCorners[IndexP][0] = NewPatchC;
+    PData.EdgePatchSides[IndexP][0] = NewEdgeSeq;
+    PData.TypeOfCorner[IndexP][0] =
+        std::vector<CornerType>(NewPatchC.size(), CTypeConvex);
   }
 
-  void FixWrongValencePatches(int MinVal=3,int MaxVal=6) 
-  {
-    //return;
+  void FixWrongValencePatches(int MinVal = 3, int MaxVal = 6) {
+    // return;
 
     std::vector<int> FixedPatches;
-    for (size_t i=0;i<PData.PatchCorners.size();i++)
-    {
-      //if not single boundary need a different fix
-      if (PData.PatchCorners[i].size()!=1)continue;
+    for (size_t i = 0; i < PData.PatchCorners.size(); i++) {
+      // if not single boundary need a different fix
+      if (PData.PatchCorners[i].size() != 1)
+        continue;
 
-      int PatchValence=PData.PatchCorners[i][0].size();
+      int PatchValence = PData.PatchCorners[i][0].size();
 
-      if ((PatchValence>=MinVal)&&(PatchValence<=MaxVal))continue;
-      
-      FixWrongValencePatch(i,MinVal,MaxVal);
+      if ((PatchValence >= MinVal) && (PatchValence <= MaxVal))
+        continue;
+
+      FixWrongValencePatch(i, MinVal, MaxVal);
 
       FixedPatches.push_back(i);
     }
-  //  std::vector<std::vector<std::vector<std::vector<std::pair<int, int>>>>>
-  //      EdgePatchSides;
+    //  std::vector<std::vector<std::vector<std::vector<std::pair<int, int>>>>>
+    //      EdgePatchSides;
     InitVisualCornersEdges(FixedPatches);
     UpdateSideLenghs(FixedPatches);
   }
@@ -2648,13 +2676,13 @@ public:
   struct CycleData {
     std::vector<std::array<int, 3>> CurveSeq;
   };
-  
+
   void GetCurveCycleData(std::vector<CurveData> &Curves,
                          std::vector<CycleData> &Cycles) const {
     Curves.clear();
     Cycles.clear();
 
-    //CompactData();
+    // CompactData();
 
     // get all corner Pos
     std::vector<Geo::Point3<ScalarType>> CornerPos;
@@ -2666,8 +2694,7 @@ public:
         PatchSubsides;
     // PatchMan.GetPerPatchSubSidesWithSplitTJunction(PatchSubsides);
     for (size_t i = 0; i < PData.SubPatchVertPos.size(); i++) {
-      std::vector<Geo::Point3<ScalarType>> SubPVert =
-          PData.SubPatchVertPos[i];
+      std::vector<Geo::Point3<ScalarType>> SubPVert = PData.SubPatchVertPos[i];
       std::vector<std::vector<int>> SubPFace = PData.SubPatchFaces[i];
 
       assert(SubPVert.size() > 0);
@@ -2730,7 +2757,6 @@ public:
       PatchSubsides.push_back(SubBorderPos);
     }
 
-    
     assert(PatchSubsides.size() > 0);
     // for each patch
     for (size_t i = 0; i < PatchSubsides.size(); i++) {
@@ -2776,7 +2802,7 @@ public:
     }
   }
 
-  bool SaveCurveCycleData(const std::string PathSave)const {
+  bool SaveCurveCycleData(const std::string PathSave) const {
     std::vector<CurveData> Curves;
     std::vector<CycleData> Cycles;
     GetCurveCycleData(Curves, Cycles);
@@ -2841,8 +2867,7 @@ public:
 
     for (size_t i = 0; i < PData.SubPatchVertPos.size(); i++) {
 
-      std::vector<Geo::Point3<ScalarType>> SubPVert =
-          PData.SubPatchVertPos[i];
+      std::vector<Geo::Point3<ScalarType>> SubPVert = PData.SubPatchVertPos[i];
       std::vector<std::vector<int>> SubPFace = PData.SubPatchFaces[i];
       // then get the outer loops
       std::vector<std::vector<int>> BorderVIdxL;
