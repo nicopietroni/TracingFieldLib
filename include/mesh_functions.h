@@ -45,6 +45,7 @@
 #include <iostream>
 #include <map>
 #include <pos3.h>
+#include "triangle3.h"
 #include <queue>
 #include <set>
 #include <string>
@@ -845,6 +846,92 @@ inline void SplitQuadInto4Tris(const std::vector<Geo::Point3<ScalarType>> &QuadP
     TrisFaces[IndexTriF3][2] = IndexMid;
   }
 }
+
+template <class ScalarType>
+static void SplitIntoTris(
+    const std::vector<Geo::Point3<ScalarType>> &PolyPos,
+    const std::vector<std::vector<int>> &PolyFaces,
+    std::vector<Geo::Point3<ScalarType>> &TriPos,
+    std::vector<std::vector<int>> &TrisFaces)
+{
+    TriPos = PolyPos;
+    TrisFaces.clear();
+
+    const int nV = static_cast<int>(TriPos.size());
+    auto valid_index = [&](int idx) -> bool { return idx >= 0 && idx < nV; };
+
+    // auto tri_area2 = [&](int ia, int ib, int ic) -> ScalarType {
+    //     const auto &A = TriPos[ia];
+    //     const auto &B = TriPos[ib];
+    //     const auto &C = TriPos[ic];
+    //     // assuming Point3 supports -, cross, norm (adapt if your Geo::Point3 API differs)
+    //     auto AB = B - A;
+    //     auto AC = C - A;
+    //     auto cr = AB.cross(AC);
+    //     return cr.norm(); // this is 2*area
+    // };
+
+    auto best_pivot_for_convex = [&](const std::vector<int>& f) -> int {
+        // Choose pivot that maximizes the minimum triangle area in the fan
+        // This reduces skinny triangles in practice.
+        const int m = (int)f.size();
+        int best = 0;
+        ScalarType bestScore = ScalarType(-1);
+
+        for (int p = 0; p < m; ++p) {
+            const int ip = f[p];
+            ScalarType minA = std::numeric_limits<ScalarType>::max();
+
+            for (int k = 1; k + 1 < m; ++k) {
+                // Build fan around p in cyclic order: (p, p+k, p+k+1)
+                const int i1 = f[(p + k) % m];
+                const int i2 = f[(p + k + 1) % m];
+                if (ip == i1 || i1 == i2 || i2 == ip) continue;
+                Geo::Traingle3<ScalarType> tri(
+                    TriPos[ip], TriPos[i1], TriPos[i2]);
+                minA = std::min(minA, tri.Area());
+            }
+
+            if (minA > bestScore) {
+                bestScore = minA;
+                best = p;
+            }
+        }
+        return best; // index in face vector
+    };
+
+    // Reserve (sum (n-2))
+    size_t reserveN = 0;
+    for (const auto &f : PolyFaces) if (f.size() >= 3) reserveN += (f.size() - 2);
+    TrisFaces.reserve(reserveN);
+
+    for (const auto &face : PolyFaces)
+    {
+        if (face.size() < 3) continue;
+
+        bool ok = true;
+        for (int idx : face) { if (!valid_index(idx)) { ok = false; break; } }
+        if (!ok) continue;
+
+        // If you don't care: pivotIdx = 0; (pure fan from first vertex)
+        // If you want nicer triangles: choose best pivot (still deterministic).
+        const int pivotIdxInFace = best_pivot_for_convex(face);
+
+        const int m = (int)face.size();
+        const int v0 = face[pivotIdxInFace];
+
+        // Triangles: (v0, v(i), v(i+1)) in cyclic order starting after pivot
+        for (int k = 1; k + 1 < m; ++k)
+        {
+            const int v1 = face[(pivotIdxInFace + k) % m];
+            const int v2 = face[(pivotIdxInFace + k + 1) % m];
+
+            if (v0 == v1 || v1 == v2 || v2 == v0) continue;
+            TrisFaces.push_back({ v0, v1, v2 });
+        }
+    }
+}
+
 
 template <class ScalarType>
 inline void VVConnectedComponenentFrom(

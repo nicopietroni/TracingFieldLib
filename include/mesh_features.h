@@ -38,10 +38,11 @@
 #include <normal.h>
 #include <set>
 #include <string>
-//#include <sys/_types/_size_t.h>
-#include <cstddef>   // C++
+// #include <sys/_types/_size_t.h>
+#include <cstddef> // C++
 #include <utility>
 #include <vector>
+#include "space_query/segment_grid_3D.h"
 // #include <tuple>
 
 namespace Geo {
@@ -268,8 +269,6 @@ public:
     for (size_t i = 0; i < CornersIdx.size(); i++)
       IsVertCorner[CornersIdx[i]] = true;
   }
-
-
 
   static void
   FeatureCorners(const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -631,13 +630,65 @@ public:
 
     std::vector<std::pair<int, int>> VertPairFeatures;
     std::vector<int> CornersIdx;
-    Geo::MeshFeatures<ScalarType>::FeatureCornersClean(VertPos, Faces, feature_angle, VertPairFeatures,
-                        CornersIdx, ero_steps, dil_steps, include_border);
+    Geo::MeshFeatures<ScalarType>::FeatureCornersClean(
+        VertPos, Faces, feature_angle, VertPairFeatures, CornersIdx, ero_steps,
+        dil_steps, include_border);
 
     BoolVariablesFromPairs(VertPos, Faces, VertPairFeatures, CornersIdx,
                            IsFaceEFeature, IsVertCorner);
   }
+
+  static std::vector<std::pair<int, int>> TransportFeatures(
+      const std::vector<Geo::Point3<ScalarType>> &VertFrom,
+      const std::vector<std::pair<int, int>> &FeaturesFrom,
+      const std::vector<std::pair<int, int>> &CandidateFeaturesFrom,
+      const std::vector<Geo::Point3<ScalarType>> &VertTo,
+      const std::vector<std::pair<int, int>> &CandidateFeaturesTo) {
+    // then get all border in index structure
+    Geo::SegmentSpatialIndex<ScalarType> SegIndex;
+    std::vector<Geo::Segment3<ScalarType>> Segs;
+    InitFromMeshFeatures<ScalarType>(VertFrom, CandidateFeaturesFrom, Segs,
+                                     SegIndex);
+    // init feature set
+    std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
+        FeatureSet;
+    for (size_t i = 0; i < FeaturesFrom.size(); i++) {
+      int v0 = FeaturesFrom[i].first;
+      int v1 = FeaturesFrom[i].second;
+      Geo::Point3<ScalarType> P0 = VertFrom[v0];
+      Geo::Point3<ScalarType> P1 = VertFrom[v1];
+      FeatureSet.insert(std::make_pair(std::min(P0, P1), std::max(P0, P1)));
+    }
+
+    std::vector<std::pair<int, int>> NewFeatures;
+    ScalarType maxDist = SegIndex.bbox.Diag();
+    for (size_t i = 0; i < CandidateFeaturesTo.size(); i++) {
+      int IndexV0 = CandidateFeaturesTo[i].first;
+      int IndexV1 = CandidateFeaturesTo[i].second;
+      Geo::Point3<ScalarType> Pos0 = VertTo[IndexV0];
+      Geo::Point3<ScalarType> Pos1 = VertTo[IndexV1];
+      Geo::Point3<ScalarType> MidP = Pos0 * 0.5 + Pos1 * 0.5;
+      int ClosestSegIdx = -1;
+      Geo::Point3<ScalarType> ClosestPt;
+      bool found =
+          SegIndex.GridClosest(Segs, MidP, maxDist, ClosestSegIdx, ClosestPt);
+      // std::cout<<"found:"<<found<<std::endl;
+      // std::cout<<"ClosestSegIdx:"<<ClosestSegIdx<<std::endl;
+      assert(ClosestSegIdx >= 0);
+      assert(ClosestSegIdx < Segs.size());
+      Geo::Point3<ScalarType> FP0 = Segs[ClosestSegIdx].P(0);
+      Geo::Point3<ScalarType> FP1 = Segs[ClosestSegIdx].P(1);
+      std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> Key(
+          std::min(FP0, FP1), std::max(FP0, FP1));
+      if (FeatureSet.count(Key) > 0) {
+        // add to new features
+        NewFeatures.push_back(std::make_pair(IndexV0, IndexV1));
+      }
+    }
+    return NewFeatures;
+  }
 };
+
 } // namespace Geo
 
 #endif

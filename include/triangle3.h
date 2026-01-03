@@ -84,6 +84,11 @@ public:
     return false;
   }
 
+  ScalarType Area() const {
+    ScalarType area = (Cross((P(1) - P(0)), (P(2) - P(0)))).Norm() / 2;
+    return area;
+  }
+  
   Traingle3(const CoordType &P0, const CoordType &P1, const CoordType &P2) {
     Pos[0] = P0;
     Pos[1] = P1;

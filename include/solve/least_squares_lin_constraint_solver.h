@@ -114,6 +114,13 @@ public:
 
   void Init(const std::vector<LinearConstraint<ScalarType>> &_LinConstr) {
 
+//     std::cout << "DEDEEDDE NAVACCHIO A..." << std::endl;
+//     std::cout << "LinConstr(before) size=" << LinConstr.size()
+//           << " cap=" << LinConstr.capacity()
+//           << " data=" << (const void*)LinConstr.data() << "\n";
+// std::cout << "_LinConstr src size=" << _LinConstr.size()
+//           << " data=" << (const void*)_LinConstr.data() << "\n";
+
     LinConstr = _LinConstr;
 
     // for (size_t i=0;i<LinConstr.size();i++)
@@ -193,6 +200,9 @@ public:
 
     for (int i = 0; i < V.rows(); i++)
       Solution[i] = V(i, 0);
+
+    delete(solver);
+    solver = nullptr;
   }
 
   void Residual(const std::vector<ScalarType> &Solution,

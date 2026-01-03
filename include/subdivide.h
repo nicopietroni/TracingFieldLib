@@ -27,32 +27,36 @@
 #ifndef SUBDIVIDE_H
 #define SUBDIVIDE_H
 
+#include "point3.h"
 #include <array>
 #include <assert.h>
 #include <vector>
-#include "point3.h"
 
-namespace Geo
-{
+namespace Geo {
 
-    template <class ScalarType>
-    class Subdivide
-    {
-    public:
+template <class ScalarType> class Subdivide {
+public:
+  // return the subdivision position between Points[1] and Points[2]
+  static Geo::Point3<ScalarType>
+  PolylineEdge(std::array<Geo::Point3<ScalarType>, 4> &Points,
+               ScalarType omega = ScalarType(1.0) / ScalarType(16.0),
+               ScalarType worstRatio = 4) {
+    ScalarType d01 = (Points[0] - Points[1]).Norm();
+    ScalarType d12 = (Points[1] - Points[2]).Norm();
+    ScalarType d23 = (Points[2] - Points[3]).Norm();
+    ScalarType MaxL = std::max(d01, std::max(d12, d23));
+    ScalarType MinL = std::min(d01, std::min(d12, d23));
+    Point3<ScalarType> new_point =
+        Points[1] * (ScalarType(0.5)) + Points[2] * (ScalarType(0.5));
+    if ((MaxL / MinL) <= worstRatio) {
+      new_point =
+          (Points[0] * (-omega)) + (Points[1] * (ScalarType(0.5) + omega)) +
+          (Points[2] * (ScalarType(0.5) + omega)) + (Points[3] * (-omega));
+    }
+    return new_point;
+  }
+};
 
-       //return the subdivision position between Points[1] and Points[2]
-       static Geo::Point3<ScalarType> PolylineEdge(std::array<Geo::Point3<ScalarType>,4> &Points,
-                                                   ScalarType omega= ScalarType(1.0) / ScalarType (16.0))
-       {
-            Point3<ScalarType> new_point = (Points[0]*(-omega)) +
-                                  (Points[1]*(ScalarType(0.5) + omega)) +
-                                  (Points[2]*(ScalarType(0.5) + omega)) +
-                                  (Points[3]*(-omega));
-            return new_point;
-       }
-
-    };
-
-}
+} // namespace Geo
 
 #endif

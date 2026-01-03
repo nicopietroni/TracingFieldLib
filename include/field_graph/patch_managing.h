@@ -162,6 +162,10 @@ public:
   const Geo::TracingGraph<ScalarType> &TGraph;
   const std::vector<Field::CrossF<ScalarType>> &Cross;
 
+  // the modified vertices when coincided pos for splitting
+  std::vector<int> ModSameBVert;
+  std::vector<Geo::Point3<ScalarType>> ModSameBOrigPos;
+
   bool UpdateVisual;
 
   PatchData PData;
@@ -1262,6 +1266,21 @@ private:
   }
 
 public:
+
+  std::vector<int> GetModifiedSameBorderVertices() const {
+    return ModSameBVert;
+  }
+  
+  void RestoreOriginalPosOnSplitBorders() {
+    assert(ModSameBVert.size() == ModSameBOrigPos.size());
+    for (size_t i = 0; i < ModSameBVert.size(); i++) {
+      int IndexV = ModSameBVert[i];
+      assert(IndexV >= 0);
+      assert(IndexV < VertPos.size());
+      VertPos[IndexV] = ModSameBOrigPos[i];
+    }
+  }
+
   void
   GetAllSideGlobalEdges(int IndexP,
                         std::vector<std::pair<int, int>> &Boundaries) const {
@@ -1322,6 +1341,7 @@ public:
         PData.OriginalFaceToPatch[IndexF] = i;
       }
   }
+
   void GetPatchGlobalVertOfType(const int &IndexP, const CornerType &CType,
                                 std::vector<int> &SelectedVert) {
     SelectedVert.clear();
@@ -1473,6 +1493,29 @@ public:
     SideV.push_back(PData.EdgePatchSides[IndexP][0][IndexE].back().second);
   }
 
+  void GetAllSideVert(int IndexP, std::vector<std::vector<int>> &SideV) const {
+    SideV.clear();
+    for (size_t i = 0; i < NumSides(IndexP); i++) {
+      std::vector<int> CurrSide;
+      GetAllSideVert(IndexP, i, CurrSide);
+      SideV.push_back(CurrSide);
+    }
+  }
+
+  void GetAllSideVertGlobal(int IndexP, int IndexE, std::vector<int> &SideV) const {
+    GetAllSideVert(IndexP, IndexE, SideV);
+    MapToOriginal(IndexP, SideV);
+  }
+
+  void GetAllSideVertGlobal(int IndexP, std::vector<std::vector<int>> &SideV) const {
+    SideV.clear();
+    for (size_t i = 0; i < NumSides(IndexP); i++) {
+      std::vector<int> CurrSide;
+      GetAllSideVertGlobal(IndexP, i, CurrSide);
+      SideV.push_back(CurrSide);
+    }
+  }
+
   void GetAllSideVert(int IndexP, std::vector<int> &SideV) const {
     SideV.clear();
     for (size_t i = 0; i < NumSides(IndexP); i++) {
@@ -1480,6 +1523,29 @@ public:
       GetAllSideVert(IndexP, i, CurrSide);
       SideV.insert(SideV.end(), CurrSide.begin(), CurrSide.end());
     }
+  }
+
+  void GetAllSidesVertGlobal(int IndexP, std::vector<int> &SideV)
+  {
+     GetAllSideVert(IndexP, SideV);
+     // map to original indexes
+     MapToOriginal(IndexP, SideV);
+  }
+  
+
+  void GetAllSidesVertGlobal( std::vector<int> &SideV)
+  {
+    SideV.clear();
+    for (size_t i = 0; i < NumPatches(); i++) {
+      if (isEmpty(i))
+        continue;
+      std::vector<int> PatchSideV;
+      GetAllSidesVertGlobal(i, PatchSideV);
+      SideV.insert(SideV.end(), PatchSideV.begin(), PatchSideV.end());
+    }
+    //sort and unique
+    std::sort(SideV.begin(), SideV.end());
+    SideV.erase(std::unique(SideV.begin(), SideV.end()), SideV.end());
   }
 
   void GetAllSidePos(std::vector<Geo::Point3<ScalarType>> &MidSidePos,
@@ -1613,9 +1679,9 @@ public:
                             CopiedMeshesElem, OriginalVert, OriginalElem);
   }
 
-  void getAllPatchMeshes(std::vector<std::vector<Geo::Point3<ScalarType>>> &SubMeshVert,
-                         std::vector<std::vector<std::vector<int>>> &SubMeshElem)const 
-  {
+  void getAllPatchMeshes(
+      std::vector<std::vector<Geo::Point3<ScalarType>>> &SubMeshVert,
+      std::vector<std::vector<std::vector<int>>> &SubMeshElem) const {
     SubMeshVert.clear();
     SubMeshElem.clear();
     for (size_t i = 0; i < NumPatches(); i++) {
@@ -2205,7 +2271,6 @@ public:
   void WriteMesh(std::string path) const {
     std::vector<Geo::Point3<ScalarType>> VPos;
     std::vector<std::vector<int>> Faces;
-    ;
     ComposeMeshFromPatches(VPos, Faces);
     WriteOBJ(path, VPos, Faces);
   }
@@ -2620,294 +2685,347 @@ public:
     WriteStats();
   }
 
-  struct CurveData {
-    std::vector<Geo::Point3<ScalarType>> Pos;
-    int NumPatches;
-    typedef typename std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>
-        PosPair;
+  // struct CurveData {
+  //   std::vector<Geo::Point3<ScalarType>> Pos;
+  //   int NumPatches;
+  //   typedef typename std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>
+  //       PosPair;
 
-    PosPair Extremes() const {
-      Geo::Point3<ScalarType> Pos0 = Pos[0];
-      Geo::Point3<ScalarType> Pos1 = Pos.back();
-      PosPair CurrExtr(Pos0, Pos1);
-      return CurrExtr;
-    }
+  //   PosPair Extremes() const {
+  //     Geo::Point3<ScalarType> Pos0 = Pos[0];
+  //     Geo::Point3<ScalarType> Pos1 = Pos.back();
+  //     PosPair CurrExtr(Pos0, Pos1);
+  //     return CurrExtr;
+  //   }
+    
+  //   void SubSample(int ReductionFactor)
+  //   {
+  //     if (ReductionFactor <= 1)
+  //       return;
 
-    inline bool operator==(const CurveData &CData) const {
+  //     if (Pos.size() <= 2)
+  //       return;
 
-      if (Pos.size() != CData.Pos.size())
-        return false;
+  //     std::vector<Geo::Point3<ScalarType>> NewPos;
+  //     NewPos.push_back(Pos[0]);
+  //     size_t Step = ReductionFactor;
+  //     for (size_t i = Step; i < Pos.size(); i += Step) {
+  //       NewPos.push_back(Pos[i]);
+  //     }
+  //     if (NewPos.back() != Pos.back())
+  //       NewPos.push_back(Pos.back());
+  //     Pos = NewPos;
+  //   }
 
-      // Check normal equality
-      if (Pos == CData.Pos)
-        return true;
+  //   inline bool operator==(const CurveData &CData) const {
 
-      // Check reversed equality
-      return std::equal(Pos.begin(), Pos.end(), CData.Pos.rbegin());
+  //     if (Pos.size() != CData.Pos.size())
+  //       return false;
 
-      // PosPair PosP0 = Extremes();
-      // PosPair PosP1 = CData.Extremes();
+  //     // Check normal equality
+  //     if (Pos == CData.Pos)
+  //       return true;
 
-      // if (PosP0.second < PosP0.first)
-      //   std::swap(PosP0.first, PosP0.second);
+  //     // Check reversed equality
+  //     return std::equal(Pos.begin(), Pos.end(), CData.Pos.rbegin());
 
-      // if (PosP1.second < PosP1.first)
-      //   std::swap(PosP1.first, PosP1.second);
+  //     // PosPair PosP0 = Extremes();
+  //     // PosPair PosP1 = CData.Extremes();
 
-      // return (PosP0 == PosP1);
-    }
+  //     // if (PosP0.second < PosP0.first)
+  //     //   std::swap(PosP0.first, PosP0.second);
 
-    inline bool operator<(const CurveData &CData) const {
-      PosPair PosP0 = Extremes();
-      PosPair PosP1 = CData.Extremes();
+  //     // if (PosP1.second < PosP1.first)
+  //     //   std::swap(PosP1.first, PosP1.second);
 
-      if (PosP0.second < PosP0.first)
-        std::swap(PosP0.first, PosP0.second);
+  //     // return (PosP0 == PosP1);
+  //   }
 
-      if (PosP1.second < PosP1.first)
-        std::swap(PosP1.first, PosP1.second);
+  //   inline bool operator<(const CurveData &CData) const {
+  //     PosPair PosP0 = Extremes();
+  //     PosPair PosP1 = CData.Extremes();
 
-      return (PosP0 < PosP1);
-    }
+  //     if (PosP0.second < PosP0.first)
+  //       std::swap(PosP0.first, PosP0.second);
 
-    CurveData(const std::vector<Geo::Point3<ScalarType>> &_Pos) { Pos = _Pos; }
-  };
+  //     if (PosP1.second < PosP1.first)
+  //       std::swap(PosP1.first, PosP1.second);
 
-  struct CycleData {
-    std::vector<std::array<int, 3>> CurveSeq;
-  };
+  //     return (PosP0 < PosP1);
+  //   }
 
-  void GetCurveCycleData(std::vector<CurveData> &Curves,
-                         std::vector<CycleData> &Cycles) const {
-    Curves.clear();
-    Cycles.clear();
+  //   CurveData(const std::vector<Geo::Point3<ScalarType>> &_Pos) { Pos = _Pos; }
+  // };
 
-    // CompactData();
+  // struct CycleData {
+  //   std::vector<std::array<int, 3>> CurveSeq;
+  // };
 
-    // get all corner Pos
-    std::vector<Geo::Point3<ScalarType>> CornerPos;
-    GetAllCornerPos(CornerPos);
-    std::set<Geo::Point3<ScalarType>> CornerPosSet(CornerPos.begin(),
-                                                   CornerPos.end());
+  // void GetCurveCycleData(std::vector<CurveData> &Curves,
+  //                        std::vector<CycleData> &Cycles) const {
+  //   Curves.clear();
+  //   Cycles.clear();
 
-    std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
-        PatchSubsides;
-    // PatchMan.GetPerPatchSubSidesWithSplitTJunction(PatchSubsides);
-    for (size_t i = 0; i < PData.SubPatchVertPos.size(); i++) {
-      std::vector<Geo::Point3<ScalarType>> SubPVert = PData.SubPatchVertPos[i];
-      std::vector<std::vector<int>> SubPFace = PData.SubPatchFaces[i];
+  //   // CompactData();
 
-      assert(SubPVert.size() > 0);
-      assert(SubPFace.size() > 0);
-      // then get the outer loops
-      std::vector<std::vector<int>> BorderVIdxL;
-      getBorderSequncesVert(SubPFace, BorderVIdxL);
-      assert(BorderVIdxL.size() == 1);
-      std::vector<int> BorderVIdx = BorderVIdxL[0];
+  //   // get all corner Pos
+  //   std::vector<Geo::Point3<ScalarType>> CornerPos;
+  //   GetAllCornerPos(CornerPos);
+  //   std::set<Geo::Point3<ScalarType>> CornerPosSet(CornerPos.begin(),
+  //                                                  CornerPos.end());
 
-      assert(BorderVIdx.size() > 0);
+  //   std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+  //       PatchSubsides;
+  //   // PatchMan.GetPerPatchSubSidesWithSplitTJunction(PatchSubsides);
+  //   for (size_t i = 0; i < PData.SubPatchVertPos.size(); i++) {
+  //     std::vector<Geo::Point3<ScalarType>> SubPVert = PData.SubPatchVertPos[i];
+  //     std::vector<std::vector<int>> SubPFace = PData.SubPatchFaces[i];
 
-      // then convert into positions
-      std::vector<Geo::Point3<ScalarType>> BorderPos;
-      for (size_t j = 0; j < BorderVIdx.size(); j++) {
-        int IndexV = BorderVIdx[j];
-        BorderPos.push_back(SubPVert[IndexV]);
-      }
+  //     assert(SubPVert.size() > 0);
+  //     assert(SubPFace.size() > 0);
+  //     // then get the outer loops
+  //     std::vector<std::vector<int>> BorderVIdxL;
+  //     getBorderSequncesVert(SubPFace, BorderVIdxL);
+  //     assert(BorderVIdxL.size() == 1);
+  //     std::vector<int> BorderVIdx = BorderVIdxL[0];
 
-      assert(BorderPos.size() > 0);
-      // sort from a corner
-      int CornFirstIdx = -1;
-      for (size_t j = 0; j < BorderPos.size(); j++)
-        if (CornerPosSet.count(BorderPos[j]) > 0) {
-          CornFirstIdx = j;
-          break;
-        }
+  //     assert(BorderVIdx.size() > 0);
 
-      assert(CornFirstIdx >= 0);
-      std::rotate(BorderPos.begin(), BorderPos.begin() + CornFirstIdx,
-                  BorderPos.end());
+  //     // then convert into positions
+  //     std::vector<Geo::Point3<ScalarType>> BorderPos;
+  //     for (size_t j = 0; j < BorderVIdx.size(); j++) {
+  //       int IndexV = BorderVIdx[j];
+  //       BorderPos.push_back(SubPVert[IndexV]);
+  //     }
 
-      // then split into sub portions
-      std::vector<std::vector<Geo::Point3<ScalarType>>> SubBorderPos;
-      assert(CornerPosSet.count(BorderPos[0]) > 0);
-      std::vector<Geo::Point3<ScalarType>> segment;
-      segment.push_back(BorderPos[0]);
+  //     assert(BorderPos.size() > 0);
+  //     // sort from a corner
+  //     int CornFirstIdx = -1;
+  //     for (size_t j = 0; j < BorderPos.size(); j++)
+  //       if (CornerPosSet.count(BorderPos[j]) > 0) {
+  //         CornFirstIdx = j;
+  //         break;
+  //       }
 
-      assert(BorderPos.size() > 1);
-      for (size_t j = 1; j < BorderPos.size(); j++) {
-        if (CornerPosSet.count(BorderPos[j]) > 0) {
-          // add last one
-          segment.push_back(BorderPos[j]);
-          // push the segment
-          SubBorderPos.push_back(segment);
-          // clear and add to the beginning
-          segment.clear();
-          segment.push_back(BorderPos[j]);
-        } else {
-          // simply add the element
-          segment.push_back(BorderPos[j]);
-        }
-      }
-      // add the first one to last segment
-      segment.push_back(BorderPos[0]);
-      SubBorderPos.push_back(segment);
-      assert(SubBorderPos.size() > 0);
+  //     assert(CornFirstIdx >= 0);
+  //     std::rotate(BorderPos.begin(), BorderPos.begin() + CornFirstIdx,
+  //                 BorderPos.end());
 
-      // then add to per patch
-      PatchSubsides.push_back(SubBorderPos);
-    }
+  //     // then split into sub portions
+  //     std::vector<std::vector<Geo::Point3<ScalarType>>> SubBorderPos;
+  //     assert(CornerPosSet.count(BorderPos[0]) > 0);
+  //     std::vector<Geo::Point3<ScalarType>> segment;
+  //     segment.push_back(BorderPos[0]);
 
-    assert(PatchSubsides.size() > 0);
-    // for each patch
-    for (size_t i = 0; i < PatchSubsides.size(); i++) {
-      Cycles.resize(Cycles.size() + 1);
-      // for each subside
-      for (size_t j = 0; j < PatchSubsides[i].size(); j++) {
-        std::vector<Geo::Point3<ScalarType>> CurrSubSd = PatchSubsides[i][j];
-        CurveData TestC(CurrSubSd);
+  //     assert(BorderPos.size() > 1);
+  //     for (size_t j = 1; j < BorderPos.size(); j++) {
+  //       if (CornerPosSet.count(BorderPos[j]) > 0) {
+  //         // add last one
+  //         segment.push_back(BorderPos[j]);
+  //         // push the segment
+  //         SubBorderPos.push_back(segment);
+  //         // clear and add to the beginning
+  //         segment.clear();
+  //         segment.push_back(BorderPos[j]);
+  //       } else {
+  //         // simply add the element
+  //         segment.push_back(BorderPos[j]);
+  //       }
+  //     }
+  //     // add the first one to last segment
+  //     segment.push_back(BorderPos[0]);
+  //     SubBorderPos.push_back(segment);
+  //     assert(SubBorderPos.size() > 0);
 
-        // add the new curve
-        int CurvIdx = -1;
-        int IndexP = -1;
-        int Verse = -1;
-        for (size_t k = 0; k < Curves.size(); k++) {
-          if (Curves[k] == TestC) {
-            CurvIdx = k;
-            Verse = 2;
-            IndexP = 1;
-            Curves[k].NumPatches++;
-            typename CurveData::PosPair PPair0 = Curves[k].Extremes();
-            typename CurveData::PosPair PPair1 = TestC.Extremes();
-            // should have inverted order
-            assert(PPair0.first == PPair1.second);
-            assert(PPair0.second == PPair1.first);
-            break;
-          }
-        }
-        // in such a case add a new one
-        if (CurvIdx == -1) {
-          TestC.NumPatches = 1;
-          Curves.push_back(TestC);
-          CurvIdx = Curves.size() - 1;
-          Verse = 1;
-          IndexP = 0;
-        }
+  //     // then add to per patch
+  //     PatchSubsides.push_back(SubBorderPos);
+  //   }
 
-        assert(IndexP >= 0);
-        assert(CurvIdx >= 0);
-        assert(CurvIdx < Curves.size());
-        std::array<int, 3> Entry{CurvIdx, Verse, IndexP};
-        Cycles.back().CurveSeq.push_back(Entry);
-      }
-    }
-  }
+  //   assert(PatchSubsides.size() > 0);
+  //   // for each patch
+  //   for (size_t i = 0; i < PatchSubsides.size(); i++) {
+  //     Cycles.resize(Cycles.size() + 1);
+  //     // for each subside
+  //     for (size_t j = 0; j < PatchSubsides[i].size(); j++) {
+  //       std::vector<Geo::Point3<ScalarType>> CurrSubSd = PatchSubsides[i][j];
+  //       CurveData TestC(CurrSubSd);
 
-  bool SaveCurveCycleData(const std::string PathSave) const {
-    std::vector<CurveData> Curves;
-    std::vector<CycleData> Cycles;
-    GetCurveCycleData(Curves, Cycles);
-    // first save the curves
-    std::string CurveF = PathSave;
-    CurveF += std::string(".curve");
+  //       // add the new curve
+  //       int CurvIdx = -1;
+  //       int IndexP = -1;
+  //       int Verse = -1;
+  //       for (size_t k = 0; k < Curves.size(); k++) {
+  //         if (Curves[k] == TestC) {
+  //           CurvIdx = k;
+  //           Verse = 2;
+  //           IndexP = 1;
+  //           Curves[k].NumPatches++;
+  //           typename CurveData::PosPair PPair0 = Curves[k].Extremes();
+  //           typename CurveData::PosPair PPair1 = TestC.Extremes();
+  //           // should have inverted order
+  //           assert(PPair0.first == PPair1.second);
+  //           assert(PPair0.second == PPair1.first);
+  //           break;
+  //         }
+  //       }
+  //       // in such a case add a new one
+  //       if (CurvIdx == -1) {
+  //         TestC.NumPatches = 1;
+  //         Curves.push_back(TestC);
+  //         CurvIdx = Curves.size() - 1;
+  //         Verse = 1;
+  //         IndexP = 0;
+  //       }
 
-    std::ofstream fout(CurveF.c_str());
-    if (!fout)
-      return false;
+  //       assert(IndexP >= 0);
+  //       assert(CurvIdx >= 0);
+  //       assert(CurvIdx < Curves.size());
+  //       std::array<int, 3> Entry{CurvIdx, Verse, IndexP};
+  //       Cycles.back().CurveSeq.push_back(Entry);
+  //     }
+  //   }
+  // }
 
-    fout << Curves.size() << "\n";
+  // bool SaveCurveCycleData(const std::string PathSave, 
+  //                         std::vector<std::pair<int, int>> &Features,
+  //                         int ReductionFactor=1) const 
+  // {
+  //   std::vector<CurveData> Curves;
+  //   std::vector<CycleData> Cycles;
+  //   GetCurveCycleData(Curves, Cycles);
 
-    for (size_t i = 0; i < Curves.size(); i++) {
-      int NumPos = Curves[i].Pos.size();
-      int NumPatches = Curves[i].NumPatches;
-      fout << NumPos << " 0 " << NumPatches << "\n";
-      for (size_t j = 0; j < NumPos; j++) {
-        Geo::Point3<ScalarType> CurrP = Curves[i].Pos[j];
-        fout << CurrP.X << " " << CurrP.Y << " " << CurrP.Z << "\n";
-      }
-    }
-    fout.close();
+  //   if (ReductionFactor > 1) {
 
-    // then save the cycles
-    std::string CycleF = PathSave;
-    CycleF += std::string(".cycle");
+  //     //save the remap of features
+  //     std::map<Geo::Point3<ScalarType>, int> FeaturesPos;
+  //     for (size_t i = 0; i < Features.size(); i++) {
+  //       int IndexV0 = Features[i].first;
+  //       int IndexV1 = Features[i].second;
+  //       FeaturesPos.insert(std::make_pair(VertPos[IndexV0], IndexV0));
+  //       FeaturesPos.insert(std::make_pair(VertPos[IndexV1], IndexV1));
+  //     }
 
-    std::ofstream fout_2(CycleF.c_str());
-    if (!fout_2)
-      return false;
+  //     for (size_t i = 0; i < Curves.size(); i++) {
+  //       Curves[i].SubSample(ReductionFactor);
+  //     }
+  //     //update features
+  //     Features.clear();
+  //     for (size_t i = 0; i < Curves.size(); i++) {
+  //       for (size_t j = 0; j < Curves[i].Pos.size()-1; j++) {
+  //         Geo::Point3<ScalarType> P0 = Curves[i].Pos[j];
+  //         Geo::Point3<ScalarType> P1 = Curves[i].Pos[j+1];
+  //         if ((FeaturesPos.count(P0)>0) && (FeaturesPos.count(P1)>0))
+  //         {
+  //           int IndexV0=FeaturesPos[P0];
+  //           int IndexV1=FeaturesPos[P1];
+  //           Features.push_back(std::make_pair(IndexV0,IndexV1));
+  //         }
+  //       }
+  //     }
+  //   }
+    
+  //   // first save the curves
+  //   std::string CurveF = PathSave;
+  //   CurveF += std::string(".curve");
 
-    fout_2 << Cycles.size() << "\n";
-    for (size_t i = 0; i < Cycles.size(); i++) {
-      fout_2 << Cycles[i].CurveSeq.size() << "\n";
-      for (size_t j = 0; j < Cycles[i].CurveSeq.size(); j++) {
-        int IndexCurv = Cycles[i].CurveSeq[j][0];
-        int VerseCurv = Cycles[i].CurveSeq[j][1];
-        int IndexP = Cycles[i].CurveSeq[j][2];
-        fout_2 << IndexCurv << " " << VerseCurv << " " << IndexP << "\n";
-      }
-    }
-    fout_2.close();
-    return true;
-  }
+  //   std::ofstream fout(CurveF.c_str());
+  //   if (!fout)
+  //     return false;
 
-  bool SaveCycleData(const std::string PathSave) {
-    std::vector<CurveData> Curves;
-    std::vector<CycleData> Cycles;
-    GetCurveCycleData(Curves, Cycles);
+  //   fout << Curves.size() << "\n";
 
-    // first save the curves
-    std::string CurveF = PathSave;
+  //   for (size_t i = 0; i < Curves.size(); i++) {
+  //     int NumPos = Curves[i].Pos.size();
+  //     int NumPatches = Curves[i].NumPatches;
+  //     fout << NumPos << " 0 " << NumPatches << "\n";
+  //     for (size_t j = 0; j < NumPos; j++) {
+  //       Geo::Point3<ScalarType> CurrP = Curves[i].Pos[j];
+  //       fout << CurrP.X << " " << CurrP.Y << " " << CurrP.Z << "\n";
+  //     }
+  //   }
+  //   fout.close();
 
-    std::ofstream fout(CurveF.c_str());
-    if (!fout)
-      return false;
+  //   // then save the cycles
+  //   std::string CycleF = PathSave;
+  //   CycleF += std::string(".cycle");
 
-    std::vector<Geo::Point3<ScalarType>> VertPos;
-    std::map<Geo::Point3<ScalarType>, int> VertIdx;
-    std::vector<std::vector<int>> PathIdx;
+  //   std::ofstream fout_2(CycleF.c_str());
+  //   if (!fout_2)
+  //     return false;
 
-    for (size_t i = 0; i < PData.SubPatchVertPos.size(); i++) {
+  //   fout_2 << Cycles.size() << "\n";
+  //   for (size_t i = 0; i < Cycles.size(); i++) {
+  //     fout_2 << Cycles[i].CurveSeq.size() << "\n";
+  //     for (size_t j = 0; j < Cycles[i].CurveSeq.size(); j++) {
+  //       int IndexCurv = Cycles[i].CurveSeq[j][0];
+  //       int VerseCurv = Cycles[i].CurveSeq[j][1];
+  //       int IndexP = Cycles[i].CurveSeq[j][2];
+  //       fout_2 << IndexCurv << " " << VerseCurv << " " << IndexP << "\n";
+  //     }
+  //   }
+  //   fout_2.close();
+  //   return true;
+  // }
 
-      std::vector<Geo::Point3<ScalarType>> SubPVert = PData.SubPatchVertPos[i];
-      std::vector<std::vector<int>> SubPFace = PData.SubPatchFaces[i];
-      // then get the outer loops
-      std::vector<std::vector<int>> BorderVIdxL;
-      getBorderSequncesVert(SubPFace, BorderVIdxL);
+  // bool SaveCycleData(const std::string PathSave) {
+  //   std::vector<CurveData> Curves;
+  //   std::vector<CycleData> Cycles;
+  //   GetCurveCycleData(Curves, Cycles);
 
-      PathIdx.resize(PathIdx.size() + 1);
+  //   // first save the curves
+  //   std::string CurveF = PathSave;
 
-      assert(BorderVIdxL.size() == 1);
-      for (size_t j = 0; j < BorderVIdxL[0].size(); j++) {
-        int IndexV = BorderVIdxL[0][j];
-        Geo::Point3<ScalarType> LoopPos = SubPVert[IndexV];
-        int CurrVertIdx = -1;
-        if (VertIdx.count(LoopPos) == 0) {
-          VertPos.push_back(LoopPos);
-          CurrVertIdx = VertPos.size() - 1;
-          VertIdx[LoopPos] = CurrVertIdx;
-        } else {
-          CurrVertIdx = VertIdx[LoopPos];
-        }
-        PathIdx.back().push_back(CurrVertIdx);
-      }
-    }
-    fout << "numV " << VertPos.size() << "\n";
-    for (size_t i = 0; i < VertPos.size(); i++) {
-      Geo::Point3<ScalarType> CurrPos = VertPos[i];
-      fout << "v " << CurrPos.X << " " << CurrPos.Y << " " << CurrPos.Z << "\n";
-    }
+  //   std::ofstream fout(CurveF.c_str());
+  //   if (!fout)
+  //     return false;
 
-    fout << "numP " << PathIdx.size() << "\n";
-    for (size_t i = 0; i < PathIdx.size(); i++) {
-      fout << "p " << i << "\n";
-      fout << "numV " << PathIdx[i].size() << "\n";
-      for (size_t j = 0; j < PathIdx[i].size(); j++) {
-        fout << PathIdx[i][j] << "\n";
-      }
-    }
-    fout.close();
+  //   std::vector<Geo::Point3<ScalarType>> VertPos;
+  //   std::map<Geo::Point3<ScalarType>, int> VertIdx;
+  //   std::vector<std::vector<int>> PathIdx;
 
-    return true;
-  }
+  //   for (size_t i = 0; i < PData.SubPatchVertPos.size(); i++) {
+
+  //     std::vector<Geo::Point3<ScalarType>> SubPVert = PData.SubPatchVertPos[i];
+  //     std::vector<std::vector<int>> SubPFace = PData.SubPatchFaces[i];
+  //     // then get the outer loops
+  //     std::vector<std::vector<int>> BorderVIdxL;
+  //     getBorderSequncesVert(SubPFace, BorderVIdxL);
+
+  //     PathIdx.resize(PathIdx.size() + 1);
+
+  //     assert(BorderVIdxL.size() == 1);
+  //     for (size_t j = 0; j < BorderVIdxL[0].size(); j++) {
+  //       int IndexV = BorderVIdxL[0][j];
+  //       Geo::Point3<ScalarType> LoopPos = SubPVert[IndexV];
+  //       int CurrVertIdx = -1;
+  //       if (VertIdx.count(LoopPos) == 0) {
+  //         VertPos.push_back(LoopPos);
+  //         CurrVertIdx = VertPos.size() - 1;
+  //         VertIdx[LoopPos] = CurrVertIdx;
+  //       } else {
+  //         CurrVertIdx = VertIdx[LoopPos];
+  //       }
+  //       PathIdx.back().push_back(CurrVertIdx);
+  //     }
+  //   }
+  //   fout << "numV " << VertPos.size() << "\n";
+  //   for (size_t i = 0; i < VertPos.size(); i++) {
+  //     Geo::Point3<ScalarType> CurrPos = VertPos[i];
+  //     fout << "v " << CurrPos.X << " " << CurrPos.Y << " " << CurrPos.Z << "\n";
+  //   }
+
+  //   fout << "numP " << PathIdx.size() << "\n";
+  //   for (size_t i = 0; i < PathIdx.size(); i++) {
+  //     fout << "p " << i << "\n";
+  //     fout << "numV " << PathIdx[i].size() << "\n";
+  //     for (size_t j = 0; j < PathIdx[i].size(); j++) {
+  //       fout << PathIdx[i][j] << "\n";
+  //     }
+  //   }
+  //   fout.close();
+
+  //   return true;
+  // }
 
   void GetVertexPaths(std::vector<std::vector<int>> &VertPaths) {
     VertPaths.clear();

@@ -73,8 +73,17 @@ bool LoadMesh(const std::string &path) {
     std::cout << "Loaded " << Connectivity.size() << " faces " << VertPos.size()
               << " vertices" << std::endl;
 
-    Geo::CleanMesh<ScalarType>::SolveNonManifoldByDeletingFaces(VertPos, Connectivity);
-   
+    //Geo::CleanMesh<ScalarType>::SolveNonManifoldByDeletingFaces(VertPos, Connectivity);
+    if (!IsAllTris(Connectivity)) {
+      std::cout << "Input mesh is not triangular : Triangularize" << std::endl;
+
+      std::vector<typename Geo::Point3<ScalarType>> VertPosTris;
+      std::vector<std::vector<int>> ConnectivityTris;
+
+      SplitIntoTris(VertPos, Connectivity, VertPosTris, ConnectivityTris);
+      VertPos = VertPosTris;
+      Connectivity = ConnectivityTris;
+    }
     MeshBox.Init(VertPos);
     ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
     // AVGL = AvgEdgeLen(VertPos, Connectivity);
@@ -314,6 +323,12 @@ int main(int argc, char *argv[]) {
   
   Geo::TriRemesh<ScalarType>(VertPos, Connectivity, RemP);
   
+  std::cout<<"CLEANING MESH"<<std::endl;
+  Geo::CleanMesh<ScalarType>::CollapseBadShapeFaces(VertPos, Connectivity,0.05);
+  std::cout<<"CLEANING FOLDS"<<std::endl;
+  int steps_clean=Geo::CleanMesh<ScalarType>::SolveFolds(VertPos, Connectivity);
+  std::cout<<"Performed:"<<steps_clean<<" unfold steps"<<std::endl;
+
   std::cout << "DONE" << std::endl;
   CreateOutputFolder();
 

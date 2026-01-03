@@ -973,13 +973,12 @@ public:
         FeatureGeoSet.insert(Key);
       }
     }
-
     // then split
     int VNum0=Pos3D.size();
     std::vector<int> OldF;
     RefineMesh<ScalarType>::SplitTriangleFaces(Pos3D, Faces, AllSplitE,
                                                AllSplitPos,OldF);
-
+    
     // update the features
     FeatureE.clear();
     for (size_t i = 0; i < Faces.size(); i++) {

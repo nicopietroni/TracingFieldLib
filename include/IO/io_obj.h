@@ -218,9 +218,17 @@ bool WriteOBJ(std::string meshFile,
 
     for (size_t i=0;i<Connectivity.size();i++)
     {
-        fout<<"f";
+        // fout<<"f";
+        // for (size_t j=0;j<Connectivity[i].size();j++)
+        //     fout<<" "<<Connectivity[i][j]+1;
+        // fout<<"\n";
+        std::string KeyElem("f");
+        if (Connectivity[i].size()==2)
+            KeyElem=std::string("l");
+
+        fout<<KeyElem.c_str();
         for (size_t j=0;j<Connectivity[i].size();j++)
-            fout<<" "<<Connectivity[i][j]+1;
+            fout<<" "<<Connectivity[i][j]+1<<"/"<<Connectivity[i][j]+1;
         fout<<"\n";
     }
 

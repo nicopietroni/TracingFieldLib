@@ -32,6 +32,7 @@
 #include "mesh_functions.h"
 #include "mesh_mapping.h"
 #include "point3.h"
+#include "polyline3.h"
 #include "segment3.h"
 #include <algorithm>
 #include <cassert>
@@ -542,6 +543,48 @@ public:
         assert(VertMap[IndexV] < VertPos.size());
         subsequences[i][j] = VertMap[subsequences[i][j]];
       }
+  }
+
+  //resample positions on the edge mesh using branch points.
+  static void ResampleNodeSequences(
+      std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::pair<int, int>> &Edges)
+  {
+    //first get the sequences
+    std::vector<std::vector<int>> subsequences;
+    ExtractSortedNodesSequencesMap(VertPos,Edges,subsequences);
+    //resample each sequence
+    for (size_t i=0;i<subsequences.size();i++)
+    {
+      //can't be a single point but at least an edge
+      assert(subsequences[i].size()>=2);
+
+      //in this case no need to resample
+      if (subsequences[i].size()==2)
+        continue;
+
+      //get current polyline
+      Geo::Polyline3<ScalarType> CurrPoly;
+      for (size_t j=0;j<subsequences[i].size();j++)
+      {
+        Geo::Point3<ScalarType> CurrPos = VertPos[subsequences[i][j]];
+        CurrPoly.PolyPos.push_back(CurrPos);
+      }
+      int num_points = subsequences[i].size();
+
+      //resample
+     std::vector<Geo::Point3<ScalarType>> ResampledPoly;
+      int numSamplePoints = subsequences[i].size();
+      assert(numSamplePoints>1);
+      ResampledPoly=CurrPoly.SampleUniformly(numSamplePoints);
+      // std::cout<<"Resampling target "<<numSamplePoints
+      //          <<" points to "<<ResampledPoly.size()<<" points."<<std::endl;
+      
+      //update positions (not considering the last one to avoid numerical issues)
+      assert(ResampledPoly.size() == subsequences[i].size()-2);
+      for (size_t j=0;j<ResampledPoly.size();j++)
+        VertPos[subsequences[i][j+1]] = ResampledPoly[j];
+    }
   }
 
   static bool SampleByCurvature(const std::vector<Point3<ScalarType>> &Points,

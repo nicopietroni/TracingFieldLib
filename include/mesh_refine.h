@@ -865,17 +865,37 @@ public:
 
   static void SplitMeshWithPlane(std::vector<Geo::Point3<ScalarType>> &Pos3D,
                                  std::vector<std::vector<int>> &Faces,
-                                 const Geo::Plane3<ScalarType> &SplitPl) {
+                                 const Geo::Plane3<ScalarType> &SplitPl,
+                                 bool snap_to_plane=true,
+                                 ScalarType snap_dist=0.01) {
     // ScalarType EPS=0.00000001;
+    ScalarType AvgL = AvgEdgeLen(Pos3D, Faces);
+    ScalarType EPS=AvgL*snap_dist;
     bool has_refined = false;
-    //        do
-    //        {
+    //first snap vertices to the plane
+    if (snap_to_plane)
+    {
+      for (size_t i=0;i<Pos3D.size();i++)
+      {
+        ScalarType dist=SplitPl.SignedDistance(Pos3D[i]);
+        if (fabs(dist)>EPS)continue;
+        Geo::Point3<ScalarType> ProjP=SplitPl.Project(Pos3D[i]);
+        Pos3D[i]=ProjP;
+      }
+    }
+
     has_refined = false;
 
     // compute the signed distance of each vertex
     std::vector<ScalarType> SignedDist;
     for (size_t i = 0; i < Pos3D.size(); i++)
-      SignedDist.push_back(SplitPl.SignedDistance(Pos3D[i]));
+    {
+      ScalarType dist=SplitPl.SignedDistance(Pos3D[i]);
+      if (snap_to_plane)
+        if (fabs(dist)<EPS)dist=0;
+      
+      SignedDist.push_back(dist);
+    }
 
     std::vector<std::pair<int, int>> To_split;
     std::vector<ScalarType> Alpha;
@@ -888,6 +908,11 @@ public:
         int IndexV1 = Faces[i][(j + 1) % 3];
         ScalarType SignDist0 = SignedDist[IndexV0];
         ScalarType SignDist1 = SignedDist[IndexV1];
+
+        if (SignDist0 == 0)
+          continue;
+        if (SignDist1 == 0)
+          continue;
 
         bool PosV0 = SignDist0 >= 0; //+EPS;
         bool PosV1 = SignDist1 >= 0; //+EPS;

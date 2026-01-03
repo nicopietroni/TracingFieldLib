@@ -104,8 +104,7 @@ void DrawOutline(const std::vector<Geo::Point3<ScalarType>> &VertPos,
     }
   }
   //std::cout<<" MAx G:"<<MaxG<<std::endl;
-  delete[] depthBuffer; // Free the depth buffer memory
-
+  
   // Convert edge pixels to object coordinates
   std::vector<GLdouble> edgeVertices;
 
@@ -139,7 +138,9 @@ void DrawOutline(const std::vector<Geo::Point3<ScalarType>> &VertPos,
     edgeVertices.push_back(objZ);
   }
 
-//   // Clear the depth buffer if necessary
+  delete[] depthBuffer; // Free the depth buffer memory
+
+ // Clear the depth buffer if necessary
   glClear(GL_DEPTH_BUFFER_BIT);
 
   // Now draw the edge vertices in object space
@@ -149,6 +150,7 @@ void DrawOutline(const std::vector<Geo::Point3<ScalarType>> &VertPos,
   for (size_t i = 0; i < edgeVertices.size(); i += 3) {
     glVertex3d(edgeVertices[i], edgeVertices[i + 1], edgeVertices[i + 2]);
   }
+
   glEnd();
   glPopAttrib();
 }

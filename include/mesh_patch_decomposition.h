@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdlib>
 #include <iostream>
 #include <set>
@@ -99,10 +100,11 @@ template <class ScalarType> class MeshPatchDecomposition {
   std::vector<int> FeatureSingIndex, FeatureSingValue;
   std::vector<std::pair<int, int>> RemainingF;
   std::vector<int> NewBorder;
+  std::vector<int> FalseBorder;
 
-  // DATA FOR REMOVE COINCIDENT VERT
-  std::vector<int> ModSameBVert;
-  std::vector<Geo::Point3<ScalarType>> ModSameBOrigPos;
+  // // DATA FOR REMOVE COINCIDENT VERT
+  // std::vector<int> ModSameBVert;
+  // std::vector<Geo::Point3<ScalarType>> ModSameBOrigPos;
 
   // DIFFERENT CLASS TO PATCH DECOMPOSITIN
   Geo::TracingGraph<ScalarType> TGraph;
@@ -200,8 +202,34 @@ template <class ScalarType> class MeshPatchDecomposition {
         NewBorder);
 
     Geo::TracingPreprocess<ScalarType>::DesambiguateCoincidentBorders(
-        TriVertPos, TriConnectivity, &ModSameBVert, &ModSameBOrigPos);
+        TriVertPos, TriConnectivity, &PatchM.ModSameBVert,
+        &PatchM.ModSameBOrigPos);
 
+    // get the "false border" vertices which are the one NewBorder but not
+    // PatchM.ModSameBVert
+    
+    std::set<int> SplitNewB(PatchM.ModSameBVert.begin(),
+                            PatchM.ModSameBVert.end());
+   
+    FalseBorder.clear();
+    for (size_t i = 0; i < NewBorder.size(); i++) {
+      if (SplitNewB.count(NewBorder[i]) > 0)
+        continue;
+      FalseBorder.push_back(NewBorder[i]);
+    }
+
+    PDeco.AvoidArriveTo=FalseBorder;
+
+    // std::vector<Geo::Point3<ScalarType>> FalseBorderPos;
+    // for (size_t i = 0; i < FalseBorder.size(); i++) {
+    //   int IndexV = FalseBorder[i];
+    //   assert(IndexV >= 0);
+    //   assert(IndexV < TriVertPos.size());
+    //   FalseBorderPos.push_back(TriVertPos[IndexV]);
+    // }
+    // WriteOBJ("TestSplitCorner.obj", TriVertPos, TriConnectivity);
+    // WriteOBJ("FalseBorder.obj", FalseBorderPos, std::vector<std::vector<int>>());
+    // exit(0);
     UpdateAfterRemesh();
   }
 
@@ -236,16 +264,26 @@ template <class ScalarType> class MeshPatchDecomposition {
     PatchM.InitVisualCornersEdges();
   }
 
-  void RestoreOriginalPosOnSplitBorders() {
-    assert(ModSameBVert.size() == ModSameBOrigPos.size());
-    for (size_t i = 0; i < ModSameBVert.size(); i++) {
-      int IndexV = ModSameBVert[i];
-      assert(IndexV >= 0);
-      assert(IndexV < TriVertPos.size());
-      TriVertPos[IndexV] = ModSameBOrigPos[i];
-    }
-  }
+  // void RestoreOriginalPosOnSplitBorders() {
+  //   assert(ModSameBVert.size() == ModSameBOrigPos.size());
+  //   for (size_t i = 0; i < ModSameBVert.size(); i++) {
+  //     int IndexV = ModSameBVert[i];
+  //     assert(IndexV >= 0);
+  //     assert(IndexV < TriVertPos.size());
+  //     TriVertPos[IndexV] = ModSameBOrigPos[i];
+  //   }
+  // }
 
+  void RestoreOriginalPosOnSplitBorders() {
+    PatchM.RestoreOriginalPosOnSplitBorders();
+    // assert(ModSameBVert.size() == ModSameBOrigPos.size());
+    // for (size_t i = 0; i < ModSameBVert.size(); i++) {
+    //   int IndexV = ModSameBVert[i];
+    //   assert(IndexV >= 0);
+    //   assert(IndexV < TriVertPos.size());
+    //   TriVertPos[IndexV] = ModSameBOrigPos[i];
+    // }
+  }
   // void ExtractDualPatches() {
   //   RestoreOriginalPosOnSplitBorders();
   //   Geo::DualPatch<ScalarType>::DisambiguateForDual(PatchM);
@@ -368,6 +406,7 @@ public:
   bool self_connection_cond;
   bool single_sing_cond;
   bool match_sing_cond;
+  bool split_removal;
   int MinSides;
   int MaxSides;
   ScalarType CCAbility;
@@ -402,16 +441,14 @@ public:
   MeshPatchDecomposition(std::vector<Geo::Point3<ScalarType>> &_TriVertPos,
                          std::vector<std::vector<int>> &_TriConnectivity,
                          std::vector<Field::CrossF<ScalarType>> &_FaceCurv,
-                        std::vector<std::pair<int, int>> &_TriFeatures
-                      )
+                         std::vector<std::pair<int, int>> &_TriFeatures)
       : TriVertPos(_TriVertPos), TriConnectivity(_TriConnectivity),
         FaceCurv(_FaceCurv), TGraph(Geo::GT_CrossField),
         PathSampl(TriVertPos, TriConnectivity, TGraph, VertCurv, SingIndex,
                   SingValue),
         PatchM(TriVertPos, TriConnectivity, VertCurv, TGraph,
                PathSampl.SelectedPaths),
-        PDeco(PatchM, PathSampl, VertCurv, FaceCurv),
-        TriFeatures(_TriFeatures)
+        PDeco(PatchM, PathSampl, VertCurv, FaceCurv), TriFeatures(_TriFeatures)
 
   {
 
@@ -431,6 +468,7 @@ public:
     single_sing_cond = true;
     match_sing_cond = true;
     prefer_feature_features = false;
+    split_removal = false;
 
     MinSides = 3;
     MaxSides = 6;
@@ -444,9 +482,9 @@ public:
   }
 
   void ExtractPatches(std::vector<std::vector<int>> &VertPaths) {
-    //TriFeatures = _TriFeatures;
+    // TriFeatures = _TriFeatures;
     PDeco.prefer_feature_features = prefer_feature_features;
-
+    PDeco.split_removal = split_removal;
     std::sort(TriFeatures.begin(), TriFeatures.end());
     auto last = std::unique(TriFeatures.begin(), TriFeatures.end());
     TriFeatures.erase(last, TriFeatures.end());
@@ -461,21 +499,23 @@ public:
     PatchM.GetVertexPaths(VertPaths);
   }
 
-  // void ExtractPatches(std::vector<std::pair<int, int>> &_TriFeatures,
-  //                     std::vector<std::pair<int, int>> &PathBoundaries,
-  //                     std::vector<int> &PathCorners) {
-  //   std::vector<std::vector<int>> VertPaths;
-  //   ExtractPatches(_TriFeatures, VertPaths);
-  //   PatchM.GetVertexPaths(VertPaths);
-  //   PatchM.GetAllSideGlobalEdges(PathBoundaries);
-  //   PatchM.GetAllCorners(PathCorners);
-  // }
   void ExtractPatches(std::vector<std::pair<int, int>> &PathBoundaries,
                       std::vector<int> &PathCorners) {
     std::vector<std::vector<int>> VertPaths;
     ExtractPatches(VertPaths);
     PatchM.GetVertexPaths(VertPaths);
     PatchM.GetAllSideGlobalEdges(PathBoundaries);
+
+    // get all original boundaries
+    std::vector<std::pair<int, int>> BorderEdges;
+    Geo::getBorderEdges(TriConnectivity, BorderEdges);
+    PathBoundaries.insert(PathBoundaries.end(), BorderEdges.begin(),
+                          BorderEdges.end());
+    std::sort(PathBoundaries.begin(), PathBoundaries.end());
+    PathBoundaries.erase(
+        std::unique(PathBoundaries.begin(), PathBoundaries.end()),
+        PathBoundaries.end());
+
     PatchM.GetAllCorners(PathCorners);
   }
 };

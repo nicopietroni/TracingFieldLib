@@ -144,6 +144,9 @@ template <class ScalarType> class PatchDecomposer {
   //   // PathSampl.MarkVertices(to_mark_vert, 0);
   // }
 public:
+
+  std::vector<int> AvoidArriveTo;
+
   void InitMustPassEdges() {
     auto time0 = std::chrono::high_resolution_clock::now();
     PathSampl.must_cross_e.clear();
@@ -414,6 +417,18 @@ public:
   //   }
   // }
 
+  void DisableAvoidToArrive()
+  {
+    // std::cout << "**** Disable avoid to arrive to size:" << AvoidArriveTo.size()
+    //           << std::endl;
+    for (size_t i = 0; i < AvoidArriveTo.size(); i++) {
+        int IndexV = AvoidArriveTo[i];
+        assert(IndexV >= 0);
+        assert(IndexV < PathSampl.allow_arrive_to.size());
+        PathSampl.allow_arrive_to[IndexV] = false;
+      }
+  }
+
   // this one
   void InitArrivalPoint(bool and_allow_pass) {
     bool allArrival =
@@ -425,6 +440,8 @@ public:
       // else
       std::fill(PathSampl.allow_arrive_to.begin(),
                 PathSampl.allow_arrive_to.end(), true);
+
+      DisableAvoidToArrive();
       return;
     }
 
@@ -465,6 +482,7 @@ public:
       //   PathSampl.allow_arrive_to[IndexV] = PathSampl.allow_path_on[IndexV];
       // }
     }
+    DisableAvoidToArrive();
   }
 
   void UpdateCondition(const int &IndexPatch) {
@@ -561,6 +579,7 @@ public:
   void Init() {
     PathSampl.Init();
     to_init_distance = true;
+    //AvoidArriveTo.clear();
   }
 
   void UpdateAllUnsolvedPatches() {
