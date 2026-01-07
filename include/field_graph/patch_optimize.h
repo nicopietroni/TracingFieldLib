@@ -37,11 +37,11 @@
 #include <iostream>
 #include <limits>
 #include <set>
-//#include <sys/_types/_size_t.h>
-#include <cstddef>   // C++
+// #include <sys/_types/_size_t.h>
+#include "../Space_Query/segment_grid_3D.h"
+#include <cstddef> // C++
 #include <utility>
 #include <vector>
-#include "../Space_Query/segment_grid_3D.h"
 
 namespace Geo {
 template <class ScalarType> class PatchOptimize {
@@ -221,6 +221,58 @@ template <class ScalarType> class PatchOptimize {
   // }
 
 public:
+  
+  static void FastSmoothPaths3DReproject(
+      const std::vector<std::vector<int>> &PathsV,
+      std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<int> &FixedV,
+      const std::vector<Geo::Point3<ScalarType>> &ReprojVertPos,
+      const std::vector<std::vector<int>> &ReprojFaces,
+      Geo::TriangleSpatialIndex<ScalarType> &TargetTriGrid,
+      ScalarType Damp = 0.5, size_t Steps = 5) {
+
+    // transform that vertices into polylines
+    std::vector<Polyline3<ScalarType>> Polylines;
+    for (size_t i = 0; i < PathsV.size(); i++) {
+      if (PathsV[i].size() == 0)
+        continue;
+      Polyline3<ScalarType> CurrPoly;
+      for (size_t j = 0; j < PathsV[i].size(); j++) {
+        int IndexV = PathsV[i][j];
+        CurrPoly.AddPoint(VertPos[IndexV]);
+      }
+      Polylines.push_back(CurrPoly);
+    }
+
+    std::set<int> FixedSet(FixedV.begin(), FixedV.end());
+
+    for (size_t it = 0; it < Steps; it++) {
+      for (size_t p = 0; p < Polylines.size(); p++) {
+        Polyline3<ScalarType> &CurrPoly = Polylines[p];
+        
+                     
+        SmoothReproject(CurrPoly, 1, ReprojVertPos, ReprojFaces, TargetTriGrid,
+                        Damp);
+
+        // check if fixed restore
+        for (size_t j = 0; j < PathsV[p].size(); j++) {
+          int IndexV = PathsV[p][j];
+          if (FixedSet.count(IndexV) > 0) {
+            CurrPoly.PolyPos[j] = VertPos[IndexV];
+          }
+        }
+      }
+      // finally update positions
+      for (size_t p = 0; p < Polylines.size(); p++) {
+        Polyline3<ScalarType> &CurrPoly = Polylines[p];
+        for (size_t j = 0; j < PathsV[p].size(); j++) {
+          int IndexV = PathsV[p][j];
+          VertPos[IndexV] = CurrPoly.PolyPos[j];
+        }
+      }
+    }
+  }
+
   static void SmoothPaths(std::vector<Geo::Point3<ScalarType>> &VertPos,
                           const std::vector<std::vector<int>> &Connectivity,
                           const std::vector<std::vector<int>> &PathsV,
@@ -261,82 +313,81 @@ public:
                  const std::vector<std::pair<int, int>> &PrimalFeatures,
                  std::vector<Geo::Point3<ScalarType>> &DualVertPos,
                  const std::vector<std::vector<int>> &DualConnectivity,
-                 ScalarType Damp = 0.5, size_t Steps = 5) 
-  {
+                 ScalarType Damp = 0.5, size_t Steps = 5) {
     typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVP;
-    std::set<Geo::Point3<ScalarType> > ToFixPos;
-    for (size_t i=0;i<PrimalFeatures.size();i++)
-    {
-      int IndexV0=PrimalFeatures[i].first;
-      int IndexV1=PrimalFeatures[i].second;
+    std::set<Geo::Point3<ScalarType>> ToFixPos;
+    for (size_t i = 0; i < PrimalFeatures.size(); i++) {
+      int IndexV0 = PrimalFeatures[i].first;
+      int IndexV1 = PrimalFeatures[i].second;
       ToFixPos.insert(PrimalVertPos[IndexV0]);
       ToFixPos.insert(PrimalVertPos[IndexV1]);
     }
     std::vector<size_t> BorderV;
-    getBorderVert(PrimalConnectivity,BorderV);
-    for (size_t i=0;i<BorderV.size();i++)
+    getBorderVert(PrimalConnectivity, BorderV);
+    for (size_t i = 0; i < BorderV.size(); i++)
       ToFixPos.insert(PrimalVertPos[BorderV[i]]);
-    
-    //then map the position to the dual  
-    for (size_t i=0;i<DualVertPos.size();i++)
-    {
-      if (ToFixPos.count(DualVertPos[i])==0)continue;
-       UVP.Fixed.push_back(i);
+
+    // then map the position to the dual
+    for (size_t i = 0; i < DualVertPos.size(); i++) {
+      if (ToFixPos.count(DualVertPos[i]) == 0)
+        continue;
+      UVP.Fixed.push_back(i);
     }
 
-    //fix the vertices on features (might result different from split)
-    std::set<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > BorderEPos;
-    std::vector<std::pair<int,int> > BorderIdx;
-    getBorderEdges(DualConnectivity,BorderIdx);
-    for (size_t i=0;i<BorderIdx.size();i++)
-    {
-      Geo::Point3<ScalarType> P0=DualVertPos[BorderIdx[i].first];
-      Geo::Point3<ScalarType> P1=DualVertPos[BorderIdx[i].second];
-      std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > Key(std::min(P0,P1),std::max(P0,P1));
+    // fix the vertices on features (might result different from split)
+    std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
+        BorderEPos;
+    std::vector<std::pair<int, int>> BorderIdx;
+    getBorderEdges(DualConnectivity, BorderIdx);
+    for (size_t i = 0; i < BorderIdx.size(); i++) {
+      Geo::Point3<ScalarType> P0 = DualVertPos[BorderIdx[i].first];
+      Geo::Point3<ScalarType> P1 = DualVertPos[BorderIdx[i].second];
+      std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> Key(
+          std::min(P0, P1), std::max(P0, P1));
       BorderEPos.insert(Key);
     }
 
-    std::vector<std::pair<int,int> > MissingFeatureE;
-    for (size_t i=0;i<PrimalFeatures.size();i++)
-    {
-      Geo::Point3<ScalarType> P0=PrimalVertPos[PrimalFeatures[i].first];
-      Geo::Point3<ScalarType> P1=PrimalVertPos[PrimalFeatures[i].second];
-      std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > Key(std::min(P0,P1),std::max(P0,P1));
-      if (BorderEPos.count(Key)>0)continue;
+    std::vector<std::pair<int, int>> MissingFeatureE;
+    for (size_t i = 0; i < PrimalFeatures.size(); i++) {
+      Geo::Point3<ScalarType> P0 = PrimalVertPos[PrimalFeatures[i].first];
+      Geo::Point3<ScalarType> P1 = PrimalVertPos[PrimalFeatures[i].second];
+      std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> Key(
+          std::min(P0, P1), std::max(P0, P1));
+      if (BorderEPos.count(Key) > 0)
+        continue;
       MissingFeatureE.push_back(PrimalFeatures[i]);
     }
 
-    //then fix the one close to the middle of missing
+    // then fix the one close to the middle of missing
     std::vector<Geo::Point3<ScalarType>> MissingP;
-    for (size_t i=0;i<MissingFeatureE.size();i++)
-    {
-      Geo::Point3<ScalarType> P0=PrimalVertPos[MissingFeatureE[i].first];
-      Geo::Point3<ScalarType> P1=PrimalVertPos[MissingFeatureE[i].second];
-      Geo::Point3<ScalarType> Avg=(P0+P1)/2;
+    for (size_t i = 0; i < MissingFeatureE.size(); i++) {
+      Geo::Point3<ScalarType> P0 = PrimalVertPos[MissingFeatureE[i].first];
+      Geo::Point3<ScalarType> P1 = PrimalVertPos[MissingFeatureE[i].second];
+      Geo::Point3<ScalarType> Avg = (P0 + P1) / 2;
       MissingP.push_back(Avg);
     }
 
-    //find the closer one
-    getBorderVert(DualConnectivity,BorderV);
-    for (size_t i=0;i<MissingP.size();i++)
-    {
-      Geo::Point3<ScalarType> P0=MissingP[i];
-      ScalarType MinD=std::numeric_limits<ScalarType>::max();
-      int MinV=-1;
-      for (size_t i=0;i<BorderV.size();i++)
-      {
-        int IndexV=BorderV[i];
-        Geo::Point3<ScalarType> P1=DualVertPos[IndexV];
-        ScalarType CurrD=(P0-P1).Norm();
-        if (CurrD>MinD)continue;
-        MinD=CurrD;
-        MinV=IndexV;
+    // find the closer one
+    getBorderVert(DualConnectivity, BorderV);
+    for (size_t i = 0; i < MissingP.size(); i++) {
+      Geo::Point3<ScalarType> P0 = MissingP[i];
+      ScalarType MinD = std::numeric_limits<ScalarType>::max();
+      int MinV = -1;
+      for (size_t i = 0; i < BorderV.size(); i++) {
+        int IndexV = BorderV[i];
+        Geo::Point3<ScalarType> P1 = DualVertPos[IndexV];
+        ScalarType CurrD = (P0 - P1).Norm();
+        if (CurrD > MinD)
+          continue;
+        MinD = CurrD;
+        MinV = IndexV;
       }
-      if (MinV!=-1)
-      UVP.Fixed.push_back(MinV);
+      if (MinV != -1)
+        UVP.Fixed.push_back(MinV);
     }
-    
-    Geo::Local_Param_Smooth<ScalarType>::SmoothWithInternalBorders(DualVertPos, DualConnectivity, false, UVP);
+
+    Geo::Local_Param_Smooth<ScalarType>::SmoothWithInternalBorders(
+        DualVertPos, DualConnectivity, false, UVP);
 
     // //first save all feature positions
     // std::set<Geo::Point3<ScalarType> > FeaturePos;

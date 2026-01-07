@@ -45,8 +45,8 @@
 #include <pos3.h>
 #include <set>
 #include <string>
-//#include <sys/_types/_size_t.h>
-#include <cstddef>   // C++
+// #include <sys/_types/_size_t.h>
+#include <cstddef> // C++
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -365,15 +365,14 @@ public:
   //   }
   // }
 
-  static void MakeUnique(std::vector<std::pair<int, int>> &Edges) 
-  {
+  static void MakeUnique(std::vector<std::pair<int, int>> &Edges) {
     for (size_t i = 0; i < Edges.size(); i++) {
       if (Edges[i].first < Edges[i].second)
         continue;
       std::swap(Edges[i].first, Edges[i].second);
     }
     std::sort(Edges.begin(), Edges.end());
-    Edges.erase(std::unique(Edges.begin(), Edges.end()),Edges.end());
+    Edges.erase(std::unique(Edges.begin(), Edges.end()), Edges.end());
   }
 
   // Function to find all sorted sequences based on branch points
@@ -545,45 +544,43 @@ public:
       }
   }
 
-  //resample positions on the edge mesh using branch points.
-  static void ResampleNodeSequences(
-      std::vector<Geo::Point3<ScalarType>> &VertPos,
-      const std::vector<std::pair<int, int>> &Edges)
-  {
-    //first get the sequences
+  // resample positions on the edge mesh using branch points.
+  static void
+  ResampleNodeSequences(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                        const std::vector<std::pair<int, int>> &Edges) {
+    // first get the sequences
     std::vector<std::vector<int>> subsequences;
-    ExtractSortedNodesSequencesMap(VertPos,Edges,subsequences);
-    //resample each sequence
-    for (size_t i=0;i<subsequences.size();i++)
-    {
-      //can't be a single point but at least an edge
-      assert(subsequences[i].size()>=2);
+    ExtractSortedNodesSequencesMap(VertPos, Edges, subsequences);
+    // resample each sequence
+    for (size_t i = 0; i < subsequences.size(); i++) {
+      // can't be a single point but at least an edge
+      assert(subsequences[i].size() >= 2);
 
-      //in this case no need to resample
-      if (subsequences[i].size()==2)
+      // in this case no need to resample
+      if (subsequences[i].size() == 2)
         continue;
 
-      //get current polyline
+      // get current polyline
       Geo::Polyline3<ScalarType> CurrPoly;
-      for (size_t j=0;j<subsequences[i].size();j++)
-      {
+      for (size_t j = 0; j < subsequences[i].size(); j++) {
         Geo::Point3<ScalarType> CurrPos = VertPos[subsequences[i][j]];
         CurrPoly.PolyPos.push_back(CurrPos);
       }
       int num_points = subsequences[i].size();
 
-      //resample
-     std::vector<Geo::Point3<ScalarType>> ResampledPoly;
+      // resample
+      std::vector<Geo::Point3<ScalarType>> ResampledPoly;
       int numSamplePoints = subsequences[i].size();
-      assert(numSamplePoints>1);
-      ResampledPoly=CurrPoly.SampleUniformly(numSamplePoints);
+      assert(numSamplePoints > 1);
+      ResampledPoly = CurrPoly.SampleUniformly(numSamplePoints);
       // std::cout<<"Resampling target "<<numSamplePoints
       //          <<" points to "<<ResampledPoly.size()<<" points."<<std::endl;
-      
-      //update positions (not considering the last one to avoid numerical issues)
-      assert(ResampledPoly.size() == subsequences[i].size()-2);
-      for (size_t j=0;j<ResampledPoly.size();j++)
-        VertPos[subsequences[i][j+1]] = ResampledPoly[j];
+
+      // update positions (not considering the last one to avoid numerical
+      // issues)
+      assert(ResampledPoly.size() == subsequences[i].size() - 2);
+      for (size_t j = 0; j < ResampledPoly.size(); j++)
+        VertPos[subsequences[i][j + 1]] = ResampledPoly[j];
     }
   }
 
@@ -745,6 +742,24 @@ public:
     }
   }
 
+  static void ExtractEdgeMeshFromVertPairs(
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &Faces,
+      const std::vector<std::vector<std::pair<int, int>>> &Edges,
+      std::vector<Geo::Point3<ScalarType>> &EdgeMeshVertPos,
+      std::vector<std::vector<int>> &ConnectivityEdges)
+  {
+    EdgeMeshVertPos.clear();
+    ConnectivityEdges.clear();
+    for (size_t i = 0; i < Edges.size(); i++) {
+      std::vector<Geo::Point3<ScalarType>> SubEdgeMeshVertPos;
+      std::vector<std::vector<int>> SubConnectivityEdges;
+      ExtractEdgeMeshFromVertPairs(VertPos, Faces, Edges[i],
+                                   SubEdgeMeshVertPos, SubConnectivityEdges);
+      AppendMesh<ScalarType>(EdgeMeshVertPos, ConnectivityEdges, SubEdgeMeshVertPos, SubConnectivityEdges);
+    }
+  }
+
   static void ExtractEdgeMeshFromPosPairs(
       const std::vector<std::pair<Geo::Point3<ScalarType>,
                                   Geo::Point3<ScalarType>>> &EdgesPos,
@@ -775,7 +790,42 @@ public:
       ConnectivityEdges.back().push_back(IndexV1);
     }
   }
-};
 
+  static void ExtractEdgeMeshFromIdxSequences(
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &Seuquences,
+      std::vector<Geo::Point3<ScalarType>> &EdgeMeshVertPos,
+      std::vector<std::vector<int>> &ConnectivityEdges) {
+    std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
+        EdgesPos;
+    for (size_t i = 0; i < Seuquences.size(); i++) {
+      for (size_t j = 0; j < Seuquences[i].size() - 1; j++) {
+        int IndexV0 = Seuquences[i][j];
+        int IndexV1 = Seuquences[i][j + 1];
+        Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
+        Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
+        EdgesPos.push_back(
+            std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>(P0,
+                                                                        P1));
+      }
+    }
+    ExtractEdgeMeshFromPosPairs(EdgesPos, EdgeMeshVertPos, ConnectivityEdges);
+  }
+
+  static void ExtractEdgePairFromIdxSequences(
+      const std::vector<std::vector<int>> &Sequences,
+      std::vector<std::vector<std::pair<int, int>>> &ConnectivityEdges) {
+    ConnectivityEdges.clear();
+    ConnectivityEdges.resize(Sequences.size());
+
+    for (size_t i = 0; i < Sequences.size(); i++) {
+      for (size_t j = 0; j < Sequences[i].size() - 1; j++) {
+        int IndexV0 = Sequences[i][j];
+        int IndexV1 = Sequences[i][j + 1];
+        ConnectivityEdges[i].push_back(std::pair<int, int>(IndexV0, IndexV1));
+      }
+    }
+  }
+};
 }; // namespace Geo
 #endif

@@ -48,6 +48,7 @@ class SideCurvatureCondition : public PatchCondition<ScalarType> {
 
 public:
   ScalarType MaxSideAngle;
+  bool smooth_paths;
 
   bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                  const int &IndexPatch) const override {
@@ -64,6 +65,7 @@ public:
       }
 
 // smooth and reproject
+      if (smooth_paths)
       Geo::SmoothReproject<ScalarType>(SidePoly, 10, TargetPos, TargetFaces, *TargetTriGrid, 0.5);
       
       ScalarType TotA = SidePoly.TotAngle();
@@ -91,6 +93,66 @@ public:
 
   SideCurvatureCondition(ScalarType _MaxSideAngle) {
     MaxSideAngle = _MaxSideAngle;
+    smooth_paths = false;
+  }
+};
+
+
+
+template <class ScalarType>
+class SideCurvatureUniformCondition : public PatchCondition<ScalarType> {
+  std::vector<Geo::Point3<ScalarType>> TargetPos;
+  std::vector<std::vector<int>> TargetFaces;
+  Geo::TriangleSpatialIndex<ScalarType> *TargetTriGrid;
+
+public:
+  ScalarType MaxSideAngle;
+  bool smooth_paths;
+
+  bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
+                 const int &IndexPatch) const override {
+    if (PatchM.NumBorders(IndexPatch) != 1)
+      return false;
+    std::vector<std::vector<int>> SideV;
+    PatchM.GetAllSideVert(IndexPatch, SideV);
+    for (size_t i = 0; i < SideV.size(); i++) {
+
+      Geo::Polyline3<ScalarType> SidePoly;
+      for (size_t j = 0; j < SideV[i].size(); j++) {
+        int IndexV = SideV[i][j];
+        SidePoly.AddPoint(PatchM.PData.SubPatchVertPos[IndexPatch][IndexV]);
+      }
+
+// smooth and reproject
+      if (smooth_paths)
+      Geo::SmoothReproject<ScalarType>(SidePoly, 10, TargetPos, TargetFaces, *TargetTriGrid, 0.5);
+      
+      ScalarType TotA = SidePoly.TotAngle();
+      if (fabs(TotA) > MaxSideAngle)
+        return false;
+    }
+    return true;
+  }
+
+  std::string Name() const override { return std::string("side_curvature"); }
+
+  void Init(const std::vector<Geo::Point3<ScalarType>> &_TargetPos,
+            const std::vector<std::vector<int>> &_TargetFaces) {
+    TargetPos = _TargetPos;
+    TargetFaces = _TargetFaces;
+    TargetTriGrid = new Geo::TriangleSpatialIndex<ScalarType>();
+    TargetTriGrid->Init(TargetPos, TargetFaces);
+  }
+
+  //destructor
+  ~SideCurvatureUniformCondition() {
+    if (TargetTriGrid)
+      delete TargetTriGrid;
+  }
+
+  SideCurvatureUniformCondition(ScalarType _MaxSideAngle) {
+    MaxSideAngle = _MaxSideAngle;
+    smooth_paths = false;
   }
 };
 

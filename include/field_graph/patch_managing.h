@@ -109,6 +109,9 @@ public:
     // the old nodes used to check if need to update
     std::vector<std::vector<int>> OLDPathNodes;
 
+    //the list of last updated patches to be used for conditions
+    std::vector<int> LastUpdatedPatches;
+
     // void PrintSize()
     // {
 
@@ -161,7 +164,6 @@ public:
   std::vector<std::vector<int>> &Faces;
   const Geo::TracingGraph<ScalarType> &TGraph;
   const std::vector<Field::CrossF<ScalarType>> &Cross;
-
   // the modified vertices when coincided pos for splitting
   std::vector<int> ModSameBVert;
   std::vector<Geo::Point3<ScalarType>> ModSameBOrigPos;
@@ -918,6 +920,7 @@ private:
         PData.PatchOriginalFaces.back().push_back(ComponentsF[i][j]);
       }
     }
+    
   }
 
   void SplitSubMeshWithInternalEdges(int IndexPatch) {
@@ -1155,6 +1158,14 @@ private:
     MapToOriginal(IndexPatch, BoundVIdx);
   }
 
+  std::vector<int> GetOriginalFacesInPatch(const int IndexPatch)const {
+    assert(IndexPatch >=0);
+    assert(IndexPatch < NumPatches());
+    return PData.PatchOriginalFaces[IndexPatch];
+    //PData.SubPatchFacesToOriginal[IndexPatch]
+  }
+
+
   // reorganise the sequence from the first corner found
   bool SortFromCorner(std::vector<std::vector<int>> &BoundVIdx,
                       const std::set<int> &CornerSet) {
@@ -1266,6 +1277,16 @@ private:
   }
 
 public:
+
+   std::vector<int> GetOriginalFacesInPatches(const std::vector<int> &IndexPatches)const {
+    std::vector<int> Faces;
+    for (size_t i = 0; i < IndexPatches.size(); i++) {
+      int IndexP = IndexPatches[i];
+      std::vector<int> FacesInPatch = GetOriginalFacesInPatch(IndexP);
+      Faces.insert(Faces.end(), FacesInPatch.begin(), FacesInPatch.end());  
+    }
+    return Faces;
+  }
 
   std::vector<int> GetModifiedSameBorderVertices() const {
     return ModSameBVert;
@@ -2139,6 +2160,7 @@ public:
   void Update(const std::vector<int> &AddedPaths,
               const std::vector<int> &RemovedPaths,
               std::vector<int> &UpdatedPatches) {
+
     UpdatedPatches.clear();
 
     // std::vector<int> ToAdd,ToRemove;
@@ -2198,6 +2220,8 @@ public:
       InitVisualCornersEdges(ToUpdatePatches);
 
     UpdatedPatches = ToUpdatePatches;
+    
+    PData.LastUpdatedPatches = ToUpdatePatches;
 
     PData.OLDPathNodes = PathNodes;
 
@@ -2551,6 +2575,10 @@ public:
   //   // std::vector<std::vector<std::vector<CornerType>>> TypeOfCorner;
 
   // }
+
+  std::vector<int> GetLastUpdatedPatches() const {
+    return PData.LastUpdatedPatches;
+  }
 
   void FixWrongValencePatch(size_t &IndexP, int MinVal = 3, int MaxVal = 6) {
     assert(IndexP >= 0);

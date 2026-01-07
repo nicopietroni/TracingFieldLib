@@ -63,10 +63,12 @@ template <class ScalarType> class NormalEsteem {
   // }
 
 public:
+
   static bool EsteemBoundaryNormals(
       const PatchManaging<ScalarType> &PatchM, const int &IndexPatch,
-      std::vector<std::vector<int>> &GlobalBoundaryVerts,
-      std::vector<std::vector<Geo::Point3<ScalarType>>> &BoundaryNormals) {
+      std::vector<std::vector<int>> &BoundaryVerts,
+      std::vector<std::vector<Geo::Point3<ScalarType>>> &BoundaryNormals,
+      bool map_to_global = true) {
 
     std::vector<std::vector<int>> LocalBoundaryVerts;
     BoundaryNormals.clear();
@@ -93,8 +95,10 @@ public:
     if (!res)
       return false;
 
-    GlobalBoundaryVerts = LocalBoundaryVerts;
-    PatchM.MapToOriginal(IndexPatch, GlobalBoundaryVerts);
+    BoundaryVerts = LocalBoundaryVerts;
+    if (map_to_global)
+        PatchM.MapToOriginal(IndexPatch, BoundaryVerts);
+
     return true;
   }
 
@@ -108,9 +112,11 @@ public:
     BoundaryNormals.resize(PatchNum);
     bool res = true;
     for (int i = 0; i < PatchNum; i++)
+    {
+      if (PatchM.isEmpty(i))continue;
       res &= EsteemBoundaryNormals(PatchM, i, GlobalBoundaryVerts[i],
                                    BoundaryNormals[i]);
-
+    }
     return res;
   }
 
@@ -181,7 +187,7 @@ public:
     bool res=EsteemBoundaryEdgeNormals(PatchM, GlobalBoundaryEdges, BoundaryEdgeNormals);
     if (!res)
       return false;
-    // then compute all average per egde
+    // then compute all average per edge
     std::map<std::pair<int, int>, Geo::Point3<ScalarType>> EdgeNormalMap;
     for (size_t i = 0; i < GlobalBoundaryEdges.size(); i++)
       for (size_t j = 0; j < GlobalBoundaryEdges[i].size(); j++)

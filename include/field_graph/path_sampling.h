@@ -2563,7 +2563,7 @@ public:
   }
 
   void GetVertexSelectedPaths(const std::vector<int> &IndexPaths,
-                              std::vector<std::vector<int>> &VertPaths) {
+                              std::vector<std::vector<int>> &VertPaths)const {
     VertPaths.clear();
     VertPaths.resize(IndexPaths.size());
 

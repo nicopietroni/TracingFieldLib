@@ -412,6 +412,7 @@ public:
   ScalarType CCAbility;
   bool prefer_feature_features;
   bool dynamicUpdates;
+  bool dynamicSmoothing;
   int num_samples;
 
   void AddExtraCondition(Geo::PatchCondition<ScalarType> *PCond) {
@@ -458,6 +459,7 @@ public:
     min_sing_distance = 1;
 
     dynamicUpdates = false;
+    dynamicSmoothing = true;
     num_samples = 1000;
 
     feature_corner_angle = 45;
@@ -490,6 +492,8 @@ public:
     TriFeatures.erase(last, TriFeatures.end());
 
     PathSampl.dynamicUpdates = dynamicUpdates;
+    PDeco.dynamic_updates = dynamicUpdates;
+    PDeco.dynamic_smooth = dynamicSmoothing;
     PathSampl.NumSamples = num_samples;
 
     InitializeData();
@@ -515,6 +519,22 @@ public:
     PathBoundaries.erase(
         std::unique(PathBoundaries.begin(), PathBoundaries.end()),
         PathBoundaries.end());
+
+    PatchM.GetAllCorners(PathCorners);
+  }
+
+  void ExtractPatches(std::vector<std::vector<std::pair<int, int>>> &Paths,
+                      std::vector<int> &PathCorners) {
+    std::vector<std::vector<int>> VertPaths;
+    ExtractPatches(VertPaths);
+    PatchM.GetVertexPaths(VertPaths);
+
+    std::vector<std::pair<int, int>> BorderEdges;
+    Geo::getBorderEdges(TriConnectivity, BorderEdges);
+                        
+    Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgePairFromIdxSequences(VertPaths,Paths);
+  
+    Paths.push_back(BorderEdges);
 
     PatchM.GetAllCorners(PathCorners);
   }

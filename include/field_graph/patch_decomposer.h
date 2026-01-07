@@ -144,7 +144,6 @@ template <class ScalarType> class PatchDecomposer {
   //   // PathSampl.MarkVertices(to_mark_vert, 0);
   // }
 public:
-
   std::vector<int> AvoidArriveTo;
 
   void InitMustPassEdges() {
@@ -417,16 +416,16 @@ public:
   //   }
   // }
 
-  void DisableAvoidToArrive()
-  {
-    // std::cout << "**** Disable avoid to arrive to size:" << AvoidArriveTo.size()
+  void DisableAvoidToArrive() {
+    // std::cout << "**** Disable avoid to arrive to size:" <<
+    // AvoidArriveTo.size()
     //           << std::endl;
     for (size_t i = 0; i < AvoidArriveTo.size(); i++) {
-        int IndexV = AvoidArriveTo[i];
-        assert(IndexV >= 0);
-        assert(IndexV < PathSampl.allow_arrive_to.size());
-        PathSampl.allow_arrive_to[IndexV] = false;
-      }
+      int IndexV = AvoidArriveTo[i];
+      assert(IndexV >= 0);
+      assert(IndexV < PathSampl.allow_arrive_to.size());
+      PathSampl.allow_arrive_to[IndexV] = false;
+    }
   }
 
   // this one
@@ -579,7 +578,7 @@ public:
   void Init() {
     PathSampl.Init();
     to_init_distance = true;
-    //AvoidArriveTo.clear();
+    // AvoidArriveTo.clear();
   }
 
   void UpdateAllUnsolvedPatches() {
@@ -904,6 +903,22 @@ public:
       }
     }
 
+    std::vector<int> ToGetPath;
+    for (auto it = FixedPaths.begin(); it != FixedPaths.end(); ++it) {
+      int IndexP = *it;
+      ToGetPath.push_back(IndexP);
+    }
+
+    std::vector<std::vector<int>> CurrP;
+    // void GetVertexSelectedPaths(const std::vector<int> &IndexPaths,
+    //                           std::vector<std::vector<int>> &VertPaths)
+    PathSampl.GetVertexSelectedPaths(ToGetPath, CurrP);
+    for (int i = 0; i < (int)CurrP.size(); i++) 
+    for (int j = 0; j < (int)CurrP[i].size(); j++) {
+      int IndexV = CurrP[i][j];
+      UVP.Fixed.push_back(IndexV);
+    }
+
     UVP.Steps = smooth_steps;
     Geo::Local_Param_Smooth<ScalarType>::Smooth(PatchMan.VertPos,
                                                 PatchMan.Faces, UVP);
@@ -1054,7 +1069,7 @@ public:
   // int time_rem3;
   // int time_rem4;
 
-  // #define SAVE_STATUS_REMOVE
+#define SAVE_STATUS_REMOVE
 
   bool RemoveIfPossible(int &Path_To_remove, bool remove_unsolved = false,
                         int minGain = 0, bool debug_msg = false) {
@@ -1409,7 +1424,7 @@ public:
 
     dynamics_smooth_steps = 5;
     sing_dist_interval_step = 0;
-    
+
     prefer_feature_features = true;
   }
 
