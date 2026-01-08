@@ -254,6 +254,70 @@ public:
     return TotalAngle;
   }
 
+std::vector<ScalarType> SignedAnglesUsingSurfaceNormalDeg(
+    const std::vector<Geo::Point3<ScalarType>> &Normals)
+{
+    std::vector<ScalarType> angles;
+    const size_t n = PolyPos.size();
+    if (n < 3) return angles;
+
+    const bool isLoop = (PolyPos.front() == PolyPos.back());
+    const size_t m = isLoop ? n - 1 : n;
+
+    auto idx = [&](int i) {
+        if (isLoop) {
+            i %= (int)m;
+            if (i < 0) i += (int)m;
+        }
+        return (size_t)i;
+    };
+
+    if (isLoop)
+        angles.resize(m);
+    else
+        angles.resize(m - 2);
+
+    for (size_t k = 0; k < angles.size(); ++k) {
+
+        size_t i1 = isLoop ? k : k + 1;
+        size_t i0 = idx((int)i1 - 1);
+        size_t i2 = idx((int)i1 + 1);
+
+        Geo::Point3<ScalarType> V1 = PolyPos[i1] - PolyPos[i0];
+        Geo::Point3<ScalarType> V2 = PolyPos[i2] - PolyPos[i1];
+
+        ScalarType l1 = V1.Norm();
+        ScalarType l2 = V2.Norm();
+        if (l1 < 1e-12 || l2 < 1e-12) {
+            angles[k] = 0;
+            continue;
+        }
+
+        V1 /= l1;
+        V2 /= l2;
+
+        Geo::Point3<ScalarType> N = Normals[i1];
+        ScalarType ln = N.Norm();
+        if (ln < 1e-12) {
+            angles[k] = 0;
+            continue;
+        }
+        N /= ln;
+
+        ScalarType angle = OrientedAngleDeg(V1, V2, N);
+        // ScalarType sinA = (V1.Cross(V2)).Dot(N);
+        // ScalarType cosA = V1.Dot(V2);
+
+        // ScalarType sinA = Dot(Cross(V1,V2),N);
+        // ScalarType cosA = Dot(V1,V2);
+        // ScalarType angle = std::atan2(sinA, cosA) * 180.0 / M_PI;
+        angles[k] = angle;
+    }
+
+    return angles;
+}
+
+
   void DenoiseHighFrequencyClosed_TaubinBilateral(
       int iterations = 10,
       ScalarType lambda = ScalarType(0.33), // smoothing step
@@ -783,6 +847,173 @@ public:
         return false;
     }
     return true;
+  }
+};
+
+
+
+template <class ScalarType> class BezierFitting {
+
+  // We assume Point3<ScalarType> supports:
+  //  - +, -, *, / with scalars
+  //  - Dot(p)  (or Dot(p,q))
+  //  - optionally Norm(), otherwise we compute sqrt(p.Dot(p))
+
+  // Clamp a value in [0,1]
+  static inline ScalarType Clamp01(ScalarType x) {
+    if (x < ScalarType(0))
+      return ScalarType(0);
+    if (x > ScalarType(1))
+      return ScalarType(1);
+    return x;
+  }
+
+  // // Compute Euclidean norm of a 3D vector
+  // template <class ScalarType, class Point3>
+  // static inline ScalarType Norm(const Point3& p)
+  // {
+  //   return std::sqrt(p.Dot(p));
+  // }
+
+  // Evaluate a quadratic Bezier curve at parameter t
+  // B(t) = (1 - t)^2 P0 + 2 (1 - t) t C + t^2 P2
+  static inline Point3<ScalarType> EvalQuadraticBezier(const Point3<ScalarType> &P0, const Point3<ScalarType> &C,
+                                           const Point3<ScalarType> &P2, ScalarType t) {
+    t = Clamp01(t);
+
+    ScalarType u = ScalarType(1) - t;
+    ScalarType a = u * u;
+    ScalarType b = ScalarType(2) * u * t;
+    ScalarType c = t * t;
+
+    return P0 * a + C * b + P2 * c;
+  }
+
+  // Compute chord-length parameterization for an open polyline
+  // The parameter t_i is proportional to the accumulated arc-length
+  static inline std::vector<ScalarType>
+  ChordLengthParams(const std::vector<Point3<ScalarType>> &Q) {
+    const size_t n = Q.size();
+    std::vector<ScalarType> t(n, ScalarType(0));
+
+    if (n <= 1)
+      return t;
+
+    ScalarType totalLength = ScalarType(0);
+    for (size_t i = 1; i < n; ++i)
+      totalLength += (Q[i] - Q[i - 1]).Norm();
+      //totalLength += Norm<ScalarType, Point3<ScalarType>>(Q[i] - Q[i - 1]);
+
+    // If the polyline is degenerate, fall back to uniform parameters
+    if (totalLength <= ScalarType(1e-20)) {
+      for (size_t i = 0; i < n; ++i)
+        t[i] = (n == 1) ? ScalarType(0) : ScalarType(i) / ScalarType(n - 1);
+      return t;
+    }
+
+    ScalarType acc = ScalarType(0);
+    t[0] = ScalarType(0);
+
+    for (size_t i = 1; i < n; ++i) {
+      //acc += Norm<ScalarType, Point3<ScalarType>>(Q[i] - Q[i - 1]);
+      acc += (Q[i] - Q[i - 1]).Norm();
+      t[i] = acc / totalLength;
+    }
+
+    t.back() = ScalarType(1);
+    return t;
+  }
+
+  // Fit the best quadratic Bezier curve (least squares)
+  // Endpoints are fixed: P0 = Q[0], P2 = Q[last]
+  // Only the control point C is solved
+  static inline bool FitQuadraticBezierControlPoint_LS(
+      const std::vector<Point3<ScalarType>> &Q, Point3<ScalarType> &P0_out, Point3<ScalarType> &C_out,
+      Point3<ScalarType> &P2_out, ScalarType eps = ScalarType(1e-20)) {
+    const size_t n = Q.size();
+    if (n < 2)
+      return false;
+
+    const Point3<ScalarType> P0 = Q.front();
+    const Point3<ScalarType> P2 = Q.back();
+
+    // With only two points the curve is a straight line
+    // Any C on the segment is valid; choose the midpoint
+    if (n == 2) {
+      C_out = (P0 + P2) * ScalarType(0.5);
+      P0_out = P0;
+      P2_out = P2;
+      return true;
+    }
+
+    std::vector<ScalarType> t = ChordLengthParams(Q);
+
+    ScalarType denom = ScalarType(0);
+    Point3<ScalarType> numer = P0 * ScalarType(0); // zero vector
+
+    // Solve least squares in closed form
+    for (size_t i = 0; i < n; ++i) {
+      const ScalarType ti = Clamp01(t[i]);
+      const ScalarType u = ScalarType(1) - ti;
+
+      const ScalarType a = u * u;
+      const ScalarType b = ScalarType(2) * u * ti;
+      const ScalarType c = ti * ti;
+
+      // Endpoints do not constrain C because b = 0 there
+      if (std::abs(b) <= ScalarType(1e-30))
+        continue;
+
+      // We want: a*P0 + b*C + c*P2 ≈ Q[i]
+      // => b*C ≈ Q[i] - a*P0 - c*P2
+      const Point3<ScalarType> rhs = Q[i] - P0 * a - P2 * c;
+
+      numer = numer + rhs * b;
+      denom += b * b;
+    }
+
+    if (denom <= eps) {
+      // Degenerate configuration: fallback to midpoint
+      C_out = (P0 + P2) * ScalarType(0.5);
+    } else {
+      C_out = numer / denom;
+    }
+
+    P0_out = P0;
+    P2_out = P2;
+    return true;
+  }
+
+public:
+
+  // Sample the fitted quadratic Bezier at the same number of points
+  // and with the same chord-length parameterization as the input polyline
+  static inline std::vector<Point3<ScalarType>>
+  SampleFittedQuadraticBezierPolyline(const std::vector<Point3<ScalarType>> &Q) {
+    Point3<ScalarType> P0, C, P2;
+    std::vector<Point3<ScalarType>> out;
+
+    if (!FitQuadraticBezierControlPoint_LS(Q, P0, C, P2))
+      return out;
+
+    std::vector<ScalarType> t = ChordLengthParams(Q);
+    out.resize(Q.size());
+
+    for (size_t i = 0; i < Q.size(); ++i)
+      out[i] = EvalQuadraticBezier(P0, C, P2, t[i]);
+
+    return out;
+  }
+
+  // Sample the fitted quadratic Bezier at the same number of points
+  // and with the same chord-length parameterization as the input polyline
+  static inline Polyline3<ScalarType>
+  SampleFittedQuadraticBezierPolyline(const Polyline3<ScalarType> &PolyL) {
+    std::vector<Point3<ScalarType>> Q = PolyL.PolyPos;
+    Polyline3<ScalarType> outPoly;
+    SampleFittedQuadraticBezierPolyline(Q);
+    outPoly.PolyPos = SampleFittedQuadraticBezierPolyline(Q);
+    return outPoly;
   }
 };
 

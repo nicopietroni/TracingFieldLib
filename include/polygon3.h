@@ -37,11 +37,13 @@
 #include "line3.h"
 #include "plane3.h"
 #include "point3.h"
-#include "segment3.h"
 #include "polyline3.h"
+#include "segment3.h"
+#include <cmath>
+#include <limits>
 
 namespace Geo {
-  template <class ScalarType>
+template <class ScalarType>
 ScalarType BestAlignedPoly(const std::vector<Geo::Point3<ScalarType>> &FacePos,
                            std::vector<Geo::Point3<ScalarType>> &bestPoly) {
   // find the perimeter

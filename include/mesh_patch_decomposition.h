@@ -61,6 +61,7 @@
 
 #include "edge_mesh_functions.h"
 #include "mesh_mapping.h"
+#include "polyline3.h"
 #include "smooth_mesh.h"
 #include <quad_mesh_functions.h>
 #include <quadmesh_smooth_separatrix.h>
@@ -538,6 +539,43 @@ public:
 
     PatchM.GetAllCorners(PathCorners);
   }
-};
 
+  //return for each patch for each side the vertex path
+  void GetSidesVertIdx(std::vector<std::vector<std::vector<int>>> &PatchSidesVertIdx)const  {
+    PatchM.GetAllSideVertGlobal(PatchSidesVertIdx);
+  }
+
+  void GetAllSidesPos(std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> &PatchSidesPos)const  {
+    std::vector<std::vector<std::vector<int>>>  PatchSidesVertIdx;
+    PatchM.GetAllSideVertGlobal(PatchSidesVertIdx);
+    PatchSidesPos.clear();
+    for (size_t i=0;i<PatchSidesVertIdx.size();i++) {
+      std::vector<std::vector<Geo::Point3<ScalarType>>> PatchSidePos;
+      for (size_t j=0;j<PatchSidesVertIdx[i].size();j++) {
+        std::vector<Geo::Point3<ScalarType>> SidePos;
+        for (size_t k=0;k<PatchSidesVertIdx[i][j].size();k++) {
+          int IndexV=PatchSidesVertIdx[i][j][k];
+          assert(IndexV>=0);
+          assert(IndexV<TriVertPos.size());
+          SidePos.push_back(TriVertPos[IndexV]);
+        }
+        PatchSidePos.push_back(SidePos);
+      }
+      PatchSidesPos.push_back(PatchSidePos);
+    }
+  }
+
+  void GetAllSidesPolyLines(std::vector<Geo::Polyline3<ScalarType>> &AllPolyLines)const  {
+    std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> PatchSidesPos;
+    GetAllSidesPos(PatchSidesPos);
+    AllPolyLines.clear();
+    for (size_t i=0;i<PatchSidesPos.size();i++) {
+      for (size_t j=0;j<PatchSidesPos[i].size();j++) {
+        Geo::Polyline3<ScalarType> PL;
+        PL.PolyPos=PatchSidesPos[i][j];
+        AllPolyLines.push_back(PL);
+      }
+    }
+  }
+};
 #endif

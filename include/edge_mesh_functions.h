@@ -812,6 +812,22 @@ public:
     ExtractEdgeMeshFromPosPairs(EdgesPos, EdgeMeshVertPos, ConnectivityEdges);
   }
 
+  static void ExtractEdgeMeshFromPolylines(
+      const std::vector<Polyline3<ScalarType>> &Polylines,
+      std::vector<Geo::Point3<ScalarType>> &EdgeMeshVertPos,
+      std::vector<std::vector<int>> &ConnectivityEdges) {
+
+    std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> EdgesPos;
+    for (size_t i = 0; i < Polylines.size(); i++) {
+      for (size_t j = 0; j < Polylines[i].PolyPos.size() - 1; j++) {
+        Geo::Point3<ScalarType> P0 = Polylines[i].PolyPos[j];
+        Geo::Point3<ScalarType> P1 = Polylines[i].PolyPos[j + 1];
+        EdgesPos.push_back(std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>(P0, P1));
+      }
+    }
+    ExtractEdgeMeshFromPosPairs(EdgesPos, EdgeMeshVertPos, ConnectivityEdges);
+  }
+
   static void ExtractEdgePairFromIdxSequences(
       const std::vector<std::vector<int>> &Sequences,
       std::vector<std::vector<std::pair<int, int>>> &ConnectivityEdges) {

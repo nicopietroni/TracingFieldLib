@@ -1537,6 +1537,17 @@ public:
     }
   }
 
+  void GetAllSideVertGlobal(std::vector<std::vector<std::vector<int>>> &SideV) const {
+    SideV.clear();
+    for (size_t i = 0; i < NumPatches(); i++) {
+      if (isEmpty(i))
+        continue;
+      std::vector<std::vector<int>> PatchSideV;
+      GetAllSideVertGlobal(i, PatchSideV);
+      SideV.push_back(PatchSideV);
+    }
+  }
+
   void GetAllSideVert(int IndexP, std::vector<int> &SideV) const {
     SideV.clear();
     for (size_t i = 0; i < NumSides(IndexP); i++) {
@@ -1612,18 +1623,19 @@ public:
     }
   }
 
-  void
-  GetPatchSidePos(int IndexPatch,
-                  std::vector<std::vector<Geo::Point3<ScalarType>>> &SidePos) {
-    assert(IndexPatch >= 0);
-    assert(IndexPatch < NumPatches());
-    assert(this->PData.EdgePatchSides[IndexPatch].size() == 1);
-    for (size_t i = 0; i < NumSides(IndexPatch); i++) {
-      std::vector<Geo::Point3<ScalarType>> CurrSidePos;
-      GetPatchSidePos(IndexPatch, i, CurrSidePos);
-      SidePos.push_back(CurrSidePos);
-    }
-  }
+  // void
+  // GetPatchSidePos(int IndexPatch,
+  //                 std::vector<std::vector<Geo::Point3<ScalarType>>> &SidePos)const {
+  //   assert(IndexPatch >= 0);
+  //   assert(IndexPatch < NumPatches());
+  //   assert(this->PData.EdgePatchSides[IndexPatch].size() == 1);
+  //   SidePos.clear();
+  //   for (size_t i = 0; i < NumSides(IndexPatch); i++) {
+  //     std::vector<Geo::Point3<ScalarType>> CurrSidePos;
+  //     GetPatchSidePos(IndexPatch, i, CurrSidePos);
+  //     SidePos.push_back(CurrSidePos);
+  //   }
+  // }
 
   void GetPerPatchSubSidesWithSplitTJunction(
       std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>

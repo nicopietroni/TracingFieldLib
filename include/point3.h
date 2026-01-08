@@ -448,20 +448,24 @@ template <class ScalarType>
 ScalarType OrientedAngleRad(const Point3<ScalarType> &v1,
                             const Point3<ScalarType> &v2,
                             const Point3<ScalarType> &normal) {
-  // Calculate the unsigned angle between v1 and v2
-  ScalarType angle = AngleRad(v1, v2);
+  // // Calculate the unsigned angle between v1 and v2
+  // ScalarType angle = AngleRad(v1, v2);
 
-  // Calculate the sign of the angle based on the orientation specified by the
-  // normal vector
-  Point3<ScalarType> crossProduct = Geo::Cross(v1, v2);
-  ScalarType dotProduct = Geo::Dot(normal, crossProduct);
+  // // Calculate the sign of the angle based on the orientation specified by the
+  // // normal vector
+  // Point3<ScalarType> crossProduct = Geo::Cross(v1, v2);
+  // ScalarType dotProduct = Geo::Dot(normal, crossProduct);
 
-  if (dotProduct < 0) {
-    angle = -angle;
-  }
+  // if (dotProduct < 0) {
+  //   angle = -angle;
+  // }
 
-  angle = normalizeAngle(angle);
+  // angle = normalizeAngle(angle);
 
+  // return angle;
+  ScalarType sinA = Dot(Cross(v1,v2),normal);
+  ScalarType cosA = Dot(v1,v2);
+  ScalarType angle = std::atan2(sinA, cosA);
   return angle;
 }
 
