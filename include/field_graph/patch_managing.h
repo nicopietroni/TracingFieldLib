@@ -1888,7 +1888,6 @@ public:
     std::vector<std::vector<CornerType>> VisualCornerType_Swap;
     std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
         VisualPaths_Swap;
-
     for (size_t i = 0; i < PData.PatchOriginalFaces.size(); i++) {
       if (PData.PatchOriginalFaces[i].size() == 0)
         continue;
@@ -1904,7 +1903,7 @@ public:
       // PatchSideVerts_Swap.push_back(PData.PatchSideVert[i]);
 
       EdgePatchSides_Swap.push_back(PData.EdgePatchSides[i]);
-
+      
       PatchIdxRemap[i] = EdgePatchSides_Swap.size() - 1;
 
       if (UpdateVisual) {
@@ -1912,6 +1911,13 @@ public:
         VisualCornerType_Swap.push_back(PData.VisualCornerType[i]);
         VisualPaths_Swap.push_back(PData.VisualPaths[i]);
       }
+    }
+
+    //update the indexes of  PData.LastUpdatedPatches[i] with the map new indexes
+    for (size_t i = 0; i < PData.LastUpdatedPatches.size(); i++) {
+      int OldIndex = PData.LastUpdatedPatches[i];
+      assert(PatchIdxRemap.count(OldIndex) > 0);
+      PData.LastUpdatedPatches[i] = PatchIdxRemap[OldIndex];
     }
 
     PData.SideLenghts = SideLenghts_Swap;
@@ -2246,6 +2252,7 @@ public:
     }
 
     std::vector<int> ToUpdPatchesV(ToUpdPatches.begin(), ToUpdPatches.end());
+    
 
     int NumPatch0 = NumPatches();
     UpdatePatches(ToUpdPatchesV);
@@ -2270,12 +2277,11 @@ public:
 
     UpdatedPatches = ToUpdatePatches;
 
-    PData.LastUpdatedPatches = ToUpdatePatches;
-
     PData.OLDPathNodes = PathNodes;
 
     CheckConsistentData();
 
+    PData.LastUpdatedPatches =  UpdatedPatches;
     // UpdateOrthoDartNodeTypeIfNeeded();
 
     assert(PData.SideLenghts.size() == NumPatches());
