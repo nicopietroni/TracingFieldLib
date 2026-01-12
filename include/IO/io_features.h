@@ -114,13 +114,14 @@ inline bool ReadFeatures(const std::string &filename,
     return false; // Failed to open the file
   }
 
-  Features.clear(); // Clear the vector to ensure it's empty before reading new data
+  Features
+      .clear(); // Clear the vector to ensure it's empty before reading new data
 
   int first, second;
   while (infile >> first >> second) {
     Features.emplace_back(first, second);
   }
-  
+
   std::sort(Features.begin(), Features.end());
   auto last = std::unique(Features.begin(), Features.end());
   Features.erase(last, Features.end());
@@ -131,6 +132,30 @@ inline bool ReadFeatures(const std::string &filename,
   }
 
   infile.close();
+  return true;
+}
+
+template< class ScalarType>
+inline bool
+SaveFeatureCoord(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                 const std::vector<std::pair<int, int>> &Features,
+                 const std::string PathSave) {
+  std::ofstream file(PathSave.c_str());
+  if (!file.is_open()) {
+    std::cerr << "Error: Unable to open file: feature_coords.txt" << std::endl;
+    return false;
+  }
+  // write first number of features
+  file << Features.size() << std::endl;
+  for (size_t i = 0; i < Features.size(); i++) {
+    int v0 = Features[i].first;
+    int v1 = Features[i].second;
+    Geo::Point3<ScalarType> P0 = VertPos[v0];
+    Geo::Point3<ScalarType> P1 = VertPos[v1];
+    file << P0.X << " " << P0.Y << " " << P0.Z << " " << P1.X << " " << P1.Y
+         << " " << P1.Z << std::endl;
+  }
+  file.close();
   return true;
 }
 

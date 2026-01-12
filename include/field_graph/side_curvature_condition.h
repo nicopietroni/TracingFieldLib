@@ -248,12 +248,14 @@ class SideCurvatureBezierCondition : public PatchCondition<ScalarType> {
   Geo::TriangleSpatialIndex<ScalarType> *TargetTriGrid;
 
 public:
-  ScalarType DiagBBox;
-  ScalarType MaxErrorRatio;
+  // ScalarType DiagBBox;
+  // ScalarType MaxErrorRatio;
+  ScalarType MaxAbsError;
   bool smooth_paths;
 
   bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                  const int &IndexPatch) const override {
+    assert(MaxAbsError > 0);
     if (PatchM.NumBorders(IndexPatch) != 1)
       return false;
 
@@ -264,6 +266,7 @@ public:
     std::vector<std::vector<int>> SideV;
     PatchM.GetAllSideVert(IndexPatch, SideV);
 
+    // ScalarType MaxThrError = MaxErrorRatio * DiagBBox;
     for (size_t i = 0; i < SideV.size(); i++) {
 
       Geo::Polyline3<ScalarType> CurrSidePoly;
@@ -282,18 +285,49 @@ public:
       SidePoly.push_back(CurrSidePoly);
       BezierSidePoly.push_back(CurrBezierPoly);
     }
+    bool AllOk = true;
+    ScalarType MaxError = 0;
     // then check the max error
     for (size_t i = 0; i < SidePoly.size(); i++) {
       Geo::Polyline3<ScalarType> CurrSidePoly = SidePoly[i];
       Geo::Polyline3<ScalarType> CurrBezierPoly = BezierSidePoly[i];
-      for (size_t j = 0; j < SidePoly.size(); j++) {
+      // if (CurrSidePoly.PolyPos.size() != CurrBezierPoly.PolyPos.size()) {
+      //   std::cout << " ERROR: Different number of points in side and bezier "
+      //                "polyline! "
+      //             << std::endl;
+      //   exit(0);
+      // }
+      for (size_t j = 0; j < CurrSidePoly.PolyPos.size(); j++) {
         Geo::Point3<ScalarType> P0 = CurrSidePoly.PolyPos[j];
         Geo::Point3<ScalarType> P1 = CurrBezierPoly.PolyPos[j];
         ScalarType Error = (P0 - P1).Norm();
-        if (Error > (MaxErrorRatio * DiagBBox))
-          return false;
+        // std::cout << " Side " << i << " Point " << j
+        //           << " Error: " << Error << std::endl;
+        if (Error > MaxAbsError) {
+          MaxError = std::max(MaxError, Error);
+          AllOk = false;
+        }
       }
     }
+
+    // if (!AllOk)
+    // {
+    // std::cout<<"Max Allowed Error Condition:"<<MaxThrError<<std::endl;
+    // std::cout<<"Found Error:"<<MaxError<<std::endl;
+    // std::vector<Geo::Point3<ScalarType>> EdmeshVertPos;
+    // std::vector<std::vector<int>> EdmeshConn;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromPolylines(
+    //     SidePoly, EdmeshVertPos, EdmeshConn);
+    // WriteOBJ("PolyTest.obj", EdmeshVertPos, EdmeshConn);
+
+    // std::vector<Geo::Point3<ScalarType>> EdmeshBezierVertPos;
+    // std::vector<std::vector<int>> EdmeshBezierConn;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromPolylines(
+    //     BezierSidePoly, EdmeshBezierVertPos, EdmeshBezierConn);
+    // WriteOBJ("BezierTest.obj", EdmeshBezierVertPos, EdmeshBezierConn);
+    // }
+    if (!AllOk)
+      return false;
     // std::vector<Geo::Point3<ScalarType>> EdmeshVertPos;
     // std::vector<std::vector<int>> EdmeshConn;
     // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromPolylines(
@@ -307,7 +341,6 @@ public:
     // WriteOBJ("BezierTest.obj", EdmeshBezierVertPos, EdmeshBezierConn);
     // exit(0);
 
-
     return true;
   }
 
@@ -315,25 +348,29 @@ public:
     return std::string("side_curvature_bezier");
   }
 
-  void Init(const std::vector<Geo::Point3<ScalarType>> &_TargetPos,
+  void Init(ScalarType _MaxAbsError,
+            const std::vector<Geo::Point3<ScalarType>> &_TargetPos,
             const std::vector<std::vector<int>> &_TargetFaces) {
+    MaxAbsError = _MaxAbsError;
+    assert(MaxAbsError > 0);
     TargetPos = _TargetPos;
     TargetFaces = _TargetFaces;
     TargetTriGrid = new Geo::TriangleSpatialIndex<ScalarType>();
     TargetTriGrid->Init(TargetPos, TargetFaces);
     Geo::Box3<ScalarType> BBox;
     BBox.Init(TargetPos);
-    DiagBBox = BBox.Diag();
+    // DiagBBox = BBox.Diag();
   }
 
+  virtual bool Mandatory() const { return true; }
   // destructor
   ~SideCurvatureBezierCondition() {
     if (TargetTriGrid)
       delete TargetTriGrid;
   }
 
-  SideCurvatureBezierCondition(ScalarType _MaxErrorRatio) {
-    MaxErrorRatio = _MaxErrorRatio;
+  SideCurvatureBezierCondition() {
+    MaxAbsError = -1;
     smooth_paths = false;
   }
 };

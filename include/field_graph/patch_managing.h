@@ -109,7 +109,7 @@ public:
     // the old nodes used to check if need to update
     std::vector<std::vector<int>> OLDPathNodes;
 
-    //the list of last updated patches to be used for conditions
+    // the list of last updated patches to be used for conditions
     std::vector<int> LastUpdatedPatches;
 
     // void PrintSize()
@@ -920,7 +920,6 @@ private:
         PData.PatchOriginalFaces.back().push_back(ComponentsF[i][j]);
       }
     }
-    
   }
 
   void SplitSubMeshWithInternalEdges(int IndexPatch) {
@@ -1158,13 +1157,12 @@ private:
     MapToOriginal(IndexPatch, BoundVIdx);
   }
 
-  std::vector<int> GetOriginalFacesInPatch(const int IndexPatch)const {
-    assert(IndexPatch >=0);
+  std::vector<int> GetOriginalFacesInPatch(const int IndexPatch) const {
+    assert(IndexPatch >= 0);
     assert(IndexPatch < NumPatches());
     return PData.PatchOriginalFaces[IndexPatch];
-    //PData.SubPatchFacesToOriginal[IndexPatch]
+    // PData.SubPatchFacesToOriginal[IndexPatch]
   }
-
 
   // reorganise the sequence from the first corner found
   bool SortFromCorner(std::vector<std::vector<int>> &BoundVIdx,
@@ -1277,13 +1275,13 @@ private:
   }
 
 public:
-
-   std::vector<int> GetOriginalFacesInPatches(const std::vector<int> &IndexPatches)const {
+  std::vector<int>
+  GetOriginalFacesInPatches(const std::vector<int> &IndexPatches) const {
     std::vector<int> Faces;
     for (size_t i = 0; i < IndexPatches.size(); i++) {
       int IndexP = IndexPatches[i];
       std::vector<int> FacesInPatch = GetOriginalFacesInPatch(IndexP);
-      Faces.insert(Faces.end(), FacesInPatch.begin(), FacesInPatch.end());  
+      Faces.insert(Faces.end(), FacesInPatch.begin(), FacesInPatch.end());
     }
     return Faces;
   }
@@ -1291,7 +1289,7 @@ public:
   std::vector<int> GetModifiedSameBorderVertices() const {
     return ModSameBVert;
   }
-  
+
   void RestoreOriginalPosOnSplitBorders() {
     assert(ModSameBVert.size() == ModSameBOrigPos.size());
     for (size_t i = 0; i < ModSameBVert.size(); i++) {
@@ -1523,12 +1521,14 @@ public:
     }
   }
 
-  void GetAllSideVertGlobal(int IndexP, int IndexE, std::vector<int> &SideV) const {
+  void GetAllSideVertGlobal(int IndexP, int IndexE,
+                            std::vector<int> &SideV) const {
     GetAllSideVert(IndexP, IndexE, SideV);
     MapToOriginal(IndexP, SideV);
   }
 
-  void GetAllSideVertGlobal(int IndexP, std::vector<std::vector<int>> &SideV) const {
+  void GetAllSideVertGlobal(int IndexP,
+                            std::vector<std::vector<int>> &SideV) const {
     SideV.clear();
     for (size_t i = 0; i < NumSides(IndexP); i++) {
       std::vector<int> CurrSide;
@@ -1537,14 +1537,39 @@ public:
     }
   }
 
-  void GetAllSideVertGlobal(std::vector<std::vector<std::vector<int>>> &SideV) const {
+  void GetAllSideVertGlobal(std::vector<std::vector<std::vector<int>>> &SideV,
+                            bool CompactEmpty = true) const {
     SideV.clear();
     for (size_t i = 0; i < NumPatches(); i++) {
-      if (isEmpty(i))
+      if (isEmpty(i) && CompactEmpty)
         continue;
+
       std::vector<std::vector<int>> PatchSideV;
-      GetAllSideVertGlobal(i, PatchSideV);
+      if (!isEmpty(i))
+        GetAllSideVertGlobal(i, PatchSideV);
+
       SideV.push_back(PatchSideV);
+    }
+  }
+
+  void GetAllSideVertPos(
+      std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> &SideVPos,
+      bool CompactEmpty = true) {
+
+    std::vector<std::vector<std::vector<int>>> SideVIdx;
+    GetAllSideVertGlobal(SideVIdx, CompactEmpty);
+    
+    SideVPos.clear();
+    for (size_t i = 0; i < SideVIdx.size(); i++) {
+      SideVPos.push_back(std::vector<std::vector<Geo::Point3<ScalarType>>>());
+      for (size_t j = 0; j < SideVIdx[i].size(); j++) {
+        SideVPos.back().push_back(std::vector<Geo::Point3<ScalarType>>());
+        for (size_t k = 0; k < SideVIdx[i][j].size(); k++) {
+          int IndexV = SideVIdx[i][j][k];
+          Geo::Point3<ScalarType> PosV = VertPos[IndexV];
+          SideVPos.back().back().push_back(PosV);
+        }
+      }
     }
   }
 
@@ -1557,16 +1582,27 @@ public:
     }
   }
 
-  void GetAllSidesVertGlobal(int IndexP, std::vector<int> &SideV)
-  {
-     GetAllSideVert(IndexP, SideV);
-     // map to original indexes
-     MapToOriginal(IndexP, SideV);
+  void GetAllSidesVertGlobal(int IndexP, std::vector<int> &SideV) const {
+    GetAllSideVert(IndexP, SideV);
+    // map to original indexes
+    MapToOriginal(IndexP, SideV);
   }
-  
 
-  void GetAllSidesVertGlobal( std::vector<int> &SideV)
-  {
+  void GetAllSidesVertGlobal(std::vector<std::vector<int>> &SideV,
+                             bool CompactEmpty = true) const {
+    for (size_t i = 0; i < NumPatches(); i++) {
+      if (isEmpty(i) && CompactEmpty)
+        continue;
+      std::vector<int> PatchSideV;
+
+      if (!isEmpty(i))
+        GetAllSidesVertGlobal(i, PatchSideV);
+
+      SideV.push_back(PatchSideV);
+    }
+  }
+
+  void GetAllSidesVertGlobal(std::vector<int> &SideV) {
     SideV.clear();
     for (size_t i = 0; i < NumPatches(); i++) {
       if (isEmpty(i))
@@ -1575,7 +1611,7 @@ public:
       GetAllSidesVertGlobal(i, PatchSideV);
       SideV.insert(SideV.end(), PatchSideV.begin(), PatchSideV.end());
     }
-    //sort and unique
+    // sort and unique
     std::sort(SideV.begin(), SideV.end());
     SideV.erase(std::unique(SideV.begin(), SideV.end()), SideV.end());
   }
@@ -1625,7 +1661,8 @@ public:
 
   // void
   // GetPatchSidePos(int IndexPatch,
-  //                 std::vector<std::vector<Geo::Point3<ScalarType>>> &SidePos)const {
+  //                 std::vector<std::vector<Geo::Point3<ScalarType>>>
+  //                 &SidePos)const {
   //   assert(IndexPatch >= 0);
   //   assert(IndexPatch < NumPatches());
   //   assert(this->PData.EdgePatchSides[IndexPatch].size() == 1);
@@ -2232,7 +2269,7 @@ public:
       InitVisualCornersEdges(ToUpdatePatches);
 
     UpdatedPatches = ToUpdatePatches;
-    
+
     PData.LastUpdatedPatches = ToUpdatePatches;
 
     PData.OLDPathNodes = PathNodes;
@@ -2728,7 +2765,8 @@ public:
   // struct CurveData {
   //   std::vector<Geo::Point3<ScalarType>> Pos;
   //   int NumPatches;
-  //   typedef typename std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>
+  //   typedef typename std::pair<Geo::Point3<ScalarType>,
+  //   Geo::Point3<ScalarType>>
   //       PosPair;
 
   //   PosPair Extremes() const {
@@ -2737,7 +2775,7 @@ public:
   //     PosPair CurrExtr(Pos0, Pos1);
   //     return CurrExtr;
   //   }
-    
+
   //   void SubSample(int ReductionFactor)
   //   {
   //     if (ReductionFactor <= 1)
@@ -2794,7 +2832,8 @@ public:
   //     return (PosP0 < PosP1);
   //   }
 
-  //   CurveData(const std::vector<Geo::Point3<ScalarType>> &_Pos) { Pos = _Pos; }
+  //   CurveData(const std::vector<Geo::Point3<ScalarType>> &_Pos) { Pos = _Pos;
+  //   }
   // };
 
   // struct CycleData {
@@ -2818,8 +2857,9 @@ public:
   //       PatchSubsides;
   //   // PatchMan.GetPerPatchSubSidesWithSplitTJunction(PatchSubsides);
   //   for (size_t i = 0; i < PData.SubPatchVertPos.size(); i++) {
-  //     std::vector<Geo::Point3<ScalarType>> SubPVert = PData.SubPatchVertPos[i];
-  //     std::vector<std::vector<int>> SubPFace = PData.SubPatchFaces[i];
+  //     std::vector<Geo::Point3<ScalarType>> SubPVert =
+  //     PData.SubPatchVertPos[i]; std::vector<std::vector<int>> SubPFace =
+  //     PData.SubPatchFaces[i];
 
   //     assert(SubPVert.size() > 0);
   //     assert(SubPFace.size() > 0);
@@ -2926,9 +2966,9 @@ public:
   //   }
   // }
 
-  // bool SaveCurveCycleData(const std::string PathSave, 
+  // bool SaveCurveCycleData(const std::string PathSave,
   //                         std::vector<std::pair<int, int>> &Features,
-  //                         int ReductionFactor=1) const 
+  //                         int ReductionFactor=1) const
   // {
   //   std::vector<CurveData> Curves;
   //   std::vector<CycleData> Cycles;
@@ -2963,7 +3003,7 @@ public:
   //       }
   //     }
   //   }
-    
+
   //   // first save the curves
   //   std::string CurveF = PathSave;
   //   CurveF += std::string(".curve");
@@ -3025,8 +3065,9 @@ public:
 
   //   for (size_t i = 0; i < PData.SubPatchVertPos.size(); i++) {
 
-  //     std::vector<Geo::Point3<ScalarType>> SubPVert = PData.SubPatchVertPos[i];
-  //     std::vector<std::vector<int>> SubPFace = PData.SubPatchFaces[i];
+  //     std::vector<Geo::Point3<ScalarType>> SubPVert =
+  //     PData.SubPatchVertPos[i]; std::vector<std::vector<int>> SubPFace =
+  //     PData.SubPatchFaces[i];
   //     // then get the outer loops
   //     std::vector<std::vector<int>> BorderVIdxL;
   //     getBorderSequncesVert(SubPFace, BorderVIdxL);
@@ -3051,7 +3092,8 @@ public:
   //   fout << "numV " << VertPos.size() << "\n";
   //   for (size_t i = 0; i < VertPos.size(); i++) {
   //     Geo::Point3<ScalarType> CurrPos = VertPos[i];
-  //     fout << "v " << CurrPos.X << " " << CurrPos.Y << " " << CurrPos.Z << "\n";
+  //     fout << "v " << CurrPos.X << " " << CurrPos.Y << " " << CurrPos.Z <<
+  //     "\n";
   //   }
 
   //   fout << "numP " << PathIdx.size() << "\n";

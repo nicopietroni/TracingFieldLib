@@ -112,6 +112,16 @@ public:
     std::vector<std::array<int, 3>> CurveSeq;
   };
 
+  // static void GetCurveCycleData2(const PatchManaging<ScalarType> &PMan,
+  //                                std::vector<CurveData> &Curves,
+  //                                std::vector<CycleData> &Cycles) {
+  //   // // get patch subsides
+  //   // std::vector<std::vector<std::vector<int>>> PatchSideGlobalIdx;
+  //   // PMan.GetAllSideVertPos(
+  //   //   std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> &SideVPos,
+  //   //   bool CompactEmpty = true
+  // }
+
   static void GetCurveCycleData(const PatchManaging<ScalarType> &PMan,
                                 std::vector<CurveData> &Curves,
                                 std::vector<CycleData> &Cycles) {
@@ -128,6 +138,7 @@ public:
 
     std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
         PatchSubsides;
+
     // PatchMan.GetPerPatchSubSidesWithSplitTJunction(PatchSubsides);
     for (size_t i = 0; i < PMan.PData.SubPatchVertPos.size(); i++) {
       std::vector<Geo::Point3<ScalarType>> SubPVert =
