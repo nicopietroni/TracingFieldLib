@@ -748,6 +748,8 @@ public:
     // if (end_features) {
     //   //PathSampl.set
     // }
+    PathSampl.SwapNodeType.clear();
+
     if (end_patch_border && add_only_where_needed) {
       // get the non solved subpatches
       std::vector<int> BorderUnsolved;
@@ -913,11 +915,11 @@ public:
     // void GetVertexSelectedPaths(const std::vector<int> &IndexPaths,
     //                           std::vector<std::vector<int>> &VertPaths)
     PathSampl.GetVertexSelectedPaths(ToGetPath, CurrP);
-    for (int i = 0; i < (int)CurrP.size(); i++) 
-    for (int j = 0; j < (int)CurrP[i].size(); j++) {
-      int IndexV = CurrP[i][j];
-      UVP.Fixed.push_back(IndexV);
-    }
+    for (int i = 0; i < (int)CurrP.size(); i++)
+      for (int j = 0; j < (int)CurrP[i].size(); j++) {
+        int IndexV = CurrP[i][j];
+        UVP.Fixed.push_back(IndexV);
+      }
 
     UVP.Steps = smooth_steps;
     Geo::Local_Param_Smooth<ScalarType>::Smooth(PatchMan.VertPos,
@@ -1471,7 +1473,7 @@ public:
     end_patch_border = true;
     end_concave = true;
     end_spike = true;
-    end_features = false;
+    end_features = true;
   }
 
   void SetBaseContinuumConfiguration() {
@@ -1915,10 +1917,9 @@ public:
 
     if (prefer_feature_features)
       has_added |= AddAllPaths();
-    else
+    else {
       PathSampl.SaveSampledPaths();
-    // std::cout<<"Test 1"<<std::endl;
-
+    }
     // set features to all possible arrival points
     SetFeatureAllConfiguration();
     InitSampling(add_only_where_needed);
@@ -1927,13 +1928,21 @@ public:
 
     std::cout << "**TRACING second feature step **" << std::endl;
     RetraceCandidates();
-
     // std::cout<<"STEP 4"<<std::endl;
     // PathSampl.Graph().PrintData();
+    // for (size_t i = 0; i < PathSampl.Candidates.size(); i++) {
+    //  std::cout << "Candidate before " << PathSampl.Candidates[i].second << " Score: "
+    //             << PathSampl.Candidates[i].first << std::endl;
+    // }
 
     if (!prefer_feature_features)
       PathSampl.AddSavedSampledPaths();
-
+    // // write all sizes
+    // for (size_t i = 0; i < PathSampl.Candidates.size(); i++) {
+    //   std::cout << "Candidate after " << PathSampl.Candidates[i].second << " Score: "
+    //             << PathSampl.Candidates[i].first << std::endl;
+    // }
+    // exit(0);
     has_added |= AddAllPaths();
 
     PathSampl.force_direct = false;

@@ -1990,13 +1990,14 @@ public:
   void SaveSampledPaths() {
     //save only the ones that are evaluate
 
-    for (size_t i = 0; i < SampledPaths.size(); i++) {
-      if (SampledPaths_Status[i] != SP_Evaluate)
+    for (size_t i = 0; i < Candidates.size(); i++) {
+      int IdxPath = Candidates[i].second;
+      if (SampledPaths_Status[IdxPath] != SP_Evaluate)
         continue;
-      StartingNodesSave.push_back(StartingNodes[i]);
-      SampledPathsSave.push_back(SampledPaths[i]);
-      SampledPathsLenghtWSave.push_back(SampledPathsLenghtW[i]);
-      SampledPaths_StatusSave.push_back(SampledPaths_Status[i]);
+      StartingNodesSave.push_back(StartingNodes[IdxPath]);
+      SampledPathsSave.push_back(SampledPaths[IdxPath]);
+      SampledPathsLenghtWSave.push_back(SampledPathsLenghtW[IdxPath]);
+      SampledPaths_StatusSave.push_back(SampledPaths_Status[IdxPath]);
       ScalarType Prio = Candidates[i].first;
       CandidatesSave.push_back(std::pair<ScalarType, int>(Prio, SampledPathsSave.size() - 1));
     }
@@ -2421,7 +2422,7 @@ public:
   // }
 
   void SetBorderCanPassToExit(const std::vector<int> &TestVertex) {
-    SwapNodeType.clear();
+    //SwapNodeType.clear();
     // set ones possible to exit
     std::vector<int> IndexN;
     

@@ -470,7 +470,7 @@ public:
     self_connection_cond = true;
     single_sing_cond = true;
     match_sing_cond = true;
-    prefer_feature_features = false;
+    prefer_feature_features = true;
     split_removal = false;
 
     MinSides = 3;
