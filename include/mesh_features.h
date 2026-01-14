@@ -42,7 +42,7 @@
 #include <cstddef> // C++
 #include <utility>
 #include <vector>
-#include "space_query/segment_grid_3D.h"
+#include "Space_Query/segment_grid_3D.h"
 // #include <tuple>
 
 namespace Geo {
