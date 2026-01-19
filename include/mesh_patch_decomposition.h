@@ -83,11 +83,10 @@ template <class ScalarType> class MeshPatchDecomposition {
   // SETUP DATA
   int min_sing_distance;
 
-  // // DUAL DATA
-  // std::vector<Geo::Point3<ScalarType>> DualVertPos;
-  // std::vector<std::vector<int>> DualConnectivity;
-  // std::vector<std::pair<int, int>> DualFeatures;
-  // std::vector<int> DualCorners;
+  // DUAL DATA
+  typename Geo::DualPatch<ScalarType>::DualParameter DualParam;
+  std::vector<std::pair<int, int>> DualFeatures;
+  std::vector<int> DualCorners;
 
   // GRAPH SETUP DATA
   ScalarType graph_drift_penalty;
@@ -285,50 +284,18 @@ template <class ScalarType> class MeshPatchDecomposition {
     //   TriVertPos[IndexV] = ModSameBOrigPos[i];
     // }
   }
-  // void ExtractDualPatches() {
-  //   RestoreOriginalPosOnSplitBorders();
-  //   Geo::DualPatch<ScalarType>::DisambiguateForDual(PatchM);
 
-  //   typename Geo::DualPatch<ScalarType>::PrimalPatchData PData;
-  //   PData.PatchFaces = PatchM.PData.SubPatchFaces;
-  //   PData.PatchVertPos = PatchM.PData.SubPatchVertPos;
-  //   PData.PatchCorners = PatchM.PData.PatchCorners;
-  //   PData.EdgePatchSides = PatchM.PData.EdgePatchSides;
-  //   for (size_t i = 0; i < PatchM.NumPatches(); i++) {
-  //     std::vector<int> PatchSing;
-  //     PatchM.PatchSingularities(i, PatchSing);
-  //     PData.PatchSingularities.push_back(PatchSing);
-  //   }
+  
 
-  //   std::vector<std::vector<int>> PerDualPatchFaceIDX;
-  //   std::vector<std::vector<int>> PerDualPatchCornerIDX;
-
-  //   int num_problematic_patches =
-  //   Geo::DualPatch<ScalarType>::ExtractDual(
-  //       PData, DualParam, DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
-  //       PerDualPatchCornerIDX);
-
-  //   has_problematic_patches|=(num_problematic_patches!=0);
-
-  //   std::vector<int> PrimalCorners;
-  //   Geo::DualPatch<ScalarType>::RetrieveDualFeatures(
-  //       TriVertPos, TriConnectivity, TriFeatures, PrimalCorners, DualVertPos,
-  //       DualConnectivity, DualFeatures, DualCorners);
-
-  //   std::vector<std::vector<int>> DualNextF, DualNextE;
-  //   Geo::getFFAdjacency(DualConnectivity, DualNextF, DualNextE);
-
-  //   // INITIALIZE SIDE SUBDIVISION
-  //   SideD.InitFromLabels(DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
-  //                        PerDualPatchCornerIDX, DualFeatures);
-  // }
-
-  // void InitDefaultDualParameters() {
-  //   DualParam.OnlyNonQuad = true;
-  //   DualParam.InitSingPos = true;
-  //   DualParam.FixSingPos = false;
-  //   DualParam.JointBorder = true;
-  // }
+  void InitDefaultDualParameters() {
+    DualParam.OnlyNonQuad = false;
+    DualParam.InitSingPos = true;
+    DualParam.FixSingPos = false;
+    DualParam.JointBorder = true;
+    DualParam.MaxIte = 50;
+    DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_ARAP;
+    //RT_UVDist_Tutte, RT_UVDist_LSC, RT_UVDist_ARAP, RT_CCability
+  }
 
   // void UpdateQuadFeatures() {
 
@@ -416,6 +383,45 @@ public:
   bool dynamicSmoothing;
   int num_samples;
 
+  void ExtractDualPatches(std::vector<Geo::Point3<ScalarType>> &DualVertPos,
+  std::vector<std::vector<int>> &DualConnectivity) {
+    RestoreOriginalPosOnSplitBorders();
+    Geo::DualPatch<ScalarType>::DisambiguateForDual(PatchM);
+
+    typename Geo::DualPatch<ScalarType>::PrimalPatchData PData;
+    PData.PatchFaces = PatchM.PData.SubPatchFaces;
+    PData.PatchVertPos = PatchM.PData.SubPatchVertPos;
+    PData.PatchCorners = PatchM.PData.PatchCorners;
+    PData.EdgePatchSides = PatchM.PData.EdgePatchSides;
+    for (size_t i = 0; i < PatchM.NumPatches(); i++) {
+      std::vector<int> PatchSing;
+      PatchM.PatchSingularities(i, PatchSing);
+      PData.PatchSingularities.push_back(PatchSing);
+    }
+
+    std::vector<std::vector<int>> PerDualPatchFaceIDX;
+    std::vector<std::vector<int>> PerDualPatchCornerIDX;
+
+    int num_problematic_patches =
+    Geo::DualPatch<ScalarType>::ExtractDual(
+        PData, DualParam, DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+        PerDualPatchCornerIDX);
+
+    //has_problematic_patches|=(num_problematic_patches!=0);
+
+    std::vector<int> PrimalCorners;
+    Geo::DualPatch<ScalarType>::RetrieveDualFeatures(
+        TriVertPos, TriConnectivity, TriFeatures, PrimalCorners, DualVertPos,
+        DualConnectivity, DualFeatures, DualCorners);
+
+    std::vector<std::vector<int>> DualNextF, DualNextE;
+    Geo::getFFAdjacency(DualConnectivity, DualNextF, DualNextE);
+
+    // // INITIALIZE SIDE SUBDIVISION
+    // SideD.InitFromLabels(DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+    //                      PerDualPatchCornerIDX, DualFeatures);
+  }
+
   void AddExtraCondition(Geo::PatchCondition<ScalarType> *PCond) {
     PDeco.AddCondition(PCond);
   }
@@ -476,6 +482,8 @@ public:
     MinSides = 3;
     MaxSides = 6;
     CCAbility = -1;
+
+    InitDefaultDualParameters();
   }
 
   Geo::PatchManaging<ScalarType> &PatchManager() { return PatchM; }

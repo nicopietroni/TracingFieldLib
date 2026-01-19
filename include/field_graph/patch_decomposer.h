@@ -1328,6 +1328,8 @@ public:
 
   bool RemoveNextIfPossible(bool remove_unsolved = false,
                             int minimal_gain = 0) {
+    if (PathSampl.SelectedPaths.size() == 0)
+      return false;
     if (current_rem_cand > PathSampl.SelectedPaths.size())
       current_rem_cand = PathSampl.SelectedPaths.size() - 1;
 
