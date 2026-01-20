@@ -186,7 +186,7 @@ void SmoothGlobal(bool iterative = false) {
 }
 
 void RefineForTracing() {
-  Geo::RefineForTracing<ScalarType>::RefineRequiredEdges(
+  Geo::RefineForTracing<ScalarType>::RefineForFieldComputation(
       TriVertPos, TriConnectivity, TriFeatures);
   Geo::getFFAdjacency(TriConnectivity, NextF, NextE);
   ComputeNormals(TriVertPos, TriConnectivity, TriFaceNormal, TriVertNormal);
