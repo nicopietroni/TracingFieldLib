@@ -71,6 +71,92 @@ ScalarType BestAlignedPoly(const std::vector<Geo::Point3<ScalarType>> &FacePos,
   return Err;
 }
 
+template <class ScalarType>
+ScalarType BestAlignedPolyProcrustes(const std::vector<Geo::Point3<ScalarType>> &FacePos,
+                           std::vector<Geo::Point3<ScalarType>> &bestPoly)
+{
+  const int n = (int)FacePos.size();
+  if (n < 3) {
+    bestPoly = FacePos;
+    return ScalarType(0);
+  }
+
+  // ------------------------------------------------------------
+  // 1) Build a unit regular n-gon template (circumradius = 1)
+  //    Centered at the origin, lying on the XY plane.
+  // ------------------------------------------------------------
+  std::vector<Geo::Point3<ScalarType>> templatePoly;
+  templatePoly.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    ScalarType angle = ScalarType(2.0 * M_PI * i) / ScalarType(n);
+    ScalarType x = std::cos(angle);
+    ScalarType y = std::sin(angle);
+    templatePoly.emplace_back(x, y, ScalarType(0));
+  }
+
+  // ------------------------------------------------------------
+  // 2) Rigidly align the template to the input points (no scaling)
+  //    Assumption: TrasformRigidMatch(A, B) modifies B so that
+  //    B ~= R * B + t best matches A.
+  // ------------------------------------------------------------
+  bestPoly = templatePoly;
+  Geo::PointMatch<ScalarType>::TrasformRigidMatch(FacePos, bestPoly);
+
+  // ------------------------------------------------------------
+  // 3) Compute optimal uniform scale in least-squares sense
+  //    We minimize:
+  //      sum_i || Q_i - ( s * P_i ) ||^2
+  //    where Q_i = FacePos[i] and P_i = bestPoly[i].
+  //    IMPORTANT: scale must be computed in a centered frame,
+  //    otherwise translation would be scaled as well.
+  // ------------------------------------------------------------
+
+  // Compute centroids
+  Geo::Point3<ScalarType> cQ(0, 0, 0), cP(0, 0, 0);
+  for (int i = 0; i < n; ++i) {
+    cQ += FacePos[i];
+    cP += bestPoly[i];
+  }
+  cQ /= ScalarType(n);
+  cP /= ScalarType(n);
+
+  // Least-squares scale: s = (Σ qi · pi) / (Σ pi · pi)
+  ScalarType numerator = 0;
+  ScalarType denominator = 0;
+  for (int i = 0; i < n; ++i) {
+    Geo::Point3<ScalarType> qi = FacePos[i] - cQ;
+    Geo::Point3<ScalarType> pi = bestPoly[i] - cP;
+    numerator   += Dot(qi, pi);   // dot product
+    denominator += Dot(pi, pi);
+  }
+
+  ScalarType s = (denominator > ScalarType(0))
+                   ? (numerator / denominator)
+                   : ScalarType(1);
+
+  // ------------------------------------------------------------
+  // 4) Apply scaling around the centroid of the aligned template
+  //    (so translation is preserved)
+  // ------------------------------------------------------------
+  for (int i = 0; i < n; ++i) {
+    bestPoly[i] = cP + (bestPoly[i] - cP) * s;
+  }
+
+  // Optional: refine with another rigid alignment after scaling
+  Geo::PointMatch<ScalarType>::TrasformRigidMatch(FacePos, bestPoly);
+
+  // ------------------------------------------------------------
+  // 5) Compute squared fitting error
+  // ------------------------------------------------------------
+  ScalarType Err = 0;
+  for (int i = 0; i < n; ++i) {
+    ScalarType d = (FacePos[i] - bestPoly[i]).Norm();
+    Err += d * d;
+  }
+
+  return Err;
+}
+
 
 } // namespace Geo
 

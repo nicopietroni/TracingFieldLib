@@ -31,6 +31,7 @@
 #include "local_operations/edge_collapse.h"
 #include "mesh_aspect_ratio.h"
 #include "mesh_functions.h"
+
 #include "normal.h"
 #include "point3.h"
 #include "pos3.h"
@@ -275,10 +276,10 @@ public:
       }
     } while (has_collapsed);
 
-    std::cout << "DONE!" << std::endl;
+    //std::cout << "DONE!" << std::endl;
     std::vector<int> BadShapeFaces =
         GetBadShapeFaces(Pos, Faces, DeletedF, MinQ);
-    std::cout << "Still Bad Faces Num:" << BadShapeFaces.size() << std::endl;
+    //std::cout << "Still Bad Faces Num:" << BadShapeFaces.size() << std::endl;
 
     std::vector<int> OriginalV, OriginalEl;
     RemoveDeleted(Pos, Faces, DeletedV, DeletedF, OriginalV, OriginalEl);
@@ -291,7 +292,7 @@ public:
                                   std::vector<std::vector<int>> &Faces) {
 
     std::vector<int> non_manifold_vert =
-        GetNonManifoldVert<ScalarType>(Pos, Faces);
+        GetNonManifoldVert(Pos, Faces);
     if (non_manifold_vert.size() == 0)
       return;
 

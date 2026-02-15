@@ -273,6 +273,49 @@ inline void GetSortedVertStar(const int &IndexV,
    GetSortedVertStar(StartPos,Faces,NextF,NextE,VertFan,HasBorder);
 }
 
+
+inline void GetSortedVertStar(const std::vector<std::vector<int> > &Faces,
+                              std::vector<std::vector<int> > &VertFan,
+                              std::vector<bool> &HasBorder)
+{
+    VertFan.clear();
+    HasBorder.clear();
+
+    std::vector<std::vector<int> > VF,VFIndex;
+    Geo::getVFAdjacency(Faces,VF,VFIndex);
+
+    std::vector<std::vector<int> > NextF,NextE;
+    Geo::getFFAdjacency(Faces,NextF,NextE);
+
+    VertFan.resize(VF.size());
+    HasBorder.resize(VF.size(),false);
+    for (size_t i=0;i<VF.size();i++)
+    {
+     bool CurrHasB;
+     GetSortedVertStar((int)i,Faces,VF,VFIndex,NextF,NextE,VertFan[i],CurrHasB);
+     HasBorder[i]=CurrHasB;
+    }
+}
+
+inline void GetSortedPosStar(const std::vector<std::vector<int> > &Faces,
+                             std::vector<std::vector<Pos3 > > &PosFan)
+{
+    PosFan.clear();
+
+    std::vector<std::vector<int> > NextF,NextE;
+    Geo::getFFAdjacency(Faces,NextF,NextE);
+
+    for (size_t i=0;i<Faces.size();i++)
+        for (size_t j=0;j<Faces[i].size();j++)
+        {
+            Pos3 StartP(i,j,Faces[i][j]);
+            std::vector<Pos3> CurrPosFan;
+            bool HasBorder;
+            GetSortedFacesFaceFun(StartP,Faces,NextF,NextE,CurrPosFan,HasBorder);
+            PosFan.push_back(CurrPosFan);
+        }
+}
+
 inline void getBorderSequnces(const std::vector<std::vector<int> > &Faces,
                        const std::vector<std::vector<int> > &NextF,
                        const std::vector<std::vector<int> > &NextE,

@@ -195,7 +195,7 @@ public:
         num_doublets++;
       }
     }
-    std::cout << "Solved " << num_doublets << " Doublets" << std::endl;
+    // std::cout << "Solved " << num_doublets << " Doublets" << std::endl;
 
     if (SolvedDoublet) {
       To_Faces = std::vector<int>(InitialFsize, -1);
@@ -440,6 +440,26 @@ public:
     Separatrix.insert(Separatrix.end(), Separatrix0.begin(), Separatrix0.end());
   }
 
+  static void SingularVertices(const std::vector<std::vector<int>> &Faces,
+                               const std::vector<bool> &BorderV,
+                               std::vector<int> &SingularVert) {
+    std::vector<int> VertValence;
+    VertValences(Faces, BorderV.size(), VertValence);
+    for (size_t i = 0; i < VertValence.size(); i++) {
+      if (BorderV[i] && (VertValence[i] > 2))
+        SingularVert.push_back(i);
+      if (!BorderV[i] && (VertValence[i] != 4))
+        SingularVert.push_back(i);
+    }
+  }
+
+  static void SingularVertices(const std::vector<std::vector<int>> &Faces,
+                               std::vector<int> &SingularVert) {
+    std::vector<bool> BorderV;
+    Geo::getBorderVert(Faces, BorderV);
+    SingularVertices(Faces, BorderV, SingularVert);
+  }
+
   static void
   FindSeparatrices(const std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
                    const std::vector<std::vector<int>> &QuadFaces,
@@ -544,6 +564,26 @@ public:
 
         Separatrices[i].push_back(CurrE);
       }
+  }
+
+  static void
+  PrintStats(const std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
+             const std::vector<std::vector<int>> &QuadFaces) {
+    std::cout << std::endl;
+    std::cout << "<<< Quad mesh STATS >>>" << std::endl;
+    std::cout << "* Number of vertices: " << QuadVertPos.size() << std::endl;
+    std::cout << "* Number of faces: " << QuadFaces.size() << std::endl;
+    
+    std::vector<int> SingularVert;
+    SingularVertices(QuadFaces, SingularVert);
+    std::cout << "* Number of singular vertices: " << SingularVert.size() << std::endl;
+
+    std::vector<ScalarType> FaceAR;
+    Geo::AspectRatioScaledJacobian(QuadVertPos, QuadFaces, FaceAR);
+    double sum = std::accumulate(FaceAR.begin(), FaceAR.end(), 0.0);
+    double average = sum / FaceAR.size();
+    std::cout << "* Aspect Ratio Scaled Jacobian: " << average << std::endl; 
+    std::cout << "* Aspect Ratio Scaled Jacobian min: " << *std::min_element(FaceAR.begin(), FaceAR.end()) << std::endl;
   }
 };
 

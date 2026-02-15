@@ -51,6 +51,7 @@ std::string Outfolder;
 
 typedef double ScalarType;
 
+bool extended_print=false;
 // MESH DATA
 bool loadedMesh = false;
 std::vector<Geo::Point3<ScalarType>> TriVertPos;
@@ -230,7 +231,7 @@ ScalarType initial_feature_angle = 60;
 int ero_steps = 3;
 int dil_steps = 3;
 bool compute_features = true;
-int smooth_steps=50;
+int smooth_steps=15;
 std::string folderProjectName;
 std::string commandLine;
 
@@ -257,7 +258,8 @@ void AutoQuadEdgeSize() {
   QuadSize /= 2;
   QuadSize*=SizeMult;
 
-  std::cout << "Quad Size: " << QuadSize << std::endl;
+  if (extended_print)
+    std::cout << "Quad Size: " << QuadSize << std::endl;
 }
 
 void CreateOutputFolder() {
@@ -279,6 +281,7 @@ void SaveMesh() {
   std::string RemFile = Outfolder;
   RemFile += std::string(GetFilanameNoExtension(PathMesh));
   RemFile.append("_quad.obj");
+  std::cout <<std::endl;
   std::cout << "Saving on:" << RemFile.c_str() << std::endl;
   WriteOBJ(RemFile, QuadVert, QuadFaces);
 }
@@ -361,18 +364,24 @@ int main(int argc, char *argv[]) {
 
     if ((!has_features)&&(!has_cross_field))
     {
-      std::cout<<"CLEANING MESH"<<std::endl;
+      if (extended_print)
+        std::cout<<"CLEANING MESH"<<std::endl;
       Geo::CleanMesh<ScalarType>::CollapseBadShapeFaces(TriVertPos, TriConnectivity,0.05);
-      std::cout<<"CLEANING FOLDS"<<std::endl;
+      if (extended_print)
+        std::cout<<"CLEANING FOLDS"<<std::endl;
       int steps_clean=Geo::CleanMesh<ScalarType>::SolveFolds(TriVertPos, TriConnectivity);
-      std::cout<<"Performed:"<<steps_clean<<" unfold steps"<<std::endl;
+      if (extended_print)
+        std::cout<<"Performed:"<<steps_clean<<" unfold steps"<<std::endl;
       // WriteOBJ("clean.obj",TriVertPos, TriConnectivity);
       // exit(0);
     }
 
-    std::cout << "BATCH PROCESSING" << std::endl;
+    if (extended_print)
+      std::cout << "BATCH PROCESSING" << std::endl;
+
     if ((!has_features) && (compute_features)) {
-      std::cout << "** COMPUTING FEATURES **" << std::endl;
+      if (extended_print)
+        std::cout << "** COMPUTING FEATURES **" << std::endl;
       Geo::MeshFeatures<ScalarType>::FeatureCornersClean(
           TriVertPos, TriConnectivity, initial_feature_angle, TriFeatures,
           TriCorners, ero_steps, dil_steps);
@@ -387,11 +396,13 @@ int main(int argc, char *argv[]) {
     // auto last = std::unique(TriFeatures.begin(), TriFeatures.end());
     // TriFeatures.erase(last, TriFeatures.end());
 
-    std::cout << "ESTEEM REMESH SIZE" << std::endl;
+    if (extended_print)
+      std::cout << "ESTEEM REMESH SIZE" << std::endl;
     TriMeshBox.Init(TriVertPos);
     AutoQuadEdgeSize();
 
-    std::cout << "QUADRANGULATE" << std::endl;
+    if (extended_print)
+      std::cout << "QUADRANGULATE" << std::endl;
 
     MQuad.QuadSize = QuadSize; /// TriMeshBox.Diag();
 

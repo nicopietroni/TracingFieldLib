@@ -288,16 +288,20 @@ template <class ScalarType> class FeatureReprojector {
 
       if (!found)non_mapped++;
     }
-    std::cout<<"Testing Size "<<CandidateIdx.size()<<std::endl;
-    std::cout<<"Branch Size "<<branchIDX.size()<<std::endl;
-    std::cout<<"Non Mapped "<<non_mapped<<std::endl;
-    std::cout<<"Mapped "<<toReprojVert.size()<<std::endl;
+    if (print_info)
+    {
+      std::cout<<"Testing Size "<<CandidateIdx.size()<<std::endl;
+      std::cout<<"Branch Size "<<branchIDX.size()<<std::endl;
+      std::cout<<"Non Mapped "<<non_mapped<<std::endl;
+      std::cout<<"Mapped "<<toReprojVert.size()<<std::endl;
+    }
     
 
     //exit(0);
   }
 
 public:
+  bool print_info=false;
 
   void Reproject()
   {

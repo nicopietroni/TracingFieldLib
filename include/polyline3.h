@@ -100,7 +100,9 @@ public:
     }
   }
 
-  void Smooth(int iters = 3, ScalarType damp = 0.25) {
+  void Smooth(int iters = 3, ScalarType damp = 0.25,
+              bool project_tangentially = true,
+              bool remove_global_drift = true) {
     bool isLoop = (PolyPos[0] == PolyPos.back());
     if (isLoop && PolyPos.size() < 4)
       return;
@@ -139,19 +141,25 @@ public:
         Geo::Point3<ScalarType> d = target - SmoothPos[i];
 
         // Project displacement onto tangent direction (curve direction)
-        Geo::Point3<ScalarType> t = (SmoothPos[ip] - SmoothPos[im]);
-        t.Normalize();
-        Geo::Point3<ScalarType> dpar = t * Dot(d, t);
+        if (!project_tangentially) {
+          Displ[i] = d * damp;
+        } else {
+          Geo::Point3<ScalarType> t = (SmoothPos[ip] - SmoothPos[im]);
+          t.Normalize();
+          Geo::Point3<ScalarType> dpar = t * Dot(d, t);
 
-        Displ[i] = dpar * damp;
+          Displ[i] = dpar * damp;
+        }
       }
 
       // Compute mean displacement to remove global drift (zero-mean)
       Geo::Point3<ScalarType> meanD(0, 0, 0);
-      for (int i = 0; i < n; ++i)
-        meanD = meanD + Displ[i];
+      if (remove_global_drift) {
+        for (int i = 0; i < n; ++i)
+          meanD = meanD + Displ[i];
 
-      meanD = meanD * (ScalarType(1) / ScalarType(n));
+        meanD = meanD * (ScalarType(1) / ScalarType(n));
+      }
 
       // Apply displacement minus the mean
       for (int i = startIdx; i < endIdx; ++i) {
@@ -254,69 +262,69 @@ public:
     return TotalAngle;
   }
 
-std::vector<ScalarType> SignedAnglesUsingSurfaceNormalDeg(
-    const std::vector<Geo::Point3<ScalarType>> &Normals)
-{
+  std::vector<ScalarType> SignedAnglesUsingSurfaceNormalDeg(
+      const std::vector<Geo::Point3<ScalarType>> &Normals) {
     std::vector<ScalarType> angles;
     const size_t n = PolyPos.size();
-    if (n < 3) return angles;
+    if (n < 3)
+      return angles;
 
     const bool isLoop = (PolyPos.front() == PolyPos.back());
     const size_t m = isLoop ? n - 1 : n;
 
     auto idx = [&](int i) {
-        if (isLoop) {
-            i %= (int)m;
-            if (i < 0) i += (int)m;
-        }
-        return (size_t)i;
+      if (isLoop) {
+        i %= (int)m;
+        if (i < 0)
+          i += (int)m;
+      }
+      return (size_t)i;
     };
 
     if (isLoop)
-        angles.resize(m);
+      angles.resize(m);
     else
-        angles.resize(m - 2);
+      angles.resize(m - 2);
 
     for (size_t k = 0; k < angles.size(); ++k) {
 
-        size_t i1 = isLoop ? k : k + 1;
-        size_t i0 = idx((int)i1 - 1);
-        size_t i2 = idx((int)i1 + 1);
+      size_t i1 = isLoop ? k : k + 1;
+      size_t i0 = idx((int)i1 - 1);
+      size_t i2 = idx((int)i1 + 1);
 
-        Geo::Point3<ScalarType> V1 = PolyPos[i1] - PolyPos[i0];
-        Geo::Point3<ScalarType> V2 = PolyPos[i2] - PolyPos[i1];
+      Geo::Point3<ScalarType> V1 = PolyPos[i1] - PolyPos[i0];
+      Geo::Point3<ScalarType> V2 = PolyPos[i2] - PolyPos[i1];
 
-        ScalarType l1 = V1.Norm();
-        ScalarType l2 = V2.Norm();
-        if (l1 < 1e-12 || l2 < 1e-12) {
-            angles[k] = 0;
-            continue;
-        }
+      ScalarType l1 = V1.Norm();
+      ScalarType l2 = V2.Norm();
+      if (l1 < 1e-12 || l2 < 1e-12) {
+        angles[k] = 0;
+        continue;
+      }
 
-        V1 /= l1;
-        V2 /= l2;
+      V1 /= l1;
+      V2 /= l2;
 
-        Geo::Point3<ScalarType> N = Normals[i1];
-        ScalarType ln = N.Norm();
-        if (ln < 1e-12) {
-            angles[k] = 0;
-            continue;
-        }
-        N /= ln;
+      Geo::Point3<ScalarType> N = Normals[i1];
+      ScalarType ln = N.Norm();
+      if (ln < 1e-12) {
+        angles[k] = 0;
+        continue;
+      }
+      N /= ln;
 
-        ScalarType angle = OrientedAngleDeg(V1, V2, N);
-        // ScalarType sinA = (V1.Cross(V2)).Dot(N);
-        // ScalarType cosA = V1.Dot(V2);
+      ScalarType angle = OrientedAngleDeg(V1, V2, N);
+      // ScalarType sinA = (V1.Cross(V2)).Dot(N);
+      // ScalarType cosA = V1.Dot(V2);
 
-        // ScalarType sinA = Dot(Cross(V1,V2),N);
-        // ScalarType cosA = Dot(V1,V2);
-        // ScalarType angle = std::atan2(sinA, cosA) * 180.0 / M_PI;
-        angles[k] = angle;
+      // ScalarType sinA = Dot(Cross(V1,V2),N);
+      // ScalarType cosA = Dot(V1,V2);
+      // ScalarType angle = std::atan2(sinA, cosA) * 180.0 / M_PI;
+      angles[k] = angle;
     }
 
     return angles;
-}
-
+  }
 
   void DenoiseHighFrequencyClosed_TaubinBilateral(
       int iterations = 10,
@@ -705,9 +713,8 @@ template <class ScalarType> class CompositeCurve3 {
     }
   }
 
-  void GetPrevIndex(int &currCurveIdx, int &currPointIdx, 
-                    int &prevCurveIdx,int &prevPointIdx) const 
-  {
+  void GetPrevIndex(int &currCurveIdx, int &currPointIdx, int &prevCurveIdx,
+                    int &prevPointIdx) const {
     assert(currCurveIdx >= 0);
     assert(currCurveIdx < (int)Curves.size());
     assert(currPointIdx >= 0);
@@ -798,8 +805,9 @@ template <class ScalarType> class CompositeCurve3 {
 
   // compute normals using cross product of vectors between last of previous
   // segment between pairs of vectors around each Vertex index
-  bool GetExtremesNormal(std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> &ExtremesNormals) const 
-  {
+  bool GetExtremesNormal(
+      std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
+          &ExtremesNormals) const {
 
     if (!IsLoop())
       return false;
@@ -811,7 +819,8 @@ template <class ScalarType> class CompositeCurve3 {
 
     for (size_t i = 0; i < Curves.size(); i++) {
       Geo::Point3<ScalarType> N0 = EsteemNormalAtIndex(i, 0);
-      Geo::Point3<ScalarType> N1 = EsteemNormalAtIndex(i, (int)Curves[i].PolyPos.size() - 1);
+      Geo::Point3<ScalarType> N1 =
+          EsteemNormalAtIndex(i, (int)Curves[i].PolyPos.size() - 1);
       ExtremesNormals.push_back(std::make_pair(N0, N1));
     }
     return true;
@@ -822,8 +831,8 @@ public:
     Curves.push_back(PolyL);
   }
 
-  bool ComputeVertexNormals(std::vector<std::vector<Geo::Point3<ScalarType>>> &OutNormals) const 
-  {
+  bool ComputeVertexNormals(
+      std::vector<std::vector<Geo::Point3<ScalarType>>> &OutNormals) const {
     OutNormals.clear();
     std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
         ExtremesNormals;
@@ -850,8 +859,6 @@ public:
   }
 };
 
-
-
 template <class ScalarType> class BezierFitting {
 
   // We assume Point3<ScalarType> supports:
@@ -877,8 +884,9 @@ template <class ScalarType> class BezierFitting {
 
   // Evaluate a quadratic Bezier curve at parameter t
   // B(t) = (1 - t)^2 P0 + 2 (1 - t) t C + t^2 P2
-  static inline Point3<ScalarType> EvalQuadraticBezier(const Point3<ScalarType> &P0, const Point3<ScalarType> &C,
-                                           const Point3<ScalarType> &P2, ScalarType t) {
+  static inline Point3<ScalarType>
+  EvalQuadraticBezier(const Point3<ScalarType> &P0, const Point3<ScalarType> &C,
+                      const Point3<ScalarType> &P2, ScalarType t) {
     t = Clamp01(t);
 
     ScalarType u = ScalarType(1) - t;
@@ -902,7 +910,7 @@ template <class ScalarType> class BezierFitting {
     ScalarType totalLength = ScalarType(0);
     for (size_t i = 1; i < n; ++i)
       totalLength += (Q[i] - Q[i - 1]).Norm();
-      //totalLength += Norm<ScalarType, Point3<ScalarType>>(Q[i] - Q[i - 1]);
+    // totalLength += Norm<ScalarType, Point3<ScalarType>>(Q[i] - Q[i - 1]);
 
     // If the polyline is degenerate, fall back to uniform parameters
     if (totalLength <= ScalarType(1e-20)) {
@@ -915,7 +923,7 @@ template <class ScalarType> class BezierFitting {
     t[0] = ScalarType(0);
 
     for (size_t i = 1; i < n; ++i) {
-      //acc += Norm<ScalarType, Point3<ScalarType>>(Q[i] - Q[i - 1]);
+      // acc += Norm<ScalarType, Point3<ScalarType>>(Q[i] - Q[i - 1]);
       acc += (Q[i] - Q[i - 1]).Norm();
       t[i] = acc / totalLength;
     }
@@ -928,8 +936,9 @@ template <class ScalarType> class BezierFitting {
   // Endpoints are fixed: P0 = Q[0], P2 = Q[last]
   // Only the control point C is solved
   static inline bool FitQuadraticBezierControlPoint_LS(
-      const std::vector<Point3<ScalarType>> &Q, Point3<ScalarType> &P0_out, Point3<ScalarType> &C_out,
-      Point3<ScalarType> &P2_out, ScalarType eps = ScalarType(1e-20)) {
+      const std::vector<Point3<ScalarType>> &Q, Point3<ScalarType> &P0_out,
+      Point3<ScalarType> &C_out, Point3<ScalarType> &P2_out,
+      ScalarType eps = ScalarType(1e-20)) {
     const size_t n = Q.size();
     if (n < 2)
       return false;
@@ -984,12 +993,330 @@ template <class ScalarType> class BezierFitting {
     return true;
   }
 
-public:
+  static inline std::vector<Point3<ScalarType>> SmoothLocalBezierPolyline(
+      const std::vector<Point3<ScalarType>> &polyIn, int iters, int winSize,
+      int deg, bool sampleUniformT, bool fitUseChordLength = true) {
+    std::vector<Point3<ScalarType>> poly = polyIn;
 
+    const int N = (int)poly.size();
+    if (N < 3)
+      return poly;
+
+    if (deg < 1)
+      return poly;
+    if (winSize < deg + 1)
+      return poly;
+    if (winSize < 2)
+      return poly;
+
+    const bool isLoop = (poly.front() == poly.back());
+
+    // Work on unique points if loop
+    int n = N;
+    if (isLoop) {
+      if (N < 4)
+        return poly; // need at least 3 unique + closure
+      n = N - 1;
+    } else {
+      if (N < 3)
+        return poly;
+    }
+
+    // If winSize is even, we still handle it, but "centered" window will be
+    // asymmetric by 1.
+    const int halfW = winSize / 2;
+
+    // Helper to build window indices around a center
+    auto buildWindow = [&](int center, std::vector<int> &indices,
+                           std::vector<Point3<ScalarType>> &window) {
+      indices.clear();
+      window.clear();
+      indices.reserve(winSize);
+      window.reserve(winSize);
+
+      // centered range: [center-halfW, center+(winSize-halfW-1)]
+      // for odd winSize, this is symmetric.
+      const int left = center - halfW;
+      const int right = center + (winSize - halfW - 1);
+
+      for (int idx = left; idx <= right; ++idx) {
+        int id = idx;
+        if (isLoop) {
+          id = (id % n + n) % n;
+        } else {
+          if (id < 0 || id >= n)
+            continue;
+        }
+        indices.push_back(id);
+        window.push_back(poly[id]);
+      }
+    };
+
+    for (int it = 0; it < iters; ++it) {
+
+      // Copy current unique vertices into P
+      std::vector<Point3<ScalarType>> P(n);
+      for (int i = 0; i < n; ++i)
+        P[i] = poly[i];
+
+      std::vector<Point3<ScalarType>> accum(n, P[0] * ScalarType(0));
+      std::vector<int> counts(n, 0);
+
+      std::vector<Point3<ScalarType>> window;
+      std::vector<int> indices;
+
+      // Slide windows centered at each vertex (excluding endpoints for open)
+      for (int center = 0; center < n; ++center) {
+
+        // For open polylines, keep endpoints fixed: do not generate windows
+        // that would move them.
+        if (!isLoop && (center < halfW || center >= n - halfW))
+          continue;
+
+        buildWindow(center, indices, window);
+
+        if ((int)window.size() < deg + 1)
+          continue;
+
+        // Fit + sample on the window (fix endpoints inside the window = true)
+        std::vector<Point3<ScalarType>> fitted =
+            BezierFitting<ScalarType>::SampleFittedBezierPolyline(
+                window, deg, sampleUniformT, fitUseChordLength,
+                /*fixEndpoints=*/true);
+
+        if (fitted.size() != window.size())
+          continue;
+
+        // Accumulate predictions for each vertex in this window
+        for (size_t k = 0; k < indices.size(); ++k) {
+          const int id = indices[k];
+          accum[id] = accum[id] + fitted[k];
+          counts[id] += 1;
+        }
+      }
+
+      // Average predictions
+      for (int i = 0; i < n; ++i) {
+        if (counts[i] > 0) {
+          P[i] = accum[i] / ScalarType(counts[i]);
+        } else {
+          // untouched vertex: keep original
+          P[i] = poly[i];
+        }
+      }
+
+      // Write back, preserving closure and open endpoints
+      if (isLoop) {
+        poly.resize(n + 1);
+        for (int i = 0; i < n; ++i)
+          poly[i] = P[i];
+        poly.back() = poly.front();
+      } else {
+        // endpoints unchanged by construction (we skipped their centers)
+        for (int i = 0; i < n; ++i)
+          poly[i] = P[i];
+      }
+    }
+
+    return poly;
+  }
+
+  // ===================== ADDED: general-degree Bezier fitting & sampling =====================
+
+// Uniform params on [0,1]
+static inline std::vector<ScalarType> UniformParams(size_t n) {
+  std::vector<ScalarType> t(n, ScalarType(0));
+  if (n <= 1) return t;
+  for (size_t i = 0; i < n; ++i)
+    t[i] = ScalarType(i) / ScalarType(n - 1);
+  return t;
+}
+
+// Binomial coefficient C(n,k)
+static inline ScalarType Binom(int n, int k) {
+  if (k < 0 || k > n) return ScalarType(0);
+  if (k == 0 || k == n) return ScalarType(1);
+  k = std::min(k, n - k);
+  ScalarType res = ScalarType(1);
+  for (int i = 1; i <= k; ++i) {
+    res *= ScalarType(n - (k - i));
+    res /= ScalarType(i);
+  }
+  return res;
+}
+
+// Bernstein basis for all j=0..deg at parameter t
+static inline void BernsteinAll(int deg, ScalarType t, std::vector<ScalarType>& B) {
+  B.assign(deg + 1, ScalarType(0));
+  t = Clamp01(t);
+  const ScalarType u = ScalarType(1) - t;
+
+  for (int j = 0; j <= deg; ++j) {
+    const ScalarType c = Binom(deg, j);
+    B[j] = c * std::pow(u, ScalarType(deg - j)) * std::pow(t, ScalarType(j));
+  }
+}
+
+// Evaluate Bezier (degree = P.size()-1)
+static inline Point3<ScalarType>
+EvalBezier(const std::vector<Point3<ScalarType>>& P, ScalarType t) {
+  const int deg = int(P.size()) - 1;
+  std::vector<ScalarType> B;
+  BernsteinAll(deg, t, B);
+
+  Point3<ScalarType> out = P[0] * ScalarType(0);
+  for (int j = 0; j <= deg; ++j)
+    out = out + P[j] * B[j];
+  return out;
+}
+
+// Solve SPD linear system M x = b with Cholesky.
+// M is kxk (ScalarType), b and x are length k (Point3)
+static inline bool SolveSPD_Cholesky(
+    const std::vector<std::vector<ScalarType>>& M,
+    const std::vector<Point3<ScalarType>>& b,
+    std::vector<Point3<ScalarType>>& x,
+    ScalarType eps = ScalarType(1e-20)) {
+
+  const int k = int(M.size());
+  x.assign(k, Point3<ScalarType>(ScalarType(0), ScalarType(0), ScalarType(0)));
+  if (k == 0) return true;
+
+  std::vector<std::vector<ScalarType>> L(k, std::vector<ScalarType>(k, ScalarType(0)));
+
+  for (int i = 0; i < k; ++i) {
+    for (int j = 0; j <= i; ++j) {
+      ScalarType sum = M[i][j];
+      for (int s = 0; s < j; ++s) sum -= L[i][s] * L[j][s];
+
+      if (i == j) {
+        if (sum <= eps) return false;
+        L[i][j] = std::sqrt(sum);
+      } else {
+        L[i][j] = sum / L[j][j];
+      }
+    }
+  }
+
+  // Forward: L y = b
+  std::vector<Point3<ScalarType>> y(k, Point3<ScalarType>(ScalarType(0),ScalarType(0),ScalarType(0)));
+  for (int i = 0; i < k; ++i) {
+    Point3<ScalarType> sum = b[i];
+    for (int s = 0; s < i; ++s) sum = sum - y[s] * L[i][s];
+    y[i] = sum / L[i][i];
+  }
+
+  // Backward: L^T x = y
+  for (int i = k - 1; i >= 0; --i) {
+    Point3<ScalarType> sum = y[i];
+    for (int s = i + 1; s < k; ++s) sum = sum - x[s] * L[s][i];
+    x[i] = sum / L[i][i];
+  }
+
+  return true;
+}
+
+// Fit Bezier of degree 'deg' by least squares.
+// If fixEndpoints=true, P0=Q.front and Pdeg=Q.back are fixed, we solve only internal controls.
+// fitUseChordLength decides how to parameterize the data points for the LS.
+static inline bool FitBezierControlPoints_LS(
+    const std::vector<Point3<ScalarType>>& Q,
+    int deg,
+    std::vector<Point3<ScalarType>>& P_out,
+    bool fitUseChordLength = true,
+    bool fixEndpoints = true,
+    ScalarType ridge = ScalarType(1e-10),
+    ScalarType eps = ScalarType(1e-20)) {
+
+  const int m = int(Q.size());
+  if (m < 2) return false;
+  if (deg < 1) return false;
+
+  // Data parameterization for fitting
+  std::vector<ScalarType> t = fitUseChordLength ? ChordLengthParams(Q)
+                                                : UniformParams(Q.size());
+
+  P_out.assign(deg + 1, Point3<ScalarType>(ScalarType(0),ScalarType(0),ScalarType(0)));
+
+  Point3<ScalarType> P0 = Q.front();
+  Point3<ScalarType> Pn = Q.back();
+
+  // Unknown count
+  const int k = fixEndpoints ? std::max(0, deg - 1) : (deg + 1);
+
+  if (fixEndpoints) {
+    P_out[0] = P0;
+    P_out[deg] = Pn;
+  }
+
+  if (k == 0) {
+    // deg==1 with fixed endpoints: straight segment
+    P_out[0] = P0;
+    P_out[deg] = Pn;
+    return true;
+  }
+
+  // Normal equations: M = A^T A (kxk), b = A^T rhs (k Point3)
+  std::vector<std::vector<ScalarType>> M(k, std::vector<ScalarType>(k, ScalarType(0)));
+  std::vector<Point3<ScalarType>> b(k, Point3<ScalarType>(ScalarType(0),ScalarType(0),ScalarType(0)));
+
+  std::vector<ScalarType> B;
+  for (int i = 0; i < m; ++i) {
+    BernsteinAll(deg, t[i], B);
+
+    Point3<ScalarType> rhs = Q[i];
+    if (fixEndpoints) {
+      rhs = rhs - P0 * B[0] - Pn * B[deg];
+    }
+
+    for (int u = 0; u < k; ++u) {
+      const int j_u = fixEndpoints ? (u + 1) : u;
+      const ScalarType a_u = B[j_u];
+
+      b[u] = b[u] + rhs * a_u;
+
+      for (int v = 0; v <= u; ++v) {
+        const int j_v = fixEndpoints ? (v + 1) : v;
+        const ScalarType a_v = B[j_v];
+        M[u][v] += a_u * a_v;
+      }
+    }
+  }
+
+  // Symmetrize + ridge
+  for (int u = 0; u < k; ++u) {
+    for (int v = 0; v < u; ++v) M[v][u] = M[u][v];
+    M[u][u] += ridge;
+  }
+
+  std::vector<Point3<ScalarType>> x;
+  if (!SolveSPD_Cholesky(M, b, x, eps)) {
+    // Fallback: linear guess along segment
+    for (int j = 0; j <= deg; ++j) {
+      const ScalarType a = ScalarType(j) / ScalarType(deg);
+      P_out[j] = P0 * (ScalarType(1) - a) + Pn * a;
+    }
+    return true;
+  }
+
+  for (int u = 0; u < k; ++u) {
+    const int j = fixEndpoints ? (u + 1) : u;
+    P_out[j] = x[u];
+  }
+
+  if (!fixEndpoints) {
+    // if endpoints are free, they are already part of x and were set above
+  }
+
+  return true;
+}
+
+public:
   // Sample the fitted quadratic Bezier at the same number of points
   // and with the same chord-length parameterization as the input polyline
   static inline std::vector<Point3<ScalarType>>
-  SampleFittedQuadraticBezierPolyline(const std::vector<Point3<ScalarType>> &Q) {
+  SampleFittedQuadraticBezierPolyline(
+      const std::vector<Point3<ScalarType>> &Q) {
     Point3<ScalarType> P0, C, P2;
     std::vector<Point3<ScalarType>> out;
 
@@ -1014,6 +1341,73 @@ public:
     SampleFittedQuadraticBezierPolyline(Q);
     outPoly.PolyPos = SampleFittedQuadraticBezierPolyline(Q);
     return outPoly;
+  }
+
+  // Like SampleFittedQuadraticBezierPolyline, but for arbitrary degree.
+  // - deg: degree of Bezier
+  // - sampleUniformT:
+  //     true  -> sample t uniformly in [0,1] on the final Bezier
+  //     false -> sample using chord-length params of the input polyline (like
+  //     your quadratic method)
+  // - fitUseChordLength:
+  //     if true, uses chord-length params for fitting (recommended)
+  //     if false, uses uniform params for fitting
+  // - fixEndpoints: if true, forces P0=Q.front and Pdeg=Q.back (like your
+  // quadratic)
+  static inline std::vector<Point3<ScalarType>>
+  SampleFittedBezierPolyline(const std::vector<Point3<ScalarType>> &Q, int deg,
+                             bool sampleUniformT, bool fitUseChordLength = true,
+                             bool fixEndpoints = true) {
+    std::vector<Point3<ScalarType>> out;
+    if (Q.size() < 2)
+      return out;
+    if (deg < 1)
+      return out;
+
+    std::vector<Point3<ScalarType>> P;
+    if (!FitBezierControlPoints_LS(Q, deg, P, fitUseChordLength, fixEndpoints))
+      return out;
+
+    std::vector<ScalarType> ts =
+        sampleUniformT ? UniformParams(Q.size()) : ChordLengthParams(Q);
+
+    out.resize(Q.size());
+    for (size_t i = 0; i < Q.size(); ++i)
+      out[i] = EvalBezier(P, ts[i]);
+
+    return out;
+  }
+
+  static inline Polyline3<ScalarType>
+  SampleFittedBezierPolyline(const Polyline3<ScalarType> &PolyL, int deg,
+                             bool sampleUniformT, bool fitUseChordLength = true,
+                             bool fixEndpoints = true) {
+    Polyline3<ScalarType> outPoly;
+    outPoly.PolyPos = SampleFittedBezierPolyline(
+        PolyL.PolyPos, deg, sampleUniformT, fitUseChordLength, fixEndpoints);
+    return outPoly;
+  }
+
+  // Local Bezier smoothing using sliding windows + averaging.
+  // - iters: number of smoothing passes
+  // - winSize: window size (recommended odd). Must be >= deg+1.
+  // - deg: Bezier degree
+  // - sampleUniformT: if true, sample fitted Bezier uniformly in t; else use
+  // chord-length of the window
+  // - fitUseChordLength: parameterization used for FITTING (recommended true)
+  //
+  // Behavior:
+  // - If polyline is a loop (first==last): preserves closure.
+  // - If open: endpoints are preserved (never changed).
+  static inline Polyline3<ScalarType>
+  SmoothLocalBezierPolyline(const Polyline3<ScalarType> &polyIn, int iters,
+                            int winSize, int deg, 
+                            bool sampleUniformT= true,
+                            bool fitUseChordLength = true) {
+    Polyline3<ScalarType> out = polyIn;
+    out.PolyPos = SmoothLocalBezierPolyline(polyIn.PolyPos, iters, winSize, deg,
+                                            sampleUniformT, fitUseChordLength);
+    return out;
   }
 };
 

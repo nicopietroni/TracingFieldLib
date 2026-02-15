@@ -1338,7 +1338,7 @@ public:
                           std::vector<std::vector<int>> &PerPatchFaceIDX,
                           std::vector<std::vector<int>> &PerPatchCornerIDX,
                           bool find_corners = true, bool write_timing = true,
-                          bool minimize_t_junctions = false) {
+                          bool minimize_t_junctions = false,bool print_info=false) {
 
     DualVertPos.clear();
     DualFaces.clear();
@@ -1520,8 +1520,10 @@ public:
     // SplEdgesIDX,
     //              DualParam.JointBorder, PrimalCornerPosSet);
     auto t1 = std::chrono::high_resolution_clock::now();
+    
+    if (print_info)
+      std::cout << "SPLITTING PATCHES" << std::endl;
 
-    std::cout << "SPLITTING PATCHES" << std::endl;
     std::set<int> SplitPatchSet(DualParam.OnlyPatch.begin(),
                                 DualParam.OnlyPatch.end());
 
@@ -1608,7 +1610,9 @@ public:
       AppendMesh(DualVertPos, DualFaces, PatchVertPos, PatchFaces);
     }
 
-    std::cout << "MAKING CONSISTENT" << std::endl;
+    if (print_info)
+      std::cout << "MAKING CONSISTENT" << std::endl;
+    
     if (DualFaces.size() > 0) {
       bool edge_manf = EdgeManifold<ScalarType>(DualVertPos, DualFaces);
       bool vert_manf = VertManifold<ScalarType>(DualVertPos, DualFaces);
@@ -1621,7 +1625,9 @@ public:
       //  WriteOBJ("test1.obj", DualVertPos, DualFaces);
       //  exit(0);
     }
-    std::cout << "MADE CONSISTENT" << std::endl;
+    if (print_info)
+      std::cout << "MADE CONSISTENT" << std::endl;
+
     if (DualFaces.size() > 0) {
       std::vector<std::vector<int>> NextF, NextE;
       getFFAdjacency(DualFaces, NextF, NextE);
@@ -1683,7 +1689,8 @@ public:
           std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
       // auto duration3 =
       //     std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2);
-
+      std::cout << std::endl;
+      std::cout << "<<< Dual extraction STATS >>>" << std::endl;
       std::cout << "Time Deriving Pos: " << duration0.count() << " milliseconds"
                 << std::endl;
       std::cout << "Time Cutting Mesh: " << duration1.count() << " milliseconds"
@@ -1693,7 +1700,8 @@ public:
       //           << std::endl;
     }
     //
-    std::cout << "DONE" << std::endl;
+    if (print_info)
+      std::cout << "DONE" << std::endl;
     return problematic_patches;
   }
 

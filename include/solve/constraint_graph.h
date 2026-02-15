@@ -537,6 +537,7 @@ template <class ScalarType> class OrientFLowGraph {
       Connections.insert(Connections.end(), Arcs1.begin(), Arcs1.end());
     }
     ConnectionsW.resize(Connections.size(), 1);
+    if (WriteDebug)
     std::cout << "There are " << Connections.size() << " Connections "
               << std::endl;
 
@@ -1534,21 +1535,25 @@ template <class ScalarType> class OrientFLowGraph {
     EnabledN = std::vector<bool>(GraphAdj.size(), true);
     SetupNodeWeightChange(1, true);
 
+    if (WriteDebug)
     std::cout << "*** Computing Increment Resizing Cycles.." << std::endl;
     PerNodeResult IncrRes = computePerNodeShortestRouteVarUnique(
         VarNode, StartNIncr); // computePerNodeShortestRoute(StartNIncr);
-    std::cout << "Computed " << IncrRes.results.size() << " increments Paths"
-              << std::endl;
+    if (WriteDebug)
+      std::cout << "Computed " << IncrRes.results.size() << " increments Paths"
+                << std::endl;
     // get the decrease paths
     EnabledN = std::vector<bool>(GraphAdj.size(), true);
     DisableUnitaryNodes();
     SetupNodeWeightChange(-1, true);
     // PerNodeResult DecrRes = computePerNodeShortestRoute(StartNDecr);
 
-    std::cout << "*** Computing Decrement Resizing Cycles.." << std::endl;
+    if (WriteDebug)
+      std::cout << "*** Computing Decrement Resizing Cycles.." << std::endl;
     PerNodeResult DecrRes =
         computePerNodeShortestRouteVarUnique(VarNode, StartNDecr);
-    std::cout << "Computed " << DecrRes.results.size() << " decrement Paths"
+    if (WriteDebug)
+      std::cout << "Computed " << DecrRes.results.size() << " decrement Paths"
               << std::endl;
     PerNodeResult AllRes = IncrRes;
     AllRes.Add(DecrRes);
@@ -1634,7 +1639,8 @@ public:
     }
 
     InitGraph();
-    std::cout << "*** Solving Equality ***" << std::endl;
+    if (WriteDebug)
+      std::cout << "*** Solving Equality ***" << std::endl;
     bool changed = false;
     int steps = 0;
     do {
@@ -1643,7 +1649,8 @@ public:
       // if (WriteDebug)
       //   std::cout << "Performed Equality size step" << std::endl;
     } while (changed);
-    std::cout << "Performed " << steps << " Equality size step" << std::endl;
+    if (WriteDebug)
+      std::cout << "Performed " << steps << " Equality size step" << std::endl;
 
     for (size_t i = 0; i < VarValue.size(); i++) {
       assert(VarValue[i] >= 1);
@@ -1659,7 +1666,8 @@ public:
     InitGraph();
     bool changed = false;
 
-    std::cout << "*** Solving Parity ***" << std::endl;
+    if (WriteDebug)
+      std::cout << "*** Solving Parity ***" << std::endl;
     int steps = 0;
     do {
       changed = SolveParityStep();
@@ -1667,6 +1675,8 @@ public:
       // if (WriteDebug)
       //   std::cout << "Performed Parity step" << std::endl;
     } while (changed);
+    
+    if (WriteDebug)
     std::cout << "Performed " << steps << " Parity size step" << std::endl;
 
     for (size_t i = 0; i < VarValue.size(); i++) {
@@ -1707,7 +1717,7 @@ public:
       const std::vector<std::vector<std::vector<int>>> &_PatchSideVariables)
       : VarTargetValue(_VarTargetValue), VarValue(_VarValue),
         PatchSideVariables(_PatchSideVariables) {
-    WriteDebug = true;
+    WriteDebug = false;
   }
 };
 
@@ -1825,6 +1835,7 @@ template <class ScalarType> class ConstraintGraph {
       if ((CurrSum % 2) == 1)
         NotParityNodes.push_back(i);
     }
+    if (WriteDebug)
     std::cout << "Num Not Parity Constraints " << NotParityNodes.size()
               << std::endl;
     // allocate all possible variables and links
@@ -1842,7 +1853,8 @@ template <class ScalarType> class ConstraintGraph {
     }
 
     InitAdjFromLinks(ParityConstraintsAdj, ParityConstrLinks);
-    std::cout << "Allocated Graph " << std::endl;
+    if (WriteDebug)
+      std::cout << "Allocated Graph " << std::endl;
   }
 
   // BSF COMPUTATION
@@ -2337,6 +2349,8 @@ template <class ScalarType> class ConstraintGraph {
   }
 
 public:
+
+  bool WriteDebug;
   void
   SolveParity(std::vector<std::vector<std::vector<int>>> &_PatchSideVariables) {
 
@@ -2367,7 +2381,7 @@ public:
 
   ConstraintGraph(std::vector<int> &_VarValue,
                   std::vector<int> &_VarTargetValue)
-      : VarTargetValue(_VarTargetValue), VarValue(_VarValue) {}
+      : VarTargetValue(_VarTargetValue), VarValue(_VarValue) {WriteDebug=false;}
 };
 
 #endif

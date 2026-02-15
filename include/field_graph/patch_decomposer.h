@@ -277,6 +277,7 @@ public:
   bool start_orginal_border;
   bool start_concave;
   bool start_spike;
+  bool print_info;
   // bool start_features;
 
   // bool end_internal;
@@ -430,6 +431,7 @@ public:
 
   // this one
   void InitArrivalPoint(bool and_allow_pass) {
+   
     bool allArrival =
         (end_original_border && end_patch_border && end_concave && end_spike);
 
@@ -441,33 +443,42 @@ public:
                 PathSampl.allow_arrive_to.end(), true);
 
       DisableAvoidToArrive();
+
       return;
     }
 
     std::vector<int> to_Mark;
+    // auto t0_c = std::chrono::high_resolution_clock::now();
+
     if (end_concave) {
       std::vector<int> currSel;
       PatchMan.GetAllGlobalVertOfType(CTypeConcave, currSel);
       to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
     }
+    
     if (end_spike) {
       std::vector<int> currSel;
       PatchMan.GetAllGlobalVertOfType(CTypeSpike, currSel);
       to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
     }
+
     if (end_original_border) {
       std::vector<int> currSel;
+     
       PatchMan.GetAllGlobalVertOfType(CTypeFlat, currSel);
+     
       for (size_t i = 0; i < currSel.size(); i++) {
         if (VertSplitForFeatures.count(currSel[i]))
           continue;
         to_Mark.push_back(currSel[i]);
       }
+
       // to_Mark.insert(to_Mark.end(), currSel.begin(), currSel.end());
     }
 
     std::fill(PathSampl.allow_arrive_to.begin(),
               PathSampl.allow_arrive_to.end(), false);
+
 
     for (size_t i = 0; i < to_Mark.size(); i++) {
       int IndexV = to_Mark[i];
@@ -482,6 +493,7 @@ public:
       // }
     }
     DisableAvoidToArrive();
+
   }
 
   void UpdateCondition(const int &IndexPatch) {
@@ -495,7 +507,7 @@ public:
     TimeUpdateConditions += elapsed0.count() * 1e-6;
   }
 
-  bool SatisfyConditions(const int &IndexPatch) {
+  bool SatisfyConditions(const int &IndexPatch) const {
     assert(!PatchMan.isEmpty(IndexPatch));
 
     bool has_satisfied = true;
@@ -741,7 +753,9 @@ public:
     // remove the space around singularities
     PathSampl.InitSingularityNodes(false);
 
+
     InitArrivalPoint(true);
+
 
     // /// this one stops to previously found borders, useful for
     // /// recursive call
@@ -766,17 +780,18 @@ public:
       PathSampl.SetBorderCanPassToExit(ArrivalFeatures);
     }
 
-    auto t1 = std::chrono::high_resolution_clock::now();
 
-    auto elapsed0 =
-        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
-    TimeInit += elapsed0.count() * 1e-6;
+    auto t3 = std::chrono::high_resolution_clock::now();
+    auto elapsed =
+        std::chrono::duration_cast<std::chrono::microseconds>(t3 - t0);
+   
+    TimeInit += elapsed.count() * 1e-6;
 
     PathSampl.SampleCandidates(first_ite);
 
-    auto t2 = std::chrono::high_resolution_clock::now();
+    auto t4 = std::chrono::high_resolution_clock::now();
     auto elapsed1 =
-        std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+        std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3);
     TimeTracing += elapsed1.count() * 1e-6;
 
     // if not initialized at this point will be
@@ -941,7 +956,8 @@ public:
     if ((UnsolvedPatches.size() == 0) && (stop_when_solved)) {
       all_solved = true;
       added_sample = false;
-      std::cout << "All Solved!" << std::endl;
+      if (print_info)
+        std::cout << "All Solved!" << std::endl;
       return;
     }
 
@@ -1020,13 +1036,26 @@ public:
       UpdateCondition(TestPatch);
     }
 
-    UnsolvedPatches.clear();
-    for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
-      if (PatchMan.isEmpty(i))
-        continue;
+    // UnsolvedPatches.clear();
+    // for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
+    //   if (PatchMan.isEmpty(i))
+    //     continue;
 
-      if (!SatisfyConditions(i))
-        UnsolvedPatches.insert(i);
+    //   if (!SatisfyConditions(i))
+    //     UnsolvedPatches.insert(i);
+    // }
+
+    for (size_t i = 0; i < UpdatedPatches.size(); i++) {
+      int TestPatch = UpdatedPatches[i];
+      if (PatchMan.isEmpty(TestPatch)) {
+        UnsolvedPatches.erase(TestPatch);
+        continue;
+      }
+
+      if (!SatisfyConditions(TestPatch))
+        UnsolvedPatches.insert(TestPatch);
+      else
+        UnsolvedPatches.erase(TestPatch);
     }
 
     for (size_t i = 0; i < PConditions.size(); i++) {
@@ -1037,13 +1066,13 @@ public:
       if (PatchMan.isEmpty(i))
         continue;
 
-      auto t4 = std::chrono::high_resolution_clock::now();
+      // auto t4 = std::chrono::high_resolution_clock::now();
       if (!SatisfyConditionsAfterGlobalUpdate(i))
         UnsolvedPatches.insert(i);
-      auto t5 = std::chrono::high_resolution_clock::now();
-      auto elapsed2 =
-          std::chrono::duration_cast<std::chrono::microseconds>(t5 - t4);
-      TimeUpdateConditions += elapsed2.count() * 1e-6;
+      // auto t5 = std::chrono::high_resolution_clock::now();
+      // auto elapsed2 =
+      //     std::chrono::duration_cast<std::chrono::microseconds>(t5 - t4);
+      // TimeUpdateConditions += elapsed2.count() * 1e-6;
     }
     auto t2 = std::chrono::high_resolution_clock::now();
     auto elapsed1 =
@@ -1071,7 +1100,7 @@ public:
   // int time_rem3;
   // int time_rem4;
 
-#define SAVE_STATUS_REMOVE
+  // #define SAVE_STATUS_REMOVE
 
   bool RemoveIfPossible(int &Path_To_remove, bool remove_unsolved = false,
                         int minGain = 0, bool debug_msg = false) {
@@ -1420,6 +1449,7 @@ public:
     end_concave = true;
     end_spike = true;
     end_features = false;
+    print_info = false;
 
     to_init_distance = true;
     first_ite = true;
@@ -1523,7 +1553,8 @@ public:
     bool all_solved = false;
     bool added_sample = false;
     bool added_once = false;
-    std::cout << "ADDING PATHS" << std::endl;
+    if (print_info)
+      std::cout << "ADDING PATHS" << std::endl;
 
     bool terminated = false;
     do {
@@ -1547,7 +1578,10 @@ public:
 
   void RemovePaths() {
     current_rem_cand = PathSampl.SelectedPaths.size() - 1;
-    std::cout << "REMOVING PATHS" << std::endl;
+
+    if (print_info)
+      std::cout << "REMOVING PATHS" << std::endl;
+
     int NumPath0 = PathSampl.SelectedPaths.size();
     while (RemoveNextIfPossible()) {
       // update dart if needed
@@ -1774,7 +1808,9 @@ public:
 
   void FinalRemovePath() {
     current_rem_cand = PathSampl.SelectedPaths.size() - 1;
-    std::cout << "FINAL REMOVAL" << std::endl;
+    if (print_info)
+      std::cout << "FINAL REMOVAL" << std::endl;
+
     int NumPath0 = PathSampl.SelectedPaths.size();
     while (RemoveNextIfPossible(true, 1)) {
       // update dart if needed
@@ -1914,7 +1950,9 @@ public:
     if (add_only_where_needed)
       InitMustPassEdges();
 
-    std::cout << "**TRACING first feature step **" << std::endl;
+    if (print_info)
+      std::cout << "**TRACING first feature step **" << std::endl;
+
     RetraceCandidates();
 
     if (prefer_feature_features)
@@ -1928,12 +1966,15 @@ public:
     if (add_only_where_needed)
       InitMustPassEdges();
 
-    std::cout << "**TRACING second feature step **" << std::endl;
+    if (print_info)
+      std::cout << "**TRACING second feature step **" << std::endl;
+
     RetraceCandidates();
     // std::cout<<"STEP 4"<<std::endl;
     // PathSampl.Graph().PrintData();
     // for (size_t i = 0; i < PathSampl.Candidates.size(); i++) {
-    //  std::cout << "Candidate before " << PathSampl.Candidates[i].second << " Score: "
+    //  std::cout << "Candidate before " << PathSampl.Candidates[i].second << "
+    //  Score: "
     //             << PathSampl.Candidates[i].first << std::endl;
     // }
 
@@ -1941,7 +1982,8 @@ public:
       PathSampl.AddSavedSampledPaths();
     // // write all sizes
     // for (size_t i = 0; i < PathSampl.Candidates.size(); i++) {
-    //   std::cout << "Candidate after " << PathSampl.Candidates[i].second << " Score: "
+    //   std::cout << "Candidate after " << PathSampl.Candidates[i].second << "
+    //   Score: "
     //             << PathSampl.Candidates[i].first << std::endl;
     // }
     // exit(0);
@@ -2050,8 +2092,9 @@ public:
     }
   }
 
-  double TimeInit, TimeTracing, TimeUpdateConditions, TimeUpdateUpdatePatches,
-      TimeUpdateDistances, TimeCheckConflicts, TimeRemovePaths;
+  double TimeInit, TimeTracing, TimeUpdateConditions,
+         TimeUpdateUpdatePatches, TimeUpdateDistances, TimeCheckConflicts,
+         TimeRemovePaths;
 
   bool ForceSolveSpikeConcave(int IndexP) // bool Do_features,
   {
@@ -2203,17 +2246,19 @@ private:
 
       // this firs step solve all the features (concave, spikes)
       has_added = false;
-      std::cout << "* solving all features *" << std::endl;
+      if (print_info)
+        std::cout << "* solving all features *" << std::endl;
 
       bool has_added_f = false;
 
       if (force_all_features) {
-        std::cout << "FORCING" << std::endl;
+        if (print_info)
+          std::cout << "FORCING" << std::endl;
         has_added_f = ForceAllFeatures();
       } else
         has_added_f = SolveAllFeatures();
 
-      if (has_added_f)
+      if (has_added_f && print_info)
         std::cout << "Added Features" << std::endl;
 
       has_added |= has_added_f;
@@ -2237,7 +2282,8 @@ private:
       }
 
       // add the remaining to solve all the rest of the objetive function
-      std::cout << "* solving rest of mesh *" << std::endl;
+      if (print_info)
+        std::cout << "* solving rest of mesh *" << std::endl;
       bool has_added_m = SolveAllMesh();
       // if (has_added_m)
       //   std::cout << "Added Mesh" << std::endl;
@@ -2253,7 +2299,8 @@ private:
 
       // PostEnableInterval();
       //  first_ite = false;
-      std::cout << "*** STEP " << CurrIte << std::endl;
+      if (print_info)
+        std::cout << "*** STEP " << CurrIte << std::endl;
     } while ((has_added) || (!all_interval));
 
     t0 = std::chrono::high_resolution_clock::now();
@@ -2641,9 +2688,9 @@ public:
     // FIX ARTIFICIALLY THE WRONG PATCHES
     PatchMan.FixWrongValencePatches();
     // PatchMan.InitVisualCornersEdges();
-
+    std::cout << std::endl;
     std::cout << "<<< Decompose TIMINGS (sec) >>> " << std::endl;
-    std::cout << "* Init: " << TimeInit << std::endl;
+    std::cout << "* Init: " << TimeInit<< std::endl;
     std::cout << "* Tracing: " << TimeTracing << std::endl;
     std::cout << "* Updating Conditions: " << TimeUpdateConditions << std::endl;
     std::cout << "* Updating Patches: " << TimeUpdateUpdatePatches << std::endl;
@@ -2717,7 +2764,7 @@ public:
       for (size_t i = 0; i < PathSampl.SelectedPaths.size(); i++)
         BoundaryP.push_back(i);
 
-      std::cout << "*** STEP 3 ***" << std::endl;
+      // std::cout << "*** STEP 3 ***" << std::endl;
       add_only_where_needed = false;
       stop_when_solved = false;
       SolveAllMesh();
@@ -2733,7 +2780,7 @@ public:
 
     } while (has_added);
     // then add the rest of candidates
-
+    std::cout << std::endl;
     std::cout << "<<< Decompose TIMINGS (sec) >>> " << std::endl;
     std::cout << "* Tracing: " << TimeTracing << std::endl;
     std::cout << "* Updating Conditions: " << TimeUpdateConditions << std::endl;
@@ -2863,6 +2910,8 @@ public:
   }
 
   void WriteStats() {
+    std::cout << std::endl;
+    std::cout << "<<< Condition satisying STATS >>> " << std::endl;
     for (size_t i = 0; i < PConditions.size(); i++) {
       int NonSatisfied = 0;
       for (size_t j = 0; j < PatchMan.NumPatches(); j++) {
@@ -2872,7 +2921,7 @@ public:
         if (!has_satisfied)
           NonSatisfied++;
       }
-      std::cout << "Unsatistied Condition " << PConditions[i]->Name().c_str()
+      std::cout << "* Unsatistied Condition " << PConditions[i]->Name().c_str()
                 << " " << NonSatisfied << std::endl;
     }
 

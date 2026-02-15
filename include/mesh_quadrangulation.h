@@ -232,6 +232,7 @@ template <class ScalarType> class MeshQuadrangulator {
 
     std::vector<Field::CrossF<ScalarType>> VertCurv0;
 
+    if (print_info)
     std::cout << "*** SPLIT FEATURES *** " << std::endl;
 
     RemainingF.clear();
@@ -321,6 +322,7 @@ template <class ScalarType> class MeshQuadrangulator {
     Geo::getFFAdjacency(DualConnectivity, DualNextF, DualNextE);
 
     // INITIALIZE SIDE SUBDIVISION
+    
     SideD.InitFromLabels(DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
                          PerDualPatchCornerIDX, DualFeatures);
   }
@@ -366,18 +368,24 @@ template <class ScalarType> class MeshQuadrangulator {
 
 
   void InitializeData() {
-    std::cout << "*** INITIALIZATION *** " << std::endl;
+    if (print_info)
+      std::cout << "*** INITIALIZATION *** " << std::endl;
+
     InitMesh();
     InitField();
 
-    std::cout << "*** REFINE AND SPLIT *** " << std::endl;
+    if (print_info)
+      std::cout << "*** REFINE AND SPLIT *** " << std::endl;
+
     auto start = std::chrono::high_resolution_clock::now();
     PreprocessMesh();
     auto end0 = std::chrono::high_resolution_clock::now();
     auto elapsed0 =
         std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
 
-    std::cout << "*** INIT GRAPHS *** " << std::endl;
+    if (print_info)
+      std::cout << "*** INIT GRAPHS *** " << std::endl;
+
     InitGraph();
 
     InitPatches();
@@ -400,25 +408,29 @@ template <class ScalarType> class MeshQuadrangulator {
     PDeco.WriteStats();
 
     ExtractDualPatches();
+    
   }
 
   void Quadrangulate() {
 
     ScalarType EdgeS = MeshBox.Diag() * QuadSize;
 
-    std::cout << "Edge Size:" << EdgeS << std::endl;
+    //std::cout << "Edge Size:" << EdgeS << std::endl;
     SideD.PrioritizeTJunction = true;
 
     SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeSize);
+
     int OddNum=SideD.NumOdd();
     //then reoptimize making them 
     if (OddNum>0)
     {
-      std::cout << "Recompute with Even Variables" << std::endl;
+      if (print_info)
+        std::cout << "Recompute with Even Variables" << std::endl;
       SideD.PMode=Geo::SideDiscretization<ScalarType>::EvenVar;
       SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeSize);
     }
-    std::cout << "GET QUADRANGULATION DATA" << std::endl;
+    if (print_info)
+      std::cout << "GET QUADRANGULATION DATA" << std::endl;
 
     std::vector<std::vector<int>> PatchFaces, PatchCorners;
     std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> SideSamples;
@@ -429,7 +441,8 @@ template <class ScalarType> class MeshQuadrangulator {
             DualVertPos, DualConnectivity, PatchFaces, PatchCorners,
             SideSamples, Q_LUT, QuadVert, QuadFaces, QuadPatch);
     
-    std::cout << "INIT SMOOTHING" << std::endl;
+    if (print_info)
+      std::cout << "INIT SMOOTHING" << std::endl;
 
     has_problematic_patches|=(num_problematic_patches>0);
     
@@ -549,39 +562,56 @@ template <class ScalarType> class MeshQuadrangulator {
       SParamQuadSmooth.ReprojFeatures.push_back(BorderETris[i]);
     }
     
-    // std::vector<Geo::Point3<ScalarType>> EdgeMPos0;
-    // std::vector<std::vector<int>> EdgesIdx0;
-    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromVertPairs(QuadVert,QuadFaces,SParamQuadSmooth.Features,EdgeMPos0,EdgesIdx0);
-    // WriteOBJ("testedge0.obj",EdgeMPos0,EdgesIdx0);
-
+    //add the subdivided border as features
     SParamQuadSmooth.ReprojVert = &TriVertPos0;
     SParamQuadSmooth.ReprojFaces = &TriConnectivity0;
     SParamQuadSmooth.Damp = 0.5;
     SParamQuadSmooth.post_project = !(has_problematic_patches);
     SParamQuadSmooth.NumIte = QuadSmoothSteps;
-    SParamQuadSmooth.SType = Geo::SMCentroid;//Geo::SMBestPoly;//Geo::SMLaplacian;//Geo::SMTaubin;/
+    SParamQuadSmooth.SType = Geo::SMBestPoly;//Geo::SMCentroid;//Geo::SMBestPoly;//Geo::SMLaplacian;//Geo::SMTaubin;/
     SParamQuadSmooth.line_border=true;
     SParamQuadSmooth.check_AspectR = false;
     SParamQuadSmooth.line_neight_features=false;
+    SParamQuadSmooth.reproject_voronoi_partition = true;
+    SParamQuadSmooth.check_multi_pass_fold = false;
     SetFixQuadVertices(SParamQuadSmooth);
-
-    // std::vector<Geo::Point3<ScalarType>> EdgeMPos1;
-    // std::vector<std::vector<int>> EdgesIdx1;
-    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromVertPairs((*SParamQuadSmooth.ReprojVert),(*SParamQuadSmooth.ReprojFaces),SParamQuadSmooth.ReprojFeatures,EdgeMPos1,EdgesIdx1);
-    // WriteOBJ("testedge1.obj",EdgeMPos1,EdgesIdx1);
-
-    //exit(0);
-    //exit(0);
     Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
+
+    SParamQuadSmooth.SType =Geo::SMCentroid;
+    SParamQuadSmooth.reproject_voronoi_partition = true;
+    SParamQuadSmooth.check_multi_pass_fold = false;
+    SParamQuadSmooth.check_AspectR = true;
+    Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
+
   }
+
+  // void SmoothQuadMeshSeparatrix() {
+    
+  //   typename Geo::QuadMeshSeparatrixSmooth<ScalarType>::SeparatrixSmoothParam
+  //       Sep_SParam;
+  //   Sep_SParam.Fixed = QuadCorners;
+  //   // exit(0);
+  //   Sep_SParam.FeatureLines = QuadFeatures;
+  //   Sep_SParam.Damp = 0.5;
+  //   Sep_SParam.Steps = QuadSmoothSteps;
+  //   Sep_SParam.fixBorder = true;
+  //   Sep_SParam.post_project=!(has_problematic_patches);
+  //   Sep_SParam.ReprojVert = &TriVertPos;
+  //   Sep_SParam.ReprojFaces = &TriConnectivity;
+  //   Sep_SParam.ReprojFeatureLines = TriFeatures;
+    
+  //   Geo::QuadMeshSeparatrixSmooth<ScalarType>::Smooth(QuadVert, QuadFaces,
+  //                                                     Sep_SParam);
+
+  // }
 
 
   void SmoothQuadrangulation() {
-    // keep more field
-    //SmoothQuadMeshSeparatrix();
-
     // laplacian smooth to solve some artifacts
     SmoothLaplacian();
+    //then to improve the alignment with the field and the quality of the quads, smooth the separatrix
+    //SmoothQuadMeshSeparatrix();
+    Geo::QuadPatchFunctions<ScalarType>::PrintStats(QuadVert, QuadFaces);
   }
 
 public:
@@ -591,6 +621,7 @@ public:
   ScalarType CCAbility;
   bool dynamicUpdates;
   int num_samples;
+  bool print_info;
 
   MeshQuadrangulator(std::vector<Geo::Point3<ScalarType>> &_TriVertPos,
                      std::vector<std::vector<int>> &_TriConnectivity,
@@ -620,13 +651,15 @@ public:
     feature_corner_angle = 45;
     QuadSize = 0.02;
 
-    QuadSmoothSteps = 50;
+    QuadSmoothSteps = 10;
     force_parity = true;
     RegVsIso = 1.0;
 
     OptimizeSize = true;
 
     has_problematic_patches = false;
+
+    print_info = false;
   }
 
   void Init() {
@@ -651,15 +684,54 @@ public:
 
     has_problematic_patches=false;
 
+    // InitializeData();
+
+    // DecomposePatches();
+
+    // Quadrangulate();
+
+    // CleanQuadMesh();
+
+    // SmoothQuadrangulation();
+
+    using Clock = std::chrono::high_resolution_clock;
+    using Seconds = std::chrono::duration<double>;
+
+    auto t0 = Clock::now();
+
+    auto t_start = Clock::now();
     InitializeData();
+    auto t_init = Clock::now();
 
     DecomposePatches();
+    auto t_decompose = Clock::now();
 
     Quadrangulate();
+    auto t_quad = Clock::now();
 
     CleanQuadMesh();
+    auto t_clean = Clock::now();
 
     SmoothQuadrangulation();
+    auto t_smooth = Clock::now();
+
+    // Durations
+    double time_init       = Seconds(t_init - t_start).count();
+    double time_decompose  = Seconds(t_decompose - t_init).count();
+    double time_quad       = Seconds(t_quad - t_decompose).count();
+    double time_clean      = Seconds(t_clean - t_quad).count();
+    double time_smooth     = Seconds(t_smooth - t_clean).count();
+    double total_time      = Seconds(t_smooth - t0).count();
+
+    std::cout << "--------------------------------\n";
+    std::cout << "\n--- Timing Report (seconds) ---\n";
+    std::cout << "InitializeData:        " << time_init      << " s\n";
+    std::cout << "DecomposePatches:      " << time_decompose << " s\n";
+    std::cout << "Quadrangulate:         " << time_quad      << " s\n";
+    std::cout << "CleanQuadMesh:         " << time_clean     << " s\n";
+    std::cout << "SmoothQuadrangulation: " << time_smooth    << " s\n";
+    std::cout << "--------------------------------\n";
+    std::cout << "Total time:            " << total_time     << " s\n";
   }
 };
 

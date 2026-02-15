@@ -46,7 +46,7 @@
 namespace Geo {
 
 template <class ScalarType>
-void GetLaplacianNeighbours(std::vector<Geo::Point3<ScalarType>> &VertPos,
+void GetLaplacianNeighbours(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                             const std::vector<std::vector<int>> &Faces,
                             std::vector<std::vector<int>> &Neighbors,
                             const std::vector<std::pair<int, int>> &LineSmooth =
@@ -67,6 +67,7 @@ void GetLaplacianNeighbours(std::vector<Geo::Point3<ScalarType>> &VertPos,
     }
   }
 
+ 
   // set all features
   std::set<std::pair<int, int>> LineSmoothSet;
   //number of edges for each feature vert
@@ -113,6 +114,14 @@ void GetLaplacianNeighbours(std::vector<Geo::Point3<ScalarType>> &VertPos,
       Neighbors[i].push_back(IndexV1);
     }
   }
+  //make them unique
+  for (size_t i = 0; i < Neighbors.size(); i++) {
+    std::vector<int> UniqueN = Neighbors[i];
+    std::sort(UniqueN.begin(), UniqueN.end());
+    UniqueN.erase(std::unique(UniqueN.begin(), UniqueN.end()), UniqueN.end());
+    Neighbors[i] = UniqueN;
+  }
+
 }
 
 

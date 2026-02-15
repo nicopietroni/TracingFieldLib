@@ -136,7 +136,8 @@ public:
                      const std::vector<std::pair<int, int>> &Features,
                      const ScalarType &MinSize, const ScalarType &MaxSize,
                      std::vector<ScalarType> *VertSize = NULL,
-                     bool subSample = true, bool useGeodesic = true) {
+                     bool subSample = true, 
+                     bool useGeodesic = true, bool print_info = false) {
 
     std::vector<int> SelectedSample;
 
@@ -155,7 +156,8 @@ public:
       for (size_t i = 0; i < VertPos.size(); i++)
         SelectedSample.push_back(i);
     }
-    std::cout << "Found " << SelectedSample.size() << " samples" << std::endl;
+    if (print_info)
+      std::cout << "Found " << SelectedSample.size() << " samples" << std::endl;
     ScalarType RatioDist = 1.5;
 
     // get all vertices from features
@@ -195,7 +197,9 @@ public:
     if (!useGeodesic) {
       PIndex.Init(VertPos);
     }
-    std::cout << "Computing Radiuses" << std::endl;
+    if (print_info)
+      std::cout << "Computing Radiuses" << std::endl;
+
     std::vector<ScalarType> SampledVal;
     for (size_t i = 0; i < SelectedSample.size(); i++) {
 
@@ -298,7 +302,9 @@ public:
     //std::cout << "Smoothing" << std::endl;
     if (VertSize!=NULL)
     Geo::SmoothLaplacianImplicit((*VertSize), Faces, FixedVal);
-    std::cout<<"Finding Perc Size:"<<SampledVal.size()<<std::endl;
+    if (print_info)
+      std::cout<<"Finding Perc Size:"<<SampledVal.size()<<std::endl;
+
     return GetPercentile(SampledVal, 0.05, MaxSize);
   }
 
@@ -307,7 +313,8 @@ public:
                    const std::vector<std::vector<int>> &Faces,
                    const ScalarType &MinSize, const ScalarType &MaxSize,
                    std::vector<ScalarType> *VertSize = NULL,
-                   ScalarType MaxNormVar = 135, bool subSample = true) {
+                   ScalarType MaxNormVar = 135, 
+                   bool subSample = true, bool print_info = false) {
     assert(MaxSize > MinSize);
 
     std::vector<int> SelectedSample;
@@ -327,7 +334,8 @@ public:
       for (size_t i = 0; i < VertPos.size(); i++)
         SelectedSample.push_back(i);
     }
-    std::cout << "Found " << SelectedSample.size() << " samples" << std::endl;
+    if (print_info)
+      std::cout << "Found " << SelectedSample.size() << " samples" << std::endl;  
 
     std::vector<Geo::Point3<ScalarType>> FaceNorm, VertNorm;
     Geo::ComputeNormals<ScalarType>(VertPos, Faces, FaceNorm, VertNorm);
@@ -399,9 +407,11 @@ public:
                        const std::vector<std::pair<int, int>> &Features,
                        const ScalarType &MinSize, const ScalarType &MaxSize,
                        std::vector<ScalarType> *VertSize = NULL,
-                       bool subSample = true, ScalarType MaxNormVar = 135) {
+                       bool subSample = true, ScalarType MaxNormVar = 135,
+                       bool print_info = false) {
 
-    std::cout << "Finding Remesh Size by Features" << std::endl;
+    if (print_info)
+      std::cout << "Finding Remesh Size by Features" << std::endl;
     std::vector<ScalarType> VertSizeFeat;
 
     ScalarType SizeFeat = -1;
@@ -413,8 +423,8 @@ public:
     else
       SizeFeat = RemeshSizeFeatures(VertPos, Faces, Features, MinSize, MaxSize,
                                     NULL, subSample);
-
-    std::cout << "Finding Remesh Size by Normal Variation" << std::endl;
+    if (print_info)
+      std::cout << "Finding Remesh Size by Normal Variation" << std::endl;
     std::vector<ScalarType> VertSizeNorm;
 
     if (VertSize != NULL)
@@ -424,6 +434,7 @@ public:
       SizeNorm = RemeshSizeNormal(VertPos, Faces, MinSize, MaxSize, NULL,
                                   MaxNormVar, subSample);
 
+    if (print_info)
     std::cout << "Done" << std::endl;
 
     assert(SizeFeat > 0);
@@ -445,11 +456,13 @@ public:
                        const std::vector<std::vector<bool>> &IsFaceEFeature,
                        const ScalarType &MinSize, const ScalarType &MaxSize,
                        std::vector<ScalarType> *VertSize = NULL,
-                       bool subSample = true, ScalarType MaxNormVar = 135) {
+                       bool subSample = true, ScalarType MaxNormVar = 135,
+                       bool print_info = false) {
     std::vector<std::pair<int, int>> VertPairFeatures;
     Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(
         Faces, IsFaceEFeature, VertPairFeatures);
-    std::cout << "There are Fearures:" << VertPairFeatures.size() << std::endl;
+    if (print_info)
+      std::cout << "There are Fearures:" << VertPairFeatures.size() << std::endl;
     return (RemeshSizeAggregated(VertPos, Faces, VertPairFeatures, MinSize,
                                  MaxSize, VertSize));
   }

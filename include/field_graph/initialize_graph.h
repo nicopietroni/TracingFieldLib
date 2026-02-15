@@ -973,7 +973,7 @@ template <class ScalarType> class TragingGraphFunctions {
   // static void SetJumpConnections(
 
 public:
-  static void MakeSymmetricCrossFieldGraph(TracingGraph<ScalarType> &TGraph) {
+  static void MakeSymmetricCrossFieldGraph(TracingGraph<ScalarType> &TGraph,bool printInfo=false) {
     // assert(TGraph.NumNodes() == (CrossField.size() * 4));
     //  then get the closest node
     int AddingOp = 0;
@@ -1018,9 +1018,11 @@ public:
         }
       }
     }
-    std::cout << "Total Test: " << TotalTest << std::endl;
-    std::cout << "Corrected Connection: " << AddingOp << std::endl;
-    std::cout << "Corrected Values: " << CorrectOp << std::endl;
+    if (printInfo) {
+      std::cout << "Total Test: " << TotalTest << std::endl;
+      std::cout << "Corrected Connection: " << AddingOp << std::endl;
+      std::cout << "Corrected Values: " << CorrectOp << std::endl;
+    }
   }
 
   static void InitFromVertCrossField(

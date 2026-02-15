@@ -31,6 +31,7 @@
 #include "./solve/iterative_integer_lin_constraint_solver.h"
 #include "field_graph/graph.h"
 #include "mesh_functions.h"
+#include "mesh_manifold.h"
 #include "point3.h"
 #include "polyline3.h"
 #include "pos3.h"
@@ -117,6 +118,8 @@ public:
   // that a patch has or not feature
   // has features must be regular
   bool WeightFeatures;
+
+  bool print_info;
 
   std::vector<std::vector<Geo::Point3<ScalarType>>> SampleSidePoints;
   std::vector<typeMatching> VarMatching;
@@ -494,7 +497,9 @@ private:
         }
       }
     NumVariables = CurrVar;
-    std::cout << "There are " << NumVariables << " Variables" << std::endl;
+
+    if (print_info)
+      std::cout << "There are " << NumVariables << " Variables" << std::endl;
   }
 
   void InitFeatureVariables(const std::vector<Geo::Point3<ScalarType>> &Vert,
@@ -720,6 +725,8 @@ private:
       OppEquivalences.push_back(Entry1);
     }
 
+    std::cout<<std::endl;
+    std::cout<< "<<< Varieble solving STATS >>>" << std::endl;
     std::cout << "NUM Constr " << OppEquivalences.size() << std::endl;
     std::cout << "NUM Variable " << NumVariables << std::endl;
   }
@@ -961,8 +968,10 @@ public:
   }
 
   void PrintStats() {
-    std::cout << "NUM VARIABLES: " << NumVariables << std::endl;
-    std::cout << "Num TJunctions: " << NumTJunctions << std::endl;
+    std::cout << std::endl;
+    std::cout << "<<< Label STATS >>>" << std::endl;
+    std::cout << "* Num Variables: " << NumVariables << std::endl;
+    std::cout << "* Num TJunctions: " << NumTJunctions << std::endl;
   }
 
   void InitFromLabels(const std::vector<Geo::Point3<ScalarType>> &Vert,
@@ -1219,7 +1228,8 @@ public:
   }
 
   void WritePatchStats() {
-    std::cout << "** STATISTICS INTEGER FIND **" << std::endl;
+    std::cout <<std::endl;
+    std::cout << "<<< Integer find STATS >>>" << std::endl;
     std::cout << "* Num Variables: " << NumVariables << std::endl;
     std::cout << "* Num Patches: " << PatchSides.size() << std::endl;
     int NumOK = 0;
@@ -1282,10 +1292,13 @@ public:
                           const bool OptimizeSize) {
     SolveSystem(_TargetL, _RegVsIso, false);
     AutomaticGraphOptimize(OptimizeSize,false);
-
+    
     InitMatchingType();
+
     FindDiscretizationPoint();
+
     WritePatchStats();
+
   }
 
   void SetToTarget(ScalarType _TargetL) {
@@ -1320,6 +1333,8 @@ public:
         Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
 
     PMode = SolvePost;
+
+    print_info=true;
   }
 };
 

@@ -36,6 +36,7 @@
 #include "quad3.h"
 #include "smooth_mesh.h"
 #include <cassert>
+#include <cstddef>
 #include <iostream>
 #include <map>
 #include <set>
@@ -47,6 +48,28 @@
 namespace Geo {
 
 template <class ScalarType> class QuadMeshSeparatrixSmooth {
+
+  static void SmoothPosSeparatrixBezier(
+      const std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
+      const std::vector<int> &SeparatrixV, const std::set<int> &FixedV,
+      std::vector<Geo::Point3<ScalarType>> &NewVertPos, int smooth_steps = 3,
+      ScalarType delta = 0.25) {
+    Polyline3<ScalarType> poly_sep;
+    for (size_t i = 0; i < SeparatrixV.size(); i++) {
+      int IndexV = SeparatrixV[i];
+      poly_sep.PolyPos.push_back(QuadVertPos[IndexV]);
+    }
+
+    std::vector<Geo::Point3<ScalarType>> OldVertPos = poly_sep.PolyPos;
+    poly_sep = BezierFitting<ScalarType>::SmoothLocalBezierPolyline(
+        poly_sep, smooth_steps, 10, 3, true, false);
+
+    // poly_sep.SmoothBezier(smooth_steps, delta,false,false);
+    NewVertPos.clear();
+    for (size_t i = 0; i < OldVertPos.size(); i++)
+      NewVertPos.push_back(OldVertPos[i] * (1 - delta) +
+                           poly_sep.PolyPos[i] * delta);
+  }
 
   static void
   SmoothPosSeparatrix(const std::vector<Geo::Point3<ScalarType>> &QuadVertPos,
@@ -60,7 +83,7 @@ template <class ScalarType> class QuadMeshSeparatrixSmooth {
       poly_sep.PolyPos.push_back(QuadVertPos[IndexV]);
     }
 
-    poly_sep.Smooth(smooth_steps, delta);
+    poly_sep.Smooth(smooth_steps, delta, false, false);
     NewVertPos = poly_sep.PolyPos;
   }
 
@@ -70,20 +93,20 @@ template <class ScalarType> class QuadMeshSeparatrixSmooth {
                           const std::vector<std::vector<int>> &Separatrices,
                           const std::vector<std::pair<int, int>> &Features,
                           const std::set<int> &FixedV, int smooth_steps = 3,
-                          ScalarType delta = 0.25) {
+                          ScalarType delta = 0.25,
+                          bool add_anti_shear_term = true) {
     std::vector<Geo::Point3<ScalarType>> AvgPos(
         QuadVertPos.size(), Geo::Point3<ScalarType>(0, 0, 0));
     std::vector<ScalarType> SumN(QuadVertPos.size(), 0);
 
-    std::vector<std::vector<int>> Neighbors;
-    GetLaplacianNeighbours(QuadVertPos, QuadFaces, Neighbors, Features);
-
     // add separatrices term
     for (size_t i = 0; i < Separatrices.size(); i++) {
       std::vector<Geo::Point3<ScalarType>> NewVertPos;
-      SmoothPosSeparatrix(QuadVertPos, Separatrices[i], FixedV, NewVertPos,
-                          smooth_steps, 0.25);
+      // SmoothPosSeparatrix(QuadVertPos, Separatrices[i], FixedV, NewVertPos,
+      //                     smooth_steps, 0.25);
 
+      SmoothPosSeparatrixBezier(QuadVertPos, Separatrices[i], FixedV,
+                                NewVertPos, smooth_steps, 0.25);
       bool isLoop = (Separatrices[i][0] == Separatrices[i].back());
       int startIdx = 0;
       int endIdx = Separatrices[i].size();
@@ -94,38 +117,55 @@ template <class ScalarType> class QuadMeshSeparatrixSmooth {
       for (size_t j = startIdx; j < endIdx; j++) {
         int IndexV = Separatrices[i][j];
         AvgPos[IndexV] += NewVertPos[j];
-        SumN[IndexV]+=1;
-      }
-    }
-
-    // add laplacian term if needed
-    for (size_t i = 0; i < AvgPos.size(); i++) {
-      // add separatrices term
-      if (SumN[i] == 0) {
-        for (size_t j = 0; j < Neighbors[i].size(); j++) {
-          AvgPos[i] += QuadVertPos[Neighbors[i][j]];
-          SumN[i]+=1;
-        }
+        SumN[IndexV] += 1;
       }
     }
 
     // add the anti-shear term along diagonals
-    std::vector<ScalarType> FaceAR;
-    AspectRatioWorstAngle(QuadVertPos,QuadFaces,FaceAR);
-    // for (size_t i=0;i<FaceAR.size();i++)
-    //   FaceAR[i]=1-FaceAR[i];
+    // compute laplacian pos
+    std::vector<std::vector<int>> Neighbors;
+    GetLaplacianNeighbours(QuadVertPos, QuadFaces, Neighbors, Features);
+    std::vector<Geo::Point3<ScalarType>> LaplVal;
+    GetLaplacianValues(QuadVertPos, Neighbors, LaplVal);
 
-    ScalarType MinWeightSh=0.05;
-    for (size_t i = 0; i < QuadFaces.size(); i++) 
-    for (size_t j = 0; j < QuadFaces[i].size(); j++) 
-    {
-      int IndexV0=QuadFaces[i][j];
-      int IndexV1=QuadFaces[i][(j+1)%4];
-      ScalarType CurrW=MinWeightSh+FaceAR[i];
-      AvgPos[IndexV0] += QuadVertPos[IndexV1]*CurrW;
-      SumN[IndexV0]+=CurrW;
+    if (add_anti_shear_term) {
+
+      // compute face aspect ratios
+      std::vector<ScalarType> FaceAR;
+      AspectRatioWorstAngle(QuadVertPos, QuadFaces, FaceAR);
+
+      // cumulate the shear info to vertices
+      std::vector<ScalarType> VertAR(QuadVertPos.size(), 0);
+      std::vector<int> SumVertArN(QuadVertPos.size(), 0);
+      for (size_t i = 0; i < QuadFaces.size(); i++) {
+        for (size_t j = 0; j < QuadFaces[i].size(); j++) {
+          int IndexV = QuadFaces[i][j];
+          VertAR[IndexV] += FaceAR[i];
+          SumVertArN[IndexV]++;
+        }
+      }
+      // average it
+      for (size_t i = 0; i < VertAR.size(); i++) {
+        int Valence = SumVertArN[i];
+        if (Valence > 0)
+          VertAR[i] /= ScalarType(Valence);
+      }
+
+      ScalarType MinWeightSh = 0.05;
+      for (size_t i = 0; i < AvgPos.size(); i++) {
+        ScalarType CurrW = MinWeightSh + (1 - VertAR[i]);
+        AvgPos[i] += LaplVal[i] * CurrW;
+        SumN[i] += CurrW;
+      }
     }
-
+    else {
+      for (size_t i = 0; i < AvgPos.size(); i++) {
+        if (SumN[i] > 0)
+          continue;
+        AvgPos[i] += LaplVal[i];
+        SumN[i] += 1;
+      }
+    }
     for (size_t i = 0; i < AvgPos.size(); i++) {
       assert(SumN[i] > 0);
       if (FixedV.count(i) > 0)
@@ -145,7 +185,7 @@ public:
     std::vector<Geo::Point3<ScalarType>> *ReprojVert;
     std::vector<std::vector<int>> *ReprojFaces;
     std::vector<std::pair<int, int>> ReprojFeatureLines;
-    //int ReprojStep;
+    // int ReprojStep;
     bool post_project;
 
     void Clear() {
@@ -160,7 +200,7 @@ public:
       Damp = 0.2;
       Steps = 5;
       fixBorder = false;
-      //ReprojStep = 5;
+      // ReprojStep = 5;
       ReprojVert = NULL;
       ReprojFaces = NULL;
       post_project = true;
@@ -168,7 +208,6 @@ public:
   };
 
 private:
-
   static void
   ReprojectIfNeeded(const SeparatrixSmoothParam &SParam,
                     std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -178,11 +217,11 @@ private:
                     std::vector<Geo::Segment3<ScalarType>> &FeatureSegs,
                     Geo::SegmentSpatialIndex<ScalarType> &SegGrid) {
 
-    bool do_reproject =((SParam.ReprojVert != NULL) &&
-                        (SParam.ReprojFaces != NULL));
+    bool do_reproject =
+        ((SParam.ReprojVert != NULL) && (SParam.ReprojFaces != NULL));
 
     bool post_project = (do_reproject && SParam.post_project);
-    
+
     if (post_project)
       Geo::AttractProject<ScalarType>(*SParam.ReprojVert, VertPos, Faces);
 
@@ -198,8 +237,8 @@ private:
                    std::vector<Geo::Segment3<ScalarType>> &FeatureSegs,
                    Geo::SegmentSpatialIndex<ScalarType> &SegGrid) {
 
-    bool do_reproject = ((SParam.ReprojVert != NULL) &&
-                        (SParam.ReprojFaces != NULL));
+    bool do_reproject =
+        ((SParam.ReprojVert != NULL) && (SParam.ReprojFaces != NULL));
 
     bool post_project = (do_reproject && SParam.post_project);
 
@@ -221,13 +260,23 @@ public:
     std::vector<Geo::Segment3<ScalarType>> FeatureSegs;
     Geo::SegmentSpatialIndex<ScalarType> SegGrid;
     InitGridIfNeeded(SParam, TriGrid, FeatureSegs, SegGrid);
-    
+
     std::vector<int> ReprojectVertIdx;
-    Geo::GetToReprojectVert<ScalarType>(QuadVertPos, ReprojectVertIdx, FeatureSegs, SegGrid);
+    for (size_t i = 0; i < SParam.FeatureLines.size(); i++) {
+      ReprojectVertIdx.push_back(SParam.FeatureLines[i].first);
+      ReprojectVertIdx.push_back(SParam.FeatureLines[i].second);
+    }
+    std::sort(ReprojectVertIdx.begin(), ReprojectVertIdx.end());
+    ReprojectVertIdx.erase(
+        std::unique(ReprojectVertIdx.begin(), ReprojectVertIdx.end()),
+        ReprojectVertIdx.end());
+
+    Geo::GetToReprojectVert<ScalarType>(QuadVertPos, ReprojectVertIdx,
+                                        FeatureSegs, SegGrid);
 
     QuadPatchFunctions<ScalarType>::FindSeparatrices(
-        QuadVertPos, QuadFaces, SParam.FeatureLines, SParam.Fixed,
-        Separatrices);
+        QuadVertPos, QuadFaces, SParam.FeatureLines, SParam.Fixed, Separatrices,
+        false);
 
     std::set<int> FixedSet(SParam.Fixed.begin(), SParam.Fixed.end());
 
@@ -239,12 +288,13 @@ public:
 
     for (size_t s = 0; s < SParam.Steps; s++) {
       SmoothPosSeparatrixStep(QuadVertPos, QuadFaces, Separatrices,
-                              SParam.FeatureLines, FixedSet, 5, SParam.Damp);
+                              SParam.FeatureLines, FixedSet, 1, SParam.Damp);
 
-      ReprojectIfNeeded(SParam, QuadVertPos, QuadFaces, TriGrid,ReprojectVertIdx, FeatureSegs,
-                          SegGrid);
+      ReprojectIfNeeded(SParam, QuadVertPos, QuadFaces, TriGrid,
+                        ReprojectVertIdx, FeatureSegs, SegGrid);
     }
-    // ReprojectIfNeeded(SParam, QuadVertPos, QuadFaces, TriGrid, ReprojectVertIdx,FeatureSegs,
+    // ReprojectIfNeeded(SParam, QuadVertPos, QuadFaces, TriGrid,
+    // ReprojectVertIdx,FeatureSegs,
     //                   SegGrid);
   }
 };

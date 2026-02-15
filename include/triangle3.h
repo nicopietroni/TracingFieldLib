@@ -32,13 +32,12 @@
 #include <iostream>
 #include <vector>
 
+#include "best_rotation.h"
 #include "line3.h"
 #include "plane3.h"
 #include "point3.h"
 #include "segment3.h"
 #include "triangle2.h"
-#include "best_rotation.h"
-
 
 namespace Geo {
 
@@ -71,16 +70,18 @@ public:
   // Equality operator
   bool operator==(const Traingle3<ScalarType> &other) const {
     // Check if all three vertices are equal
-    return ((Pos[0] == other.Pos[0]) && 
-            (Pos[1] == other.Pos[1]) &&
+    return ((Pos[0] == other.Pos[0]) && (Pos[1] == other.Pos[1]) &&
             (Pos[2] == other.Pos[2]));
   }
 
   // Less-than operator for use in std::set or std::map
   bool operator<(const Traingle3<ScalarType> &other) const {
-    if (Pos[0] != other.Pos[0]) return (Pos[0] < other.Pos[0]);
-    if (Pos[1] != other.Pos[1]) return (Pos[1] < other.Pos[1]);
-    if (Pos[2] != other.Pos[2]) return (Pos[2] < other.Pos[2]);
+    if (Pos[0] != other.Pos[0])
+      return (Pos[0] < other.Pos[0]);
+    if (Pos[1] != other.Pos[1])
+      return (Pos[1] < other.Pos[1]);
+    if (Pos[2] != other.Pos[2])
+      return (Pos[2] < other.Pos[2]);
     return false;
   }
 
@@ -88,7 +89,7 @@ public:
     ScalarType area = (Cross((P(1) - P(0)), (P(2) - P(0)))).Norm() / 2;
     return area;
   }
-  
+
   Traingle3(const CoordType &P0, const CoordType &P1, const CoordType &P2) {
     Pos[0] = P0;
     Pos[1] = P1;
@@ -206,16 +207,12 @@ void BarycentricCoords(const Traingle3<ScalarType> &T,
 }
 
 template <class ScalarType>
-void BarycentricCoords(const std::vector<Geo::Point3<ScalarType> > &VertPos,
-                       const std::vector<std::vector<int> > &Faces,
-                       const int IndexF,
-                       const Geo::Point3<ScalarType> &TestPos,
-                       ScalarType &alpha, 
-                       ScalarType &beta, 
-                       ScalarType &gamma)
-{
-  Traingle3<ScalarType> T=TriangleOfFace(VertPos,Faces,IndexF);
-  BarycentricCoords(T,TestPos,alpha,beta,gamma);
+void BarycentricCoords(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                       const std::vector<std::vector<int>> &Faces,
+                       const int IndexF, const Geo::Point3<ScalarType> &TestPos,
+                       ScalarType &alpha, ScalarType &beta, ScalarType &gamma) {
+  Traingle3<ScalarType> T = TriangleOfFace(VertPos, Faces, IndexF);
+  BarycentricCoords(T, TestPos, alpha, beta, gamma);
 }
 
 template <class ScalarType>
@@ -378,9 +375,24 @@ Point3<ScalarType> Normal(const Geo::Traingle3<ScalarType> &T) {
 
 template <class ScalarType>
 Point3<ScalarType> Barycenter(const Geo::Traingle3<ScalarType> &T) {
-  return ((T.P(0)+T.P(1)+T.P(2))/3);
+  return ((T.P(0) + T.P(1) + T.P(2)) / 3);
 }
 
+template <class ScalarType>
+void ClosestTris(const std::vector<Geo::Traingle3<ScalarType>> &Tris,
+                 const Geo::Point3<ScalarType> &TestPos,
+                 Geo::Point3<ScalarType> &ClosP, int &IndexT) {
+  ScalarType minD = std::numeric_limits<ScalarType>::max();
+  for (size_t i = 0; i < Tris.size(); i++) {
+    Geo::Point3<ScalarType> TestP = ClosestPoint<ScalarType>(Tris[i], TestPos);
+    ScalarType TestD = (TestP - TestPos).Norm();
+    if (TestD < minD) {
+      minD = TestD;
+      ClosP = TestP;
+      IndexT = i;
+    }
+  }
+}
 } // namespace Geo
 
 #endif

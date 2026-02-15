@@ -404,25 +404,25 @@ inline void VertValences(const std::vector<std::vector<int>> &Faces, const int N
     }
 }
 
-inline void SingularVertices(const std::vector<std::vector<int>> &Faces,
-                      const std::vector<bool> &BorderV,
-                      std::vector<int> &SingularVert) {
-  std::vector<int> VertValence;
-  VertValences(Faces, BorderV.size(), VertValence);
-  for (size_t i = 0; i < VertValence.size(); i++) {
-    if (BorderV[i] && (VertValence[i] > 2))
-      SingularVert.push_back(i);
-    if (!BorderV[i] && (VertValence[i] != 4))
-      SingularVert.push_back(i);
-  }
-}
+// inline void SingularVertices(const std::vector<std::vector<int>> &Faces,
+//                       const std::vector<bool> &BorderV,
+//                       std::vector<int> &SingularVert) {
+//   std::vector<int> VertValence;
+//   VertValences(Faces, BorderV.size(), VertValence);
+//   for (size_t i = 0; i < VertValence.size(); i++) {
+//     if (BorderV[i] && (VertValence[i] > 2))
+//       SingularVert.push_back(i);
+//     if (!BorderV[i] && (VertValence[i] != 4))
+//       SingularVert.push_back(i);
+//   }
+// }
 
-inline void SingularVertices(const std::vector<std::vector<int>> &Faces,
-                      std::vector<int> &SingularVert) {
-  std::vector<bool> BorderV;
-  Geo::getBorderVert(Faces, BorderV);
-  SingularVertices(Faces, BorderV, SingularVert);
-}
+// inline void SingularVertices(const std::vector<std::vector<int>> &Faces,
+//                       std::vector<int> &SingularVert) {
+//   std::vector<bool> BorderV;
+//   Geo::getBorderVert(Faces, BorderV);
+//   SingularVertices(Faces, BorderV, SingularVert);
+// }
 
 enum MType { MT_Triangle, MT_Tetra, MT_Other };
 
@@ -1267,24 +1267,52 @@ inline int PolyMeshGenus(int NVert, int nEdges, int NFaces, int NHoles,
 //   return EdgeSet.size();
 // }
 
+// inline int NumEdges(const std::vector<std::vector<int>> &Connectivity) {
+//   std::unordered_set<uint64_t> EdgeSet;
+
+//   for (const auto &face : Connectivity) {
+//     int sizeF = static_cast<int>(face.size());
+//     for (int j = 0; j < sizeF; ++j) {
+//       int v0 = face[j];
+//       int v1 = face[(j + 1) % sizeF];
+//       int minV = std::min(v0, v1);
+//       int maxV = std::max(v0, v1);
+
+//       uint64_t edgeKey =
+//           (static_cast<uint64_t>(minV) << 32) | static_cast<uint32_t>(maxV);
+//       EdgeSet.insert(edgeKey);
+//     }
+//   }
+
+//   return static_cast<int>(EdgeSet.size());
+// }
+
 inline int NumEdges(const std::vector<std::vector<int>> &Connectivity) {
-  std::unordered_set<uint64_t> EdgeSet;
+  std::vector<uint64_t> edges;
+  
+  size_t estimatedEdges = 0;
+  for (const auto &f : Connectivity)
+    estimatedEdges += f.size();
+
+  edges.reserve(estimatedEdges);
 
   for (const auto &face : Connectivity) {
     int sizeF = static_cast<int>(face.size());
     for (int j = 0; j < sizeF; ++j) {
       int v0 = face[j];
       int v1 = face[(j + 1) % sizeF];
-      int minV = std::min(v0, v1);
-      int maxV = std::max(v0, v1);
 
-      uint64_t edgeKey =
-          (static_cast<uint64_t>(minV) << 32) | static_cast<uint32_t>(maxV);
-      EdgeSet.insert(edgeKey);
+      uint64_t minV = std::min(v0, v1);
+      uint64_t maxV = std::max(v0, v1);
+
+      edges.push_back((minV << 32) | maxV);
     }
   }
 
-  return static_cast<int>(EdgeSet.size());
+  std::sort(edges.begin(), edges.end());
+  auto last = std::unique(edges.begin(), edges.end());
+
+  return static_cast<int>(std::distance(edges.begin(), last));
 }
 
 template <class ScalarType>

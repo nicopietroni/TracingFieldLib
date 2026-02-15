@@ -332,18 +332,24 @@ template <class ScalarType> class MeshPatchDecomposition {
   // }
 
   void InitializeData() {
-    std::cout << "*** INITIALIZATION *** " << std::endl;
+   
+    if (print_info)
+      std::cout << "*** INITIALIZATION *** " << std::endl;
     InitMesh();
     InitField();
 
-    std::cout << "*** REFINE AND SPLIT *** " << std::endl;
+    if (print_info)
+      std::cout << "*** REFINE AND SPLIT *** " << std::endl;
+    
     auto start = std::chrono::high_resolution_clock::now();
     PreprocessMesh();
     auto end0 = std::chrono::high_resolution_clock::now();
     auto elapsed0 =
         std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
+        
+    if (print_info)
+       std::cout << "*** INIT GRAPHS *** " << std::endl;
 
-    std::cout << "*** INIT GRAPHS *** " << std::endl;
     InitGraph();
 
     InitPatches();
@@ -375,6 +381,7 @@ public:
   bool single_sing_cond;
   bool match_sing_cond;
   bool split_removal;
+  bool print_info;
   int MinSides;
   int MaxSides;
   ScalarType CCAbility;
@@ -478,7 +485,8 @@ public:
     match_sing_cond = true;
     prefer_feature_features = true;
     split_removal = false;
-
+    print_info = false;
+    
     MinSides = 3;
     MaxSides = 6;
     CCAbility = -1;

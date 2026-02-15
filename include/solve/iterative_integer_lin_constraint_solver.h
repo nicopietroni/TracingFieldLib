@@ -54,7 +54,7 @@ public:
   enum FixOrderType { ST_ClosestInt, ST_LowError, ST_StQRPivoting };
   // SolveType SType;
   FixOrderType FOrdType;
-
+  bool print_info;
 private:
   std::vector<int> MinValue, MaxValue;
   std::vector<int> SoftMinValue, SoftMaxValue, OptValues;
@@ -408,7 +408,8 @@ public:
   }
 
   void Solve(std::vector<int> &Solution) {
-    PrintUsedMethod();
+    if (print_info)
+      PrintUsedMethod();
 
     bool completed = false;
     std::vector<ScalarType> Float_Solution;
@@ -435,6 +436,7 @@ public:
     // PrioritizeMinVal = true;
     MaxSoftW = 2;
     SoftIncreaseW = 0.2;
+    print_info = false;
   }
 };
 

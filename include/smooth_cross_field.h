@@ -59,7 +59,8 @@ void ComputeCurvatureField(
     const std::vector<Geo::Point3<ScalarType>> &VertNormals,
     std::vector<Field::CrossF<ScalarType>> &VertCurv,
     std::vector<Field::CrossF<ScalarType>> &FaceCurv, const size_t Nring = 3,
-    bool weightByAnisotropy = true) {
+    bool weightByAnisotropy = true,
+    bool print_info = false) {
   const ScalarType Eps = 0.00000001;
   Eigen::MatrixXi F;
   typename EigenInterface<ScalarType>::MatrixXm Vf;
@@ -68,7 +69,9 @@ void ComputeCurvatureField(
   EigenInterface<ScalarType>::GetTriMeshData(VertPos, Faces, F, Vf);
   Eigen::MatrixXd V = Vf.template cast<double>();
 
-  std::cout << "..Computing Curvature Directions" << std::endl;
+  if (print_info)
+    std::cout << "..Computing Curvature Directions" << std::endl;
+
   igl::principal_curvature(V, F, PD1, PD2, PV1, PV2, Nring, true);
 
   // then copy curvature per vertex
@@ -124,23 +127,33 @@ void ComputeCurvatureField(
   }
 
   // make the directions order coherent with normal orientation
-  std::cout << "..Make Vert Cross Coherent with Normals" << std::endl;
+  if (print_info)
+    std::cout << "..Make Vert Cross Coherent with Normals" << std::endl;
+  
   MakeDirectionNormalCoherent<ScalarType>(VertNormals, VertCurv);
 
   // compute the anisotropy
-  std::cout << "..Init Quality as Anisotropy on Vert" << std::endl;
+  if (print_info)
+    std::cout << "..Init Quality as Anisotropy on Vert" << std::endl;
+
   InitCrossFieldQualityAsAnisotropy<ScalarType>(VertCurv, 0);
 
-  std::cout << "..Set Face Cross From Vert" << std::endl;
+  if (print_info)
+    std::cout << "..Set Face Cross From Vert" << std::endl;
+
   SetFaceCrossVectorFromVert<ScalarType>(Faces, FacesNormals, VertCurv,
                                          FaceCurv, weightByAnisotropy);
 
   // compute the anisotropy
-  std::cout << "..Init Quality as Anisotropy on Faces" << std::endl;
+  if (print_info)
+    std::cout << "..Init Quality as Anisotropy on Faces" << std::endl;
+
   InitCrossFieldQualityAsAnisotropy<ScalarType>(FaceCurv, 0);
 
   // make the directions order coherent with normal orientation
-  std::cout << "..Make Face Cross Coherent with Normals" << std::endl;
+  if (print_info)
+    std::cout << "..Make Face Cross Coherent with Normals" << std::endl;
+
   MakeDirectionNormalCoherent<ScalarType>(FacesNormals, FaceCurv);
 
   for (size_t i = 0; i < FaceCurv.size(); i++) {

@@ -71,6 +71,16 @@ int FindVertCorrespondences(
   return Mapped;
 }
 
+// //non bijective version
+// template <class ScalarType>
+// int FindVertCorrespondences(
+//     const std::vector<Geo::Point3<ScalarType>> &FromVert,
+//     const std::vector<Geo::Point3<ScalarType>> &ToVert,
+//     std::vector<std::vector<int>> &VerteMap)
+// {
+  
+// }
+
 template <class ScalarType>
 int FindFacesCorrespondences(
     const std::vector<Geo::Point3<ScalarType>> &FromVert,

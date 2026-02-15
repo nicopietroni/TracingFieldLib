@@ -40,8 +40,9 @@
 #include <iostream>
 #include <iterator>
 #include <set>
-//#include <sys/_types/_size_t.h>
-#include <cstddef>   // C++
+// #include <sys/_types/_size_t.h>
+#include <cstddef> // C++
+#include <tangent_space_smooth.h>
 #include <utility>
 #include <vector>
 
@@ -761,7 +762,7 @@ public:
           continue;
         ToSplitE.push_back(KeyE1);
       }
-    std::cout << "To split: " << ToSplitE.size() << std::endl;
+    // std::cout << "To split: " << ToSplitE.size() << std::endl;
     std::vector<ScalarType> Alpha(ToSplitE.size(), 0.5);
     RefineMesh<ScalarType>::SplitTriangleFaces(Pos3D, Faces, ToSplitE, Alpha);
   }
@@ -773,7 +774,7 @@ public:
                        const std::vector<std::pair<int, int>> &FeatureE,
                        std::vector<int> &DisconnVert,
                        std::vector<Geo::Point3<ScalarType>> &DisconnDir,
-                       ScalarType max_angle = 45) {
+                       ScalarType max_angle = 45, bool print_info = false) {
     std::vector<int> OldVindex;
     std::vector<Geo::Point3<ScalarType>> Pos3DSplit = Pos3D;
     std::vector<std::vector<int>> FacesSplit = Faces;
@@ -810,8 +811,10 @@ public:
       DisconnVert.push_back(IndexV);
       DisconnDir.push_back(Dir3D);
     }
-    std::cout << "Found " << DisconnVert.size() << " disconnected nodes"
-              << std::endl;
+    if (print_info) {
+      std::cout << "Found " << DisconnVert.size() << " disconnected nodes"
+                << std::endl;
+    }
   }
 
   static void RefineWideAngles(std::vector<Geo::Point3<ScalarType>> &Pos3D,
@@ -850,21 +853,20 @@ public:
       }
     }
     RefineMesh<ScalarType>::SplitTriangleFaces(Pos3D, Faces, To_splitE,
-                                               To_splitPos, FeatureE,
-                                               OldF);
+                                               To_splitPos, FeatureE, OldF);
   }
 
 public:
-
-  static void RefineForFieldComputation(std::vector<Geo::Point3<ScalarType>> &Pos3D,
-                                  std::vector<std::vector<int>> &Faces,
-                                  std::vector<std::pair<int, int>> &FeatureE,
-                                  bool splitAllFedge = true,
-                                  bool final_smooth_new_v=false) {
+  static void
+  RefineForFieldComputation(std::vector<Geo::Point3<ScalarType>> &Pos3D,
+                            std::vector<std::vector<int>> &Faces,
+                            std::vector<std::pair<int, int>> &FeatureE,
+                            bool splitAllFedge = true,
+                            bool final_smooth_new_v = false) {
     std::vector<ScalarType> Angles;
     Angles.push_back(135);
     Angles.push_back(225);
-    
+
     // make sure the features are in the right order
     for (size_t i = 0; i < FeatureE.size(); i++) {
       if (FeatureE[i].first < FeatureE[i].second)
@@ -880,7 +882,7 @@ public:
                            To_splitPos[1]);
     GetInternalVertBorderN(Pos3D, Faces, FeatureE, To_splitE[2],
                            To_splitPos[2]);
-   
+
     // add the first one
     std::vector<std::pair<int, int>> AllSplitE = To_splitE[0];
     std::vector<Geo::Point3<ScalarType>> AllSplitPos = To_splitPos[0];
@@ -974,11 +976,11 @@ public:
       }
     }
     // then split
-    int VNum0=Pos3D.size();
+    int VNum0 = Pos3D.size();
     std::vector<int> OldF;
     RefineMesh<ScalarType>::SplitTriangleFaces(Pos3D, Faces, AllSplitE,
-                                               AllSplitPos,OldF);
-    
+                                               AllSplitPos, OldF);
+
     // update the features
     FeatureE.clear();
     for (size_t i = 0; i < Faces.size(); i++) {
@@ -1008,9 +1010,10 @@ public:
     RemoveDuplicatedVert(Pos3D, Faces);
     RemoveUnfererencedVert(Pos3D, Faces);
 
-    if (!final_smooth_new_v)return;
-    int VNum1=Pos3D.size();
-      typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam SmParam;
+    if (!final_smooth_new_v)
+      return;
+    int VNum1 = Pos3D.size();
+    typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam SmParam;
     for (size_t i = VNum0; i < VNum1; i++)
       SmParam.SmoothOnly.push_back(i);
 
@@ -1026,36 +1029,36 @@ public:
                       std::vector<std::vector<int>> &Faces,
                       std::vector<Field::CrossF<ScalarType>> &FaceCurv,
                       std::vector<std::pair<int, int>> &FeatureE,
-                      ScalarType max_angle = 45) {
+                      ScalarType max_angle = 45, bool print_info = false) {
 
     std::vector<int> DisconnVert;
     std::vector<Geo::Point3<ScalarType>> DisconnDir;
     FindNonConnectedVert(Pos3D, Faces, FaceCurv, FeatureE, DisconnVert,
                          DisconnDir, max_angle);
     std::vector<int> OldF;
-    RefineWideAngles(Pos3D, Faces, FeatureE, DisconnVert,OldF, max_angle);
-    assert(OldF.size()==Faces.size());
+    RefineWideAngles(Pos3D, Faces, FeatureE, DisconnVert, OldF, max_angle);
+    assert(OldF.size() == Faces.size());
 
-    //then upcate the cross field
+    // then upcate the cross field
     std::vector<Field::CrossF<ScalarType>> NewFaceCurv;
-    for (size_t i=0;i<Faces.size();i++)
-    {
-      int IndexOldF=OldF[i];
-      assert(IndexOldF>=0);
-      assert(IndexOldF<FaceCurv.size());
+    for (size_t i = 0; i < Faces.size(); i++) {
+      int IndexOldF = OldF[i];
+      assert(IndexOldF >= 0);
+      assert(IndexOldF < FaceCurv.size());
       NewFaceCurv.push_back(FaceCurv[IndexOldF]);
     }
-    //then update centroids of 
-    FaceCurv=NewFaceCurv;
-    UpdateFaceCrossPositionFromMesh(Pos3D,Faces,FaceCurv);
+    // then update centroids of
+    FaceCurv = NewFaceCurv;
+    UpdateFaceCrossPositionFromMesh(Pos3D, Faces, FaceCurv);
 
-    std::cout << "Refined: " << DisconnVert.size() << " disconnected vert"
-              << std::endl;
+    if (print_info) {
+      std::cout << "Refined: " << DisconnVert.size() << " disconnected vert"
+                << std::endl;
+    }
 
     std::sort(FeatureE.begin(), FeatureE.end());
     auto last = std::unique(FeatureE.begin(), FeatureE.end());
     FeatureE.erase(last, FeatureE.end());
-
   }
 };
 } // namespace Geo

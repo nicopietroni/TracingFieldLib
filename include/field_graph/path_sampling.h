@@ -103,6 +103,7 @@ public:
   bool only_visible;
   bool avoidSingularities;
   bool distanceSingularities;
+  bool print_info;
   bool UniformWDist;
   int MaxCrossJump;
   std::vector<std::vector<int>> SampledPaths;
@@ -1195,8 +1196,11 @@ private:
     SampledPaths.clear();
     SampledPathsLenghtW.clear();
 
-    std::cout << "Sampling starting Nodes" << std::endl;
-    std::cout << "Target Samples " << NumSamples << std::endl;
+    if (print_info)
+    {
+      std::cout << "Sampling starting Nodes" << std::endl;
+      std::cout << "Target Samples " << NumSamples << std::endl;
+    }
     // auto t0 = std::chrono::high_resolution_clock::now();
 
     // sample the initial vertices
@@ -1221,8 +1225,12 @@ private:
         std::unique(SampledVert.begin(), SampledVert.end());
     SampledVert.erase(last, SampledVert.end());
 
-    std::cout << "Sampling on " << SampledVert.size() << " Vertices"
-              << std::endl;
+    if (print_info)
+    {
+      std::cout << "Sampling on " << SampledVert.size() << " Vertices"
+                << std::endl;
+    }
+
     // exit(0);
     //  FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
     FindSampledNodesFromVertex(SampledVert, StartingNodes);
@@ -1244,8 +1252,11 @@ private:
     GetArrivalNodes(ArrivalNodes);
 
     // std::unordered_set<int> SampledNodes;
+    if (print_info)
+    {
     std::cout << "There are " << StartingNodes.size() << " starting nodes"
               << std::endl;
+    }
 
     // for (size_t i=0;i<FilterDisableN.size();i++)
     TGraph.EnableNodes(FilterDisableN);
@@ -1272,11 +1283,14 @@ private:
     SampledPaths_Status.clear();
     SampledPaths_Status.resize(SampledPaths.size(), SP_Evaluate);
 
-    std::cout << "Sampled " << SampledPaths.size() << " Paths" << std::endl;
-    std::cout << "self intersected " << self_intersected << std::endl;
-    std::cout << "Non traced " << non_traced << std::endl;
-    std::cout << "Non direct " << non_direct << std::endl;
-    std::cout << "max jump " << max_jump << std::endl;
+    if (print_info)
+    {
+      std::cout << "Sampled " << SampledPaths.size() << " Paths" << std::endl;
+      std::cout << "self intersected " << self_intersected << std::endl;
+      std::cout << "Non traced " << non_traced << std::endl;
+      std::cout << "Non direct " << non_direct << std::endl;
+      std::cout << "max jump " << max_jump << std::endl;
+    }
     // std::cout << "redundant " << redundant << std::endl;
 
     // std::cout << "Sampling Nodes Time: " << TimeSampling << std::endl;
@@ -2466,7 +2480,9 @@ public:
   }
 
   void RestoreNodeType() {
-    std::cout << "Restoring nodes:" << SwapNodeType.size() << std::endl;
+    if (print_info)
+      std::cout << "Restoring nodes:" << SwapNodeType.size() << std::endl;
+    
     for (size_t i = 0; i < SwapNodeType.size(); i++) {
       int IndexN = SwapNodeType[i].first;
       NType TypeNode = SwapNodeType[i].second;
@@ -2905,6 +2921,7 @@ public:
     distanceSingularities = false;
     dynamicUpdates = true;
     updatePatches = true;
+    print_info = false;
     // orthoBorderDist=true;
     NumSamples = 1000;
     minSingResample = 8;
