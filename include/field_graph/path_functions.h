@@ -43,9 +43,10 @@
 #include <iostream>
 #include <list>
 #include <set>
-//#include <sys/_types/_size_t.h>
-#include <cstddef>   // C++
+// #include <sys/_types/_size_t.h>
+#include <cstddef> // C++
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace Geo {
@@ -231,12 +232,12 @@ public:
       bool connected = ConnectDirect(TGraph, IndexN0, IndexN1, DirectPath);
       if (!connected) {
         if (UpdateArc) {
-          if (TGraph.ActiveArcNodes(IndexN0,IndexN1))
+          if (TGraph.ActiveArcNodes(IndexN0, IndexN1))
             TGraph.DectivateArc(IndexN0, IndexN1);
           int OppN1 = Field::CrossFieldGraph::OppositeNodeCrossField(IndexN1);
           int OppN0 = Field::CrossFieldGraph::OppositeNodeCrossField(IndexN0);
-          if (TGraph.ActiveArcNodes(OppN1,OppN0))
-          TGraph.DectivateArc(OppN1, OppN0);
+          if (TGraph.ActiveArcNodes(OppN1, OppN0))
+            TGraph.DectivateArc(OppN1, OppN0);
         }
         return false;
       }
@@ -662,6 +663,45 @@ public:
       }
   }
 
+  // static void FindTPathWithIncidentTJunction(const
+  // std::vector<std::vector<int>> &PathNodes,
+  //                                            std::vector<int>
+  //                                            &PathWithTJunction) {
+  //   PathWithTJunction.clear();
+  //   //first get all end and start points of the path
+  //   std::set<std::pair<int, int>> EndOrthoNodes;
+  //   for (size_t i = 0; i < PathNodes.size(); i++) {
+  //     if (PathNodes[i].size() < 2)
+  //       continue;
+  //     if (IsLoop(PathNodes[i]))continue;
+  //     int N0 = PathNodes[i][0];
+  //     int NEnd = PathNodes[i].back();
+  //     //get the orthogonal nodes to the start and end to check if some
+  //     intersect std::vector<int> EndOrthoNodes0, EndOrthoNodes1;
+  //     Field::CrossFieldGraph::OrthoNodesCrossField(N0, EndOrthoNodes0);
+  //     Field::CrossFieldGraph::OrthoNodesCrossField(NEnd, EndOrthoNodes1);
+  //     for (size_t j = 0; j < EndOrthoNodes0.size(); j++) {
+  //     EndOrthoNodes.insert(EndOrthoNodes1.begin(), EndOrthoNodes1.end());
+  //   }
+  //   if (EndOrthoNodes.size() == 0)
+  //     return;
+
+  //   //then search if some path has Tjunctions
+  //   for (size_t i = 0; i < PathNodes.size(); i++) {
+  //     if (PathNodes[i].size() < 2)
+  //       continue;
+  //     for (size_t j = 0; j < PathNodes[i].size(); j++) {
+  //       int TestN = PathNodes[i][j];
+  //       if (EndOrthoNodes.count(TestN) > 0)
+  //       {
+  //         PathWithTJunction.push_back(i);
+  //         break;
+  //       }
+  //     }
+  //   }
+  //   PathWithTJunction.clear();
+  // }
+
   static void FindTJunctions(const std::vector<std::vector<int>> &Paths,
                              std::vector<TJunction> &TJunctions) {
     std::vector<int> EdgePathIdx;
@@ -744,6 +784,197 @@ public:
       assert(VT != -1);
       TJunctions.push_back(TJunction(V, V0, V1, VT));
     }
+  }
+
+  // static void FindTPathWithIncidentTJunction(const
+  // std::vector<std::vector<int>> &PathNodes,
+  //                                            std::vector<int>
+  //                                            &PathWithTJunction) {
+
+  //   //first find vertices with possible T-junctions
+  //   std::vector<std::vector<int> > VertPaths;
+  //   for (size_t i=0;i<PathNodes.size();i++)
+  //   {
+  //     if (PathNodes[i].size() < 2)
+  //       continue;
+  //     std::vector<int> CurrVertPath;
+  //     Field::CrossFieldGraph::ElemsOfNode(PathNodes[i],CurrVertPath);
+  //     VertPaths.push_back(CurrVertPath);
+  //   }
+
+  //   std::vector<TJunction> VertTJunctions;
+  //   FindTJunctions(VertPaths, VertTJunctions);
+
+  //   //then set the vertex with T-junctions as possible candidates to check
+  //   std::set<int> TJunctionVertices;
+  //   for (size_t i=0;i<VertTJunctions.size();i++)
+  //     TJunctionVertices.insert(VertTJunctions[i].V);
+
+  //   PathWithTJunction.clear();
+  //   std::set<int> EndOrthoNodes;
+  //   for (size_t i = 0; i < PathNodes.size(); i++) {
+  //     if (PathNodes[i].size() < 2)
+  //       continue;
+  //     if (IsLoop(PathNodes[i]))continue;
+  //     int N0 = PathNodes[i][0];
+  //     int NEnd = PathNodes[i].back();
+
+  //     int VertN0 = Field::CrossFieldGraph::ElemOfNode(N0);
+  //     int VertNEnd = Field::CrossFieldGraph::ElemOfNode(NEnd);
+
+  //     //get the orthogonal nodes to the start and end to check if some
+  //     intersect std::vector<int> EndOrthoNodes0, EndOrthoNodes1; if
+  //     (TJunctionVertices.count(VertN0) > 0)
+  //     {
+  //       Field::CrossFieldGraph::OrthoNodesCrossField(N0, EndOrthoNodes0);
+  //       EndOrthoNodes.insert(EndOrthoNodes0.begin(), EndOrthoNodes0.end());
+  //     }
+  //     if (TJunctionVertices.count(VertNEnd) > 0)
+  //     {
+  //       Field::CrossFieldGraph::OrthoNodesCrossField(NEnd, EndOrthoNodes1);
+  //       EndOrthoNodes.insert(EndOrthoNodes1.begin(), EndOrthoNodes1.end());
+  //     }
+  //   }
+  //   if (EndOrthoNodes.size() == 0)
+  //     return;
+
+  //   //then search if some path has Tjunctions
+  //   for (size_t i = 0; i < PathNodes.size(); i++) {
+  //     if (PathNodes[i].size() < 2)
+  //       continue;
+  //     for (size_t j = 0; j < PathNodes[i].size(); j++) {
+  //       int TestN = PathNodes[i][j];
+  //       int TestV = Field::CrossFieldGraph::ElemOfNode(TestN);
+  //       if (TJunctionVertices.count(TestV) == 0)
+  //         continue;
+  //       if (EndOrthoNodes.count(TestV) > 0)
+  //       {
+  //         PathWithTJunction.push_back(i);
+  //         break;
+  //       }
+  //     }
+  //   }
+
+  // }
+
+  static void
+  FindTPathWithIncidentTJunction(const std::vector<std::vector<int>> &PathNodes,
+                                 std::vector<int> &PathWithTJunction) {
+
+    //for each pair of vertices the path on it
+    std::map<std::pair<int,int>,int> EdgePath;
+
+    for (size_t i = 0; i < PathNodes.size(); i++) {
+      if (PathNodes[i].size() < 2)
+        continue;
+
+      std::vector<int> VertIdx;
+      Field::CrossFieldGraph::ElemsOfNode(PathNodes[i],VertIdx);
+    
+      for (size_t j = 0; j < VertIdx.size()-1; j++) {
+        int V0 = VertIdx[j];
+        int V1 = VertIdx[j+1];
+        std::pair<int,int> Edge = std::make_pair(std::min(V0, V1), std::max(V0, V1));
+        EdgePath[Edge] = i;
+      }
+    }
+
+    //then get the vertices with 3 edges and at 2 path indees
+    std::map<int,std::vector<int>> VertexCountPath;
+    for (auto it=EdgePath.begin(); it!=EdgePath.end(); it++)    {
+      int V0 = it->first.first;
+      int V1 = it->first.second;
+      int PathIdx = it->second;
+      VertexCountPath[V0].push_back(PathIdx);
+      VertexCountPath[V1].push_back(PathIdx);
+    }
+
+    //then get the possible T-junction paths where in one vertes it appears 2 time and the other only one time
+    PathWithTJunction.clear();
+    for (auto it=VertexCountPath.begin(); it!=VertexCountPath.end(); it++)    {
+      int V = it->first;
+
+      //if there are not three intersections cannot be a T-junction
+      if (it->second.size() != 3) 
+        continue;
+
+      std::set<int> PathIdxSet(it->second.begin(), it->second.end());
+      //if there are not two different paths cannot be a T-junction
+      if (PathIdxSet.size() != 2)
+        continue;
+
+      //then get the one appearing two times and that is the one if orthogonal to the other one
+      std::vector<int> PathIdxVec(it->second.begin(), it->second.end());
+      int PathIdx0 = PathIdxVec[0];
+      int PathIdx1 = PathIdxVec[1];
+      int PathIdx2 = PathIdxVec[2];
+
+      if ((PathIdx0 == PathIdx1)||(PathIdx0 == PathIdx2)) {
+          PathWithTJunction.push_back(PathIdx0);
+          continue;
+      }
+
+      if ((PathIdx1 == PathIdx0)||(PathIdx1 == PathIdx2)) {
+          PathWithTJunction.push_back(PathIdx1);
+          continue;
+      }
+
+      if ((PathIdx2 == PathIdx0)||(PathIdx2 == PathIdx1)) {
+          PathWithTJunction.push_back(PathIdx2);
+          continue;
+      }
+    }
+    std::sort(PathWithTJunction.begin(), PathWithTJunction.end());
+    PathWithTJunction.erase(std::unique(PathWithTJunction.begin(), PathWithTJunction.end()), PathWithTJunction.end());
+
+    // PathWithTJunction.clear();
+    // std::set<int> EndOrthoNodes;
+    // for (size_t i = 0; i < PathNodes.size(); i++) {
+    //   if (PathNodes[i].size() < 2)
+    //     continue;
+    //   if (IsLoop(PathNodes[i]))
+    //     continue;
+    //   int N0 = PathNodes[i][0];
+    //   int NEnd = PathNodes[i].back();
+
+    //   // int VertN0 = Field::CrossFieldGraph::ElemOfNode(N0);
+    //   // int VertNEnd = Field::CrossFieldGraph::ElemOfNode(NEnd);
+
+    //   // get the orthogonal nodes to the start and end to check if some
+    //   // intersect
+    //   std::vector<int> EndOrthoNodes0, EndOrthoNodes1;
+
+    //   Field::CrossFieldGraph::OrthoNodesCrossField(N0, EndOrthoNodes0);
+    //   EndOrthoNodes.insert(EndOrthoNodes0.begin(), EndOrthoNodes0.end());
+
+    //   Field::CrossFieldGraph::OrthoNodesCrossField(NEnd, EndOrthoNodes1);
+    //   EndOrthoNodes.insert(EndOrthoNodes1.begin(), EndOrthoNodes1.end());
+    // }
+
+    // if (EndOrthoNodes.size() == 0)
+    //   return;
+
+    // // then search if some path has Tjunctions
+    // for (size_t i = 0; i < PathNodes.size(); i++) {
+    //   if (PathNodes[i].size() < 2)
+    //     continue;
+    //   bool isLoop = IsLoop(PathNodes[i]);
+    //   int startIdx=0;
+    //   int endIdx=PathNodes[i].size();
+    //   if (isLoop){
+    //     startIdx++;
+    //     endIdx--;
+    //   }
+    //   for (size_t j = startIdx; j < endIdx; j++) {
+    //     int TestN = PathNodes[i][j];
+    //     int TestV = Field::CrossFieldGraph::ElemOfNode(TestN);
+       
+    //     if (EndOrthoNodes.count(TestV) > 0) {
+    //       PathWithTJunction.push_back(i);
+    //       break;
+    //     }
+    //   }
+    // }
   }
 
   static void FindCorners(const std::vector<Geo::Point3<ScalarType>> &Pos,

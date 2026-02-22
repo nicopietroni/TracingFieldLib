@@ -156,24 +156,44 @@ template <class ScalarType> class MeshQuadrangulator {
                              TriCornersIdx);
   }
 
+  // void InitConditions() {
+  //   PDeco.ClearConditions();
+  //   // if (single_boundary_cond)
+  //   PDeco.AddCondition(new Geo::SingleBoundaryCondition<ScalarType>());
+  //   // if (disk_like_cond)
+  //   PDeco.AddCondition(new Geo::DiskLikeCondition<ScalarType>());
+  //   // if (self_connection_cond)
+  //   PDeco.AddCondition(new Geo::SelfConnectingPatchCondition<ScalarType>());
+  //   // if (single_sing_cond)
+  //   //   PDeco.AddCondition(new Geo::SingleSingularityCondition<ScalarType>());
+  //   // if (match_sing_cond)
+  //   PDeco.AddCondition(new Geo::MathchSingularityCondition<ScalarType>());
+  //   // if ((MinSides > 0) || (MaxSides > 0)) {
+  //   PDeco.AddCondition(new Geo::NumSidesCondition<ScalarType>());
+
+  //   if (CCAbility > 0)
+  //     PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(CCAbility));
+  // }
+
   void InitConditions() {
     PDeco.ClearConditions();
-    // if (single_boundary_cond)
-    PDeco.AddCondition(new Geo::SingleBoundaryCondition<ScalarType>());
-    // if (disk_like_cond)
-    PDeco.AddCondition(new Geo::DiskLikeCondition<ScalarType>());
-    // if (self_connection_cond)
-    PDeco.AddCondition(new Geo::SelfConnectingPatchCondition<ScalarType>());
-    // if (single_sing_cond)
-    //   PDeco.AddCondition(new Geo::SingleSingularityCondition<ScalarType>());
-    // if (match_sing_cond)
     PDeco.AddCondition(new Geo::MathchSingularityCondition<ScalarType>());
     // if ((MinSides > 0) || (MaxSides > 0)) {
     PDeco.AddCondition(new Geo::NumSidesCondition<ScalarType>());
 
     if (CCAbility > 0)
       PDeco.AddCondition(new Geo::CCabilityCondition<ScalarType>(CCAbility));
-  }
+
+    // if (single_boundary_cond)
+    PDeco.AddCondition(new Geo::SingleBoundaryCondition<ScalarType>());
+    // if (self_connection_cond)
+    PDeco.AddCondition(new Geo::SelfConnectingPatchCondition<ScalarType>());
+    // if (disk_like_cond)
+    PDeco.AddCondition(new Geo::DiskLikeCondition<ScalarType>());
+     // if (single_sing_cond)
+    //   PDeco.AddCondition(new Geo::SingleSingularityCondition<ScalarType>());
+    // if (match_sing_cond)
+    }
 
   void InitPatches() {
     // initialize patches corners
@@ -566,16 +586,29 @@ template <class ScalarType> class MeshQuadrangulator {
     SParamQuadSmooth.ReprojVert = &TriVertPos0;
     SParamQuadSmooth.ReprojFaces = &TriConnectivity0;
     SParamQuadSmooth.Damp = 0.5;
-    SParamQuadSmooth.post_project = !(has_problematic_patches);
+
+    if (reliable_smooth)
+      SParamQuadSmooth.post_project = !(has_problematic_patches);
+    else
+      SParamQuadSmooth.post_project = false;
+
     SParamQuadSmooth.NumIte = QuadSmoothSteps;
-    SParamQuadSmooth.SType = Geo::SMBestPoly;//Geo::SMCentroid;//Geo::SMBestPoly;//Geo::SMLaplacian;//Geo::SMTaubin;/
+    if (reliable_smooth)
+      SParamQuadSmooth.SType = Geo::SMBestPoly;
+    else
+      SParamQuadSmooth.SType = Geo::SMCentroid;
+    //Geo::SMCentroid;//Geo::SMBestPoly;//Geo::SMLaplacian;//Geo::SMTaubin;/
+    
     SParamQuadSmooth.line_border=true;
     SParamQuadSmooth.check_AspectR = false;
     SParamQuadSmooth.line_neight_features=false;
-    SParamQuadSmooth.reproject_voronoi_partition = true;
+    SParamQuadSmooth.reproject_voronoi_partition = reliable_smooth;
     SParamQuadSmooth.check_multi_pass_fold = false;
+
     SetFixQuadVertices(SParamQuadSmooth);
     Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
+
+    if (!reliable_smooth)return;
 
     SParamQuadSmooth.SType =Geo::SMCentroid;
     SParamQuadSmooth.reproject_voronoi_partition = true;
@@ -622,7 +655,8 @@ public:
   bool dynamicUpdates;
   int num_samples;
   bool print_info;
-
+  bool reliable_smooth;
+  
   MeshQuadrangulator(std::vector<Geo::Point3<ScalarType>> &_TriVertPos,
                      std::vector<std::vector<int>> &_TriConnectivity,
                      std::vector<Field::CrossF<ScalarType>> &_FaceCurv,
@@ -660,12 +694,14 @@ public:
     has_problematic_patches = false;
 
     print_info = false;
+    reliable_smooth = true;
   }
 
   void Init() {
     Q_LUT.Initialize();
     InitDefaultDualParameters();
     has_problematic_patches = false;
+    PatchM.UpdateVisual=false;
   }
 
   void ExtractQuad(std::vector<std::pair<int, int>> &_TriFeatures) {

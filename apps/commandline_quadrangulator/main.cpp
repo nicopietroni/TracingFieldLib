@@ -36,6 +36,8 @@
 // #include <point2.h>
 #include "IO/io_features.h"
 #include "IO/io_field.h"
+#include "mesh_functions.h"
+#include "plane3.h"
 #include <IO/io_obj.h>
 #include <point3.h>
 
@@ -73,12 +75,15 @@ std::vector<int> SingIndex, SingValue;
 bool has_loaded_mesh = false;
 bool has_cross_field = false;
 bool has_features = false;
+bool to_split_symmetry = false;
 
 ScalarType QuadSize;
 std::vector<Geo::Point3<ScalarType>> QuadVert;
 std::vector<std::vector<int>> QuadFaces;
 
 ScalarType SizeMult=1.0;
+
+Geo::Plane3<ScalarType> SymmetryPlane;
 
 bool LoadMesh(const std::string &path) {
   //    oss<<"Loading "<<path.c_str()<<std::endl;
@@ -286,6 +291,19 @@ void SaveMesh() {
   WriteOBJ(RemFile, QuadVert, QuadFaces);
 }
 
+void SplitSymmetry()
+{
+  Geo::Point3<ScalarType> Center(0, 0, 0); // MeshBox.Center();
+  Geo::Point3<ScalarType> Dir(1, 0, 0);
+  SymmetryPlane.Init(Center, Dir);
+
+  RefineMesh<ScalarType>::SplitMeshWithPlane(TriVertPos, TriConnectivity,
+                                             SymmetryPlane);
+  RemoveFacesOnNegativeSide<ScalarType>(TriVertPos, TriConnectivity, SymmetryPlane);
+  
+  //WriteOBJ("split.obj", TriVertPos, TriConnectivity); 
+}
+
 int main(int argc, char *argv[]) {
   std::stringstream commandLineStr;
 
@@ -334,15 +352,39 @@ int main(int argc, char *argv[]) {
 
     if (std::string(argv[i]) == std::string("-angle")) {
       initial_feature_angle = static_cast<ScalarType>(std::stod(argv[i + 1]));
+      std::cout << "Initial Feature Angle: " << initial_feature_angle
+                << std::endl;
+      continue;
     }
 
     if (std::string(argv[i]) == std::string("-size")) {
       SizeMult = static_cast<ScalarType>(std::stod(argv[i + 1]));
+      std::cout<<"Size Multiplier:"<<SizeMult<<std::endl;
+      continue;
     }
 
     if (std::string(argv[i]) == std::string("-smooth")) {
       smooth_steps = std::atoi(argv[i + 1]);
       std::cout<<"Smooth Steps:"<<smooth_steps<<std::endl;
+      continue;
+    }
+
+    if (std::string(argv[i]) == std::string("-nosmooth")) {
+      smooth_steps = 0;
+      std::cout<<"No Smooth Steps"<<std::endl;
+      continue;
+    }
+
+    if (std::string(argv[i]) == std::string("-fastsmooth")) {
+      MQuad.reliable_smooth = false;
+      std::cout<<"Using fast but less reliable smooth"<<std::endl;
+      continue;
+    }
+
+    if (std::string(argv[i]) == std::string("-symmetry")) {
+      to_split_symmetry = true;
+      std::cout<<"Splitting mesh with symmetry plane"<<std::endl;
+      continue;
     }
 
     if (GetFileExtension(std::string(argv[i])) == std::string("features")) {
@@ -361,7 +403,8 @@ int main(int argc, char *argv[]) {
   }
 
   if (has_loaded_mesh) {
-
+    if (to_split_symmetry)
+      SplitSymmetry();
     if ((!has_features)&&(!has_cross_field))
     {
       if (extended_print)
@@ -414,6 +457,12 @@ int main(int argc, char *argv[]) {
     MQuad.ExtractQuad(TriFeatures);
 
     CreateOutputFolder();
+    if (to_split_symmetry)
+    {
+      std::set<int> MiddleV;
+      MirrorMesh<ScalarType>(QuadVert, QuadFaces, SymmetryPlane, MiddleV);
+      RemoveDuplicatedVert(QuadVert, QuadFaces);
+    }
     SaveMesh();
     // ProjectName = GetFilanameNoExtension(PathMesh);
     // ProjectName += std::string("_quad.obj");

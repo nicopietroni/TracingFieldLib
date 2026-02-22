@@ -26,6 +26,7 @@
 
 #ifndef MESH_VORONOI_PARTITION
 #define MESH_VORONOI_PARTITION
+#include "IO/io_obj.h"
 #include "mesh_functions.h"
 #include "mesh_subdivide.h"
 #include "point3.h"
@@ -68,7 +69,9 @@ public:
     Geo::SubdivideMesh<ScalarType>::CatmullClark(
         VoronoiVertPos, VoronoiFaces, OldF, OrigVertVert, OrigVertFaces,
         OrigVertFacesEdge);
-
+    
+    // WriteOBJ("primal.obj", OriginalVertPos, OriginalFaces);
+    // WriteOBJ("subdivided.obj", VoronoiVertPos, VoronoiFaces);
     // then create the reproejction basis
     ReprojBasisIndex.clear();
     ReprojBasisIndex.resize(OriginalVertPos.size());
@@ -176,7 +179,11 @@ public:
 #endif
 
   void Update() {
-    assert(VoronoiVertPos.size() == OriginalVertPos.size());
+
+    // WriteOBJ("original.obj", OriginalVertPos, OriginalFaces);
+    // WriteOBJ("voronoi.obj", VoronoiVertPos, VoronoiFaces);
+
+    // assert(VoronoiVertPos.size() == OriginalVertPos.size());
     assert(VoronoiVertPos.size() == OrigVertFaces.size());
     assert(VoronoiVertPos.size() == OrigVertFacesEdge.size());
 

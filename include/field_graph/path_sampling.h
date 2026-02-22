@@ -1696,6 +1696,7 @@ public:
   }
 
 private:
+
   void UpdateDistancesWithLastInsertedPath() {
     
     TGraph.SaveEnabledNodes();

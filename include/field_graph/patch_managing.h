@@ -101,63 +101,11 @@ public:
                        hashPairIntFunction>
         PathsEdges2;
 
-    // this one store for each edge the faces that are on it
-    // std::map<std::pair<int, int>, std::vector<int>> EdgesToFace;
-    std::unordered_map<std::pair<int, int>, std::vector<int>,
-                       hashPairIntFunction>
-        EdgesToFace;
-
     // the old nodes used to check if need to update
     std::vector<std::vector<int>> OLDPathNodes;
 
     // the list of last updated patches to be used for conditions
     std::vector<int> LastUpdatedPatches;
-
-    // void PrintSize()
-    // {
-
-    //   size_t sizePatchCorners = sizeof(PatchCorners);
-    //   size_t sizeTypeOfCorner = sizeof(TypeOfCorner);
-    //   size_t sizeEdgePatchSides = sizeof(EdgePatchSides);
-    //   size_t sizeSideLenghts = sizeof(sizeSideLenghts);
-    //   size_t sizeVisualCorners= sizeof(VisualCorners);
-
-    //   size_t sizeVisualCornerType= sizeof(VisualCornerType);
-    //   size_t sizeVisualPaths= sizeof(VisualPaths);
-    //   size_t sizeSubPatchVertPos= sizeof(SubPatchVertPos);
-    //   size_t sizeSubPatchFaces= sizeof(SubPatchFaces);
-    //   size_t sizeSubPatchVertToOriginal= sizeof(SubPatchVertToOriginal);
-
-    //   size_t sizeSubPatchFacesToOriginal= sizeof(SubPatchFacesToOriginal);
-    //   size_t sizePatchOriginalFaces= sizeof(PatchOriginalFaces);
-    //   size_t sizeOriginalFaceToPatch= sizeof(OriginalFaceToPatch);
-    //   size_t sizePathsEdges2= sizeof(PathsEdges2);
-    //   size_t sizeEdgesToFace= sizeof(EdgesToFace);
-    //   size_t sizeOLDPathNodes= sizeof(OLDPathNodes);
-
-    //   std::cout<<"sizePatchCorners: "<<sizePatchCorners<<std::endl;
-    //   std::cout<<"sizeTypeOfCorner: "<<sizeTypeOfCorner<<std::endl;
-    //   std::cout<<"sizeEdgePatchSides: "<<sizeEdgePatchSides<<std::endl;
-    //   std::cout<<"sizeSideLenghts: "<<sizeSideLenghts<<std::endl;
-    //   std::cout<<"sizeVisualCorners: "<<sizeVisualCorners<<std::endl;
-
-    //   std::cout<<"sizeVisualCornerType: "<<sizeVisualCornerType<<std::endl;
-    //   std::cout<<"sizeVisualPaths: "<<sizeVisualPaths<<std::endl;
-    //   std::cout<<"sizeSubPatchVertPos: "<<sizeSubPatchVertPos<<std::endl;
-    //   std::cout<<"sizeSubPatchFaces: "<<sizeSubPatchFaces<<std::endl;
-    //   std::cout<<"sizeSubPatchVertToOriginal:
-    //   "<<sizeSubPatchVertToOriginal<<std::endl;
-
-    //   std::cout<<"sizeSubPatchFacesToOriginal:
-    //   "<<sizeSubPatchFacesToOriginal<<std::endl;
-    //   std::cout<<"sizePatchOriginalFaces:
-    //   "<<sizePatchOriginalFaces<<std::endl;
-    //   std::cout<<"sizeOriginalFaceToPatch:
-    //   "<<sizeOriginalFaceToPatch<<std::endl; std::cout<<"sizePathsEdges2:
-    //   "<<sizePathsEdges2<<std::endl; std::cout<<"sizeEdgesToFace:
-    //   "<<sizeEdgesToFace<<std::endl; std::cout<<"sizeOLDPathNodes:
-    //   "<<sizeOLDPathNodes<<std::endl;
-    // }
   };
 
   // the original mesh
@@ -169,6 +117,11 @@ public:
   std::vector<int> ModSameBVert;
   std::vector<Geo::Point3<ScalarType>> ModSameBOrigPos;
 
+  // this one store for each edge the faces that are on it
+  // std::map<std::pair<int, int>, std::vector<int>> EdgesToFace;
+  std::unordered_map<std::pair<int, int>, std::vector<int>, hashPairIntFunction>
+      EdgesToFace;
+
   bool UpdateVisual;
   bool print_info;
 
@@ -178,8 +131,12 @@ public:
 
   void SaveStatus() { OldPData = PData; }
 
-  void RestoreStatus() { PData = OldPData; }
+  //void RestoreStatus() { PData = OldPData; }
 
+  void RestoreStatus() { std::swap(PData, OldPData); }
+ 
+  double TimeUpdatePatches[6] = {0, 0, 0, 0, 0, 0};
+  double TimeUpdateSubPatches[2] = {0, 0};
 private:
   // adjacency on the mesh
   std::vector<std::vector<int>> NextF;
@@ -189,6 +146,8 @@ private:
   const std::vector<std::vector<int>> &PathNodes;
 
   void InitVisualCorners(int IndexP) {
+    if (!UpdateVisual)
+      return;
     PData.VisualCorners[IndexP].clear();
     PData.VisualCornerType[IndexP].clear();
 
@@ -271,17 +230,18 @@ private:
       }
   }
 
-  void GetAllSideGlobalVert(int IndexP,const std::vector<int> &AllCornerVert, std::vector<int> &SideVert) {
+  void GetAllSideGlobalVert(int IndexP, const std::vector<int> &AllCornerVert,
+                            std::vector<int> &SideVert) {
     assert(IndexP >= 0);
     assert(IndexP < NumPatches());
     SideVert.clear();
 
-    //std::vector<int> SortedCornerVert = AllCornerVert;
-    // std::vector<int> CornerVert;
-    // //GetAllCorners(IndexP,CornerVert);
-    // GetAllCorners(CornerVert);
-    // std::sort(CornerVert.begin(), CornerVert.end());
-    //std::sort(SortedCornerVert.begin(), SortedCornerVert.end());
+    // std::vector<int> SortedCornerVert = AllCornerVert;
+    //  std::vector<int> CornerVert;
+    //  //GetAllCorners(IndexP,CornerVert);
+    //  GetAllCorners(CornerVert);
+    //  std::sort(CornerVert.begin(), CornerVert.end());
+    // std::sort(SortedCornerVert.begin(), SortedCornerVert.end());
 
     std::vector<int> SideVert0;
     GetAllSideVert(IndexP, SideVert0);
@@ -289,8 +249,9 @@ private:
     std::sort(SideVert0.begin(), SideVert0.end());
 
     // Perform set subtraction
-    std::set_difference(SideVert0.begin(), SideVert0.end(), AllCornerVert.begin(),
-                        AllCornerVert.end(), std::back_inserter(SideVert));
+    std::set_difference(SideVert0.begin(), SideVert0.end(),
+                        AllCornerVert.begin(), AllCornerVert.end(),
+                        std::back_inserter(SideVert));
   }
 
   void GetAllInternalGlobalVert(int IndexP, std::vector<int> &InternalVert) {
@@ -315,6 +276,8 @@ private:
   }
 
   void InitVisualSides(int IndexP) {
+    if (!UpdateVisual)
+      return;
     PData.VisualPaths[IndexP].clear();
 
     std::map<int, std::pair<Geo::Point3<ScalarType>, int>> SidePatchPos;
@@ -438,7 +401,7 @@ private:
     }
   }
 #else
-  void  InitVisualCornersEdges(const std::vector<int> &PatchesIdx) {
+  void InitVisualCornersEdges(const std::vector<int> &PatchesIdx) {
     const size_t num_threads = 8;
     const size_t N = PatchesIdx.size();
 
@@ -447,8 +410,8 @@ private:
     for (size_t t = 0; t < num_threads; ++t) {
       threads.emplace_back([&, t]() {
         for (size_t i = t; i < N; i += num_threads) {
-           InitVisualCorners(PatchesIdx[i]);
-           InitVisualSides(PatchesIdx[i]);
+          InitVisualCorners(PatchesIdx[i]);
+          InitVisualSides(PatchesIdx[i]);
         }
       });
     }
@@ -970,8 +933,12 @@ private:
   }
 
   void SplitSubMeshWithInternalEdges(int IndexPatch) {
+    auto t0 = std::chrono::high_resolution_clock::now();
     std::vector<std::vector<int>> NextFPatch, NextEPatch;
+    
     getFFAdjacency(PData.SubPatchFaces[IndexPatch], NextFPatch, NextEPatch);
+    auto t1 = std::chrono::high_resolution_clock::now();
+
     std::set<std::pair<int, int>> SplitEdgeSet;
     // std::unordered_set<std::pair<int, int>, hashPairIntFunction>
     // SplitEdgeSet;
@@ -991,6 +958,10 @@ private:
         assert(IndexV1 < PData.SubPatchVertToOriginal[IndexPatch].size());
         int IndexV1Or = PData.SubPatchVertToOriginal[IndexPatch][IndexV1];
 
+        //only once ofr each edge
+        if (IndexV0Or> IndexV1Or)
+          continue;
+
         std::pair<int, int> EdgeKOr(std::min(IndexV0Or, IndexV1Or),
                                     std::max(IndexV0Or, IndexV1Or));
         // if (PData.PathsEdges.count(EdgeKOr) == 0)
@@ -1003,14 +974,18 @@ private:
         SplitEdgeSet.insert(EdgeK);
       }
     }
+    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    TimeUpdateSubPatches[0] += elapsed1.count() * 1e-6;
+   
+    if (SplitEdgeSet.size() == 0) return;
+
     std::vector<std::pair<int, int>> SplitEdges(SplitEdgeSet.begin(),
                                                 SplitEdgeSet.end());
 
     // std::map<Geo::Point3<ScalarType>, int> PosToIDX;
     std::unordered_map<Geo::Point3<ScalarType>, int,
                        Geo::Point3Hash<ScalarType>,
-                       Geo::Point3Equal<ScalarType>>
-        PosToIDX;
+                       Geo::Point3Equal<ScalarType>> PosToIDX;
 
     for (size_t i = 0; i < PData.SubPatchVertPos[IndexPatch].size(); i++) {
       Geo::Point3<ScalarType> Pos = PData.SubPatchVertPos[IndexPatch][i];
@@ -1039,9 +1014,14 @@ private:
         PData.SubPatchVertToOriginal[IndexPatch].push_back(PosToIDX[Pos]);
       }
     }
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+    TimeUpdateSubPatches[1] += elapsed2.count() * 1e-6;
+
   }
 
   void UpdateSubMesh(int IndexPatch) {
+
     assert(IndexPatch >= 0);
     // std::map<int, int> VertMap;
     std::unordered_map<int, int> VertMap;
@@ -1055,6 +1035,13 @@ private:
     PData.SubPatchFaces[IndexPatch].clear();
     PData.SubPatchVertToOriginal[IndexPatch].clear();
     PData.SubPatchFacesToOriginal[IndexPatch].clear();
+
+    int EsteemedNumVert = PData.PatchOriginalFaces[IndexPatch].size() /2;
+    int EsteemedNumFaces = PData.PatchOriginalFaces[IndexPatch].size() ;
+    PData.SubPatchVertPos[IndexPatch].reserve(EsteemedNumVert);
+    PData.SubPatchFaces[IndexPatch].reserve(EsteemedNumFaces);
+    PData.SubPatchVertToOriginal[IndexPatch].reserve(EsteemedNumVert);
+    PData.SubPatchFacesToOriginal[IndexPatch].reserve(EsteemedNumFaces);
 
     // for each face
     for (size_t i = 0; i < PData.PatchOriginalFaces[IndexPatch].size(); i++) {
@@ -1081,7 +1068,6 @@ private:
         PData.SubPatchFaces[IndexPatch].back()[j] = IndexNewV;
       }
     }
-
     // then split internally if needed
     SplitSubMeshWithInternalEdges(IndexPatch);
   }
@@ -1160,9 +1146,11 @@ private:
     PData.TypeOfCorner[IndexPatch].clear();
     // PData.PatchSideVert[IndexPatch].clear();
     PData.EdgePatchSides[IndexPatch].clear();
-    PData.VisualCorners[IndexPatch].clear();
-    PData.VisualCornerType[IndexPatch].clear();
-    PData.VisualPaths[IndexPatch].clear();
+    if (UpdateVisual) {
+      PData.VisualCorners[IndexPatch].clear();
+      PData.VisualCornerType[IndexPatch].clear();
+      PData.VisualPaths[IndexPatch].clear();
+    }
   }
 
   void AllocateNewPatch() {
@@ -1178,9 +1166,11 @@ private:
     PData.TypeOfCorner.resize(PData.TypeOfCorner.size() + 1);
     // PData.PatchSideVert.resize(PData.TypeOfCorner.size()+1);
     PData.EdgePatchSides.resize(PData.EdgePatchSides.size() + 1);
-    PData.VisualCorners.resize(PData.VisualCorners.size() + 1);
-    PData.VisualCornerType.resize(PData.VisualCornerType.size() + 1);
-    PData.VisualPaths.resize(PData.VisualPaths.size() + 1);
+    if (UpdateVisual) {
+      PData.VisualCorners.resize(PData.VisualCorners.size() + 1);
+      PData.VisualCornerType.resize(PData.VisualCornerType.size() + 1);
+      PData.VisualPaths.resize(PData.VisualPaths.size() + 1);
+    }
   }
 
   void UpdateSubPatchPos(int IndexPatch) {
@@ -1414,7 +1404,7 @@ public:
     SelectedVert.clear();
     switch (CType) {
     case CTypeFlat:
-      GetAllSideGlobalVert(IndexP, SortedAllCornerVert,SelectedVert);
+      GetAllSideGlobalVert(IndexP, SortedAllCornerVert, SelectedVert);
       break;
     case CTypeNone:
       GetAllInternalGlobalVert(IndexP, SelectedVert);
@@ -1425,8 +1415,7 @@ public:
   }
 
   void GetPatchGlobalVertOfType(const int &IndexP, const CornerType &CType,
-                                std::vector<int> &SelectedVert) 
-  { 
+                                std::vector<int> &SelectedVert) {
     std::vector<int> SortedAllCornerVert;
     GetAllCorners(IndexP, SortedAllCornerVert);
     std::sort(SortedAllCornerVert.begin(), SortedAllCornerVert.end());
@@ -1436,7 +1425,7 @@ public:
   void GetAllGlobalVertOfType(const CornerType CType,
                               std::vector<int> &SelectedVert) {
     SelectedVert.clear();
-   
+
     int total = 0;
     int processed_patches = 0;
     std::vector<int> AllCornerVert;
@@ -1447,7 +1436,7 @@ public:
         continue;
       processed_patches++;
       std::vector<int> SelectedPatchVert;
-      GetPatchGlobalVertOfType(i, CType,AllCornerVert,SelectedPatchVert);
+      GetPatchGlobalVertOfType(i, CType, AllCornerVert, SelectedPatchVert);
       SelectedVert.insert(SelectedVert.end(), SelectedPatchVert.begin(),
                           SelectedPatchVert.end());
       total += SelectedPatchVert.size();
@@ -1455,7 +1444,8 @@ public:
     // if (CType ==CTypeFlat)
     // {
     //   std::cout<<"Num "<<total<<" vertices of type "<<CType<<std::endl;
-    //   std::cout<<"Processed "<<processed_patches<<" patches out of "<<NumPatches()<<std::endl;
+    //   std::cout<<"Processed "<<processed_patches<<" patches out of
+    //   "<<NumPatches()<<std::endl;
     // }
   }
 
@@ -1463,8 +1453,12 @@ public:
     ToAdd.clear();
     ToRemove.clear();
     for (size_t i = 0; i < PathNodes.size(); i++) {
+      if (PathNodes[i].size() == 0)
+        continue;
       bool found = false;
       for (size_t j = 0; j < PData.OLDPathNodes.size(); j++) {
+        if (PData.OLDPathNodes[j].size() == 0)
+          continue;
         if (PathNodes[i] != PData.OLDPathNodes[j])
           continue;
         found = true;
@@ -1474,8 +1468,12 @@ public:
         ToAdd.push_back(i);
     }
     for (size_t i = 0; i < PData.OLDPathNodes.size(); i++) {
+      if (PData.OLDPathNodes[i].size() == 0)
+          continue;
       bool found = false;
       for (size_t j = 0; j < PathNodes.size(); j++) {
+        if (PathNodes[j].size() == 0)
+          continue;
         if (PData.OLDPathNodes[i] != (PathNodes[j]))
           continue;
         found = true;
@@ -1520,8 +1518,8 @@ public:
                      std::vector<CornerType> &CurrType) const {
     CornerVert.clear();
     CurrType.clear();
-    //std::map<int, std::pair<Geo::Point3<ScalarType>, int>> CornersPos;
-    // for each loop
+    // std::map<int, std::pair<Geo::Point3<ScalarType>, int>> CornersPos;
+    //  for each loop
     for (size_t i = 0; i < PData.PatchCorners[IndexP].size(); i++)
       // for each side
       for (size_t j = 0; j < PData.PatchCorners[IndexP].size(); j++)
@@ -1533,7 +1531,7 @@ public:
         }
   }
 
-  void GetAllCorners(int IndexP,std::vector<int> &CornerVert) const {
+  void GetAllCorners(int IndexP, std::vector<int> &CornerVert) const {
     assert(IndexP < NumPatches());
     assert(IndexP >= 0);
     std::vector<CornerType> PCurrType;
@@ -1873,6 +1871,73 @@ public:
     Faces = NewFaces;
   }
 
+  void ComposeMeshFromPatches(const std::vector<int> &PatchesIndexes,
+                              std::vector<Geo::Point3<ScalarType>> &VertPos,
+                              std::vector<std::vector<int>> &Faces) const {
+    VertPos.clear();
+    Faces.clear();
+
+    // append all faces
+    std::vector<std::pair<int, int>> PatchF;
+    for (size_t i = 0; i < PatchesIndexes.size(); i++) {
+      int IndexP = PatchesIndexes[i];
+      if (isEmpty(IndexP))
+        continue;
+
+      AppendMesh(VertPos, Faces, PData.SubPatchVertPos[IndexP],
+                 PData.SubPatchFaces[IndexP]);
+    }
+  }
+
+  // when the patch has a single set of corners return
+  //  the mesh formed by all corners and one vertex in the middle
+  void GetAbstractMesh(const int &IndexPatch,
+                       std::vector<Geo::Point3<ScalarType>> &VertPos,
+                       std::vector<std::vector<int>> &Faces) const {
+    VertPos.clear();
+    Faces.clear();
+    // if empty return
+    if (isEmpty(IndexPatch))
+      return;
+    // if there are more then one loop return
+    if (NumBorders(IndexPatch) != 1)
+      return;
+
+    GetAllCornerPos(IndexPatch, VertPos);
+
+    // add one vertex in the middle
+    Geo::Point3<ScalarType> MiddleP(0, 0, 0);
+    for (size_t i = 0; i < VertPos.size(); i++)
+      MiddleP += VertPos[i];
+
+    MiddleP /= VertPos.size();
+    VertPos.push_back(MiddleP);
+
+    // then create traiangle between each corner and the middle
+    for (size_t i = 0; i < VertPos.size() - 1; i++) {
+      std::vector<int> Face;
+      Face.push_back(i);
+      Face.push_back((i + 1) % (VertPos.size() - 1));
+      Face.push_back(VertPos.size() - 1);
+      Faces.push_back(Face);
+    }
+
+    assert(VertPos.size() > 0);
+  }
+
+  void GetAbstractMesh(const std::vector<int> &IndexPatches,
+                       std::vector<Geo::Point3<ScalarType>> &VertPos,
+                       std::vector<std::vector<int>> &Faces) const {
+    VertPos.clear();
+    Faces.clear();
+    for (size_t i = 0; i < IndexPatches.size(); i++) {
+      std::vector<Geo::Point3<ScalarType>> PatchVert;
+      std::vector<std::vector<int>> PatchFaces;
+      GetAbstractMesh(IndexPatches[i], PatchVert, PatchFaces);
+      AppendMesh<ScalarType>(VertPos, Faces, PatchVert, PatchFaces);
+    }
+    RemoveDuplicatedVert(VertPos, Faces);
+  }
   // void getMeshOfPatches(
   //   std::vector<std::vector<Geo::Point3<ScalarType>> > &SubMeshV,
   //   std::vector<std::vector<std::vector<int>>> &SubMeshF,
@@ -1885,7 +1950,7 @@ public:
   //   }
 
   void AddTouchedPatchesToSet(const std::vector<int> &PathN,
-                              std::set<int> &PatchIdx) {
+                              std::set<int> &PatchIdx) const {
     if (PathN.size() == 0)
       return;
     // loop repeat the last two times so no need to check
@@ -1896,14 +1961,75 @@ public:
       int IndexV1 = Field::CrossFieldGraph::ElemOfNode(IndexN1);
       std::pair<int, int> key(std::min(IndexV0, IndexV1),
                               std::max(IndexV0, IndexV1));
-      assert(PData.EdgesToFace.count(key) > 0);
-      for (size_t j = 0; j < PData.EdgesToFace[key].size(); j++) {
-        int IndexF = PData.EdgesToFace[key][j];
+      assert(EdgesToFace.count(key) > 0);
+      for (size_t j = 0; j < EdgesToFace.at(key).size(); j++) {
+        int IndexF = EdgesToFace.at(key)[j];
         assert(IndexF >= 0);
         assert(IndexF < (int)Faces.size());
         assert(IndexF < (int)PData.OriginalFaceToPatch.size());
         PatchIdx.insert(PData.OriginalFaceToPatch[IndexF]);
       }
+    }
+  }
+
+  void GetTouchedPatches(const std::vector<int> &PathN,
+                         std::vector<int> &PatchIdx) const {
+    PatchIdx.clear();
+    if (PathN.size() == 0)
+      return;
+    std::set<int> PatchIdxSet;
+    AddTouchedPatchesToSet(PathN, PatchIdxSet);
+    PatchIdx.assign(PatchIdxSet.begin(), PatchIdxSet.end());
+  }
+
+  void
+  GetMergingPatchIfRemoved(const std::vector<int> &PathN,
+                           std::vector<std::vector<int>> &MergedPatches) const {
+    MergedPatches.clear();
+    if (PathN.size() == 0)
+      return;
+
+    // loop repeat the last two times so no need to check
+    for (int i = 0; i < PathN.size() - 1; i++) {
+      int IndexN0 = PathN[i];
+      int IndexN1 = PathN[i + 1];
+      int IndexV0 = Field::CrossFieldGraph::ElemOfNode(IndexN0);
+      int IndexV1 = Field::CrossFieldGraph::ElemOfNode(IndexN1);
+      std::pair<int, int> key(std::min(IndexV0, IndexV1),
+                              std::max(IndexV0, IndexV1));
+      assert(EdgesToFace.count(key) > 0);
+      std::vector<int> CurrMergingPatches;
+      for (size_t j = 0; j < EdgesToFace.at(key).size(); j++) {
+        int IndexF = EdgesToFace.at(key)[j];
+        int IndexP = PData.OriginalFaceToPatch[IndexF];
+        CurrMergingPatches.push_back(IndexP);
+      }
+      if (CurrMergingPatches.size() < 2)
+        continue;
+      // then see if there is another merging patches with one of these and mege
+      // to it
+      bool merged = false;
+      std::sort(CurrMergingPatches.begin(), CurrMergingPatches.end());
+      for (size_t k = 0; k < MergedPatches.size(); k++) {
+        std::vector<int> Inter;
+        std::set_intersection(MergedPatches[k].begin(), MergedPatches[k].end(),
+                              CurrMergingPatches.begin(),
+                              CurrMergingPatches.end(),
+                              std::back_inserter(Inter));
+        if (Inter.size() > 0) {
+          MergedPatches[k].insert(MergedPatches[k].end(),
+                                  CurrMergingPatches.begin(),
+                                  CurrMergingPatches.end());
+          std::sort(MergedPatches[k].begin(), MergedPatches[k].end());
+          MergedPatches[k].erase(
+              std::unique(MergedPatches[k].begin(), MergedPatches[k].end()),
+              MergedPatches[k].end());
+          merged = true;
+          break;
+        }
+      }
+      if (!merged)
+        MergedPatches.push_back(CurrMergingPatches);
     }
   }
 
@@ -1930,8 +2056,8 @@ public:
       std::pair<int, int> key(std::min(IndexV0, IndexV1),
                               std::max(IndexV0, IndexV1));
       assert(PData.EdgesToFace.count(key) > 0);
-      for (size_t j = 0; j < PData.EdgesToFace[key].size(); j++) {
-        int IndexF = PData.EdgesToFace[key][j];
+      for (size_t j = 0; j < PData.EdgesToFace.at(key).size(); j++) {
+        int IndexF = PData.EdgesToFace.at(key)[j];
         assert(IndexF >= 0);
         assert(IndexF < (int)Faces.size());
         assert(IndexF < (int)PData.OriginalFaceToPatch.size());
@@ -2129,6 +2255,16 @@ public:
     return sideNum;
   }
 
+  int NumSingularities(const int &IndexPatch) const {
+    std::vector<int> PatchSing;
+    // std::cout<<"Test 0 "<<std::endl;
+    PatchSingularities(IndexPatch, PatchSing);
+    // std::cout<<"Patch "<<IndexPatch<<" singularities:
+    // "<<PatchSing.size()<<std::endl;
+
+    return ((int)PatchSing.size());
+  }
+
   int NumCorners(const int &IndexPatch) const {
     int cornNum = 0;
     for (size_t i = 0; i < PData.PatchCorners[IndexPatch].size(); i++)
@@ -2164,33 +2300,33 @@ public:
     return (PData.PatchOriginalFaces[IndexPatch].empty());
   }
 
-//   void InitVisualCornersEdges() {
-// #pragma omp parallel for num_threads(8)
-//     for (size_t i = 0; i < NumPatches(); i++) {
-//       InitVisualCorners(i);
-//       InitVisualSides(i);
-//       // std::cout<<"Patch Corner size:
-//       // "<<PData.PatchCorners[i].size()<<std::endl; for (size_t
-//       // j=0;j<PData.PatchCorners[i].size();j++)
-//       //   std::cout<<PData.PatchCorners[i][j]<<std::endl;
+  //   void InitVisualCornersEdges() {
+  // #pragma omp parallel for num_threads(8)
+  //     for (size_t i = 0; i < NumPatches(); i++) {
+  //       InitVisualCorners(i);
+  //       InitVisualSides(i);
+  //       // std::cout<<"Patch Corner size:
+  //       // "<<PData.PatchCorners[i].size()<<std::endl; for (size_t
+  //       // j=0;j<PData.PatchCorners[i].size();j++)
+  //       //   std::cout<<PData.PatchCorners[i][j]<<std::endl;
 
-//       // std::cout<<"Visual Corner size:
-//       // "<<PData.VisualCorners[i].size()<<std::endl;
-//       if (PData.PatchCorners[i].size() == 1) {
-//         int numCorn = PData.VisualCorners[i].size();
-//         assert(PData.PatchCorners[i][0].size() == numCorn);
-//         if (numCorn > 0) {
-//           assert(PData.VisualPaths[i].size() == numCorn);
-//           assert(PData.VisualCornerType[i].size() == numCorn);
-//         } else {
-//           assert(PData.VisualPaths[i].size() == 1);
-//         }
-//       }
-//     }
-//   }
+  //       // std::cout<<"Visual Corner size:
+  //       // "<<PData.VisualCorners[i].size()<<std::endl;
+  //       if (PData.PatchCorners[i].size() == 1) {
+  //         int numCorn = PData.VisualCorners[i].size();
+  //         assert(PData.PatchCorners[i][0].size() == numCorn);
+  //         if (numCorn > 0) {
+  //           assert(PData.VisualPaths[i].size() == numCorn);
+  //           assert(PData.VisualCornerType[i].size() == numCorn);
+  //         } else {
+  //           assert(PData.VisualPaths[i].size() == 1);
+  //         }
+  //       }
+  //     }
+  //   }
 
 #ifndef PARALLEL_PATCH_UPDATE
- void InitVisualCornersEdges() {
+  void InitVisualCornersEdges() {
     for (size_t i = 0; i < NumPatches(); i++) {
       InitVisualCorners(i);
       InitVisualSides(i);
@@ -2214,7 +2350,7 @@ public:
     }
   }
 #else
-  void  InitVisualCornersEdges() {
+  void InitVisualCornersEdges() {
     const size_t num_threads = 8;
     const size_t N = NumPatches();
 
@@ -2223,8 +2359,8 @@ public:
     for (size_t t = 0; t < num_threads; ++t) {
       threads.emplace_back([&, t]() {
         for (size_t i = t; i < N; i += num_threads) {
-           InitVisualCorners(i);
-           InitVisualSides(i);
+          InitVisualCorners(i);
+          InitVisualSides(i);
         }
       });
     }
@@ -2233,30 +2369,30 @@ public:
       th.join();
   }
 #endif
-//  void InitVisualCornersEdges() {
-// #pragma omp parallel for num_threads(8)
-//     for (size_t i = 0; i < NumPatches(); i++) {
-//       InitVisualCorners(i);
-//       InitVisualSides(i);
-//       // std::cout<<"Patch Corner size:
-//       // "<<PData.PatchCorners[i].size()<<std::endl; for (size_t
-//       // j=0;j<PData.PatchCorners[i].size();j++)
-//       //   std::cout<<PData.PatchCorners[i][j]<<std::endl;
+  //  void InitVisualCornersEdges() {
+  // #pragma omp parallel for num_threads(8)
+  //     for (size_t i = 0; i < NumPatches(); i++) {
+  //       InitVisualCorners(i);
+  //       InitVisualSides(i);
+  //       // std::cout<<"Patch Corner size:
+  //       // "<<PData.PatchCorners[i].size()<<std::endl; for (size_t
+  //       // j=0;j<PData.PatchCorners[i].size();j++)
+  //       //   std::cout<<PData.PatchCorners[i][j]<<std::endl;
 
-//       // std::cout<<"Visual Corner size:
-//       // "<<PData.VisualCorners[i].size()<<std::endl;
-//       if (PData.PatchCorners[i].size() == 1) {
-//         int numCorn = PData.VisualCorners[i].size();
-//         assert(PData.PatchCorners[i][0].size() == numCorn);
-//         if (numCorn > 0) {
-//           assert(PData.VisualPaths[i].size() == numCorn);
-//           assert(PData.VisualCornerType[i].size() == numCorn);
-//         } else {
-//           assert(PData.VisualPaths[i].size() == 1);
-//         }
-//       }
-//     }
-//   }
+  //       // std::cout<<"Visual Corner size:
+  //       // "<<PData.VisualCorners[i].size()<<std::endl;
+  //       if (PData.PatchCorners[i].size() == 1) {
+  //         int numCorn = PData.VisualCorners[i].size();
+  //         assert(PData.PatchCorners[i][0].size() == numCorn);
+  //         if (numCorn > 0) {
+  //           assert(PData.VisualPaths[i].size() == numCorn);
+  //           assert(PData.VisualCornerType[i].size() == numCorn);
+  //         } else {
+  //           assert(PData.VisualPaths[i].size() == 1);
+  //         }
+  //       }
+  //     }
+  //   }
 
   void UpdateSubPatchPos() {
     for (size_t i = 0; i < NumPatches(); i++)
@@ -2404,7 +2540,9 @@ public:
   void Update(const std::vector<int> &AddedPaths,
               const std::vector<int> &RemovedPaths,
               std::vector<int> &UpdatedPatches) {
-
+    
+    auto t0 = std::chrono::high_resolution_clock::now();
+   
     UpdatedPatches.clear();
 
     // std::vector<int> ToAdd,ToRemove;
@@ -2443,7 +2581,13 @@ public:
     std::vector<int> ToUpdPatchesV(ToUpdPatches.begin(), ToUpdPatches.end());
 
     int NumPatch0 = NumPatches();
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+
     UpdatePatches(ToUpdPatchesV);
+
+    auto t2 = std::chrono::high_resolution_clock::now();
+
     int NumPatch1 = NumPatches();
     assert(NumPatch1 <= NumPatch1);
 
@@ -2455,10 +2599,15 @@ public:
       ToUpdatePatches.push_back(i);
 
     UpdateSubMeshes(ToUpdatePatches);
+    auto t3 = std::chrono::high_resolution_clock::now();
 
     FindPatchCorners(ToUpdatePatches);
 
+    auto t4 = std::chrono::high_resolution_clock::now();
+
     UpdateSideLenghs(ToUpdatePatches);
+
+    auto t5 = std::chrono::high_resolution_clock::now();
 
     if (UpdateVisual)
       InitVisualCornersEdges(ToUpdatePatches);
@@ -2481,21 +2630,40 @@ public:
     assert(PData.PatchCorners.size() == NumPatches());
     assert(PData.TypeOfCorner.size() == NumPatches());
     assert(PData.EdgePatchSides.size() == NumPatches());
+
+    auto t6 = std::chrono::high_resolution_clock::now();
+
+    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2);
+    auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3);
+    auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(t5 - t4);
+    auto elapsed5 = std::chrono::duration_cast<std::chrono::microseconds>(t6 - t5);
+
+    TimeUpdatePatches[0] += elapsed0.count() * 1e-6;
+    TimeUpdatePatches[1] += elapsed1.count() * 1e-6;
+    TimeUpdatePatches[2] += elapsed2.count() * 1e-6;
+    TimeUpdatePatches[3] += elapsed3.count() * 1e-6;
+    TimeUpdatePatches[4] += elapsed4.count() * 1e-6;
+    TimeUpdatePatches[5] += elapsed5.count() * 1e-6;
+
   }
 
   void InitEdgeToFace() {
-    PData.EdgesToFace.clear();
+    // PData.EdgesToFace.clear();
+    EdgesToFace.clear();
     for (size_t i = 0; i < Faces.size(); i++)
       for (size_t j = 0; j < Faces[i].size(); j++) {
         int IndexV0 = Faces[i][j];
         int IndexV1 = Faces[i][(j + 1) % 3];
         std::pair<int, int> key(std::min(IndexV0, IndexV1),
                                 std::max(IndexV0, IndexV1));
-        PData.EdgesToFace[key].push_back(i);
+        // PData.EdgesToFace[key].push_back(i);
+        EdgesToFace[key].push_back(i);
       }
   }
 
-  void Update(std::vector<int> &UpdatedPatches) {
+  void UpdateAuto(std::vector<int> &UpdatedPatches) {
     std::vector<int> ToAdd, ToRemove;
     FindAddRemovePaths(ToAdd, ToRemove);
     Update(ToAdd, ToRemove, UpdatedPatches);
@@ -2623,9 +2791,11 @@ public:
     PData.PatchCorners.clear();
     PData.TypeOfCorner.clear();
     PData.EdgePatchSides.clear();
-    PData.VisualCorners.clear();
-    PData.VisualCornerType.clear();
-    PData.VisualPaths.clear();
+    if (UpdateVisual) {
+      PData.VisualCorners.clear();
+      PData.VisualCornerType.clear();
+      PData.VisualPaths.clear();
+    }
     PData.SubPatchVertPos.clear();
     PData.SubPatchFaces.clear();
     PData.SubPatchVertToOriginal.clear();
@@ -2637,7 +2807,8 @@ public:
 
     // PData.PathsEdges.clear();
     PData.PathsEdges2.clear();
-    PData.EdgesToFace.clear();
+    // PData.EdgesToFace.clear();
+    EdgesToFace.clear();
     // std::vector<std::vector<int> > OLDPathNodes=PathNodes;
     PData.OLDPathNodes.clear();
   }
@@ -2646,9 +2817,11 @@ public:
     assert(TestPNum == PData.TypeOfCorner.size());
     assert(TestPNum == PData.EdgePatchSides.size());
     assert(TestPNum == PData.SideLenghts.size());
-    assert(TestPNum == PData.VisualCorners.size());
-    assert(TestPNum == PData.VisualCornerType.size());
-    assert(TestPNum == PData.VisualPaths.size());
+    if (UpdateVisual) {
+      assert(TestPNum == PData.VisualCorners.size());
+      assert(TestPNum == PData.VisualCornerType.size());
+      assert(TestPNum == PData.VisualPaths.size());
+    }
     assert(TestPNum == PData.SubPatchVertPos.size());
     assert(TestPNum == PData.SubPatchFaces.size());
     assert(TestPNum == PData.SubPatchVertToOriginal.size());
@@ -2886,7 +3059,9 @@ public:
     }
     //  std::vector<std::vector<std::vector<std::vector<std::pair<int, int>>>>>
     //      EdgePatchSides;
-    InitVisualCornersEdges(FixedPatches);
+    if (UpdateVisual)
+      InitVisualCornersEdges(FixedPatches);
+
     UpdateSideLenghs(FixedPatches);
   }
 
@@ -2933,10 +3108,11 @@ public:
     PData.EdgePatchSides.resize(PData.PatchOriginalFaces.size());
 
     // this is only for visualization purposes
-    PData.VisualCorners.resize(PData.PatchOriginalFaces.size());
-    PData.VisualCornerType.resize(PData.PatchOriginalFaces.size());
-    PData.VisualPaths.resize(PData.PatchOriginalFaces.size());
-
+    if (UpdateVisual) {
+      PData.VisualCorners.resize(PData.PatchOriginalFaces.size());
+      PData.VisualCornerType.resize(PData.PatchOriginalFaces.size());
+      PData.VisualPaths.resize(PData.PatchOriginalFaces.size());
+    }
     // then set the corners as the bundary convex
     // PData.PathsEdges.clear();
     PData.PathsEdges2.clear();

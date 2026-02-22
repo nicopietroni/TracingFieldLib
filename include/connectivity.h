@@ -246,61 +246,118 @@ inline void FindVertexStar(const std::vector<std::vector<int>> &connections,
 ////        ExtendVertexStar(Kernel);
 //}
 
-inline void getFFAdjacency(const std::vector<std::vector<int>> &Faces,
-                           std::vector<std::vector<int>> &NextF,
-                           std::vector<std::vector<int>> &NextE) {
-  typedef typename std::pair<size_t, size_t> sizeTPair;
+// inline void getFFAdjacency(const std::vector<std::vector<int>> &Faces,
+//                            std::vector<std::vector<int>> &NextF,
+//                            std::vector<std::vector<int>> &NextE) {
+//   typedef typename std::pair<size_t, size_t> sizeTPair;
 
-  NextF.clear();
-  NextE.clear();
-  NextF.resize(Faces.size());
-  NextE.resize(Faces.size());
+//   NextF.clear();
+//   NextE.clear();
+//   NextF.resize(Faces.size());
+//   NextE.resize(Faces.size());
 
-  // std::map<sizeTPair, std::vector<sizeTPair>> EdgeVToFaceE;
-  std::unordered_map<sizeTPair, std::vector<sizeTPair>, hashPairSizeTFunction>
-      EdgeVToFaceE;
+//   // std::map<sizeTPair, std::vector<sizeTPair>> EdgeVToFaceE;
+//   std::unordered_map<sizeTPair, std::vector<sizeTPair>, hashPairSizeTFunction>
+//       EdgeVToFaceE;
 
-  for (size_t i = 0; i < Faces.size(); i++) {
-    size_t sizeF = Faces[i].size();
-    NextF[i].resize(sizeF, -1);
-    NextE[i].resize(sizeF, -1);
-    for (size_t j = 0; j < Faces[i].size(); j++) {
-      int indexV0 = Faces[i][j];
-      int indexV1 = Faces[i][(j + 1) % sizeF];
-      sizeTPair Key((size_t)std::min(indexV0, indexV1),
-                    (size_t)std::max(indexV0, indexV1));
-      EdgeVToFaceE[Key].push_back(sizeTPair(i, j));
+//   for (size_t i = 0; i < Faces.size(); i++) {
+//     size_t sizeF = Faces[i].size();
+//     NextF[i].resize(sizeF, -1);
+//     NextE[i].resize(sizeF, -1);
+//     for (size_t j = 0; j < Faces[i].size(); j++) {
+//       int indexV0 = Faces[i][j];
+//       int indexV1 = Faces[i][(j + 1) % sizeF];
+//       sizeTPair Key((size_t)std::min(indexV0, indexV1),
+//                     (size_t)std::max(indexV0, indexV1));
+//       EdgeVToFaceE[Key].push_back(sizeTPair(i, j));
+//     }
+//   }
+
+//   NextF.resize(Faces.size());
+//   NextE.resize(Faces.size());
+//   std::vector<std::pair<sizeTPair, std::vector<sizeTPair>>> EdgeVect(
+//       EdgeVToFaceE.begin(), EdgeVToFaceE.end());
+//   for (size_t i = 0; i < EdgeVect.size(); i++) {
+//     assert(EdgeVect[i].second.size() >= 1);
+//     if (EdgeVect[i].second.size() == 1)
+//       continue; // this is a border edge
+
+//     assert(EdgeVect[i].second.size() == 2);
+
+//     int IndexF0 = EdgeVect[i].second[0].first;
+//     int IndexE0 = EdgeVect[i].second[0].second;
+
+//     int IndexF1 = EdgeVect[i].second[1].first;
+//     int IndexE1 = EdgeVect[i].second[1].second;
+
+//     assert(IndexF0 != IndexF1);
+
+//     assert(IndexE0 < (int)NextF[IndexF0].size());
+//     assert(IndexE1 < (int)NextF[IndexF1].size());
+
+//     NextF[IndexF0][IndexE0] = IndexF1;
+//     NextF[IndexF1][IndexE1] = IndexF0;
+
+//     NextE[IndexF0][IndexE0] = IndexE1;
+//     NextE[IndexF1][IndexE1] = IndexE0;
+//     // for (size_t j=0;j<EdgeVect.size();i++)
+//   }
+// }
+
+inline void getFFAdjacency(
+    const std::vector<std::vector<int>> &Faces,
+    std::vector<std::vector<int>> &NextF,
+    std::vector<std::vector<int>> &NextE)
+{
+  using sizeTPair = std::pair<size_t, size_t>;
+
+  struct EdgeAdj {
+    size_t f0 = (size_t)-1, e0 = (size_t)-1;
+    size_t f1 = (size_t)-1, e1 = (size_t)-1;
+    uint8_t count = 0;
+
+    inline void add(size_t f, size_t e) {
+      if (count == 0) { f0=f; e0=e; count=1; }
+      else            { f1=f; e1=e; count=2; }
+    }
+  };
+
+  NextF.assign(Faces.size(), {});
+  NextE.assign(Faces.size(), {});
+
+  size_t totHalfEdges = 0;
+  for (const auto &f : Faces) totHalfEdges += f.size();
+
+  std::unordered_map<sizeTPair, EdgeAdj, hashPairSizeTFunction> edge2adj;
+  edge2adj.reserve(totHalfEdges);
+
+  for (size_t fi = 0; fi < Faces.size(); ++fi) {
+    const auto &F = Faces[fi];
+    const size_t n = F.size();
+    NextF[fi].assign(n, -1);
+    NextE[fi].assign(n, -1);
+
+    for (size_t ej = 0; ej < n; ++ej) {
+      const int v0 = F[ej];
+      const int v1 = F[(ej + 1) % n];
+
+      const size_t a = (size_t)std::min(v0, v1);
+      const size_t b = (size_t)std::max(v0, v1);
+      const sizeTPair key(a, b);
+
+      edge2adj.try_emplace(key).first->second.add(fi, ej);
     }
   }
 
-  NextF.resize(Faces.size());
-  NextE.resize(Faces.size());
-  std::vector<std::pair<sizeTPair, std::vector<sizeTPair>>> EdgeVect(
-      EdgeVToFaceE.begin(), EdgeVToFaceE.end());
-  for (size_t i = 0; i < EdgeVect.size(); i++) {
-    assert(EdgeVect[i].second.size() >= 1);
-    if (EdgeVect[i].second.size() == 1)
-      continue; // this is a border edge
+  for (const auto &kv : edge2adj) {
+    const EdgeAdj &a = kv.second;
+    if (a.count != 2) continue; // border or non-manifold
 
-    assert(EdgeVect[i].second.size() == 2);
+    const int f0 = (int)a.f0, e0 = (int)a.e0;
+    const int f1 = (int)a.f1, e1 = (int)a.e1;
 
-    int IndexF0 = EdgeVect[i].second[0].first;
-    int IndexE0 = EdgeVect[i].second[0].second;
-
-    int IndexF1 = EdgeVect[i].second[1].first;
-    int IndexE1 = EdgeVect[i].second[1].second;
-
-    assert(IndexF0 != IndexF1);
-
-    assert(IndexE0 < (int)NextF[IndexF0].size());
-    assert(IndexE1 < (int)NextF[IndexF1].size());
-
-    NextF[IndexF0][IndexE0] = IndexF1;
-    NextF[IndexF1][IndexE1] = IndexF0;
-
-    NextE[IndexF0][IndexE0] = IndexE1;
-    NextE[IndexF1][IndexE1] = IndexE0;
-    // for (size_t j=0;j<EdgeVect.size();i++)
+    NextF[f0][e0] = f1;  NextF[f1][e1] = f0;
+    NextE[f0][e0] = e1;  NextE[f1][e1] = e0;
   }
 }
 

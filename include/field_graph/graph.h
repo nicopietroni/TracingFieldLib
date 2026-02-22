@@ -473,7 +473,9 @@ public:
     }
   }
 
-  void RestoreEnabledNodes() { EnabledN = SwapEnabledN; }
+  //void RestoreEnabledNodes() { EnabledN = SwapEnabledN; }
+
+  void RestoreEnabledNodes() { std::swap(EnabledN, SwapEnabledN); }
 
   void RestoreEnabledArcs() {
     assert(SwapEnabledA.size() == N.size());
@@ -484,9 +486,22 @@ public:
     }
   }
 
-  void EnableAllNodes() { EnabledN = std::vector<bool>(N.size(), true); }
+  //void EnableAllNodes() { EnabledN = std::vector<bool>(N.size(), true); }
+  void EnableAllNodes() {
+  if (EnabledN.size() != N.size())
+    EnabledN.assign(N.size(), true);
+  else
+    std::fill(EnabledN.begin(), EnabledN.end(), true);
+  }
 
-  void DisableAllNodes() { EnabledN = std::vector<bool>(N.size(), false); }
+  //void DisableAllNodes() { EnabledN = std::vector<bool>(N.size(), false); }
+
+  void DisableAllNodes() {
+  if (EnabledN.size() != N.size())
+    EnabledN.assign(N.size(), false);
+  else
+    std::fill(EnabledN.begin(), EnabledN.end(), false);
+  }
 
   void EnableAllArcs() {
     for (size_t i = 0; i < N.size(); i++)
