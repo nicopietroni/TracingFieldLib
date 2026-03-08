@@ -59,22 +59,32 @@ public:
       }
   }
 
-  static void DrawSideValue(const Geo::SideDiscretization<ScalarType> &SideD) {
+  static void DrawSideValue(const Geo::SideDiscretization<ScalarType> &SideD,bool drawTarget=true) {
     std::vector<Geo::Point3<ScalarType>> VarMidP;
     SideD.GetVariablesMidP(VarMidP);
 
     std::vector<int> VarValue;
     SideD.GetVariablesValues(VarValue);
 
+    std::vector<int> TargetVarValue;
+    SideD.GetTargetVariablesValues(TargetVarValue);
+
     std::vector<Geo::Point3<ScalarType>> LabelCol;
     LabelCol.resize(VarMidP.size(), Geo::Point3<ScalarType>(0, 0, 1));
 
     std::vector<std::string> LabelText;
     for (size_t i = 0; i < VarValue.size(); i++)
-      LabelText.push_back(std::to_string(VarValue[i]));
-
+    {
+      std::string ValStr;
+      if ((drawTarget) && (VarValue[i] != TargetVarValue[i]))
+        ValStr = std::to_string(TargetVarValue[i]) + "->" + std::to_string(VarValue[i]);
+      else
+        ValStr = std::to_string(VarValue[i]);
+      LabelText.push_back(ValStr);
+    }
     GLDraw::GLDrawLabel<ScalarType>::IMGuiDrawLabels3D(VarMidP, LabelCol,
                                                        LabelText);
+    //if (drawTarget) {
   }
 
   static void DrawSubdivision(const Geo::SideDiscretization<ScalarType> &SideD,

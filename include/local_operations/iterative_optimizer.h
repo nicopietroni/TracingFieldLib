@@ -75,8 +75,9 @@ void AllocateLocalOperations(
     std::vector<ScalarType> *VertSize,
     std::vector<std::vector<bool>> *IsFaceEFeature,
     std::vector<bool> *IsVertCorner,
-    std::vector<Geo::LocalOperation<ScalarType> *> &CurrLop,
-    bool FixBoundary) {
+    std::vector<Geo::LocalOperation<ScalarType> *> &CurrLop, bool FixBoundary,
+    const std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
+        *KeepEdges) {
 
   CurrLop.clear();
   Geo::LocalOperation<ScalarType> *Lop = NULL;
@@ -92,19 +93,25 @@ void AllocateLocalOperations(
   }
 
   if (OpType == OpFlip)
+  {
     CurrLop.push_back(new Geo::TriangleEdgeFlipOperation<ScalarType>(
         pos, Faces, Vert, DeletedV, DeletedF, VF, VFIndex, NextF, NextE, VertQ,
         MaxNormFlipVariation, IsFaceEFeature, IsVertCorner));
+  }
 
   if (OpType == OpRefine)
+  {
     CurrLop.push_back(new Geo::EdgeSplitOperation<ScalarType>(
         pos, Faces, Vert, DeletedV, DeletedF, VF, VFIndex, NextF, NextE, VertQ,
-        VertSize, IsFaceEFeature, IsVertCorner, FixBoundary));
-
+        VertSize, IsFaceEFeature, IsVertCorner, FixBoundary, KeepEdges));
+  }
+  
   if (OpType == OpEdgeCollapse)
+  {
     CurrLop.push_back(new Geo::TriangleEdgeCollapseOperation<ScalarType>(
         pos, Faces, Vert, DeletedV, DeletedF, VF, VFIndex, NextF, NextE, VertQ,
         VertSize, IsFaceEFeature, IsVertCorner));
+  }
   // return Lop;
 }
 
@@ -119,10 +126,13 @@ Geo::LocalOperation<ScalarType> *AllocateLocalOperation(
     const ScalarType &abs_target_l, const ScalarType MaxNormFlipVariation,
     std::vector<ScalarType> *VertSize,
     std::vector<std::vector<bool>> *IsFaceEFeature,
-    std::vector<bool> *IsVertCorner) {
+    std::vector<bool> *IsVertCorner,
+    bool FixBoundary,
+    const std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
+        *KeepEdges) {
 
   Geo::LocalOperation<ScalarType> *Lop = NULL;
-
+ 
   if (OpType == OpSmooth) {
     return (new Geo::VertSmoothOperation<ScalarType>(pos, Faces, Vert, DeletedV,
                                                      DeletedF, VF, VFIndex,
@@ -137,7 +147,7 @@ Geo::LocalOperation<ScalarType> *AllocateLocalOperation(
   if (OpType == OpRefine)
     return (new Geo::EdgeSplitOperation<ScalarType>(
         pos, Faces, Vert, DeletedV, DeletedF, VF, VFIndex, NextF, NextE, VertQ,
-        VertSize, IsFaceEFeature, IsVertCorner));
+        VertSize, IsFaceEFeature, IsVertCorner, FixBoundary, KeepEdges));
 
   // if (OpType == OpEdgeCollapse)
   assert(OpType == OpEdgeCollapse);
@@ -246,6 +256,7 @@ template <class ScalarType> class IterativeOptimizer {
   ScalarType min_acceptable;
   ScalarType abs_target_l;
   ScalarType MaxQError;
+  std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>  KeepEdgeSet;
 
   typename Geo::ImproveAspectRatioPriority<ScalarType>::AspectRatioType AType =
       Geo::ImproveAspectRatioPriority<ScalarType>::RadiusRatio;
@@ -265,7 +276,10 @@ template <class ScalarType> class IterativeOptimizer {
     return ((SizeL0 + SizeL1) / (ScalarType)2);
   }
 
-  void AddOperation(const Pos3 &pos, OperationType OpType) {
+  void AddOperation(
+      const Pos3 &pos, OperationType OpType,
+      const std::set<std::pair<Geo::Point3<ScalarType>,
+                               Geo::Point3<ScalarType>>> *KeepEdges = NULL) {
     std::vector<Geo::LocalOperation<ScalarType> *> Lop;
     // AllocateLocalOperations(OpType, pos, Faces, Vert, DeletedV, DeletedF, VF,
     //                         VFIndex, NextF, NextE, VertNorm, FaceNorm, VertQ,
@@ -277,12 +291,11 @@ template <class ScalarType> class IterativeOptimizer {
     }
     ScalarType CurrTargetL = AdaptiveLen(pos, abs_target_l);
 
-
     AllocateLocalOperations(OpType, pos, Faces, Vert, DeletedV, DeletedF, VF,
                             VFIndex, NextF, NextE, VertQ, CurrTargetL,
                             MaxNormFlipVariation, VertSizePTR, IsFaceEFeature,
-                            IsVertCorner, Lop, FixBoundary);
-    
+                            IsVertCorner, Lop, FixBoundary, KeepEdges);
+
     assert(Lop.size() > 0);
 
     for (size_t i = 0; i < Lop.size(); i++) {
@@ -399,20 +412,20 @@ template <class ScalarType> class IterativeOptimizer {
     GetFacesPos(involved_faces, FacePos);
     for (size_t i = 0; i < FacePos.size(); i++) {
       if (addSmooth)
-        AddOperation(FacePos[i], OpSmooth);
+        AddOperation(FacePos[i], OpSmooth,&KeepEdgeSet);
       if (addFlip)
-        AddOperation(FacePos[i], OpFlip);
+        AddOperation(FacePos[i], OpFlip,&KeepEdgeSet);
       if (addRefine)
-        AddOperation(FacePos[i], OpRefine);
+        AddOperation(FacePos[i], OpRefine, &KeepEdgeSet);
       if (addEdgeColl && fast_collapse_update)
-        AddOperation(FacePos[i], OpEdgeCollapse);
+        AddOperation(FacePos[i], OpEdgeCollapse,&KeepEdgeSet);
     }
 
     if ((!fast_collapse_update) && (addEdgeColl)) {
       std::vector<Pos3> PosFan;
       GetFacesPosFan(involved_faces, PosFan);
       for (size_t i = 0; i < PosFan.size(); i++)
-        AddOperation(PosFan[i], OpEdgeCollapse);
+        AddOperation(PosFan[i], OpEdgeCollapse,&KeepEdgeSet);
     }
   }
 
@@ -457,19 +470,17 @@ template <class ScalarType> class IterativeOptimizer {
 
         Pos3 Pos(i, j, IndexV0);
 
-        if (addSmooth){
-          AddOperation(Pos, OpSmooth);
+        if (addSmooth) {
+          AddOperation(Pos, OpSmooth,&KeepEdgeSet);
         }
-        if (addFlip){
-          AddOperation(Pos, OpFlip);
+        if (addFlip) {
+          AddOperation(Pos, OpFlip,&KeepEdgeSet);
         }
-        if (addRefine)
-        {
-          AddOperation(Pos, OpRefine);
+        if (addRefine) {
+          AddOperation(Pos, OpRefine, &KeepEdgeSet);
         }
-        if (addEdgeColl)
-        {
-          AddOperation(Pos, OpEdgeCollapse);
+        if (addEdgeColl) {
+          AddOperation(Pos, OpEdgeCollapse,&KeepEdgeSet);
         }
         // insertedE.insert(Key);
       }
@@ -609,9 +620,9 @@ template <class ScalarType> class IterativeOptimizer {
                      bool _addEdgeColl = false) {
 
     abs_target_l = _target_l; // AvgEdgeLen(Vert,Faces)*_target_l;
-    
+
     InitSupportStructures();
-    
+
     min_gain = _min_gain;
     min_acceptable = _min_acceptable;
     addSmooth = _addSmooth;
@@ -630,7 +641,6 @@ template <class ScalarType> class IterativeOptimizer {
     assert(VFIndex0 == VFIndex);
     assert(NextF0 == NextF);
     assert(NextE0 == NextE);
-
   }
 
   BasicPriorityFunction<ScalarType> *IPrio;
@@ -700,6 +710,8 @@ public:
     ScalarType MaxQError;
     ScalarType MaxNormFlipVariation;
     bool adaptive;
+    std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType> >> KeepEdges;
+
     // std::vector<Quadric<ScalarType> > *VertQ;
 
     OptParam() {
@@ -718,16 +730,31 @@ public:
     }
   };
 
+  // void InitKeepEdges(const OptParam &OParam) {
+  //   KeepEdgeSet.clear();
+  //   for (size_t i = 0; i < OParam.KeepEdges.size(); i++) {
+  //     int IndexV0 = OParam.KeepEdges[i].first;
+  //     int IndexV1 = OParam.KeepEdges[i].second;
+  //     Geo::Point3<ScalarType> P0 = Vert[IndexV0];
+  //     Geo::Point3<ScalarType> P1 = Vert[IndexV1];
+  //     std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>> Edge(
+  //         std::min(P0, P1), std::max(P0, P1));
+  //     KeepEdgeSet.insert(Edge);
+  //   }
+  // }
+
   int GlobalOptimize(const OptParam &OParam, bool check_genus = true) {
     MaxQError = OParam.MaxQError;
     feature_angle = OParam.feature_angle;
     writeMSG = OParam.writeMSG;
     MaxNormFlipVariation = OParam.MaxNormFlipVariation;
     adaptive = OParam.adaptive;
-
+    KeepEdgeSet= OParam.KeepEdges;
+    //InitKeepEdges(OParam);
     InitGlobalOpt(OParam.target_l, OParam.min_gain, OParam.min_acceptable,
                   OParam.addSmooth, OParam.addFlip, OParam.addRefine,
                   OParam.addEdgeColl);
+   
 
     int Genus0, Genus1;
     if (check_genus) {
@@ -744,7 +771,6 @@ public:
       std::cout << "SIZE1:" << Vert.size() << std::endl;
       assert((*VertSize).size() == Vert.size());
     }
-
 
     OptimizeStep(true); // OParam.update_stack);
 
@@ -781,6 +807,10 @@ public:
     MaxQError = OParam.MaxQError;
     auto t0 = std::chrono::high_resolution_clock::now();
     int Genus0, Genus1;
+
+    KeepEdgeSet= OParam.KeepEdges;
+    //InitKeepEdges(OParam);
+   
     if (check_genus) {
       Genus0 = PolyMeshGenus(Vert, Faces);
       bool ManifE = EdgeManifold<ScalarType>(Vert, Faces);
@@ -848,7 +878,7 @@ public:
         Geo::LocalOperation<ScalarType> *CurrLop = AllocateLocalOperation(
             CurrOpType, pos, Faces, Vert, DeletedV, DeletedF, VF, VFIndex,
             NextF, NextE, VertQ, CurrTargetL, MaxNormFlipVariation, VertSizePTR,
-            IsFaceEFeature, IsVertCorner);
+            IsFaceEFeature, IsVertCorner,FixBoundary, &KeepEdgeSet);
 
         CurrLop->feature_angle = feature_angle;
         CurrLop->max_error = OParam.MaxQError;
@@ -917,8 +947,7 @@ public:
       std::vector<std::pair<Quadric<ScalarType>, ScalarType>> &_VertQ,
       std::vector<ScalarType> *_VertSize = NULL,
       std::vector<std::vector<bool>> *_IsFaceEFeature = NULL,
-      std::vector<bool> *_IsVertCorner = NULL,
-      bool _FixBoundary = false)
+      std::vector<bool> *_IsVertCorner = NULL, bool _FixBoundary = false)
       : Vert(_Vert), Faces(_Faces), VertQ(_VertQ) {
     min_gain = 0.01;
     min_acceptable = 0;
@@ -984,7 +1013,8 @@ int CollapseSmallEdges(
   Oparam.MaxNormFlipVariation = 5;
   Oparam.adaptive = TRemP.adaptive;
   Oparam.writeMSG = TRemP.writeMSG;
-
+  Oparam.KeepEdges = TRemP.PreserveEdges;
+  
   int steps = 0;
   if (!TRemP.iterative) {
 
@@ -1022,21 +1052,24 @@ int RefineBigEdges(
   Oparam.MaxNormFlipVariation = 5;
   Oparam.writeMSG = TRemP.writeMSG;
   Oparam.adaptive = TRemP.adaptive;
+  Oparam.KeepEdges = TRemP.PreserveEdges;
+
   // Oparam.writeMSG=false;
   int steps = 0;
+
   if (!TRemP.iterative) {
     // Geo::IterativeOptimizer<ScalarType> IteOpt(VertPos, Faces, &SmallPrio,
     //                                            VertQ, VertSize,
     //                                            &TRemP.IsFaceEFeature,
     //                                            &TRemP.IsVertCorner);
-    Geo::IterativeOptimizer<ScalarType> IteOpt(VertPos, Faces, &BigPrio, VertQ,
-                                               VertSize, &TRemP.IsFaceEFeature,
-                                               &TRemP.IsVertCorner, TRemP.fix_borders);                                           
+    Geo::IterativeOptimizer<ScalarType> IteOpt(
+        VertPos, Faces, &BigPrio, VertQ, VertSize, &TRemP.IsFaceEFeature,
+        &TRemP.IsVertCorner, TRemP.fix_borders);
     steps = IteOpt.GlobalOptimize(Oparam, false);
   } else {
-    Geo::IterativeOptimizer<ScalarType> IteOpt(VertPos, Faces, &BigPrio, VertQ,
-                                               VertSize, &TRemP.IsFaceEFeature,
-                                               &TRemP.IsVertCorner, TRemP.fix_borders);
+    Geo::IterativeOptimizer<ScalarType> IteOpt(
+        VertPos, Faces, &BigPrio, VertQ, VertSize, &TRemP.IsFaceEFeature,
+        &TRemP.IsVertCorner, TRemP.fix_borders);
     steps = IteOpt.IterativelOptimize(Oparam, false);
   }
 
@@ -1063,6 +1096,8 @@ int OptimizeValence(
   Oparam.MaxQError = TRemP.max_error;
   Oparam.MaxNormFlipVariation = 5;
   Oparam.writeMSG = TRemP.writeMSG;
+  Oparam.KeepEdges = TRemP.PreserveEdges;
+
   // Geo::IterativeOptimizer<ScalarType> IteOpt(VertPos, Faces,
   // &IprValCurvEn); int steps = IteOpt.GlobalOptimize(Oparam, false);
 
@@ -1165,9 +1200,20 @@ void ReprojectStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
                    const std::vector<Geo::Point3<ScalarType>> &VertPos0,
                    const std::vector<std::vector<int>> &Faces0,
                    Geo::TriangleSpatialIndex<ScalarType> &TriGrid,
+                   const std::vector<int> &FixedVert = std::vector<int>(),
                    ScalarType damp = 0.5) {
   ScalarType maxDist = TriGrid.bbox.Diag();
+
+  std::set<int> FixedVertSet(FixedVert.begin(), FixedVert.end());
+
   for (size_t i = 0; i < VertPos.size(); i++) {
+
+    if (FixedVertSet.find(i) != FixedVertSet.end())
+      continue;
+
+    if (!FixedVert.empty() && FixedVert[i])
+      continue;
+
     Geo::Point3<ScalarType> Pos = VertPos[i];
     int closestF;
     Geo::Point3<ScalarType> closestPt;
@@ -1193,17 +1239,20 @@ void SmoothReprojectUVStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
   Geo::getFFAdjacency(Faces, NextF, NextE);
 
   typename Geo::Local_Param_Smooth<ScalarType>::UVSmoothParam UVParam;
-  Geo::MeshFeatures<ScalarType>::FeatureCorners(VertPos, Faces, NextF, feature_angle,
-                                  UVParam.FeatureLines, UVParam.Fixed, true);
+  Geo::MeshFeatures<ScalarType>::FeatureCorners(
+      VertPos, Faces, NextF, feature_angle, UVParam.FeatureLines, UVParam.Fixed,
+      true);
   std::vector<int> FixedVert1;
   std::vector<std::pair<int, int>> FeatureLines1;
-  Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(Faces, IsFaceEFeature,
-                                               FeatureLines1);
-  Geo::MeshFeatures<ScalarType>::GetVertIndexFromBoolCorners(IsVertCorner, FixedVert1);
+  Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(
+      Faces, IsFaceEFeature, FeatureLines1);
+  Geo::MeshFeatures<ScalarType>::GetVertIndexFromBoolCorners(IsVertCorner,
+                                                             FixedVert1);
 
   UVParam.FeatureLines.insert(UVParam.FeatureLines.end(), FeatureLines1.begin(),
-                      FeatureLines1.end());
-  UVParam.Fixed.insert(UVParam.Fixed.end(), FixedVert1.begin(), FixedVert1.end());
+                              FeatureLines1.end());
+  UVParam.Fixed.insert(UVParam.Fixed.end(), FixedVert1.begin(),
+                       FixedVert1.end());
 
   UVParam.Steps = 1;
 
@@ -1241,14 +1290,15 @@ void SmoothReproject3DStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
 
   std::vector<int> FixedVert;
   std::vector<std::pair<int, int>> FeatureLines;
-  Geo::MeshFeatures<ScalarType>::FeatureCorners(VertPos, Faces, NextF, feature_angle,
-                                  FeatureLines, FixedVert, true);
+  Geo::MeshFeatures<ScalarType>::FeatureCorners(
+      VertPos, Faces, NextF, feature_angle, FeatureLines, FixedVert, true);
 
   std::vector<int> FixedVert1;
   std::vector<std::pair<int, int>> FeatureLines1;
-  Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(Faces, IsFaceEFeature,
-                                               FeatureLines1);
-  Geo::MeshFeatures<ScalarType>::GetVertIndexFromBoolCorners(IsVertCorner, FixedVert1);
+  Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(
+      Faces, IsFaceEFeature, FeatureLines1);
+  Geo::MeshFeatures<ScalarType>::GetVertIndexFromBoolCorners(IsVertCorner,
+                                                             FixedVert1);
 
   FeatureLines.insert(FeatureLines.end(), FeatureLines1.begin(),
                       FeatureLines1.end());
@@ -1263,16 +1313,16 @@ void SmoothReproject3DStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
   }
 
   SmoothParam<ScalarType> SParam;
-  SParam.Features=FeatureLines;
-  SParam.FixedVert=FixedVert;
-  SParam.line_border=false;
-  SParam.NumIte=1;
+  SParam.Features = FeatureLines;
+  SParam.FixedVert = FixedVert;
+  SParam.line_border = false;
+  SParam.NumIte = 1;
 
   for (size_t s = 0; s < steps; s++) {
-    //Geo::SmoothLaplacian(VertPos, Faces, 1, FixedVert, FeatureLines, false);
+    // Geo::SmoothLaplacian(VertPos, Faces, 1, FixedVert, FeatureLines, false);
     Geo::SmoothLaplacian(VertPos, Faces, SParam);
     if (reproject)
-      ReprojectStep(VertPos, VertPos0, Faces0, TriGrid);
+      ReprojectStep(VertPos, VertPos0, Faces0, TriGrid, SParam.FixedVert);
   }
 }
 

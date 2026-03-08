@@ -170,6 +170,7 @@ public:
 
   std::vector<int> FilterDisableVert;
   std::vector<int> FilterDisableN;
+  double TimeUpdateDist[4]={0,0,0,0};
 
   Geo::TracingGraph<ScalarType> &Graph() const { return TGraph; }
 
@@ -677,10 +678,10 @@ public:
   void InitializeDistance() {
 
     // save the enabled
-    TGraph.SaveEnabledNodes();
-    TGraph.SaveEnabledArcs();
-    TGraph.EnableAllNodes();
-    TGraph.EnableAllArcs();
+    // TGraph.SaveEnabledNodes();
+    // TGraph.SaveEnabledArcs();
+    // TGraph.EnableAllNodes();
+    // TGraph.EnableAllArcs();
 
     TGraph.CurrDistIndex() = 0;
     // TGraph.SetMaxDistance();
@@ -746,11 +747,12 @@ public:
     SParam.onlyVisible = true;
     SParam.stopAtPrevDist = false;
     SParam.uniformW = UniformWDist;
+    SParam.checkEnabled = false;
     int StopNode;
     Geo::GraphQuery<ScalarType>::Dijkstra(TGraph, StartN, SParam, StopNode);
 
-    TGraph.RestoreEnabledNodes();
-    TGraph.RestoreEnabledArcs();
+    // TGraph.RestoreEnabledNodes();
+    // TGraph.RestoreEnabledArcs();
 
     ScalarType MaxVal = TGraph.MaxDistance();
     TGraph.SetUnMarkedToDistance(MaxVal);
@@ -1698,11 +1700,14 @@ public:
 private:
 
   void UpdateDistancesWithLastInsertedPath() {
-    
-    TGraph.SaveEnabledNodes();
-    TGraph.SaveEnabledArcs();
-    TGraph.EnableAllNodes();
-    TGraph.EnableAllArcs();
+    auto t0 = std::chrono::high_resolution_clock::now();
+   
+    // TGraph.SaveEnabledNodes();
+    // TGraph.SaveEnabledArcs();
+    // TGraph.EnableAllNodes();
+    // TGraph.EnableAllArcs();
+
+    auto t1 = std::chrono::high_resolution_clock::now();
 
     std::vector<int> StartN;
     StartN.insert(StartN.end(), SelectedPaths.back().begin(),
@@ -1714,6 +1719,7 @@ private:
 
     typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
     SParam.avoid_zero_path = true;
+    SParam.checkEnabled = false;
     for (size_t i = 0; i < SELECTED_GRAPH_FLAG; i++)
       SParam.StopAtSel[i] = false;
     SParam.MaxL = std::numeric_limits<ScalarType>::max();
@@ -1732,10 +1738,21 @@ private:
    
     TGraph.CurrDistIndex() = 0;
     Geo::GraphQuery<ScalarType>::Dijkstra(TGraph, StartN, SParam, StopNode);
+    
+    auto t2 = std::chrono::high_resolution_clock::now();
 
-    TGraph.RestoreEnabledNodes();
-    TGraph.RestoreEnabledArcs();
+    
+    // TGraph.RestoreEnabledNodes();
+    // TGraph.RestoreEnabledArcs();
     //TGraph.DisableNodes(SwapDisable);
+    auto t3 = std::chrono::high_resolution_clock::now();
+
+    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2);
+    TimeUpdateDist[0] += elapsed0.count() * 1e-6;
+    TimeUpdateDist[1] += elapsed1.count() * 1e-6;
+    TimeUpdateDist[2] += elapsed2.count() * 1e-6;
   }
 
   void RetraceCandidatesConflictWithSelected(bool check_start = true) {

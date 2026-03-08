@@ -1790,9 +1790,10 @@ void SetExportBar() {
       PMode = Geo::SideDiscretization<ScalarType>::SolvePost;
 
     SideD.PMode = PMode;
+    
 
+    ImGui::Checkbox("Graph Optimize", &SideD.graph_optimize);
     ImGui::Checkbox("Optimize Size", &OptimizeSize);
-
     if (ImGui::Button("Find Subdivision")) {
       DrawSubdivision = true;
       DrawQuadMesh = false;

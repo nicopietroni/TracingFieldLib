@@ -114,8 +114,7 @@ inline bool ReadFeatures(const std::string &filename,
     return false; // Failed to open the file
   }
 
-  Features
-      .clear(); // Clear the vector to ensure it's empty before reading new data
+  Features.clear(); // Clear the vector to ensure it's empty before reading new data
 
   int first, second;
   while (infile >> first >> second) {
@@ -133,6 +132,52 @@ inline bool ReadFeatures(const std::string &filename,
 
   infile.close();
   return true;
+}
+
+inline bool ReadSharpFile(const std::string &filename,
+                   const std::vector<std::vector<int>> &Faces,
+                   std::vector<std::pair<int, int>> &Features,
+                   bool writeInfo = true)
+{
+    if (writeInfo)
+      std::cout << "Reading:" << filename.c_str() << std::endl;
+
+    std::ifstream file(filename);
+    if (!file.is_open())
+    {
+        std::cerr << "Cannot open file\n";
+        return false;
+    }
+
+    int numEntries;
+    file >> numEntries;
+    file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    //entries.reserve(numEntries);
+
+    std::string line;
+    Features.clear();
+    while (std::getline(file, line))
+    {
+        if (line.empty())
+            continue;
+
+        std::stringstream ss(line);
+        int type,face,edge;
+        char comma;
+
+        ss >> type >> comma >> face >> comma >> edge;
+        int v0 = Faces[face][edge];
+        int v1 = Faces[face][(edge + 1) % Faces[face].size()];
+        std::pair<int, int> e = std::make_pair(std::min(v0, v1), std::max(v0, v1));
+        Features.push_back(e);
+    }
+
+    std::sort(Features.begin(), Features.end());
+    auto last = std::unique(Features.begin(), Features.end());
+    Features.erase(last, Features.end());
+
+    return true;
 }
 
 template< class ScalarType>

@@ -92,6 +92,8 @@ GetNonManifoldVert(const std::vector<Geo::Point3<ScalarType>> &Pos3D,
 
   std::vector<int> NonManifoldV;
   for (size_t i = 0; i < Pos3D.size(); i++) {
+    if (VF[i].size() == 0)
+      continue;
     // get the star of faces using FF adjacency
     std::vector<Pos3 > FacesStarFF;
     Pos3 StartPos(VF[i][0], VFIndex[i][0], i);

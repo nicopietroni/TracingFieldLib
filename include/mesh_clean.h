@@ -27,6 +27,7 @@
 #ifndef MESH_CLEAN
 #define MESH_CLEAN
 
+#include "IO/io_obj.h"
 #include "connectivity.h"
 #include "local_operations/edge_collapse.h"
 #include "mesh_aspect_ratio.h"
@@ -222,7 +223,9 @@ public:
 
     std::vector<std::vector<int>> NextF, NextE;
     getFFAdjacency(Faces, NextF, NextE);
-
+    
+    
+    int step = 0;
     do {
       has_collapsed = false;
       std::vector<int> BadShapeFaces =
@@ -263,7 +266,7 @@ public:
 
           CollOp.PrecomputeConnectivity();
           CollOp.PrecomputeGeometry();
-
+        
           if (!CollOp.Feasible())
             continue;
 
@@ -273,7 +276,9 @@ public:
           has_collapsed = true;
           break;
         }
+         step++;
       }
+     
     } while (has_collapsed);
 
     //std::cout << "DONE!" << std::endl;

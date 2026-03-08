@@ -63,7 +63,7 @@ public:
       FixType;
 
   parityMode PMode;
-
+  bool graph_optimize;
 private:
   // energyMode EM;
   ScalarType RegVsIso;
@@ -118,6 +118,8 @@ public:
   // that a patch has or not feature
   // has features must be regular
   bool WeightFeatures;
+
+  //bool WeightDiffSize;
 
   bool print_info;
 
@@ -246,6 +248,10 @@ public:
       Geo::Point3<ScalarType> P1 = SubSide[IndexM1];
       VarMidP.push_back((P0 + P1) / 2);
     }
+  }
+
+  void GetTargetVariablesValues(std::vector<int> &_VarValue) const {
+    _VarValue = VarTargetValue;
   }
 
   void GetVariablesValues(std::vector<int> &_VarValue) const {
@@ -429,6 +435,14 @@ private:
     }
   }
 
+  int GetTargetSizeSum(const std::vector<int> &VarIndex)
+  {
+    int Sum = 0;
+    for (size_t i = 0; i < VarIndex.size(); i++)
+      Sum += VarTargetValue[VarIndex[i]];
+    return Sum;
+  }
+
   void InitOppEquivalencesW() {
 
     std::vector<ScalarType> PatchVariance;
@@ -441,6 +455,7 @@ private:
     // square might be less regular
     if (WeightRegFaceRatio) {
       for (size_t j = 0; j < PatchVariance.size(); j++) {
+        //twice for bacause two equivalences for each patch
         OppEquivalencesW.push_back(PatchVariance[j]);
         OppEquivalencesW.push_back(PatchVariance[j]);
       }
@@ -464,6 +479,17 @@ private:
           OppEquivalencesW[i] += 1;
       }
     }
+
+    // if (WeightDiffSize) {
+    //   for (size_t i = 0; i < OppEquivalences.size(); i++) {
+    //     std::vector<int> Variables;
+    //     int Target0 = GetTargetSizeSum(OppEquivalences[i].first);
+    //     int Target1 = GetTargetSizeSum(OppEquivalences[i].second);
+    //     ScalarType Ratio = (ScalarType)std::max(Target0, Target1) / (ScalarType)std::min(Target0, Target1);
+    //     OppEquivalencesW[i] *= Ratio;//pow(1 / Ratio,2);
+        
+    //   }
+    // }
 
     for (size_t i = 0; i < OppEquivalencesW.size(); i++) {
       assert(OppEquivalencesW[i] >= 1);
@@ -704,11 +730,11 @@ private:
 
   void InitOppositeEquivalences() {
     OppEquivalences.clear();
-    std::vector<bool> Visited(PatchSides.size(), false);
+    //std::vector<bool> Visited(PatchSides.size(), false);
     for (size_t i = 0; i < PatchSides.size(); i++) {
-      if (Visited[i])
-        continue;
-      Visited[i] = true;
+      // if (Visited[i])
+      //   continue;
+      // Visited[i] = true;
       int SideSize = NumSides(i);
       if (SideSize != 4)
         continue;
@@ -1291,7 +1317,8 @@ public:
                           const ScalarType _RegVsIso,
                           const bool OptimizeSize) {
     SolveSystem(_TargetL, _RegVsIso, false);
-    AutomaticGraphOptimize(OptimizeSize,false);
+    if (graph_optimize)
+      AutomaticGraphOptimize(OptimizeSize,false);
     
     InitMatchingType();
 
@@ -1326,7 +1353,7 @@ public:
 
     WeightFeatures = true;
     WeightRegFaceRatio = true;
-
+    //WeightDiffSize=true;
     // ST_ClosestInt, ST_LowError, StQRPivoting
     // FixType=Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
     FixType =
@@ -1335,6 +1362,8 @@ public:
     PMode = SolvePost;
 
     print_info=true;
+
+    graph_optimize=true;
   }
 };
 

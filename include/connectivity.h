@@ -733,7 +733,7 @@ inline void UpdateFF(const std::vector<std::vector<int>> &Faces,
         NextE[IndexF1][IndexE1] = IndexE0;
         continue;
       }
-      std::cout << "SIZE E:" << EdgeVToFaceE[KeyE].size() << std::endl;
+      std::cout << "WARNING FF Topology Face Sharing Edge Num:" << EdgeVToFaceE[KeyE].size() << std::endl;
       // can't be
       assert(0);
     }

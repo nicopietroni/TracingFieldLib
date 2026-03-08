@@ -942,17 +942,23 @@ template <class ScalarType> class OrientFLowGraph {
     if ((BestIdxIncr == -1) && (BestIdxDecr == -1))
       return false;
 
-    if (BestWDecr < BestWIncr) {
+    bool applied_change = false;
+    if ((BestWDecr < BestWIncr) && (BestIdxDecr != -1)) {
       // std::cout << "*** APPLYING Decrease ***" << std::endl;
       ApplyDecrease(DecreasePaths[BestIdxDecr]);
+      applied_change = true;
     } else {
       // std::cout << "*** APPLYING Increase ***" << std::endl;
-      ApplyIncrease(IncreasePaths[BestIdxIncr]);
+      if (BestIdxIncr != -1) 
+      {
+        ApplyIncrease(IncreasePaths[BestIdxIncr]);
+        applied_change = true;
+      }
     }
 
     // std::cout << "*** DONE ***" << std::endl;
 
-    return true;
+    return applied_change;
   }
 
   bool SolveParityStep() {
@@ -1459,6 +1465,7 @@ template <class ScalarType> class OrientFLowGraph {
       assert(EnabledN[NodeIdx[i]]);
       ScalarType CurrPrio = PriorityChange(NodeIdx[i], Diff, true);
       Prio += PriorityChange(NodeIdx[i], Diff);
+      //Prio = std::max(Prio,PriorityChange(NodeIdx[i], Diff));
     }
     return Prio;
   }

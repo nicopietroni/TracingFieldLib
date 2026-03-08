@@ -3051,6 +3051,9 @@ public:
     // std::cout << "--------- Updating SubPatches 0: " << PatchMan.TimeUpdateSubPatches[0] << std::endl;
     // std::cout << "--------- Updating SubPatches 1: " << PatchMan.TimeUpdateSubPatches[1] << std::endl;
     std::cout << "* Updating Distances: " << TimeUpdateDistances << std::endl;
+    // std::cout << "----- Updating Distances 0: " << PathSampl.TimeUpdateDist[0] << std::endl;
+    // std::cout << "----- Updating Distances 1: " << PathSampl.TimeUpdateDist[1] << std::endl;
+    // std::cout << "----- Updating Distances 2: " << PathSampl.TimeUpdateDist[2] << std::endl;
     std::cout << "* Check Conflicts: " << TimeCheckConflicts << std::endl;
     std::cout << "* Time Remove: " << TimeRemovePaths << std::endl;
     // std::cout << "* Attempted Removals: " << attept_removal << std::endl;

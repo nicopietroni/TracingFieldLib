@@ -95,6 +95,7 @@ public:
     bool stopAtPrevDist;
     bool uniformW;
     int MaxSteps;
+    bool checkEnabled;
 
     ShortestPathParam() {
       avoid_zero_path = true;
@@ -106,6 +107,7 @@ public:
       stopAtPrevDist = false;
       MaxSteps = -1;
       uniformW=false;
+      checkEnabled=true;
     }
   };
 
@@ -124,7 +126,10 @@ public:
       TGraph.Father(IndexN0) = -1;
       TGraph.Source(IndexN0) = IndexN0;
       TGraph.Steps(IndexN0) = 0;
-      assert(TGraph.EnabledN[IndexN0]);
+      //assert(TGraph.EnabledN[IndexN0]);
+      //it can be not enabled then I remove from seeds
+      if (SParam.checkEnabled && (!TGraph.EnabledN[IndexN0]))
+        continue;
       Heap.push_back(HeapEntry(IndexN0, 0, IndexN0));
     }
 
@@ -171,7 +176,7 @@ public:
       // for (size_t i=0;i<TGraph.N[CurrN].size();i++)
       for (size_t i = 0; i < TGraph.NeighSize(CurrN); i++) {
         // check if the link is enabled
-        if (!TGraph.ActiveLink(CurrN, i))
+        if (SParam.checkEnabled && (!TGraph.ActiveLink(CurrN, i)))
           continue;
         if (SParam.onlyDirect && (!TGraph.DirectLink(CurrN, i)))
           continue;
@@ -180,9 +185,10 @@ public:
 
         // size_t NextN=TGraph.N[CurrN][i];
         size_t NextN = TGraph.NodeLink(CurrN, i);
-        if (!TGraph.EnabledN[NextN])
+        // if (!TGraph.EnabledN[NextN])
+        //   continue;
+        if (SParam.checkEnabled && (!TGraph.EnabledN[NextN]))
           continue;
-        
         ScalarType NextStep=TGraph.WeightLink(CurrN, i);
         //other
         if (SParam.uniformW)

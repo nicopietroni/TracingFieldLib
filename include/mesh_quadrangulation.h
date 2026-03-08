@@ -59,6 +59,7 @@
 #include <patch_side_discretization.h>
 
 #include "edge_mesh_functions.h"
+#include "mesh_manifold.h"
 #include "mesh_mapping.h"
 #include "smooth_mesh.h"
 #include <quad_mesh_functions.h>
@@ -151,7 +152,7 @@ template <class ScalarType> class MeshQuadrangulator {
   void InitField() {
     SetVertCrossFromFace(TriVertPos, TriConnectivity, TriVertNormals, FaceCurv,
                          VertCurv);
-
+    
     Geo::MeshFeatures<ScalarType>::Corners(TriVertPos, TriFeatures, feature_corner_angle,
                              TriCornersIdx);
   }
@@ -348,6 +349,7 @@ template <class ScalarType> class MeshQuadrangulator {
   }
 
   void InitDefaultDualParameters() {
+    //DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_Tutte;
     DualParam.OnlyNonQuad = true;
     DualParam.InitSingPos = true;
     DualParam.FixSingPos = false;
@@ -587,16 +589,16 @@ template <class ScalarType> class MeshQuadrangulator {
     SParamQuadSmooth.ReprojFaces = &TriConnectivity0;
     SParamQuadSmooth.Damp = 0.5;
 
-    if (reliable_smooth)
+    //if (reliable_smooth)
       SParamQuadSmooth.post_project = !(has_problematic_patches);
-    else
-      SParamQuadSmooth.post_project = false;
+    // else
+    //   SParamQuadSmooth.post_project = false;
 
     SParamQuadSmooth.NumIte = QuadSmoothSteps;
     if (reliable_smooth)
       SParamQuadSmooth.SType = Geo::SMBestPoly;
     else
-      SParamQuadSmooth.SType = Geo::SMCentroid;
+      SParamQuadSmooth.SType = Geo::SMLaplacian;
     //Geo::SMCentroid;//Geo::SMBestPoly;//Geo::SMLaplacian;//Geo::SMTaubin;/
     
     SParamQuadSmooth.line_border=true;
@@ -704,6 +706,23 @@ public:
     PatchM.UpdateVisual=false;
   }
 
+  bool MatchPreconditions() {
+    if (TriVertPos.size() == 0 || TriConnectivity.size() == 0) {
+      std::cerr << "Error: Empty mesh data." << std::endl;
+      return false;
+    }
+    if (!EdgeManifold(TriVertPos, TriConnectivity)) 
+    {
+      std::cerr << "Error: Non-manifold edge in mesh data." << std::endl;
+      return false;
+    }
+    if (!VertManifold(TriVertPos, TriConnectivity)) {
+      std::cerr << "Error: Non-manifold vertex in mesh data." << std::endl;
+      return false;
+    }
+    return true;
+  }
+  
   void ExtractQuad(std::vector<std::pair<int, int>> &_TriFeatures) {
     TriFeatures = _TriFeatures;
 
@@ -719,16 +738,6 @@ public:
     PathSampl.NumSamples = num_samples;
 
     has_problematic_patches=false;
-
-    // InitializeData();
-
-    // DecomposePatches();
-
-    // Quadrangulate();
-
-    // CleanQuadMesh();
-
-    // SmoothQuadrangulation();
 
     using Clock = std::chrono::high_resolution_clock;
     using Seconds = std::chrono::duration<double>;

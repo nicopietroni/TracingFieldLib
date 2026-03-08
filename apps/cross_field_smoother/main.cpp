@@ -202,7 +202,7 @@ void SmoothGlobal(bool iterative = false) {
 }
 
 void RefineForTracing() {
-  Geo::RefineForTracing<ScalarType>::RefineRequiredEdges(VertPos, Connectivity,
+  Geo::RefineForTracing<ScalarType>::RefineForFieldComputation(VertPos, Connectivity,
                                                          Features);
   Geo::getFFAdjacency(Connectivity, NextF, NextE);
   ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
@@ -664,6 +664,16 @@ int main(int argc, char *argv[]) {
     if (GetFileExtension(std::string(argv[i])) == std::string("features")) {
       std::string PathFeat = std::string(argv[i]);
       bool load_feat = ReadFeatures(PathFeat, Features, true);
+      if (!load_feat)
+        exit(0);
+      std::cout << "Loaded Features" << std::endl;
+      has_load_features = true;
+      continue;
+    }
+
+    if (GetFileExtension(std::string(argv[i])) == std::string("sharp")) {
+      std::string PathFeat = std::string(argv[i]);
+      bool load_feat = ReadSharpFile(PathFeat, Connectivity, Features, true);
       if (!load_feat)
         exit(0);
       std::cout << "Loaded Features" << std::endl;

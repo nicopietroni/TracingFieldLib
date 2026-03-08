@@ -31,6 +31,7 @@
 #include "../point3.h"
 #include "../pos3.h"
 #include "basic_priority_function.h"
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -53,6 +54,7 @@ template <class ScalarType> struct TriRemParam {
   std::vector<std::vector<bool> > IsFaceEFeature;
   std::vector<bool> IsVertCorner;
   std::vector<ScalarType> VertSize;
+  std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> PreserveEdges;
   //std::vector<bool> Exclude;
   // std::vector<std::pair<int,int> > VertPairFeatures;
   // std::vector<int> CornersIdx;

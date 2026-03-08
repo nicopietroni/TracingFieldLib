@@ -186,6 +186,7 @@ class EdgeSplitOperation : public Geo::LocalOperation<ScalarType> {
   // ScalarType TargetL;
   // ScalarType Tolerance;
   bool FixBoundary;
+  const std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> *KeepEdgeSet;
   std::vector<ScalarType> *VertDens;
 
 public:
@@ -199,6 +200,17 @@ public:
     if (FixBoundary) {
       if (this->pos.IsBorder(this->NextF))
         return false;
+    }
+    if (KeepEdgeSet != nullptr) {
+      int IndexV0 = this->Faces[IndexF][IndexE];
+      int IndexV1 = this->Faces[IndexF][(IndexE + 1) % 3];
+      Geo::Point3<ScalarType> P0 = this->Vert[IndexV0];
+      Geo::Point3<ScalarType> P1 = this->Vert[IndexV1];
+      if (KeepEdgeSet->count(std::make_pair(P0, P1)) > 0 ||
+          KeepEdgeSet->count(std::make_pair(P1, P0)) > 0) {
+        //std::cout << "Preserve Edge" << std::endl;
+        return false;
+      }
     }
     int IndexF1 = this->NextF[IndexF][IndexE];
     //int IndexE1 = this->NextE[IndexF][IndexE];
@@ -376,7 +388,8 @@ public:
       std::vector<ScalarType> *_VertDens = NULL,
       std::vector<std::vector<bool>> *_IsFaceEFeature = NULL,
       std::vector<bool> *_IsVertCorner = NULL,
-      bool _FixBoundary = false)
+      bool _FixBoundary = false,
+      const std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> *_KeepEdgeSet = nullptr)
       : Geo::LocalOperation<ScalarType>(
             _pos, _Faces, _Vert, _DeletedV, _DeletedF, _VF, _VFIndex, _NextF,
             _NextE, _VertQ, _IsFaceEFeature, _IsVertCorner) {
@@ -387,6 +400,12 @@ public:
     // reproject = false;
     FixBoundary = _FixBoundary;
     VertDens = _VertDens;
+    if (_KeepEdgeSet == nullptr)
+        std::cout << "EDGE SET NULL"<<std::endl;
+
+    KeepEdgeSet = _KeepEdgeSet;
+    //exit(0);
+
   }
 };
 } // namespace Geo
