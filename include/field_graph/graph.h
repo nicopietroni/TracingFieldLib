@@ -71,6 +71,8 @@ enum NType {
 enum GraphType { GT_CrossField, GT_FrameField };
 
 template <class ScalarType> class TracingGraph {
+
+
   ScalarType AvgW;
 
   // TO BE USED IN DIJKSTRA
@@ -181,6 +183,8 @@ template <class ScalarType> class TracingGraph {
 
 
 public:
+  //std::vector<Geo::Point3<ScalarType> > NodePos;
+
   std::vector<std::vector<NeighInfo> > N;
 
   
@@ -268,6 +272,10 @@ public:
     EnabledN.clear();
     EnabledN.resize(NumNodes, true);
   }
+
+  // void InitNodePos(const std::vector<Geo::Point3<ScalarType>> &_NodePos) {
+  //   NodePos = _NodePos;
+  // }
 
   int NeighSize(const int &IndexN0)const {
     assert(IndexN0 >= 0);

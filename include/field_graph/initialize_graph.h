@@ -1044,6 +1044,17 @@ public:
 
     InitAdjacencyFromVertCrossField(TGraph, Adjacency, EdgeSet, CrossField,
                                     drift_penalty, maxAngle);
+    
+     //initialize vert positions
+    std::vector<Geo::Point3<ScalarType>> NodePos;
+    for (size_t i = 0; i < VertPos.size(); i++)
+    for (size_t d = 0; d < 4; d++)
+    {
+      int IndexN = Field::CrossFieldGraph::NodeOfElemDir(i,d);
+      Geo::Point3<ScalarType> NodePosElem = VertPos[i];
+      NodePos.push_back(NodePosElem);
+    }
+    //TGraph.InitNodePos(NodePos);
 
     SetNodeTypeVertCross(TGraph, Faces, VertPos, CrossField);
     RemoveBorderExitNeigh(TGraph);
@@ -1076,7 +1087,7 @@ public:
 
     InitAdjacencyFromPolyFrameField(TGraph, Adjacency, EdgeSet, FrameField,
                                     drift_penalty, maxAngle);
-
+    
     SetNodeTypeFrame(TGraph, PolyConnectivity, VertPos, FrameField);
 
     // RemoveBorderPolyField(TGraph);

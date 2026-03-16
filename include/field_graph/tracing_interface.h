@@ -36,6 +36,7 @@
 //#include <sys/_types/_size_t.h>
 #include <cstddef>   // C++
 #include <vector>
+#include <atomic>
 // #include "../cross_field.h"
 #include "graph_tracing.h"
 
@@ -45,6 +46,35 @@ template <class ScalarType> class GraphTracing {
 public:
   enum TraceStatus { TraceSuccess, TraceIncomplete, TraceNotDirect };
 
+  static std::atomic<int>& TotalTrace() {
+        static std::atomic<int> counter = 0;
+        return counter;
+    }
+  
+  static std::atomic<int>& FailedTrace() {
+        static std::atomic<int> counter = 0;
+        return counter;
+    }
+  
+  static std::atomic<int>& NumLoops() {
+        static std::atomic<int> counter = 0;
+        return counter;
+    }
+  
+   static std::atomic<int>& TimeTracingLoops() {
+        static std::atomic<int> time = 0;
+        return time;
+    }
+
+    static std::atomic<int>& TimeTracingOpen() {
+        static std::atomic<int> time = 0;
+        return time;
+    }
+
+    static std::atomic<int>& TimeFailTrace() {
+        static std::atomic<int> time = 0;
+        return time;
+    }
 private:
   static bool CompleteTraceFrom(Geo::TracingGraph<ScalarType> &TGraph,
                                 const int &StartN, std::vector<int> &PathN,
@@ -77,6 +107,8 @@ private:
     SParam.onlyDirect = false;
     SParam.stopAtPrevDist = false;
     SParam.onlyVisible = only_visible;
+    //SParam.MaxNeigh = 3;
+    //SParam.jumpIndirectOnly = false;//FASTER
     // SParam.uniformW=true;
     ScalarType PathL;
     std::vector<int> SourceNodes;
@@ -110,7 +142,8 @@ private:
 
     // static int LoopCount = 0;
     // static int NonLoopCount = 0;
-
+    TotalTrace()++;
+    auto t0 = std::chrono::high_resolution_clock::now();
     // save the disabled to restore afterwards
     std::vector<int> DisabledSwap;
     if (enable_when_need) {
@@ -143,36 +176,40 @@ private:
     bool IsBorder = IsOppositeExitDomain(TGraph, StartN);
     IsBorder |= IsOppositeTangent(TGraph, StartN);
     assert(TGraph.IsEnabled(StartN));
-    // std::cout<<"A"<<std::endl;
-
-    // auto t0 = std::chrono::high_resolution_clock::now();
-
+   
     bool has_traced = CompleteTraceFrom(TGraph, StartN, PathN, allow_loops,
                                         true, ArrivalNodes, only_visible);
 
     // std::cout<<"B"<<std::endl;
     if (!has_traced) {
+      FailedTrace()++;
       if (enable_when_need)
         TGraph.DisableNodes(DisabledSwap);
+
+      auto t1 = std::chrono::high_resolution_clock::now();
+      auto elapsed0 =std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+      TimeFailTrace()+=elapsed0.count();
       return TraceIncomplete;
     }
     assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph, PathN));
 
     bool IsLoop = Geo::PathFunctions<ScalarType>::IsLoop(PathN);
 
-    // if (IsLoop)
-    //   LoopCount++;
-    // else
-    //   NonLoopCount++;
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto elapsed0 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+  
 
-    // std::cout << "Loop " << 100*
-    // (ScalarType)LoopCount/(ScalarType)(LoopCount+NonLoopCount) << "
-    // Perc"<<std::endl;
+    if (IsLoop)
+    {
+      NumLoops()++;
+      TimeTracingLoops()+=elapsed0.count();
+    }
+    else {
+      TimeTracingOpen()+=elapsed0.count();
+    }
+
     bool has_to_complete = !(IsBorder || IsLoop);
-
-    // std::cout<<"TEST 0"<<std::endl;
-    // assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathN));
-    // std::cout<<"TEST 0 done"<<std::endl;
 
     if (has_to_complete) {
       // std::cout<<"Completing"<<std::endl;
@@ -180,45 +217,44 @@ private:
       if (!TGraph.IsEnabled(StartOpp)) {
         if (enable_when_need)
           TGraph.DisableNodes(DisabledSwap);
+
+        FailedTrace()++;
         return TraceIncomplete;
       }
       assert(TGraph.IsEnabled(StartOpp));
       std::vector<int> PathNOpp;
 
-      // std::cout<<"C"<<std::endl;
-      // std::cout<<"TEST 1"<<std::endl;
       has_traced = CompleteTraceFrom(TGraph, StartOpp, PathNOpp, false, true,
                                      ArrivalNodes, only_visible);
 
-      // std::cout<<"TEST 1 done"<<std::endl;
-
-      // std::cout<<"D"<<std::endl;
+      auto t2 = std::chrono::high_resolution_clock::now();
+      auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+      
 
       if (!has_traced) {
         if (enable_when_need)
           TGraph.DisableNodes(DisabledSwap);
+        FailedTrace()++;
+        TimeFailTrace()+=elapsed1.count();
         return TraceIncomplete;
+      }
+      else {
+        TimeTracingOpen()+=elapsed1.count();
       }
       assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph, PathNOpp));
 
       // revert the path
-      // std::cout<<"TEST 1.2"<<std::endl;
-      // assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathNOpp));
-      // std::cout<<"TEST 1.2 done"<<std::endl;
       PathFunctions<ScalarType>::ReversePath(TGraph, PathNOpp);
-      // std::cout<<"size 1 "<<PathNOpp.size()<<std::endl;
 
       // reverse might be not possible
       if (!Geo::PathFunctions<ScalarType>::IsConnected(TGraph, PathNOpp)) {
         if (enable_when_need)
           TGraph.DisableNodes(DisabledSwap);
+        FailedTrace()++;
         return TraceIncomplete;
       }
       assert(PathNOpp.back() == PathN[0]);
 
-      // std::cout<<"TEST 1.5"<<std::endl;
-      // assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph,PathNOpp));
-      // std::cout<<"TEST 1.5 done"<<std::endl;
       //  remove the last one
       PathNOpp.pop_back();
       // then append
@@ -226,19 +262,8 @@ private:
       PathN = PathNOpp;
     }
 
-    // auto t1 = std::chrono::high_resolution_clock::now();
-    //  std::cout<<"TEST 2"<<std::endl;
-    // if (!Geo::PathFunctions<ScalarType>::IsConnected(TGraph, PathN))
-    // {
-    //   std::cout<<"Size "<<PathN.size()<<std::endl;
-    //   if (Geo::PathFunctions<ScalarType>::IsLoop(PathN))
-    //     std::cout<<"IsLoop "<<std::endl;
-    //   else
-    //     std::cout<<" NO IsLoop "<<std::endl;
-    //   assert(0);
-    // }
+    
     assert(Geo::PathFunctions<ScalarType>::IsConnected(TGraph, PathN));
-    // std::cout<<"TEST 2 done"<<std::endl;
 
     Len = PathFunctions<ScalarType>::PathWeight(TGraph, PathN);
 
@@ -251,24 +276,12 @@ private:
       if (!has_direct) {
         if (enable_when_need)
           TGraph.DisableNodes(DisabledSwap);
+        FailedTrace()++;
         return TraceNotDirect;
       }
     }
 
-    // auto t2 = std::chrono::high_resolution_clock::now();
-
-    // auto elapsed0 =
-    //     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
-    // auto elapsed1 =
-    //     std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-
-    // double TimeTrac = elapsed0.count() * 1e-6;
-    // double TimeDirect = elapsed1.count() * 1e-6;
-
-    // std::cout<<"TIME TRAC/DIRECT "<<TimeTrac/TimeDirect<<std::endl;
-
-    // FindArrivalNodesFromVertex(SampledVert,StartingNodes);
-
+    
     if (simplify)
       Geo::PathFunctions<ScalarType>::SimplifyConnection(TGraph, PathN);
 

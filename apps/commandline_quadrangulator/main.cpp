@@ -57,7 +57,7 @@ std::string Outfolder;
 
 typedef double ScalarType;
 
-bool extended_print = false;
+bool extended_print = true;
 // MESH DATA
 bool loadedMesh = false;
 std::vector<Geo::Point3<ScalarType>> TriVertPos;
@@ -558,11 +558,12 @@ int main(int argc, char *argv[]) {
       // exit(0);
     }
 
-    if (extended_print)
-      std::cout << "BATCH PROCESSING" << std::endl;
+    // if (extended_print)
+    //   std::cout << "BATCH PROCESSING" << std::endl;
 
     if ((has_features) && (add_features)) {
-      std::cout << "** ADDING FEATURES **" << std::endl;
+      if (extended_print)
+        std::cout << "ADDING FEATURES" << std::endl;
 
       std::vector<std::pair<int, int>> AddedFeatures;
       std::vector<int> AddedCorners;
@@ -584,7 +585,7 @@ int main(int argc, char *argv[]) {
     }
     if ((!has_features) && (compute_features)) {
       if (extended_print)
-        std::cout << "** COMPUTING FEATURES **" << std::endl;
+        std::cout << "COMPUTING FEATURES" << std::endl;
       Geo::MeshFeatures<ScalarType>::FeatureCornersClean(
           TriVertPos, TriConnectivity, initial_feature_angle, TriFeatures,
           TriCorners, ero_steps, dil_steps);
@@ -599,29 +600,12 @@ int main(int argc, char *argv[]) {
                 << " corners" << std::endl;
     }
 
-    //  ComputeNormals(TriVertPos, TriConnectivity, T`riFaceNormal,
-    //  TriVertNormal);
-
-    //  Geo::MeshFeatures<ScalarType>::GetVertIndexFromBoolCorners(TriCorners,
-    //  TriCorners);
-    //  Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(TriConnectivity,
-    //  TriFeatures, TriFeatures); std::cout << "Mapped " << TriFeatures.size()
-    //  << " features after cleaning"
-    //           << std::endl;
-
-    //  if (extended_print)
-    //    std::cout << "GETTING DUAL" << std::endl;
-
-    //  // get the dual
-    //  std::vector<int> PerDualPatchFaceIDX, PerDualPatchCornerIDX;
-    //  GetDualMesh(TriVertPos, TriConnectivity, TriFeatures, TriCorners,
+   
     if (!has_cross_field) {
+      if (extended_print)
+        std::cout << "COMPUTING CROSS FIELD" << std::endl;
       BatchProcessField();
     }
-
-    // std::sort(TriFeatures.begin(), TriFeatures.end());
-    // auto last = std::unique(TriFeatures.begin(), TriFeatures.end());
-    // TriFeatures.erase(last, TriFeatures.end());
 
     if (extended_print)
       std::cout << "ESTEEM REMESH SIZE" << std::endl;
@@ -636,7 +620,7 @@ int main(int argc, char *argv[]) {
     MQuad.QuadSmoothSteps = smooth_steps;
     // MQuad.RegVsIso=0.1;
     MQuad.CCAbility = 0.5; // 25;
-    MQuad.num_samples = 3000;
+    MQuad.num_samples = 6000;//3000;
 
     MQuad.ExtractQuad(TriFeatures);
 
@@ -647,11 +631,7 @@ int main(int argc, char *argv[]) {
       RemoveDuplicatedVert(QuadVert, QuadFaces);
     }
     SaveMesh();
-    // ProjectName = GetFilanameNoExtension(PathMesh);
-    // ProjectName += std::string("_quad.obj");
-    // std::cout << "Writing:" << ProjectName << std::endl;
-
-    // WriteOBJ(ProjectName.c_str(), QuadVert, QuadFaces);
+    
   }
 
   return 0;

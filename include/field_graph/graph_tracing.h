@@ -31,6 +31,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <list>
 #include <set>
 // #include "graph_frame_field.h"
@@ -94,8 +95,11 @@ public:
     bool onlyVisible;
     bool stopAtPrevDist;
     bool uniformW;
+    // bool useAStar;
     int MaxSteps;
     bool checkEnabled;
+    int MaxNeigh;
+    // bool jumpIndirectOnly;
 
     ShortestPathParam() {
       avoid_zero_path = true;
@@ -106,8 +110,11 @@ public:
       onlyVisible = true;
       stopAtPrevDist = false;
       MaxSteps = -1;
-      uniformW=false;
-      checkEnabled=true;
+      uniformW = false;
+      // useAStar=true;
+      checkEnabled = true;
+      MaxNeigh = -1;
+      // jumpIndirectOnly=false;
     }
   };
 
@@ -126,8 +133,8 @@ public:
       TGraph.Father(IndexN0) = -1;
       TGraph.Source(IndexN0) = IndexN0;
       TGraph.Steps(IndexN0) = 0;
-      //assert(TGraph.EnabledN[IndexN0]);
-      //it can be not enabled then I remove from seeds
+      // assert(TGraph.EnabledN[IndexN0]);
+      // it can be not enabled then I remove from seeds
       if (SParam.checkEnabled && (!TGraph.EnabledN[IndexN0]))
         continue;
       Heap.push_back(HeapEntry(IndexN0, 0, IndexN0));
@@ -174,7 +181,9 @@ public:
 
       // go over neighbours
       // for (size_t i=0;i<TGraph.N[CurrN].size();i++)
+      int pushedNeigh = 0;
       for (size_t i = 0; i < TGraph.NeighSize(CurrN); i++) {
+        
         // check if the link is enabled
         if (SParam.checkEnabled && (!TGraph.ActiveLink(CurrN, i)))
           continue;
@@ -185,27 +194,38 @@ public:
 
         // size_t NextN=TGraph.N[CurrN][i];
         size_t NextN = TGraph.NodeLink(CurrN, i);
+
+        //limit the number of neighbour to push only in case the next is not arrival point
+          if (SParam.MaxNeigh > 0)
+          {
+            bool HasCompletedNext = false;
+            for (size_t j = 0; j < SELECTED_GRAPH_FLAG; j++)
+              HasCompletedNext |=
+                  (SParam.StopAtSel[j] && TGraph.IsSelected(NextN, j));
+            if (!HasCompletedNext && (pushedNeigh >= SParam.MaxNeigh))
+              continue;
+          }
+       
         // if (!TGraph.EnabledN[NextN])
         //   continue;
         if (SParam.checkEnabled && (!TGraph.EnabledN[NextN]))
           continue;
-        ScalarType NextStep=TGraph.WeightLink(CurrN, i);
-        //other
-        if (SParam.uniformW)
-        {
-          //uniform plus a small value to disambuguate when have the same 
-          //number of arcs
-          // ScalarType delta=TGraph.AverageWeigth()*0.001;
-          // NextStep=1+(delta*NextStep);
-          ScalarType delta=0.001;
-          NextStep=TGraph.AverageWeigth()+(delta*NextStep);
+        ScalarType NextStep = TGraph.WeightLink(CurrN, i);
+        // other
+        if (SParam.uniformW) {
+          // uniform plus a small value to disambuguate when have the same
+          // number of arcs
+          //  ScalarType delta=TGraph.AverageWeigth()*0.001;
+          //  NextStep=1+(delta*NextStep);
+          ScalarType delta = 0.001;
+          NextStep = TGraph.AverageWeigth() + (delta * NextStep);
         }
-        if(NextStep<=0)
-        {
-          std::cout<<"W:"<<NextStep<<std::endl;
+        if (NextStep <= 0) {
+          std::cout << "Negative Weight:" << NextStep << std::endl;
           exit(0);
         }
-        ScalarType NextWeight = CurrWeight + NextStep;//TGraph.WeightLink(CurrN, i);
+        ScalarType NextWeight =
+            CurrWeight + NextStep; // TGraph.WeightLink(CurrN, i);
         ScalarType OldWeight = std::numeric_limits<ScalarType>::max();
 
         // check if has been explored or not
@@ -229,14 +249,13 @@ public:
 
           if ((SParam.MaxSteps > 0) &&
               (TGraph.Steps(NextN) > SParam.MaxSteps)) {
-            //                        std::cout<<"Max
-            //                        Steps"<<SParam.MaxSteps<<std::endl;
-            //                        std::cout<<"Next
-            //                        Steps"<<TGraph.Steps(NextN)<<std::endl;
             continue;
           }
-          Heap.push_back(HeapEntry(NextN, NextWeight, CurrSource));
+          ScalarType NextW = NextWeight;
+
+          Heap.push_back(HeapEntry(NextN, NextW, CurrSource));
           push_heap(Heap.begin(), Heap.end());
+          pushedNeigh++;
         }
       }
 

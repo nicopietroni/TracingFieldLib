@@ -38,8 +38,8 @@
 #include <map>
 #include <queue>
 #include <set>
-//#include <sys/_types/_size_t.h>
-#include <cstddef>   // C++
+// #include <sys/_types/_size_t.h>
+#include <cstddef> // C++
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -54,12 +54,18 @@
 
 template <class ScalarType> class OrientFLowGraph {
 
+  //for each node the variable and patch it belongs to
   std::vector<std::pair<int, int>> Node_to_VarPatch;
+  //for each variable and patch the node index 
+  //(NOTICE one patch have two nodes for the two sides)
   std::map<std::pair<int, int>, int> VarPatch_to_Node;
-  // std::vector<std::vector<int> > ExitPatchNode,EnterPatchNode;
+
+  //for each variable the two patches it belongs to
   std::vector<std::pair<int, int>> VarPatch;
+  //for each variable the list of patch and side it belongs to
   std::vector<std::vector<std::pair<int, int>>> VarPatchSide;
 
+  //graph data
   std::vector<std::vector<int>> GraphAdj;
   std::vector<std::vector<ScalarType>> GraphWeight;
   std::vector<ScalarType> GraphNodeWeight;
@@ -74,6 +80,7 @@ template <class ScalarType> class OrientFLowGraph {
   std::vector<int> TargetDecr;
   std::vector<int> SourceParity;
   std::vector<int> TargetParity;
+  //for each patch for each side the list of variables
   const std::vector<std::vector<std::vector<int>>> &PatchSideVariables;
   std::vector<int> &VarValue;
   std::vector<int> &VarTargetValue;
@@ -254,6 +261,9 @@ template <class ScalarType> class OrientFLowGraph {
     assert(IndexVar < VarTargetValue.size());
     ScalarType TargetVal = VarTargetValue[IndexVar];
     ScalarType Diff = pow((TestValue - TargetVal), 2);
+    // ScalarType Diff = ((ScalarType) std::max((ScalarType)TestValue,
+    // TargetVal)/ (ScalarType)std::min((ScalarType)TestValue,
+    // (ScalarType)TargetVal)); Diff = pow(Diff, 2);
     return Diff;
   }
 
@@ -468,8 +478,11 @@ template <class ScalarType> class OrientFLowGraph {
 
     // count number of variables
     int MaxV = 0;
+    //for each patch
     for (size_t i = 0; i < PatchSideVariables.size(); i++)
+    //for each side
       for (size_t j = 0; j < PatchSideVariables[i].size(); j++)
+        //for each variable
         for (size_t k = 0; k < PatchSideVariables[i][j].size(); k++)
           MaxV = std::max(MaxV, PatchSideVariables[i][j][k]);
 
@@ -504,7 +517,8 @@ template <class ScalarType> class OrientFLowGraph {
       int IndexP0 = VarPatch[i].first;
       int IndexP1 = VarPatch[i].second;
       assert(IndexP0 != IndexP1);
-
+      //one of the two can be -1 if the variable is only in one patch, 
+      // in that case we put the other patch as -1
       int IndexN0 = i * 2;
       int IndexVar = i;
       Node_to_VarPatch[IndexN0].first = IndexVar;
@@ -538,8 +552,8 @@ template <class ScalarType> class OrientFLowGraph {
     }
     ConnectionsW.resize(Connections.size(), 1);
     if (WriteDebug)
-    std::cout << "There are " << Connections.size() << " Connections "
-              << std::endl;
+      std::cout << "There are " << Connections.size() << " Connections "
+                << std::endl;
 
     InitAdjGraphFromLinks(Connections, ConnectionsW);
   }
@@ -850,13 +864,11 @@ template <class ScalarType> class OrientFLowGraph {
       assert(curr_sourceN >= 0);
       assert(curr_sourceN < Node_to_VarPatch.size());
 
-      std::vector<int> curt_target =
-          AdmissibleTargets(curr_sourceN, TargetN, check_common_patch);
+      std::vector<int> curt_target = AdmissibleTargets(curr_sourceN, TargetN, check_common_patch);
       std::vector<int> curt_source(1, curr_sourceN);
 
-      // std::cout << "Curr Source:" << curr_sourceN << std::endl;
-      // std::cout << "Curr Target Size:" << curt_target.size() << std::endl;
-
+      //std::cout << "Reduced Target Size" << TargetN.size()-curt_target.size() << std::endl;
+      
       ShortestPathResult SRes = ShortestPath(curt_source, curt_target);
 
       if (!SRes.found)
@@ -893,6 +905,26 @@ template <class ScalarType> class OrientFLowGraph {
 
     // std::cout << "*** FINDING INCREASE PATHS ***" << std::endl;
     IncreasePaths = FindPaths(SourceIncr, TargetIncr, false);
+    // std::cout << "Source Increase Num:" << SourceIncr.size() << std::endl;
+    // for (size_t i = 0; i < SourceIncr.size(); i++) {
+    //   int curr_sourceN = SourceIncr[i];
+    //   std::cout << "Source Increase Node:" << curr_sourceN << std::endl;
+    // }
+    // std::cout << "Target Increase Num:" << TargetIncr.size() << std::endl;
+    // for (size_t i = 0; i < TargetIncr.size(); i++) {
+    //   int curr_targetN = TargetIncr[i];
+    //   std::cout << "Target Increase Node:" << curr_targetN << std::endl;
+    // }
+    // std::cout << "Found " << IncreasePaths.size() << " increase paths"
+    //           << std::endl;
+
+    // std::vector<ShortestPathResult> IncreasePathsTest;
+    // std::vector<int> TargetIncrTest(TargetIncr);
+    // TargetIncrTest.insert(TargetIncrTest.end(),TargetDecr.begin(),TargetDecr.end());
+    // TargetIncrTest.insert(TargetIncrTest.end(),SourceDecr.begin(),SourceDecr.end());
+    // IncreasePathsTest = FindPaths(SourceIncr, TargetIncrTest, false);
+    //  std::cout << "Found " << IncreasePathsTest.size() << " increase paths with test target"
+    //           << std::endl;
     // std::cout << "*** DONE ***" << std::endl;
 
     // find the best path increase
@@ -916,6 +948,13 @@ template <class ScalarType> class OrientFLowGraph {
 
     // std::cout << "*** FINDING DECREASE PATHS ***" << std::endl;
     DecreasePaths = FindPaths(SourceDecr, TargetDecr, true);
+    // std::cout << "Source Decrease Num:" << SourceDecr.size() << std::endl;
+    // std::cout << "Target Decrease Num:" << TargetDecr.size() << std::endl;
+
+    // std::cout << "Found " << DecreasePaths.size() << " decrease paths"
+    //           << std::endl;
+
+    // exit(0);
     // std::cout << "*** DONE ***" << std::endl;
 
     if ((IncreasePaths.size() == 0) && (DecreasePaths.size() == 0))
@@ -943,14 +982,18 @@ template <class ScalarType> class OrientFLowGraph {
       return false;
 
     bool applied_change = false;
+    std::cout << "Best Increase Idx:" << BestIdxIncr << std::endl;
+    std::cout << "Best Decrease Idx:" << BestIdxDecr << std::endl;
+
+    std::cout << "Best Increase Err:" << BestWIncr << std::endl;
+    std::cout << "Best Decrease Err:" << BestWDecr << std::endl;
     if ((BestWDecr < BestWIncr) && (BestIdxDecr != -1)) {
-      // std::cout << "*** APPLYING Decrease ***" << std::endl;
+      std::cout << "*** APPLYING Decrease ***" << std::endl;
       ApplyDecrease(DecreasePaths[BestIdxDecr]);
       applied_change = true;
     } else {
-      // std::cout << "*** APPLYING Increase ***" << std::endl;
-      if (BestIdxIncr != -1) 
-      {
+      std::cout << "*** APPLYING Increase ***" << std::endl;
+      if (BestIdxIncr != -1) {
         ApplyIncrease(IncreasePaths[BestIdxIncr]);
         applied_change = true;
       }
@@ -1040,7 +1083,6 @@ template <class ScalarType> class OrientFLowGraph {
 
     return true;
   }
-
 
   struct NodeRoute {
     enum Kind { NONE, CYCLE, SRC_TO_SINK } kind = NONE;
@@ -1465,7 +1507,7 @@ template <class ScalarType> class OrientFLowGraph {
       assert(EnabledN[NodeIdx[i]]);
       ScalarType CurrPrio = PriorityChange(NodeIdx[i], Diff, true);
       Prio += PriorityChange(NodeIdx[i], Diff);
-      //Prio = std::max(Prio,PriorityChange(NodeIdx[i], Diff));
+      // Prio = std::max(Prio,PriorityChange(NodeIdx[i], Diff));
     }
     return Prio;
   }
@@ -1509,7 +1551,7 @@ template <class ScalarType> class OrientFLowGraph {
     // only once
     for (size_t i = 0; i < CycleRes.results.size(); i++) {
       NodeRoute CurrR = CycleRes.results[i].second;
-      //assert(CurrR.kind != NodeRoute::SRC_TO_SINK);
+      // assert(CurrR.kind != NodeRoute::SRC_TO_SINK);
       if (CurrR.kind == NodeRoute::CYCLE) {
         assert(CurrR.nodes[0] == CurrR.nodes.back());
         CurrR.nodes.pop_back();
@@ -1543,7 +1585,7 @@ template <class ScalarType> class OrientFLowGraph {
     SetupNodeWeightChange(1, true);
 
     if (WriteDebug)
-    std::cout << "*** Computing Increment Resizing Cycles.." << std::endl;
+      std::cout << "*** Computing Increment Resizing Cycles.." << std::endl;
     PerNodeResult IncrRes = computePerNodeShortestRouteVarUnique(
         VarNode, StartNIncr); // computePerNodeShortestRoute(StartNIncr);
     if (WriteDebug)
@@ -1561,7 +1603,7 @@ template <class ScalarType> class OrientFLowGraph {
         computePerNodeShortestRouteVarUnique(VarNode, StartNDecr);
     if (WriteDebug)
       std::cout << "Computed " << DecrRes.results.size() << " decrement Paths"
-              << std::endl;
+                << std::endl;
     PerNodeResult AllRes = IncrRes;
     AllRes.Add(DecrRes);
 
@@ -1682,9 +1724,9 @@ public:
       // if (WriteDebug)
       //   std::cout << "Performed Parity step" << std::endl;
     } while (changed);
-    
+
     if (WriteDebug)
-    std::cout << "Performed " << steps << " Parity size step" << std::endl;
+      std::cout << "Performed " << steps << " Parity size step" << std::endl;
 
     for (size_t i = 0; i < VarValue.size(); i++) {
       assert(VarValue[i] >= 1);
@@ -1843,8 +1885,8 @@ template <class ScalarType> class ConstraintGraph {
         NotParityNodes.push_back(i);
     }
     if (WriteDebug)
-    std::cout << "Num Not Parity Constraints " << NotParityNodes.size()
-              << std::endl;
+      std::cout << "Num Not Parity Constraints " << NotParityNodes.size()
+                << std::endl;
     // allocate all possible variables and links
     ParityConstrLinks.resize(VarValue.size());
     for (size_t i = 0; i < ParityConstr.size(); i++) {
@@ -2356,7 +2398,6 @@ template <class ScalarType> class ConstraintGraph {
   }
 
 public:
-
   bool WriteDebug;
   void
   SolveParity(std::vector<std::vector<std::vector<int>>> &_PatchSideVariables) {
@@ -2388,7 +2429,9 @@ public:
 
   ConstraintGraph(std::vector<int> &_VarValue,
                   std::vector<int> &_VarTargetValue)
-      : VarTargetValue(_VarTargetValue), VarValue(_VarValue) {WriteDebug=false;}
+      : VarTargetValue(_VarTargetValue), VarValue(_VarValue) {
+    WriteDebug = false;
+  }
 };
 
 #endif

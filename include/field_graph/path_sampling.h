@@ -321,14 +321,74 @@ public:
   //                                                                RadiusStar,4,SampledVert);
   // }
 
+  // void SampleTracingVert(int NumSources, std::vector<int> &SampledVert,
+  //                        const int IndexMark = -1) {
+  //   int MinBorderSample = 4;
+
+  //   std::vector<int> SampleableV;
+  //   GetSamplableVert(SampleableV);
+  //   int RadiusStar = Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(
+  //       SampleableV.size(), NumSources);
+
+  //   // int RadiusStar=VertPos.size()/NumSources;
+
+  //   SampledVert.clear();
+  //   Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(
+  //       VertPos.size(), Connectivity, RadiusStar, MinBorderSample, SampledVert,
+  //       &SampleableV);
+
+  //   std::vector<int> ForcedV;
+  //   GetForcedSampleVert(ForcedV);
+  //   SampledVert.insert(SampledVert.end(), ForcedV.begin(), ForcedV.end());
+
+  //   // // then sample previous sampled paths
+  //   // std::set<int> SampleableVSet(SampleableV.begin(), SampleableV.end());
+  //   // for (size_t i = 0; i < SelectedPaths.size(); i++) {
+
+  //   //   int SampleStep = RadiusStar;
+  //   //   size_t pathSize = SelectedPaths[i].size();
+  //   //   size_t minSamples = 4;
+
+  //   //   // Calcola il numero minimo di campioni necessari
+  //   //   SampleStep = std::max(SampleStep, static_cast<int>(pathSize /
+  //   //   minSamples));
+
+  //   //   for (size_t s = (SampleStep / 2); s < SelectedPaths[i].size();s +=
+  //   //   SampleStep)
+  //   //   {
+  //   //     if (s >= SelectedPaths[i].size())
+  //   //       break;
+  //   //     int IndexV = Field::CrossFieldGraph::ElemOfNode(SelectedPaths[i][s]);
+  //   //     assert(IndexV < VertPos.size());
+  //   //     assert(IndexV >= 0);
+  //   //     // if (!SampleableV[IndexV])continue;
+  //   //     if (SampleableVSet.count(IndexV) == 0)
+  //   //       continue;
+  //   //     SampledVert.push_back(IndexV);
+  //   //   }
+  //   // }
+  //   //  if (IndexMark!=-1)
+  //   //  {
+  //   //      std::vector<int> MarkedV;
+  //   //      GetMarkedVert(IndexMark,MarkedV);
+  //   //      //           std::cout<<" There are "<< MarkedV.size()<<"places to
+  //   //      sample "<<std::endl;
+  //   //      //RadiusStar=MarkedV.size()/NumSources;
+  //   //      RadiusStar=Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(MarkedV.size(),NumSources);
+  //   //      Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,
+  //   //                                                             RadiusStar,4,SampledVert,&MarkedV);
+  //   //  }
+  //   //  else
+  //   //      Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,
+  //   //                                                             RadiusStar,4,SampledVert);
+  // }
+
   void SampleTracingVert(int NumSources, std::vector<int> &SampledVert,
-                         const int IndexMark = -1) {
-    // ScalarType AreaC=VertPos.size()/NumSources
+                         int &NumSamplable) {
     int MinBorderSample = 4;
 
     std::vector<int> SampleableV;
     GetSamplableVert(SampleableV);
-    // std::cout<<"DE BOIA "<<SampleableV.size()<<std::endl;
     int RadiusStar = Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(
         SampleableV.size(), NumSources);
 
@@ -338,53 +398,11 @@ public:
     Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(
         VertPos.size(), Connectivity, RadiusStar, MinBorderSample, SampledVert,
         &SampleableV);
-    // for (size_t i=0;i<VertPos.size();i++)
-    //   SampledVert.push_back(i);
 
     std::vector<int> ForcedV;
     GetForcedSampleVert(ForcedV);
     SampledVert.insert(SampledVert.end(), ForcedV.begin(), ForcedV.end());
-
-    // // then sample previous sampled paths
-    // std::set<int> SampleableVSet(SampleableV.begin(), SampleableV.end());
-    // for (size_t i = 0; i < SelectedPaths.size(); i++) {
-
-    //   int SampleStep = RadiusStar;
-    //   size_t pathSize = SelectedPaths[i].size();
-    //   size_t minSamples = 4;
-
-    //   // Calcola il numero minimo di campioni necessari
-    //   SampleStep = std::max(SampleStep, static_cast<int>(pathSize /
-    //   minSamples));
-
-    //   for (size_t s = (SampleStep / 2); s < SelectedPaths[i].size();s +=
-    //   SampleStep)
-    //   {
-    //     if (s >= SelectedPaths[i].size())
-    //       break;
-    //     int IndexV = Field::CrossFieldGraph::ElemOfNode(SelectedPaths[i][s]);
-    //     assert(IndexV < VertPos.size());
-    //     assert(IndexV >= 0);
-    //     // if (!SampleableV[IndexV])continue;
-    //     if (SampleableVSet.count(IndexV) == 0)
-    //       continue;
-    //     SampledVert.push_back(IndexV);
-    //   }
-    // }
-    //  if (IndexMark!=-1)
-    //  {
-    //      std::vector<int> MarkedV;
-    //      GetMarkedVert(IndexMark,MarkedV);
-    //      //           std::cout<<" There are "<< MarkedV.size()<<"places to
-    //      sample "<<std::endl;
-    //      //RadiusStar=MarkedV.size()/NumSources;
-    //      RadiusStar=Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(MarkedV.size(),NumSources);
-    //      Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,
-    //                                                             RadiusStar,4,SampledVert,&MarkedV);
-    //  }
-    //  else
-    //      Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,
-    //                                                             RadiusStar,4,SampledVert);
+    NumSamplable = SampleableV.size();
   }
 
   int NumAllowPathNeigh(int IndexN) {
@@ -1133,9 +1151,7 @@ private:
 
           std::vector<int> TracedPath;
           ScalarType PathL;
-          bool has_traced = TraceCandidate(GraphInstances[t], i,
-          ArrivalNodes,
-                                           TracedPath, PathL);
+          bool has_traced = TraceCandidate(GraphInstances[t], i,ArrivalNodes,TracedPath, PathL);
 
           if (!has_traced)
             continue;
@@ -1207,7 +1223,8 @@ private:
 
     // sample the initial vertices
     std::vector<int> SampledVert;
-    SampleTracingVert(NumSamples, SampledVert);
+    int NumSampleable;
+    SampleTracingVert(NumSamples, SampledVert,NumSampleable);
     // std::cout << "Test 1 " << SampledVert.size() << " Vertices"
     //           << std::endl;
     //  add in between singularity samples
@@ -1232,7 +1249,8 @@ private:
       std::cout << "Sampling on " << SampledVert.size() << " Vertices"
                 << std::endl;
     }
-
+    // std::cout << "Num Sampleable Vertices " << NumSampleable << std::endl;
+    // std::cout << "Num Sampled Vertices " << SampledVert.size() << std::endl<< std::endl;
     // exit(0);
     //  FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
     FindSampledNodesFromVertex(SampledVert, StartingNodes);
@@ -1943,6 +1961,7 @@ public:
   void GetSamplableVert(std::vector<int> &SamplVert) {
     SamplVert.clear();
     assert(sample_on.size() == VertPos.size());
+    //SamplVert.reserve(sample_on.size());
     for (size_t i = 0; i < sample_on.size(); i++) {
       if (!sample_on[i])
         continue;

@@ -137,30 +137,14 @@ inline void FindVertexStar(const std::vector<std::vector<int>> &connections,
   Kernel.clear();
   Kernel.resize(NumVert);
   for (size_t i = 0; i < connections.size(); i++) {
-    // int sizeF=connections[i].size();
-    // for (size_t j = 0; j < connections[i].size(); j++) {
-    //   int VertIDX0 = connections[i][j];
-    //   for (size_t k = 0; k < connections[i].size(); k++) {
-    //     if (j == k)
-    //       continue;
-    //     int VertIDX1 = connections[i][k];
-    //     assert(VertIDX0 != VertIDX1);
-    //     Kernel[VertIDX0].push_back(VertIDX1);
-    //     Kernel[VertIDX1].push_back(VertIDX0);
-    //   }
-    // }
+   
     int sizeF = connections[i].size();
     for (size_t j = 0; j < connections[i].size(); j++) {
       int VertIDX0 = connections[i][j];
       int VertIDX1 = connections[i][(j + 1) % sizeF];
-      // for (size_t k = 0; k < connections[i].size(); k++) {
-      //   if (j == k)
-      //     continue;
-      //   int VertIDX1 = connections[i][k];
-      //   assert(VertIDX0 != VertIDX1);
+     
       Kernel[VertIDX0].push_back(VertIDX1);
       Kernel[VertIDX1].push_back(VertIDX0);
-      // }
     }
   }
   // make them unique
@@ -204,10 +188,6 @@ inline int FindMaxVertIdx(const std::vector<std::pair<int, int>> &Edges) {
 inline void FindVertexStar(const std::vector<std::vector<int>> &connections,
                            std::vector<std::vector<int>> &Kernel,
                            const int extend_step = 0) {
-  //    int NumV=0;
-  //    for (size_t i=0;i<connections.size();i++)
-  //        for (size_t j=0;j<connections[i].size();j++)
-  //            NumV=std::max(NumV,connections[i][j]);
   int NumV = FindMaxVertIdx(connections);
   NumV++; // num vertices is bigger index +1
 

@@ -805,7 +805,7 @@ void SetRenderBar() {
   if (ImGui::CollapsingHeader("DRAW SUBDIVISION")) {
     // ImGui::Checkbox("Draw Assing TJunct", &DrawAssignTJuctions);
     // ImGui::Checkbox("Draw Side Samples Sample", &DrawSubdivision);
-    ImGui::Checkbox("Draw Side Samples Sample", &DrawSubdivision);
+    ImGui::Checkbox("Draw Side Samples", &DrawSubdivision);
     ImGui::Checkbox("Draw Assign Values", &DrawAssignValues);
   }
   ImGui::End();

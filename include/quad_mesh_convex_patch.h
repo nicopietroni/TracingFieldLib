@@ -41,8 +41,8 @@
 #include <set>
 #include <utility>
 #include <vector>
-#ifndef SMOOTH_WITH_PATCHES
-#define SMOOTH_WITH_PATCHES
+#ifndef CONVEX_QUAD_PATCHES
+#define CONVEX_QUAD_PATCHES
 
 namespace Geo {
 
@@ -60,7 +60,7 @@ template <class ScalarType> class ConvexPatchFinder {
   // using clock_t = std::chrono::steady_clock;
   // using ns = std::chrono::nanoseconds;
 
-  int ExpandingSideScore(const std::vector<Geo::Point3<ScalarType>> &PatchPos,
+  void ExpandingSideScore(const std::vector<Geo::Point3<ScalarType>> &PatchPos,
                          const std::vector<std::vector<int>> &PatchFaces,
                          const std::vector<std::vector<Pos3>> &Side,
                          const int CentralV,

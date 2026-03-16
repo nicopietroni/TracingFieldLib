@@ -3036,10 +3036,21 @@ public:
     // FIX ARTIFICIALLY THE WRONG PATCHES
     PatchMan.FixWrongValencePatches();
     // PatchMan.InitVisualCornersEdges();
+    int num_traced = Geo::GraphTracing<ScalarType>::TotalTrace();
+    int num_loops = Geo::GraphTracing<ScalarType>::NumLoops();
+    int failed_trace = Geo::GraphTracing<ScalarType>::FailedTrace();
+
     std::cout << std::endl;
     std::cout << "<<< Decompose TIMINGS (sec) >>> " << std::endl;
     std::cout << "* Init: " << TimeInit << std::endl;
     std::cout << "* Tracing: " << TimeTracing << std::endl;
+    // std::cout << "---- Number of Traced Paths: " << num_traced << std::endl;
+    // std::cout << "---- Failed Traces: " << failed_trace << std::endl;
+    // std::cout << "---- Number of Loops: " << num_loops << std::endl;
+    // std::cout << "---- Time Tracing Loops: " << Geo::GraphTracing<ScalarType>::TimeTracingLoops()*1e-6 << std::endl;
+    // std::cout << "---- Time Tracing Open: " << Geo::GraphTracing<ScalarType>::TimeTracingOpen()*1e-6 << std::endl;
+    // std::cout << "---- Time Fail Trace: " << Geo::GraphTracing<ScalarType>::TimeFailTrace()*1e-6 << std::endl;
+
     std::cout << "* Updating Conditions: " << TimeUpdateConditions << std::endl;
     std::cout << "* Updating Patches: " << TimeUpdateUpdatePatches << std::endl;
     // std::cout << "---- Updating Patches 0: " << PatchMan.TimeUpdatePatches[0] << std::endl;
