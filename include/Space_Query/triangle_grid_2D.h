@@ -27,6 +27,7 @@
 #ifndef TRIANGLE_GRID_2D
 #define TRIANGLE_GRID_2D
 
+#include <iostream>
 #include <vector>
 #include "grid_basics_2D.h"
 #include <point2.h>
@@ -196,8 +197,10 @@ public:
               const std::vector<std::vector<int> > &face)
     {
         bbox.SetEmpty();
+        
         TMark=0;
         FaceMark.clear();
+
         FaceMark.resize(face.size(),0);
 
         bbox.Init(vert);

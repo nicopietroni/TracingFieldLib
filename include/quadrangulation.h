@@ -36,6 +36,7 @@
 #include "mesh_functions.h"
 #include "point2.h"
 #include "point3.h"
+#include "quad2.h"
 #include "quadrangulationLUT.h"
 #include "segment2.h"
 #include "triangle3.h"
@@ -53,6 +54,88 @@ namespace Geo {
 
 template <class ScalarType> class Quadrangulation {
 public:
+  static bool SampleRegularSubPatch(
+      const std::vector<Geo::Point2<ScalarType>> &PatchVertUV,
+      const Geo::TriangleSpatialIndex2D<ScalarType> &PatchUVGrid,
+      const std::vector<Geo::Point3<ScalarType>> &PatchVert3D,
+      const std::vector<std::vector<int>> &Patch_Faces, const int SizeX,
+      const int SizeY, const Geo::Quad2<ScalarType> &DomainQuadUV,
+      std::vector<Geo::Point2<ScalarType>> &QuadVertUV,
+      std::vector<Geo::Point3<ScalarType>> &QuadVert3D,
+      std::vector<std::vector<int>> &QuadFaces)
+
+  {
+    std::vector<std::vector<Geo::Point2<ScalarType>>> SampledPosUV;
+    std::vector<std::vector<Geo::Point3<ScalarType>>> Sampled3D;
+    std::vector<std::vector<int>> IndexSampled;
+
+    QuadVertUV.clear();
+    QuadVert3D.clear();
+    QuadFaces.clear();
+    if (SizeX == 0 || SizeY == 0)
+      return false;
+
+    // then update the indexes
+    DomainQuadUV.SampleBilinear(SizeX, SizeY, SampledPosUV);
+    IndexSampled.resize(SampledPosUV.size());
+    // then set the index of the sampled UVs
+    for (size_t x = 0; x < SampledPosUV.size(); x++) {
+      IndexSampled[x].resize(SampledPosUV[x].size(), -1);
+      for (size_t y = 0; y < SampledPosUV[x].size(); y++) {
+        QuadVertUV.push_back(SampledPosUV[x][y]);
+        IndexSampled[x][y] = QuadVertUV.size() - 1;
+      }
+    }
+
+    // then retrieve the 3D position for each sampled UV
+    Sampled3D.resize(SampledPosUV.size());
+    for (size_t x = 0; x < SampledPosUV.size(); x++) {
+      Sampled3D[x].resize(SampledPosUV[x].size());
+      for (size_t y = 0; y < SampledPosUV[x].size(); y++) {
+        Geo::Point2<ScalarType> P = SampledPosUV[x][y];
+        Geo::Point3<ScalarType> BaryCoords;
+        int IndexF = -1;
+        bool found = PatchUVGrid.FirstTrianglesOverPoint(
+            PatchVertUV, Patch_Faces, P, IndexF, BaryCoords);
+        if (!found)
+          return false;
+
+        assert(IndexF != -1);
+
+        int IndexV0 = Patch_Faces[IndexF][0];
+        int IndexV1 = Patch_Faces[IndexF][1];
+        int IndexV2 = Patch_Faces[IndexF][2];
+
+        Geo::Point3<ScalarType> P0 = PatchVert3D[IndexV0];
+        Geo::Point3<ScalarType> P1 = PatchVert3D[IndexV1];
+        Geo::Point3<ScalarType> P2 = PatchVert3D[IndexV2];
+
+        Geo::Point3<ScalarType> InterpP =
+            P0 * BaryCoords.X + P1 * BaryCoords.Y + P2 * BaryCoords.Z;
+        Sampled3D[x][y] = InterpP;
+        QuadVert3D.push_back(InterpP);
+      }
+    }
+
+    // then retrieve the 3D point
+    QuadFaces.clear();
+    for (size_t i = 0; i < IndexSampled.size() - 1; i++) {
+      for (size_t j = 0; j < IndexSampled[i].size() - 1; j++) {
+        int IndexV0 = IndexSampled[i][j];
+        int IndexV1 = IndexSampled[i + 1][j];
+        int IndexV2 = IndexSampled[i + 1][j + 1];
+        int IndexV3 = IndexSampled[i][j + 1];
+        QuadFaces.resize(QuadFaces.size() + 1);
+        QuadFaces.back().push_back(IndexV0);
+        QuadFaces.back().push_back(IndexV1);
+        QuadFaces.back().push_back(IndexV2);
+        QuadFaces.back().push_back(IndexV3);
+      }
+    }
+    
+    return true;
+  }
+
   static void SampleRegular(
       const std::vector<Geo::Point2<ScalarType>> &PatchVertUV,
       const std::vector<Geo::Point3<ScalarType>> &PatchVert3D,
@@ -383,7 +466,8 @@ public:
 
       // only if the patch corner side is 4
       if (PatchCornerIdx[i].size() != 4) {
-        std::cout<<"Warning Quadrangulation of Patch with Corner Num !=4"<<std::endl;
+        std::cout << "Warning Quadrangulation of Patch with Corner Num !=4"
+                  << std::endl;
         problematic_patches++;
         continue;
       }

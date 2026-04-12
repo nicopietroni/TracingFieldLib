@@ -199,6 +199,124 @@ bool LoadOBJ(std::string meshFile,
     return has_loaded;
 }
 
+// ---------------------------------------------------
+// clamp utility for colors in [0,1]
+// ---------------------------------------------------
+template <class ScalarType>
+static ScalarType Clamp01(ScalarType v)
+{
+    return std::max(ScalarType(0), std::min(ScalarType(1), v));
+}
+
+// ---------------------------------------------------
+// Write .mtl file with one material per face
+// Each material encodes a face RGB color
+// ---------------------------------------------------
+template <class ScalarType>
+bool WriteMTLFromFaceColor(const std::string &mtlFile,
+                           const std::vector<std::vector<ScalarType>> &FaceColor,
+                           bool clampColors = true)
+{
+    std::ofstream mout(mtlFile.c_str());
+    if (!mout) return false;
+
+    mout << std::setprecision(17);
+
+    for (size_t i = 0; i < FaceColor.size(); ++i)
+    {
+        assert(FaceColor[i].size() == 3);
+
+        ScalarType r = FaceColor[i][0];
+        ScalarType g = FaceColor[i][1];
+        ScalarType b = FaceColor[i][2];
+
+        // Optionally clamp color values into [0,1]
+        if (clampColors)
+        {
+            r = Clamp01(r);
+            g = Clamp01(g);
+            b = Clamp01(b);
+        }
+
+        // Define a unique material for each face
+        mout << "newmtl face_mat_" << i << "\n";
+        mout << "Ka 0 0 0\n";                     // ambient
+        mout << "Kd " << r << " " << g << " " << b << "\n"; // diffuse color
+        mout << "Ks 0 0 0\n";                     // no specular
+        mout << "d 1.0\n";                        // fully opaque
+        mout << "illum 1\n\n";                    // simple illumination model
+    }
+
+    mout.close();
+    return true;
+}
+
+// ---------------------------------------------------
+// Write OBJ + MTL with per-face colors
+// Each face is assigned a material defined in the MTL
+// ---------------------------------------------------
+template <class ScalarType>
+bool WriteOBJWithFaceColor(const std::string &meshFile,
+                           const std::vector<std::vector<ScalarType>> &VertPos,
+                           const std::vector<std::vector<int>> &Connectivity,
+                           const std::vector<std::vector<ScalarType>> &FaceColor,
+                           bool clampColors = true)
+{
+    // Number of faces must match number of colors
+    if (Connectivity.size() != FaceColor.size())
+        return false;
+
+    // Build MTL filename (same path, same base name)
+    std::string mtlFile = RemoveExtension(meshFile) + ".mtl";
+
+    // In OBJ, reference only the filename (not full path)
+    std::string mtlFileName = GetFilaname(mtlFile);
+
+    // Write the material file first
+    if (!WriteMTLFromFaceColor(mtlFile, FaceColor, clampColors))
+        return false;
+
+    std::ofstream fout(meshFile.c_str());
+    if (!fout) return false;
+
+    fout << std::setprecision(17);
+
+    // Reference material library
+    fout << "mtllib " << mtlFileName << "\n";
+
+    // Write vertices
+    for (size_t i = 0; i < VertPos.size(); i++)
+    {
+        assert(VertPos[i].size() == 3);
+        fout << "v "
+             << VertPos[i][0] << " "
+             << VertPos[i][1] << " "
+             << VertPos[i][2] << "\n";
+    }
+
+    // Write faces/lines with per-face material assignment
+    for (size_t i = 0; i < Connectivity.size(); i++)
+    {
+        // Use "f" for faces, "l" for edges
+        std::string KeyElem("f");
+        if (Connectivity[i].size() == 2)
+            KeyElem = std::string("l");
+
+        // Assign material corresponding to this face
+        fout << "usemtl face_mat_" << i << "\n";
+        fout << KeyElem;
+
+        // OBJ uses 1-based indexing
+        for (size_t j = 0; j < Connectivity[i].size(); j++)
+            fout << " " << Connectivity[i][j] + 1;
+
+        fout << "\n";
+    }
+
+    fout.close();
+    return true;
+}
+
 template <class ScalarType>
 bool WriteOBJ(std::string meshFile,
               const std::vector<std::vector<ScalarType > > &VertPos,
@@ -317,6 +435,30 @@ bool WriteOBJ(std::string meshFile,
 }
 
 template <class ScalarType>
+bool WriteOBJWithFaceColor(const std::string &meshFile,
+                           const std::vector<Geo::Point3<ScalarType> > &VertPos,
+                           const std::vector<std::vector<int>> &Connectivity,
+                           const std::vector<Geo::Point3<ScalarType> > &FaceColor,
+                           bool clampColors = true)
+{
+    std::vector<std::vector<ScalarType > > VertPosVect(VertPos.size());
+    for (size_t i=0;i<VertPos.size();i++)
+    {
+        VertPosVect[i].push_back(VertPos[i].X);
+        VertPosVect[i].push_back(VertPos[i].Y);
+        VertPosVect[i].push_back(VertPos[i].Z);
+    }
+    std::vector<std::vector<ScalarType > > ColorVect(FaceColor.size());
+    for (size_t i=0;i<FaceColor.size();i++)
+    {
+        ColorVect[i].push_back(FaceColor[i].X);
+        ColorVect[i].push_back(FaceColor[i].Y);
+        ColorVect[i].push_back(FaceColor[i].Z);
+    }
+    return (WriteOBJWithFaceColor(meshFile,VertPosVect,Connectivity,ColorVect,clampColors));
+}
+
+template <class ScalarType>
 bool WriteOBJ(std::string meshFile,
               const std::vector<Geo::Point3<ScalarType> > &VertPos,
               const std::vector<Geo::Point2<ScalarType> > &UVPos,
@@ -355,30 +497,5 @@ bool WriteOBJ(std::string meshFile,
     return (WriteOBJ(meshFile,VertPosVect,Connectivity));
 }
 
-// template <class ScalarType>
-// bool WriteOFF(std::string meshFile,
-//               const std::vector<Geo::Point3<ScalarType> > &VertPos,
-//               const std::vector<std::vector<int> > &Connectivity)
-// {
-//     std::ofstream out(meshFile);
-//     if (!out.is_open())
-//         return false;
-
-//     out << "OFF\n";
-//     out << VertPos.size() << " " << Connectivity.size() << " 0\n";
-
-//     for (const auto& p : VertPos)
-//         out << p.X << " " << p.Y << " " << p.Z << "\n";
-
-//     for (const auto& face : Connectivity) {
-//         out << face.size();
-//         for (int idx : face)
-//             out << " " << idx;
-//         out << "\n";
-//     }
-
-//     out.close();
-//     return true;
-// }
 
 #endif

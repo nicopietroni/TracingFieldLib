@@ -42,13 +42,13 @@
 #include <IO/io_obj.h>
 #include <point3.h>
 
+#include "mesh_symmetry.h"
 #include <field_graph/refine_for_tracing.h>
 #include <init_cross_field.h>
 #include <mesh_mapping.h>
 #include <mesh_quadrangulation.h>
 #include <remesh_size.h>
 #include <triangular_remesh.h>
-#include "mesh_symmetry.h"
 
 std::string PathMesh;
 std::string PathField;
@@ -80,7 +80,7 @@ bool has_loaded_mesh = false;
 bool has_cross_field = false;
 bool has_features = false;
 bool to_split_symmetry = false;
-
+bool do_clean = true;
 ScalarType QuadSize;
 std::vector<Geo::Point3<ScalarType>> QuadVert;
 std::vector<std::vector<int>> QuadFaces;
@@ -124,18 +124,6 @@ void InitFieldByCurvature() {
 
   has_cross_field = true;
 }
-
-// void SaveMesh() {
-//   assert(!PathMesh.empty());
-//   std::string PathRemMesh = RemoveExtension(PathMesh);
-//   PathRemMesh += std::string("_remesh.obj");
-//   std::cout << "Saving Field on file " << PathRemMesh.c_str() << std::endl;
-//   bool Saved = WriteOBJ(PathRemMesh, TriVertPos, TriConnectivity);
-//   if (!Saved) {
-//     std::cout << "ERROR SAVING FIELD FILE " << std::endl;
-//     exit(0);
-//   }
-// }
 
 void SaveField() {
   assert(!PathMesh.empty());
@@ -240,6 +228,8 @@ int dil_steps = 3;
 bool compute_features = true;
 bool only_border_corners = false;
 bool add_features = false;
+bool save_layout = false;
+bool save_stats =true;
 int smooth_steps = 15;
 std::string folderProjectName;
 std::string commandLine;
@@ -290,104 +280,80 @@ void CreateOutputFolder() {
   // exit(0);
 }
 
-void SaveMesh() {
+void SaveMesh(bool save_color_quality = false) {
   std::string RemFile = Outfolder;
   RemFile += std::string(GetFilanameNoExtension(PathMesh));
   RemFile.append("_quad.obj");
   std::cout << std::endl;
   std::cout << "Saving on:" << RemFile.c_str() << std::endl;
-  WriteOBJ(RemFile, QuadVert, QuadFaces);
+
+  if (save_color_quality) {
+    std::vector<ScalarType> FaceAR;
+    Geo::AspectRatioScaledJacobian(QuadVert, QuadFaces, FaceAR);
+    std::vector<Geo::Point3<ScalarType>> QuadColors;
+    Geo::GetColorByScalar(FaceAR, 0.0, 1.0, QuadColors);
+    WriteOBJWithFaceColor<ScalarType>(RemFile, QuadVert, QuadFaces, QuadColors);
+  } else {
+    WriteOBJ(RemFile, QuadVert, QuadFaces);
+  }
+}
+
+void SaveStats(const MeshQuadrangulator<ScalarType> &MQuad) {
+  std::string RemFile = "statistics.csv";
+  std::string MeshName = GetFilaname(PathMesh);
+
+  // ---- Compute distortion ----
+  std::vector<ScalarType> FaceAR;
+  Geo::AspectRatioScaledJacobian(QuadVert, QuadFaces, FaceAR);
+
+  ScalarType ARMin = std::numeric_limits<ScalarType>::max();
+  ScalarType ARAvg = 0;
+
+  if (!FaceAR.empty()) {
+    ARMin = *std::min_element(FaceAR.begin(), FaceAR.end());
+    ARAvg = std::accumulate(FaceAR.begin(), FaceAR.end(), ScalarType(0)) / FaceAR.size();
+  }
+
+  // ---- Check if file exists ----
+  std::ifstream infile(RemFile);
+  bool fileExists = infile.good();
+  infile.close();
+
+  // ---- Open in append mode ----
+  std::ofstream out(RemFile, std::ios::app);
+
+  // ---- Write header if new file ----
+  if (!fileExists) {
+    out << "MeshName,"
+        << "time_init,"
+        << "time_decompose,"
+        << "time_dual,"
+        << "time_quad,"
+        << "time_clean,"
+        << "time_smooth,"
+        << "total_time,"
+        << "AR_avg,"
+        << "AR_min"
+        << std::endl;
+  }
+
+  // ---- Write data row ----
+  out << MeshName << ","
+      << MQuad.time_init << ","
+      << MQuad.time_decompose << ","
+      << MQuad.time_dual << ","
+      << MQuad.time_quad << ","
+      << MQuad.time_clean << ","
+      << MQuad.time_smooth << ","
+      << MQuad.total_time << ","
+      << ARAvg << ","
+      << ARMin
+      << std::endl;
+
+  out.close();
 }
 
 Geo::Point3<ScalarType> DirSymm(1, 0, 0);
-
-// void SplitSymmetry() {
-//   Geo::Point3<ScalarType> Center(0, 0, 0); // MeshBox.Center();
-//   SymmetryPlane.Init(Center, DirSymm);
-
-//   std::vector<Geo::Point3<ScalarType>> OldVertPos = TriVertPos;
-//   std::vector<std::vector<int>> OldConnectivity = TriConnectivity;
-//   RefineMesh<ScalarType>::SplitMeshWithPlane(TriVertPos, TriConnectivity,
-//                                              SymmetryPlane);
-//   RemoveFacesOnNegativeSide<ScalarType>(TriVertPos, TriConnectivity,
-//                                         SymmetryPlane);
-
-//   if (has_features) {
-//     std::vector<int> VerteMap;
-//     FindVertCorrespondences<ScalarType>(OldVertPos, TriVertPos, VerteMap);
-//     // remap the features
-//     std::vector<std::pair<int, int>> NewFeatures;
-//     for (size_t i = 0; i < TriFeatures.size(); i++) {
-//       int IndexV0 = TriFeatures[i].first;
-//       int IndexV1 = TriFeatures[i].second;
-//       assert(IndexV0 >= 0);
-//       assert(IndexV1 >= 0);
-//       assert(IndexV0 < VerteMap.size());
-//       assert(IndexV1 < VerteMap.size());
-//       int NewIndexV0 = VerteMap[IndexV0];
-//       int NewIndexV1 = VerteMap[IndexV1];
-//       if (NewIndexV0 == -1 || NewIndexV1 == -1) {
-//         continue; // this feature is lost as one of the vertices is on the
-//                   // symmetry plane
-//       }
-//       NewFeatures.push_back(std::pair<int, int>(
-//           std::min(NewIndexV0, NewIndexV1), std::max(NewIndexV0, NewIndexV1)));
-//     }
-//     TriFeatures = NewFeatures;
-//     std::sort(TriFeatures.begin(), TriFeatures.end());
-//     auto last = std::unique(TriFeatures.begin(), TriFeatures.end());
-//     TriFeatures.erase(last, TriFeatures.end());
-//   }
-
-//   Geo::TriRemParam<ScalarType> RemP;
-//   RemP.TargetL = AvgEdgeLen(TriVertPos, TriConnectivity); // QuadSize;
-//   RemP.feature_angle = initial_feature_angle;
-//   RemP.collapse_small = true;
-//   RemP.refine_big = true;
-//   RemP.flip_valence = true;
-//   RemP.flip_quadrics = true;
-//   RemP.smooth_mesh = true;
-//   std::cout << "Remeshing near symmetry plane, target size: " << RemP.TargetL
-//             << std::endl;
-//   if (has_features)
-//     Geo::MeshFeatures<ScalarType>::BoolVariablesFromPairs(
-//         TriVertPos, TriConnectivity, TriFeatures, TriCorners,
-//         RemP.IsFaceEFeature, RemP.IsVertCorner);
-  
-//   WriteOBJ("split_symmetry_before.obj", TriVertPos, TriConnectivity);
-//   if (remesh_near_symmetry)
-//     Geo::TriRemeshCloseToPlane<ScalarType>(TriVertPos, TriConnectivity,
-//                                            SymmetryPlane, 0.05, RemP);
-//   WriteOBJ("split_symmetry.obj", TriVertPos, TriConnectivity);
-
-//   if (has_features) {
-//     Geo::MeshFeatures<ScalarType>::GetVertIndexFromBoolCorners(
-//         RemP.IsVertCorner, TriCorners);
-//     Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(
-//         TriConnectivity, RemP.IsFaceEFeature, TriFeatures);
-//   }
-
-//   if (has_features)
-//     Geo::MeshFeatures<ScalarType>::BoolVariablesFromPairs(
-//         TriVertPos, TriConnectivity, TriFeatures, TriCorners,
-//         RemP.IsFaceEFeature, RemP.IsVertCorner);
-
-//   Geo::TriRemeshCloseToPlane<ScalarType>(TriVertPos, TriConnectivity,
-//                                          SymmetryPlane, 0.025, RemP);
-
-//   if (has_features) {
-//     Geo::MeshFeatures<ScalarType>::GetVertIndexFromBoolCorners(
-//         RemP.IsVertCorner, TriCorners);
-//     Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(
-//         TriConnectivity, RemP.IsFaceEFeature, TriFeatures);
-//   }
-
-//   Geo::getFFAdjacency(TriConnectivity, NextF, NextE);
-//   ComputeNormals(TriVertPos, TriConnectivity, TriFaceNormal, TriVertNormal);
-
-//   std::cout << "Mesh splitted with symmetry plane, new num faces: "
-//             << TriConnectivity.size() << std::endl;
-// }
 
 
 void SplitSymmetry() {
@@ -395,9 +361,9 @@ void SplitSymmetry() {
   SymmetryPlane.Init(Center, DirSymm);
 
   ScalarType Tolerance = AvgEdgeLen(TriVertPos, TriConnectivity) * 0.1;
-  Geo::MeshSymmetry<ScalarType>::CutMeshWithSymmetryPlane(TriVertPos, TriConnectivity,
-                                              TriFeatures, TriCorners,
-                                              SymmetryPlane, Tolerance); 
+  Geo::MeshSymmetry<ScalarType>::CutMeshWithSymmetryPlane(
+      TriVertPos, TriConnectivity, TriFeatures, TriCorners, SymmetryPlane,
+      Tolerance);
 
   Geo::getFFAdjacency(TriConnectivity, NextF, NextE);
   ComputeNormals(TriVertPos, TriConnectivity, TriFaceNormal, TriVertNormal);
@@ -429,8 +395,7 @@ int main(int argc, char *argv[]) {
     if (GetFileExtension(std::string(argv[i])) == std::string("obj")) {
       PathMesh = std::string(argv[1]);
       has_loaded_mesh = LoadMesh(PathMesh);
-      if (!MQuad.MatchPreconditions())
-      {
+      if (!MQuad.MatchPreconditions()) {
         exit(0);
       }
       // has_loaded_mesh = LoadMesh(PathMesh);
@@ -497,13 +462,22 @@ int main(int argc, char *argv[]) {
       continue;
     }
 
+    if (std::string(argv[i]) == std::string("-noclean")) {
+      do_clean = false;
+      std::cout << "Disabling mesh cleaning" << std::endl;
+      continue;
+    }
+
     if (std::string(argv[i]) == std::string("-symmetryr")) {
       to_split_symmetry = true;
       DirSymm = Geo::Point3<ScalarType>(-1, 0, 0);
       std::cout << "Splitting mesh with symmetry plane" << std::endl;
       continue;
     }
-
+    if (std::string(argv[i]) == std::string("-savelayout")) {
+      save_layout = true;
+      continue;
+    }
     if (GetFileExtension(std::string(argv[i])) == std::string("features")) {
       std::string PathFeat = std::string(argv[i]);
       std::cout << "Loading Features" << std::endl;
@@ -538,22 +512,23 @@ int main(int argc, char *argv[]) {
     if (to_split_symmetry)
       SplitSymmetry();
     if ((!has_features) && (!has_cross_field)) {
-      //std::cout << "Step 0 " << std::endl;
+      // std::cout << "Step 0 " << std::endl;
 
-      if (extended_print)
-        std::cout << "CLEANING MESH" << std::endl;
-      Geo::CleanMesh<ScalarType>::CollapseBadShapeFaces(TriVertPos,
-                                                        TriConnectivity, 0.05);
+      if (do_clean) {
+        if (extended_print)
+          std::cout << "CLEANING MESH" << std::endl;
+        Geo::CleanMesh<ScalarType>::CollapseBadShapeFaces(
+            TriVertPos, TriConnectivity, 0.05);
 
-      if (extended_print)
-        std::cout << "CLEANING FOLDS" << std::endl;
-      int steps_clean =
-          Geo::CleanMesh<ScalarType>::SolveFolds(TriVertPos, TriConnectivity);
+        if (extended_print)
+          std::cout << "CLEANING FOLDS" << std::endl;
+        int steps_clean =
+            Geo::CleanMesh<ScalarType>::SolveFolds(TriVertPos, TriConnectivity);
 
-      if (extended_print)
-        std::cout << "Performed:" << steps_clean << " unfold steps"
-                  << std::endl;
-
+        if (extended_print)
+          std::cout << "Performed:" << steps_clean << " unfold steps"
+                    << std::endl;
+      }
       // WriteOBJ("clean.obj",TriVertPos, TriConnectivity);
       // exit(0);
     }
@@ -600,7 +575,6 @@ int main(int argc, char *argv[]) {
                 << " corners" << std::endl;
     }
 
-   
     if (!has_cross_field) {
       if (extended_print)
         std::cout << "COMPUTING CROSS FIELD" << std::endl;
@@ -619,8 +593,8 @@ int main(int argc, char *argv[]) {
 
     MQuad.QuadSmoothSteps = smooth_steps;
     // MQuad.RegVsIso=0.1;
-    MQuad.CCAbility = 0.5; // 25;
-    MQuad.num_samples = 6000;//3000;
+    MQuad.CCAbility = 0.5;    // 25;
+    MQuad.num_samples = 6000; // 3000;
 
     MQuad.ExtractQuad(TriFeatures);
 
@@ -630,8 +604,20 @@ int main(int argc, char *argv[]) {
       MirrorMesh<ScalarType>(QuadVert, QuadFaces, SymmetryPlane, MiddleV);
       RemoveDuplicatedVert(QuadVert, QuadFaces);
     }
+
     SaveMesh();
-    
+
+    if (save_stats)
+      SaveStats(MQuad);
+
+    if (save_layout) {
+      std::vector<Geo::Point3<ScalarType>> PrimalVertPos, DualVertPos;
+      std::vector<std::vector<int>> PrimalConnectivity, DualConnectivity;
+      MQuad.GetPrimalDualMesh(PrimalVertPos, PrimalConnectivity, DualVertPos,
+                              DualConnectivity);
+      WriteOBJ("primal_layout.obj", PrimalVertPos, PrimalConnectivity);
+      WriteOBJ("dual_layout.obj", DualVertPos, DualConnectivity);
+    }
   }
 
   return 0;

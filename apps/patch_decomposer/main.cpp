@@ -1574,6 +1574,7 @@ void SetExportBar() {
     ImGui::Checkbox("Init Sing Pos", &DualParam.InitSingPos);
     ImGui::Checkbox("Fix Sing Pos", &DualParam.FixSingPos);
     ImGui::Checkbox("Joint Border", &DualParam.JointBorder);
+    ImGui::Checkbox("Reduce T-Junction", &DualParam.Minimize_t_junctions);
 
     if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_UVDist_Tutte)
       EvenMode = 0;

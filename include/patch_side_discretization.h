@@ -29,6 +29,7 @@
 
 #include "./solve/constraint_graph.h"
 #include "./solve/iterative_integer_lin_constraint_solver.h"
+#include "./solve/orient_flow_graph.h"
 #include "field_graph/graph.h"
 #include "mesh_functions.h"
 #include "mesh_manifold.h"
@@ -64,6 +65,7 @@ public:
 
   parityMode PMode;
   bool graph_optimize;
+
 private:
   // energyMode EM;
   ScalarType RegVsIso;
@@ -119,7 +121,7 @@ public:
   // has features must be regular
   bool WeightFeatures;
 
-  //bool WeightDiffSize;
+  // bool WeightDiffSize;
 
   bool print_info;
 
@@ -435,8 +437,7 @@ private:
     }
   }
 
-  int GetTargetSizeSum(const std::vector<int> &VarIndex)
-  {
+  int GetTargetSizeSum(const std::vector<int> &VarIndex) {
     int Sum = 0;
     for (size_t i = 0; i < VarIndex.size(); i++)
       Sum += VarTargetValue[VarIndex[i]];
@@ -455,7 +456,7 @@ private:
     // square might be less regular
     if (WeightRegFaceRatio) {
       for (size_t j = 0; j < PatchVariance.size(); j++) {
-        //twice for bacause two equivalences for each patch
+        // twice for bacause two equivalences for each patch
         OppEquivalencesW.push_back(PatchVariance[j]);
         OppEquivalencesW.push_back(PatchVariance[j]);
       }
@@ -485,9 +486,10 @@ private:
     //     std::vector<int> Variables;
     //     int Target0 = GetTargetSizeSum(OppEquivalences[i].first);
     //     int Target1 = GetTargetSizeSum(OppEquivalences[i].second);
-    //     ScalarType Ratio = (ScalarType)std::max(Target0, Target1) / (ScalarType)std::min(Target0, Target1);
-    //     OppEquivalencesW[i] *= Ratio;//pow(1 / Ratio,2);
-        
+    //     ScalarType Ratio = (ScalarType)std::max(Target0, Target1) /
+    //     (ScalarType)std::min(Target0, Target1); OppEquivalencesW[i] *=
+    //     Ratio;//pow(1 / Ratio,2);
+
     //   }
     // }
 
@@ -730,7 +732,7 @@ private:
 
   void InitOppositeEquivalences() {
     OppEquivalences.clear();
-    //std::vector<bool> Visited(PatchSides.size(), false);
+    // std::vector<bool> Visited(PatchSides.size(), false);
     for (size_t i = 0; i < PatchSides.size(); i++) {
       // if (Visited[i])
       //   continue;
@@ -751,8 +753,8 @@ private:
       OppEquivalences.push_back(Entry1);
     }
 
-    std::cout<<std::endl;
-    std::cout<< "<<< Varieble solving STATS >>>" << std::endl;
+    std::cout << std::endl;
+    std::cout << "<<< Varieble solving STATS >>>" << std::endl;
     std::cout << "NUM Constr " << OppEquivalences.size() << std::endl;
     std::cout << "NUM Variable " << NumVariables << std::endl;
   }
@@ -820,6 +822,7 @@ private:
       EqConstr.RHSide = 0;
       EqConstr.Weight = RegVsIso;
       EqConstr.Weight *= OppEquivalencesW[i];
+      EqConstr.Weight /= (Var0.size() + Var1.size());
       for (size_t j = 0; j < Var0.size(); j++) {
         EqConstr.LHSide.push_back(VarTerm<ScalarType>(Var0[j], 0, 1));
         // MaxVal=std::max(MaxVal,Var0[j]);
@@ -884,32 +887,39 @@ private:
   }
 
 public:
-  void SolveParityViaGraph(bool find_points = true) {
+
+  int SolveParityViaGraph(bool find_points = true) {
     std::vector<std::vector<std::vector<int>>> PatchVar;
 
-    //solve first with flow graph
+    // solve first with flow graph
     GetPerPatchVars(PatchVar);
     OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
-    FlowG.SolveParity();
+    // FlowG.MinRatio = MinRatio;
+    // FlowG.MaxRatio = MaxRatio;
+    int steps=FlowG.SolveParity();
 
-    //then the one that allow invert u and v
+    // then the one that allow invert u and v
     GetPerPatchVars(PatchVar);
     ConstraintGraph<ScalarType> CostrGraph(VarValue, VarTargetValue);
-    CostrGraph.SolveParity(PatchVar);
+    steps+=CostrGraph.SolveParity(PatchVar);
 
     if (find_points) {
       InitMatchingType();
       FindDiscretizationPoint();
       WritePatchStats();
     }
+    return steps;
   }
 
-  void SolveEqualityViaGraph(bool find_points = true) {
+  int SolveEqualityViaGraph(bool find_points = true) {
     std::vector<std::vector<std::vector<int>>> PatchVar;
     GetPerPatchVars(PatchVar);
 
     OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
-    FlowG.SolveEquality();
+    // FlowG.MinRatio = MinRatio;
+    // FlowG.MaxRatio = MaxRatio;
+
+    int steps = FlowG.SolveEquality();
 
     if (find_points) {
       InitMatchingType();
@@ -917,56 +927,66 @@ public:
 
       WritePatchStats();
     }
+    return steps;
   }
 
-  void SolveSizeViaGraphCycles(bool find_points = true) {
+  int SolveSizeViaGraphCycles(bool find_points = true) {
     std::vector<std::vector<std::vector<int>>> PatchVar;
     GetPerPatchVars(PatchVar);
 
     OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
-    FlowG.ImproveSize();
+    int steps=FlowG.ImproveSize();
 
     if (find_points) {
       InitMatchingType();
       FindDiscretizationPoint();
       WritePatchStats();
     }
+    return steps;
   }
 
-  int NumOdd()
-  {
-    int OddPatches=0;
+  int NumOdd() {
+    int OddPatches = 0;
     for (size_t i = 0; i < PatchSides.size(); i++) {
       typeMatching typeM = PatchMatchingType(i);
-      if (typeM==OddSubd)
+      if (typeM == OddSubd)
         OddPatches++;
     }
     return OddPatches;
   }
 
-  void AutomaticGraphOptimize(bool OptimizeSize,
+  void AutomaticGraphOptimize(const bool OptimizeEquality,
+                              const bool OptimizeSize, 
+                              const bool MakeEven,
                               bool find_points = true) 
   {
-    if (PMode==Geo::SideDiscretization<ScalarType>::EvenVar)
+    if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
       DivideTargetVal();
 
-    SolveEqualityViaGraph(false);
+    int stepEq=0;
+    int stepSize=0;
+    int stepParity=0;
+    if (OptimizeEquality)
+      stepEq=SolveEqualityViaGraph(false);
 
-     if (PMode==Geo::SideDiscretization<ScalarType>::EvenVar)
+    if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
       DuplicateSolution();
 
     if (OptimizeSize)
-      SolveSizeViaGraphCycles(false);
+      stepSize=SolveSizeViaGraphCycles(false);
 
-    if (PMode == SolvePost)
-      SolveParityViaGraph(false);
+    if ((PMode == Geo::SideDiscretization<ScalarType>::SolvePost) && MakeEven)
+      stepParity=SolveParityViaGraph(false);
 
-   
     if (find_points) {
       InitMatchingType();
       FindDiscretizationPoint();
       WritePatchStats();
     }
+
+    std::cout<<"Performed:"<<stepEq<<" Equality Steps, "<<std::endl;
+    std::cout<<"Performed:"<<stepSize<<" Size Steps, "<<std::endl;
+    std::cout<<"Performed:"<<stepParity<<" Parity Steps."<<std::endl;
   }
 
   bool LessThanRatio(const int IndexVar) const {
@@ -1253,15 +1273,13 @@ public:
     //_GeoFeatures = GeoFeatures;
   }
 
-  void WritePatchStats() {
-    std::cout <<std::endl;
-    std::cout << "<<< Integer find STATS >>>" << std::endl;
-    std::cout << "* Num Variables: " << NumVariables << std::endl;
-    std::cout << "* Num Patches: " << PatchSides.size() << std::endl;
-    int NumOK = 0;
-    int NumNoQuad = 0;
-    int NumNoMatch = 0;
-    int NumOdd = 0;
+  void GetPatchStats(int &NumOK,int &NumNoQuad,
+                     int &NumNoMatch,int &NumOdd)
+  {
+    NumOK = 0;
+    NumNoQuad = 0;
+    NumNoMatch = 0;
+    NumOdd = 0;
     for (size_t i = 0; i < PatchSides.size(); i++) {
       typeMatching typeM = PatchMatchingType(i);
       switch (typeM) {
@@ -1279,6 +1297,31 @@ public:
         break;
       }
     }
+  }
+
+  void WritePatchStats(int &NumOK0,int &NumNoQuad0,
+                       int &NumNoMatch0,int &NumOdd0,
+                       int &NumOK1,int &NumNoQuad1,
+                       int &NumNoMatch1,int &NumOdd1)
+  {
+    std::cout << "<<< Integer Optimization STATS >>>" << std::endl;
+   
+    std::cout << "* Num Non Quad: " << NumNoQuad0 << "-->" << NumNoQuad1 << std::endl;
+    std::cout << "* Num Odd: " << NumOdd0 << "-->" << NumOdd1 << std::endl;
+    std::cout << "* Num No Match: " << NumNoMatch0 << "-->" << NumNoMatch1 << std::endl;
+    std::cout << "* Num OK Match: " << NumOK0 << "-->" << NumOK1 << std::endl;
+  }
+
+  void WritePatchStats() {
+    std::cout << std::endl;
+    std::cout << "<<< Integer find STATS >>>" << std::endl;
+    std::cout << "* Num Variables: " << NumVariables << std::endl;
+    std::cout << "* Num Patches: " << PatchSides.size() << std::endl;
+    int NumOK = 0;
+    int NumNoQuad = 0;
+    int NumNoMatch = 0;
+    int NumOdd = 0;
+    GetPatchStats(NumOK, NumNoQuad, NumNoMatch, NumOdd);
     std::cout << "* Num Non Quad: " << NumNoQuad << std::endl;
     std::cout << "* Num Odd: " << NumOdd << std::endl;
     std::cout << "* Num No Match: " << NumNoMatch << std::endl;
@@ -1315,17 +1358,30 @@ public:
 
   void FindDiscretization(const ScalarType &_TargetL,
                           const ScalarType _RegVsIso,
-                          const bool OptimizeSize) {
+                          const bool OptimizeEquality, const bool OptimizeSize,
+                          const bool MakeEven) {
+
+    std::cout<<"Solving Integer System..."<<std::endl;
     SolveSystem(_TargetL, _RegVsIso, false);
-    if (graph_optimize)
-      AutomaticGraphOptimize(OptimizeSize,false);
+
+    int NumOK0 = 0, NumNoQuad0 = 0, NumNoMatch0 = 0, NumOdd0 = 0;
+    GetPatchStats(NumOK0, NumNoQuad0, NumNoMatch0, NumOdd0);
     
+    std::cout<<"Graph Optimization..."<<std::endl;
+    AutomaticGraphOptimize(OptimizeEquality, OptimizeSize, MakeEven, false);
+
     InitMatchingType();
 
     FindDiscretizationPoint();
 
-    WritePatchStats();
-
+    //WritePatchStats();
+    int NumOK1 = 0, NumNoQuad1 = 0, NumNoMatch1 = 0, NumOdd1 = 0;
+    GetPatchStats(NumOK1, NumNoQuad1, NumNoMatch1, NumOdd1);
+    
+    WritePatchStats(NumOK0, NumNoQuad0,
+                       NumNoMatch0, NumOdd0,
+                       NumOK1, NumNoQuad1,
+                       NumNoMatch1, NumOdd1);
   }
 
   void SetToTarget(ScalarType _TargetL) {
@@ -1353,17 +1409,17 @@ public:
 
     WeightFeatures = true;
     WeightRegFaceRatio = true;
-    //WeightDiffSize=true;
-    // ST_ClosestInt, ST_LowError, StQRPivoting
-    // FixType=Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
+    // WeightDiffSize=true;
+    //  ST_ClosestInt, ST_LowError, StQRPivoting
+    //  FixType=Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
     FixType =
         Geo::IntegerLinearConstraintLeastSQSolver<ScalarType>::ST_ClosestInt;
 
     PMode = SolvePost;
 
-    print_info=true;
+    print_info = true;
 
-    graph_optimize=true;
+    graph_optimize = true;
   }
 };
 

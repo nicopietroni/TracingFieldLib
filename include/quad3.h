@@ -42,6 +42,7 @@
 #include "point3.h"
 #include "polygon3.h"
 #include "segment3.h"
+#include "quad2.h"
 
 namespace Geo {
 
@@ -145,6 +146,13 @@ public:
     Pos[1] = P1;
     Pos[2] = P2;
     Pos[3] = P3;
+  }
+
+  Quad3(const Quad2<ScalarType> &Q2, const ScalarType Z = 0) {
+    Pos[0] = Geo::Point3<ScalarType>(Q2.P(0).X, Q2.P(0).Y, Z);
+    Pos[1] = Geo::Point3<ScalarType>(Q2.P(1).X, Q2.P(1).Y, Z);
+    Pos[2] = Geo::Point3<ScalarType>(Q2.P(2).X, Q2.P(2).Y, Z);
+    Pos[3] = Geo::Point3<ScalarType>(Q2.P(3).X, Q2.P(3).Y, Z);
   }
 };
 

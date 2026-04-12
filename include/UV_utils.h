@@ -676,6 +676,17 @@ public:
     }
     return -1;
   }
+
+  static void TranslateCenterToZero(std::vector<Geo::Point2<ScalarType>> &VertPos)
+  {
+    if (VertPos.size() == 0)
+      return;
+    Geo::Box2<ScalarType> BB;
+    BB.Init(VertPos);
+    Geo::Point2<ScalarType> Center = BB.Center();
+    for (size_t i = 0; i < VertPos.size(); i++)
+      VertPos[i] = VertPos[i] - Center;
+  }
 };
 
 } // namespace Geo

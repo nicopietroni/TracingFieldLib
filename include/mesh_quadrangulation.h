@@ -114,7 +114,8 @@ template <class ScalarType> class MeshQuadrangulator {
   ScalarType graph_maxAngle;
   int graph_diffuse_step;
 
-  bool force_parity;
+  // bool force_parity;
+  bool OptimizeEquality;
   bool OptimizeSize;
 
   // OTHER DATA
@@ -318,7 +319,8 @@ template <class ScalarType> class MeshQuadrangulator {
     RestoreOriginalPosOnSplitBorders();
     Geo::DualPatch<ScalarType>::DisambiguateForDual(PatchM);
 
-    typename Geo::DualPatch<ScalarType>::PrimalPatchData PData;
+    // typename Geo::DualPatch<ScalarType>::PrimalPatchData PData;
+    Geo::PrimalPatchData<ScalarType> PData;
     PData.PatchFaces = PatchM.PData.SubPatchFaces;
     PData.PatchVertPos = PatchM.PData.SubPatchVertPos;
     PData.PatchCorners = PatchM.PData.PatchCorners;
@@ -354,10 +356,13 @@ template <class ScalarType> class MeshQuadrangulator {
 
   void InitDefaultDualParameters() {
     // DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_Tutte;
+    // DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_ARAP;
+    // DualParam.RType = Geo::DualPatch<ScalarType>::RT_CCability;
     DualParam.OnlyNonQuad = true;
     DualParam.InitSingPos = true;
     DualParam.FixSingPos = false;
     DualParam.JointBorder = true;
+    DualParam.OptimizeForQuad = false;
   }
 
   void UpdateQuadFeatures() {
@@ -432,8 +437,8 @@ template <class ScalarType> class MeshQuadrangulator {
 
     PatchM.WriteStats();
     PDeco.WriteStats();
-
-    ExtractDualPatches();
+    // PatchM.WriteMesh("primal_layout.obj");
+    // WriteOBJ("dual_layout.obj", DualVertPos, DualConnectivity);
   }
 
   void Quadrangulate() {
@@ -443,7 +448,8 @@ template <class ScalarType> class MeshQuadrangulator {
     // std::cout << "Edge Size:" << EdgeS << std::endl;
     SideD.PrioritizeTJunction = true;
 
-    SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeSize);
+    SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeEquality, OptimizeSize,
+                             true);
 
     int OddNum = SideD.NumOdd();
     // then reoptimize making them
@@ -451,7 +457,8 @@ template <class ScalarType> class MeshQuadrangulator {
       if (print_info)
         std::cout << "Recompute with Even Variables" << std::endl;
       SideD.PMode = Geo::SideDiscretization<ScalarType>::EvenVar;
-      SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeSize);
+      SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeEquality, OptimizeSize,
+                               true);
     }
     if (print_info)
       std::cout << "GET QUADRANGULATION DATA" << std::endl;
@@ -607,14 +614,14 @@ template <class ScalarType> class MeshQuadrangulator {
     SetFixQuadVertices(SParamQuadSmooth);
     Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
 
-      // if (!reliable_smooth)
-      //   return;
+    // if (!reliable_smooth)
+    //   return;
 
-      // SParamQuadSmooth.SType = Geo::SMCentroid;
-      // SParamQuadSmooth.reproject_voronoi_partition = true;
-      // SParamQuadSmooth.check_multi_pass_fold = false;
-      // SParamQuadSmooth.check_AspectR = true;
-      // Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
+    // SParamQuadSmooth.SType = Geo::SMCentroid;
+    // SParamQuadSmooth.reproject_voronoi_partition = true;
+    // SParamQuadSmooth.check_multi_pass_fold = false;
+    // SParamQuadSmooth.check_AspectR = true;
+    // Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
   }
 
   void SmoothQuadMeshSeparatrix() {
@@ -657,7 +664,8 @@ template <class ScalarType> class MeshQuadrangulator {
                        AddBorder);
         NewBorder.insert(NewBorder.end(), AddBorder.begin(), AddBorder.end());
       }
-      UVParam.Fixed.insert(UVParam.Fixed.end(), NewBorder.begin(),NewBorder.end());
+      UVParam.Fixed.insert(UVParam.Fixed.end(), NewBorder.begin(),
+                           NewBorder.end());
       std::sort(UVParam.Fixed.begin(), UVParam.Fixed.end());
       auto last = std::unique(UVParam.Fixed.begin(), UVParam.Fixed.end());
       UVParam.Fixed.erase(last, UVParam.Fixed.end());
@@ -692,6 +700,9 @@ public:
   bool print_info;
   bool reliable_smooth;
 
+  ScalarType time_init,time_decompose,time_dual,time_quad;
+  ScalarType time_clean,time_smooth,total_time;
+
   MeshQuadrangulator(std::vector<Geo::Point3<ScalarType>> &_TriVertPos,
                      std::vector<std::vector<int>> &_TriConnectivity,
                      std::vector<Field::CrossF<ScalarType>> &_FaceCurv,
@@ -721,15 +732,26 @@ public:
     QuadSize = 0.02;
 
     QuadSmoothSteps = 10;
-    force_parity = true;
+    // force_parity = true;
     RegVsIso = 1.0;
 
+    OptimizeEquality = true;
     OptimizeSize = true;
 
     has_problematic_patches = false;
 
     print_info = false;
     reliable_smooth = true;
+  }
+
+  void
+  GetPrimalDualMesh(std::vector<Geo::Point3<ScalarType>> &_PrimalVertPos,
+                    std::vector<std::vector<int>> &_PrimalConnectivity,
+                    std::vector<Geo::Point3<ScalarType>> &_DualVertPos,
+                    std::vector<std::vector<int>> &_DualConnectivity) const {
+    PatchM.ComposeMeshFromPatches(_PrimalVertPos, _PrimalConnectivity);
+    _DualVertPos = DualVertPos;
+    _DualConnectivity = DualConnectivity;
   }
 
   void Init() {
@@ -755,7 +777,8 @@ public:
     return true;
   }
 
-  void ExtractQuad(std::vector<std::pair<int, int>> &_TriFeatures) {
+  void ExtractQuad(std::vector<std::pair<int, int>> &_TriFeatures,
+                   bool WriteTimings = true) {
     TriFeatures = _TriFeatures;
 
     TriVertPos0 = TriVertPos;
@@ -783,6 +806,9 @@ public:
     DecomposePatches();
     auto t_decompose = Clock::now();
 
+    ExtractDualPatches();
+    auto t_dual = Clock::now();
+
     Quadrangulate();
     auto t_quad = Clock::now();
 
@@ -793,22 +819,26 @@ public:
     auto t_smooth = Clock::now();
 
     // Durations
-    double time_init = Seconds(t_init - t_start).count();
-    double time_decompose = Seconds(t_decompose - t_init).count();
-    double time_quad = Seconds(t_quad - t_decompose).count();
-    double time_clean = Seconds(t_clean - t_quad).count();
-    double time_smooth = Seconds(t_smooth - t_clean).count();
-    double total_time = Seconds(t_smooth - t0).count();
+    time_init = (ScalarType)Seconds(t_init - t_start).count();
+    time_decompose = (ScalarType)Seconds(t_decompose - t_init).count();
+    time_dual = (ScalarType)Seconds(t_dual - t_decompose).count();
+    time_quad = (ScalarType)Seconds(t_quad - t_dual).count();
+    time_clean = (ScalarType)Seconds(t_clean - t_quad).count();
+    time_smooth = (ScalarType)Seconds(t_smooth - t_clean).count();
+    total_time = (ScalarType)Seconds(t_smooth - t0).count();
 
-    std::cout << "--------------------------------\n";
-    std::cout << "\n--- Timing Report (seconds) ---\n";
-    std::cout << "InitializeData:        " << time_init << " s\n";
-    std::cout << "DecomposePatches:      " << time_decompose << " s\n";
-    std::cout << "Quadrangulate:         " << time_quad << " s\n";
-    std::cout << "CleanQuadMesh:         " << time_clean << " s\n";
-    std::cout << "SmoothQuadrangulation: " << time_smooth << " s\n";
-    std::cout << "--------------------------------\n";
-    std::cout << "Total time:            " << total_time << " s\n";
+    if (WriteTimings) {
+      std::cout << "--------------------------------\n";
+      std::cout << "\n--- Timing Report (seconds) ---\n";
+      std::cout << "InitializeData:        " << time_init << " s\n";
+      std::cout << "DecomposePatches:      " << time_decompose << " s\n";
+      std::cout << "ExtractDualPatches:    " << time_dual << " s\n";
+      std::cout << "Solve Quadrangulation: " << time_quad << " s\n";
+      std::cout << "CleanQuadMesh:         " << time_clean << " s\n";
+      std::cout << "SmoothQuadrangulation: " << time_smooth << " s\n";
+      std::cout << "--------------------------------\n";
+      std::cout << "Total time:            " << total_time << " s\n";
+    }
   }
 };
 
