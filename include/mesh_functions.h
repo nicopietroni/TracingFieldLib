@@ -683,6 +683,30 @@ AvgEdgeLen(const std::vector<Geo::Point2<ScalarType>> &VertPos,
 }
 
 template <class ScalarType>
+void AvgEdgeLenPerVert(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                 const std::vector<std::vector<int>> &Faces,
+                 std::vector<ScalarType> &EdgeLenPerVert) 
+{
+  EdgeLenPerVert.resize(VertPos.size(), 0);
+  std::vector<int> EdgeCount(VertPos.size(), 0);
+  for (size_t i = 0; i < Faces.size(); i++)
+    for (size_t j = 0; j < Faces[i].size(); j++) {
+      int IndexV0 = Faces[i][j];
+      int IndexV1 = Faces[i][(j + 1) % Faces[i].size()];
+      ScalarType CurrELenght = (VertPos[IndexV0] - VertPos[IndexV1]).Norm();
+      EdgeLenPerVert[IndexV0] += CurrELenght;
+      EdgeLenPerVert[IndexV1] += CurrELenght;
+      EdgeCount[IndexV0]++;
+      EdgeCount[IndexV1]++;
+    }
+  for (size_t i = 0; i < EdgeLenPerVert.size(); i++) {
+    if (EdgeCount[i] > 0) {
+      EdgeLenPerVert[i] /= EdgeCount[i];
+    }
+  }
+}
+
+template <class ScalarType>
 inline ScalarType
 FaceVertAngleDeg(const std::vector<Geo::Point2<ScalarType>> &VertPos,
                  const std::vector<std::vector<int>> &Faces, const int &IndexF,

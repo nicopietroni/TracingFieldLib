@@ -1681,10 +1681,10 @@ template <class ScalarType> class OrientFLowGraph {
 
   bool SolveEqStep(bool allow_pass_all, bool allow_arrive_all) {
     bool HasToSolve = true;
+    EnableAll();
 
     // get the one to increase and decrease
     HasToSolve = SetupSolve(true, false);
-
     if (!HasToSolve)
       return false;
 
@@ -1703,11 +1703,13 @@ template <class ScalarType> class OrientFLowGraph {
 
     std::vector<int> SingleIncr, SingleDecr;
     GetSingleNodeChanges(SingleIncr, SingleDecr);
+
     for (size_t i = 0; i < SingleIncr.size(); i++) {
       std::vector<int> path(1, SingleIncr[i]);
       AllPathModifications.emplace_back(path, 1);
       AllPathModifications.back().priority = Priority(path, 1);
     }
+
     for (size_t i = 0; i < SingleDecr.size(); i++) {
       std::vector<int> path(1, SingleDecr[i]);
       if (!CanDecrease(path))
@@ -2380,6 +2382,8 @@ template <class ScalarType> class OrientFLowGraph {
     
     ScalarType Prio = 0;
     for (size_t i = 0; i < NodeIdx.size(); i++) {
+      assert(NodeIdx[i] >= 0);
+      assert(NodeIdx[i] < static_cast<int>(EnabledN.size()));
       assert(EnabledN[NodeIdx[i]]);
       ScalarType CurrPrio = PriorityChange(NodeIdx[i], Diff[i], true);
       Prio += PriorityChange(NodeIdx[i], Diff[i]);
@@ -2604,6 +2608,7 @@ template <class ScalarType> class OrientFLowGraph {
     std::vector<ShortestPathResult> ShortestDecrPaths;
     ShortestDecrPaths = FindMinimumCyclesFromSources(sourceN);
 
+    EnableAll();
     // add to all possible paths
     for (const auto &path : ShortestIncrPaths) {
       std::vector<int> CurrP = path.path;
@@ -2702,6 +2707,7 @@ template <class ScalarType> class OrientFLowGraph {
 
     int improve_step = 0;
     // ScalarType best_prio = 0;
+    EnableAll();
     do {
       std::vector<PathPriority> CurrPathModifications = AllPathModifications;
       FilterApplicable(CurrPathModifications);
@@ -2748,6 +2754,7 @@ public:
     }
 
     InitGraph();
+
     if (WriteDebug)
       std::cout << "*** Solving Equality ***" << std::endl;
     bool changed = false;
@@ -2756,10 +2763,9 @@ public:
       // try best configuration
 
       changed = SolveEqStep(true, false);
-
       steps++;
       // if (WriteDebug)
-      //   std::cout << "Performed Equality size step" << std::endl;
+      //std::cout << "Performed Equality size step" << std::endl;
     } while (changed);
     if (WriteDebug)
       std::cout << "Performed " << steps << " Equality size step" << std::endl;
@@ -2767,6 +2773,7 @@ public:
     for (size_t i = 0; i < VarValue.size(); i++) {
       assert(VarValue[i] >= 1);
     }
+
     return (steps - 1);
   }
 

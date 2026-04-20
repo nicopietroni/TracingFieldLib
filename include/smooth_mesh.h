@@ -51,8 +51,11 @@
 #include "edge_mesh_functions.h"
 #include "laplacian_neighbors.h"
 #include "mesh_features.h"
+#include "mesh_fold_displace.h"
 #include "mesh_functions.h"
 #include "mesh_mapping.h"
+#include "mesh_subdivide.h"
+#include "mesh_voronoi_partition.h"
 #include "normal.h"
 #include "point3.h"
 #include "polygon3.h"
@@ -60,9 +63,6 @@
 #include "quad3.h"
 #include "reproject_mesh.h"
 #include "triangle3.h"
-#include "mesh_subdivide.h"
-#include "mesh_voronoi_partition.h"
-#include "mesh_fold_displace.h"
 // #include "polyhedra_connectivity.h"
 // #include "header"
 
@@ -196,105 +196,11 @@ void SmoothLaplacianlSignal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
   }
 }
 
-// template <class ScalarType>
-// ScalarType BestAlignedPoly(const std::vector<Geo::Point3<ScalarType>>
-// &FacePos,
-//                            std::vector<Geo::Point3<ScalarType>> &bestPoly) {
-//   // find the perimeter
-//   Geo::Polyline3<ScalarType> Poly;
-//   Poly.PolyPos = FacePos;
-//   ScalarType Len = Poly.Lenght();
-
-//   ScalarType sideLength = Len / FacePos.size(); // Compute side length
-//   ScalarType radius =
-//       sideLength / (2 * sin(M_PI / FacePos.size())); // Compute circumradius
-
-//   bestPoly.clear();
-//   for (int i = 0; i < FacePos.size(); ++i) {
-//     ScalarType angle = (2.0 * M_PI * i) / FacePos.size(); // Angle in radians
-//     ScalarType x = radius * cos(angle);
-//     ScalarType y = radius * sin(angle);
-//     bestPoly.push_back(Geo::Point3<ScalarType>(x, y, 0));
-//   }
-
-//   Geo::PointMatch<ScalarType>::TrasformRigidMatch(FacePos, bestPoly);
-
-//   ScalarType Err = 0;
-//   for (size_t i = 0; i < FacePos.size(); i++)
-//     Err += pow((FacePos[i] - bestPoly[i]).Norm(), 2);
-//   return Err;
-// }
-
-// template <class ScalarType>
-// Geo::Point3<ScalarType>
-// NormalPoly(const std::vector<Geo::Point3<ScalarType>> &PolyPos) {
-
-//   // compute normal of polygonal face
-//   Point3<ScalarType> Norm(0, 0, 0);
-//   int sizeF = PolyPos.size();
-//   for (int i = 0; i < sizeF; i++) {
-//     int IndexV0 = (i + sizeF - 1) % sizeF;
-//     int IndexV1 = i;
-//     int IndexV2 = (i + 1) % sizeF;
-//     Point3<ScalarType> P0 = PolyPos[IndexV0];
-//     Point3<ScalarType> P1 = PolyPos[IndexV1];
-//     Point3<ScalarType> P2 = PolyPos[IndexV2];
-//     Point3<ScalarType> Dir0 = P1 - P0;
-//     Point3<ScalarType> Dir1 = P2 - P0;
-//     Dir0.Normalize();
-//     Dir1.Normalize();
-//     Norm += Cross(Dir0, Dir1);
-//   }
-//   Norm.Normalize();
-//   return Norm;
-// }
-
-// template <class ScalarType>
-// void SmoothLaplacian(std::vector<Geo::Point3<ScalarType>> &VertPos,
-//                      const std::vector<std::vector<int>> &Faces, int NumIte,
-//                      const std::vector<int> &FixedVert = std::vector<int>(),
-//                      const std::vector<std::pair<int, int>> &Features =
-//                          std::vector<std::pair<int, int>>(),
-//                      bool line_border = true, ScalarType Damp = 0.5) {
-
-// template <class ScalarType>
-// void GetLaplacianValues(const std::vector<Geo::Point3<ScalarType>> &Values,
-//                         const std::vector<std::vector<int>> &Neighbors,
-//                         std::vector<Geo::Point3<ScalarType>> &LaplVal,
-//                         const std::map<std::pair<int, int>, ScalarType>
-//                         &NeighWeights=std::map<std::pair<int, int>,
-//                         ScalarType>()) {
-
-//   LaplVal = std::vector<Geo::Point3<ScalarType>>(
-//       Values.size(), Geo::Point3<ScalarType>(0, 0, 0));
-
-//   assert(Neighbors.size() == Values.size());
-//   for (size_t i = 0; i < Neighbors.size(); i++) {
-//     for (size_t j = 0; j < Neighbors[i].size(); j++) {
-//       int IndexN0 = i;
-//       int IndexN1 = Neighbors[i][j];
-//       assert(IndexN0 >= 0);
-//       assert(IndexN0 < Values.size());
-//       ScalarType AddValue =
-//       if (NeighWeights.size() > 0) {
-//         std::pair<int, int> Key(IndexN0, IndexN);
-//         assert(NeighWeights.count(Key) > 0);
-//         LaplVal[i] += Values[IndexN] * NeighWeights.at(Key);
-//       } else
-//       LaplVal[i] += Values[IndexN];
-//     }
-//     LaplVal[i] /= Neighbors[i].size();
-//   }
-// }
-
 template <class ScalarType>
-void GetLaplacianValues(
-    const std::vector<Geo::Point3<ScalarType>> &Values,
-    const std::vector<std::vector<int>> &Neighbors,
-     std::vector<Geo::Point3<ScalarType>> &LaplVal)
-    // const std::map<std::pair<int, int>, ScalarType> &NeighWeights =
-    //     std::map<std::pair<int, int>, ScalarType>()) 
-  {
+void GetLaplacianValues(const std::vector<Geo::Point3<ScalarType>> &Values,
+                        const std::vector<std::vector<int>> &Neighbors,
+                        std::vector<Geo::Point3<ScalarType>> &LaplVal)
+{
 
   LaplVal = std::vector<Geo::Point3<ScalarType>>(
       Values.size(), Geo::Point3<ScalarType>(0, 0, 0));
@@ -310,174 +216,26 @@ void GetLaplacianValues(
       assert(IndexN0 >= 0);
       assert(IndexN0 < Values.size());
       ScalarType Weight = 1;
-      // if (NeighWeights.size() > 0) {
-      //   std::pair<int, int> Key(IndexN0, IndexN1);
-      //   if (NeighWeights.count(Key) > 0) {
-      //     Weight = NeighWeights.at(Key);
-      //     // std::cout<<"Weight "<<Key.first<<" "<<Key.second<<"
-      //     // "<<Weight<<std::endl;
-      //   } else {
-      //     std::cout << "No Weight " << Key.first << " " << Key.second
-      //               << std::endl;
-      //     exit(0);
-      //   }
-      // }
-      // if (Weight != 1) {
-      //   // std::cout<<"Weight "<<Weight<<std::endl;
-      //   printed = true;
-      //   numNot1++;
-      // }
       LaplVal[IndexN0] += Values[IndexN1] * Weight;
       SumWeight += Weight;
     }
-    // if ((printed) && (numNot1 > 2)) {
-    //   std::cout << "Neigh Size " << Neighbors[i].size() << std::endl;
-    //   std::vector<int> UniqueNeigh(Neighbors[i].begin(), Neighbors[i].end());
-    //   std::sort(UniqueNeigh.begin(), UniqueNeigh.end());
-    //   UniqueNeigh.erase(std::unique(UniqueNeigh.begin(), UniqueNeigh.end()),
-    //                     UniqueNeigh.end());
-    //   std::cout << "Unique Neigh Size " << UniqueNeigh.size() << std::endl;
-
-    //   std::cout << "Sum W " << SumWeight << std::endl;
-    // }
+    
     LaplVal[i] /= SumWeight;
   }
 }
 
-// template <class ScalarType>
-// void SmoothLaplacianStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
-//                          const std::vector<std::vector<int>> &Faces,
-//                          const std::set<int> &FixedV,
-//                          const std::vector<std::pair<int, int>> &LineSmooth =
-//                              std::vector<std::pair<int, int>>(),
-//                          ScalarType Damp = 0.5) {
-//   std::vector<Geo::Point3<ScalarType>> AvgPos(VertPos.size(),
-//                                               Geo::Point3<ScalarType>(0, 0,
-//                                               0));
-//   std::vector<int> AvgNum(VertPos.size(), 0);
-
-//   std::set<int> LineSmoothV;
-//   for (size_t i = 0; i < LineSmooth.size(); i++) {
-//     LineSmoothV.insert(LineSmooth[i].first);
-//     LineSmoothV.insert(LineSmooth[i].second);
-//   }
-
-//   // cumulate the non line
-//   for (size_t i = 0; i < Faces.size(); i++)
-//     for (size_t j = 0; j < Faces[i].size(); j++) {
-//       int IndexV0 = Faces[i][j];
-//       int IndexV1 = Faces[i][(j + 1) % Faces[i].size()];
-//       bool IsFixedV0 = (FixedV.count(IndexV0) > 0);
-//       bool IsFixedV1 = (FixedV.count(IndexV1) > 0);
-//       bool IsLineSmoothV0 = (LineSmoothV.count(IndexV0) > 0);
-//       bool IsLineSmoothV1 = (LineSmoothV.count(IndexV1) > 0);
-//       if ((!IsFixedV0) && (!IsLineSmoothV0)) {
-//         AvgPos[IndexV0] += VertPos[IndexV1];
-//         AvgNum[IndexV0]++;
-//       }
-//       if ((!IsFixedV1) && (!IsLineSmoothV1)) {
-//         AvgPos[IndexV1] += VertPos[IndexV0];
-//         AvgNum[IndexV1]++;
-//       }
-//     }
-
-//   // cumulate the line
-//   for (size_t i = 0; i < LineSmooth.size(); i++) {
-//     int IndexV0 = LineSmooth[i].first;
-//     int IndexV1 = LineSmooth[i].second;
-//     bool IsFixedV0 = (FixedV.count(IndexV0) > 0);
-//     bool IsFixedV1 = (FixedV.count(IndexV1) > 0);
-//     if (!IsFixedV0) {
-//       AvgPos[IndexV0] += VertPos[IndexV1];
-//       AvgNum[IndexV0]++;
-//     }
-//     if (!IsFixedV1) {
-//       AvgPos[IndexV1] += VertPos[IndexV0];
-//       AvgNum[IndexV1]++;
-//     }
-//   }
-
-//   // then average
-//   for (size_t i = 0; i < AvgNum.size(); i++) {
-//     if (AvgNum[i] == 0) {
-//       AvgPos[i] = VertPos[i];
-//       continue;
-//     }
-//     AvgPos[i] /= AvgNum[i];
-//   }
-//   for (size_t i = 0; i < AvgPos.size(); i++)
-//     VertPos[i] = VertPos[i] * Damp + AvgPos[i] * (1 - Damp);
-// }
-
-// template <class ScalarType>
-// void GetLaplacianNeighbours(std::vector<Geo::Point3<ScalarType>> &VertPos,
-//                             const std::vector<std::vector<int>> &Faces,
-//                             std::vector<std::vector<int>> &Neighbors,
-//                             const std::vector<std::pair<int, int>>
-//                             &LineSmooth =
-//                                 std::vector<std::pair<int, int>>()) {
-//   Neighbors.clear();
-//   Neighbors.resize(VertPos.size());
-
-//   for (size_t i = 0; i < Faces.size(); i++) {
-//     for (size_t j = 0; j < Faces[i].size(); j++) {
-//       int IndexV = Faces[i][j];
-//       Neighbors[IndexV].insert(Neighbors[IndexV].end(), Faces[i].begin(),
-//                                Faces[i].end());
-//     }
-//   }
-
-//   // for (size_t i = 0; i < Faces.size(); i++) {
-//   //   for (size_t j = 0; j < Faces[i].size(); j++) {
-//   //     int IndexV0 = Faces[i][j];
-//   //     int IndexV1 = Faces[i][(j+1)%Faces[i].size()];
-//   //     Neighbors[IndexV1].push_back(IndexV0);
-//   //     Neighbors[IndexV0].push_back(IndexV1);
-//   //   }
-//   // }
-
-//   // set all features
-//   std::set<std::pair<int, int>> LineSmoothSet;
-//   std::set<int> FeatureV;
-//   for (size_t i = 0; i < LineSmooth.size(); i++) {
-//     std::pair<int, int> KeyE = LineSmooth[i];
-//     if (KeyE.first > KeyE.second)
-//       std::swap(KeyE.first, KeyE.second);
-//     LineSmoothSet.insert(KeyE);
-//     FeatureV.insert(KeyE.first);
-//     FeatureV.insert(KeyE.second);
-//   }
-
-//   // otherwise filter neighbours
-//   for (size_t i = 0; i < Neighbors.size(); i++) {
-//     // if not a feature all neighbours
-//     if (FeatureV.count(i) == 0)
-//       continue;
-
-//     // filters with features
-//     std::vector<int> CurrN = Neighbors[i];
-//     Neighbors[i].clear();
-//     for (size_t j = 0; j < CurrN.size(); j++) {
-//       int IndexV0 = i;
-//       int IndexV1 = CurrN[j];
-//       std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
-//                                std::max(IndexV0, IndexV1));
-//       if (LineSmoothSet.count(KeyE) == 0)
-//         continue;
-//       Neighbors[i].push_back(IndexV1);
-//     }
-//   }
-// }
 
 template <class ScalarType>
-void SmoothLaplacianStep(
-    std::vector<Geo::Point3<ScalarType>> &VertPos,
-    const std::vector<std::vector<int>> &Faces, const std::set<int> &FixedV,
-    const std::vector<std::pair<int, int>> &LineSmooth = std::vector<std::pair<int, int>>(),
-    ScalarType Damp = 0.5, bool line_neight_features = true)
-    // const std::map<std::pair<int, int>, ScalarType> &NeighWeights =
-    //     std::map<std::pair<int, int>, ScalarType>()) 
-    {
+void SmoothLaplacianStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
+                         const std::vector<std::vector<int>> &Faces,
+                         const std::set<int> &FixedV,
+                         const std::vector<std::pair<int, int>> &LineSmooth =
+                             std::vector<std::pair<int, int>>(),
+                         ScalarType Damp = 0.5,
+                         bool line_neight_features = true)
+// const std::map<std::pair<int, int>, ScalarType> &NeighWeights =
+//     std::map<std::pair<int, int>, ScalarType>())
+{
   std::vector<std::vector<int>> Neighbors;
   if (line_neight_features)
     GetLaplacianNeighbours(VertPos, Faces, Neighbors, LineSmooth);
@@ -488,23 +246,9 @@ void SmoothLaplacianStep(
 
   // then average the values
   std::vector<Geo::Point3<ScalarType>> LaplVal;
-  GetLaplacianValues(VertPos, Neighbors, LaplVal);//, NeighWeights);
+  GetLaplacianValues(VertPos, Neighbors, LaplVal); //, NeighWeights);
   assert(LaplVal.size() == VertPos.size());
 
-  // if (Bilaplacian) {
-  //   // encode as difference
-  //   for (size_t i = 0; i < LaplVal.size(); i++)
-  //     LaplVal[i] = LaplVal[i] - VertPos[i];
-
-  //   // smooth the laplacian to get bilaplacian
-  //   std::vector<Geo::Point3<ScalarType>> BiLaplVal;
-  //   GetLaplacianValues(LaplVal, Neighbors, BiLaplVal);
-
-  //   // and readd to original vert
-  //   for (size_t i = 0; i < LaplVal.size(); i++) {
-  //     LaplVal[i] = VertPos[i] + BiLaplVal[i] * 0.001; // BiLaplVal[i];
-  //   }
-  // }
 
   for (size_t i = 0; i < LaplVal.size(); i++) {
     if (FixedV.count(i) > 0)
@@ -630,156 +374,6 @@ void SmoothCentroidStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
     VertPos[i] = VertPos[i] * Damp + AvgPos[i] * (1 - Damp);
 }
 
-// template <class ScalarType>
-// void SmoothPushStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
-//                          const std::vector<std::vector<int>> &Faces,
-//                          const std::set<int> &FixedV,
-//                          const std::vector<std::pair<int, int>> &LineSmooth =
-//                              std::vector<std::pair<int, int>>(),
-//                          ScalarType Damp = 0.5) {
-//   std::vector<Geo::Point3<ScalarType>> AvgPos(VertPos.size(),
-//                                               Geo::Point3<ScalarType>(0, 0,
-//                                               0));
-//   std::vector<int> AvgNum(VertPos.size(), 0);
-
-//   std::set<int> LineSmoothV;
-//   for (size_t i = 0; i < LineSmooth.size(); i++) {
-//     LineSmoothV.insert(LineSmooth[i].first);
-//     LineSmoothV.insert(LineSmooth[i].second);
-//   }
-
-//   std::vector<ScalarType> VertL(VertPos.size(),0);
-//   std::vector<int> VertLNum(VertPos.size(),0);
-//   std::vector<std::vector<int> > VertN(VertPos.size(),std::vector<int>());
-//    for (size_t i = 0; i < Faces.size(); i++)
-//     for (size_t j = 0; j < Faces[i].size(); j++) {
-//       int IndexV0 = Faces[i][j];
-//       int IndexV1 = Faces[i][(j + 1) % Faces[i].size()];
-//       ScalarType Len=(VertPos[IndexV0]-VertPos[IndexV1]).Norm();
-//       VertL[IndexV0]+=Len;
-//       VertL[IndexV1]+=Len;
-//       VertLNum[IndexV0]++;
-//       VertLNum[IndexV1]++;
-//       VertN[IndexV0].push_back(IndexV1);
-//       VertN[IndexV1].push_back(IndexV0);
-//     }
-//   for (size_t i = 0; i < VertL.size(); i++)
-//     VertL[i]/=VertLNum[i];
-
-//   for (size_t i = 0; i < VertN.size(); i++)
-//   {
-//     std::sort(VertN[i].begin(),VertN[i].end());
-//     VertN[i].erase(std::unique(VertN[i].begin(), VertN[i].end()),
-//     VertN[i].end());
-//   }
-
-//   //compute the position
-//   for (size_t i = 0; i < VertN.size(); i++)
-//     for (size_t j = 0; j < VertN[i].size(); j++) {
-//       int IndexV0 = i;
-//       int IndexV1 = VertN[i][j];
-//       assert(IndexV0!=IndexV1);
-//       Geo::Point3<ScalarType> Dir=VertPos[IndexV1]-VertPos[IndexV0];
-//       Dir.Normalize();
-//       Dir=Dir*VertL[IndexV0];
-//       Geo::Point3<ScalarType> TargetP=VertPos[IndexV0]+Dir;
-//       bool IsFixedV = (FixedV.count(IndexV1) > 0);
-//       bool IsLineSmoothV = (LineSmoothV.count(IndexV1) > 0);
-//       if ((!IsFixedV) && (!IsLineSmoothV)) {
-//         AvgPos[IndexV1] += TargetP;
-//         AvgNum[IndexV1]++;
-//       }
-//     }
-
-//   // cumulate the line
-//   for (size_t i = 0; i < LineSmooth.size(); i++) {
-//     int IndexV0 = LineSmooth[i].first;
-//     int IndexV1 = LineSmooth[i].second;
-//     bool IsFixedV0 = (FixedV.count(IndexV0) > 0);
-//     bool IsFixedV1 = (FixedV.count(IndexV1) > 0);
-//     if (!IsFixedV0) {
-//       AvgPos[IndexV0] += VertPos[IndexV1];
-//       AvgNum[IndexV0]++;
-//     }
-//     if (!IsFixedV1) {
-//       AvgPos[IndexV1] += VertPos[IndexV0];
-//       AvgNum[IndexV1]++;
-//     }
-//   }
-
-//   // then average
-//   for (size_t i = 0; i < AvgNum.size(); i++) {
-//     if (AvgNum[i] == 0) {
-//       AvgPos[i] = VertPos[i];
-//       continue;
-//     }
-//     AvgPos[i] /= AvgNum[i];
-//   }
-//   for (size_t i = 0; i < AvgPos.size(); i++)
-//     VertPos[i] = VertPos[i] * Damp + AvgPos[i] * (1 - Damp);
-// }
-
-// template <class ScalarType>
-// void GetTargetPoly(
-//     const std::vector<Geo::Point3<ScalarType>> &VertPos,
-//     const std::vector<std::vector<int>> &Faces,
-//     const std::set<int> &LineSmoothV,
-//     std::vector<std::vector<Geo::Point3<ScalarType>>> &TargetPoly,
-//     std::vector<ScalarType> &Weights, bool weight_by_Aspect = true) {
-//   ScalarType WDefault = 1;
-//   Weights.clear();
-//   Weights.resize(Faces.size(), WDefault);
-
-//   TargetPoly.clear();
-
-//   // cumulate the non line
-//   for (size_t i = 0; i < Faces.size(); i++) {
-
-//     std::vector<Geo::Point3<ScalarType>> FacePos;
-//     for (size_t j = 0; j < Faces[i].size(); j++) {
-//       int IndexV = Faces[i][j];
-//       FacePos.push_back(VertPos[IndexV]);
-//     }
-
-//     std::vector<Geo::Point3<ScalarType>> CurrPoly;
-//     //ScalarType W = BestAlignedPoly(FacePos, CurrPoly);
-//     ScalarType W = BestAlignedPolyProcrustes(FacePos, CurrPoly);
-//     TargetPoly.push_back(CurrPoly);
-
-//     // translate if on a border
-//     Geo::Point3<ScalarType> TranslateV(0, 0, 0);
-//     int TranslateNum = 0;
-//     for (size_t j = 0; j < Faces[i].size(); j++) {
-//       int IndexV = Faces[i][j];
-//       bool IsLineSmoothV = (LineSmoothV.count(IndexV) > 0);
-//       if (IsLineSmoothV) {
-//         TranslateV += VertPos[IndexV] - TargetPoly[i][j];
-//         TranslateNum++;
-//       }
-//     }
-//     bool HasB = false;
-//     if (TranslateNum > 0) {
-//       // HasB = true;
-//       TranslateV /= TranslateNum;
-//       for (size_t j = 0; j < TargetPoly[i].size(); j++)
-//         TargetPoly[i][j] += (TranslateV*0.5); // only half to avoid overcompensation
-//     }
-//     // set the weight as the distance
-//     if (weight_by_Aspect) {
-//       ScalarType Err = 0;
-//       //normalized by average edge len
-//       ScalarType Perim = 0;
-//       for (size_t j = 0; j < FacePos.size(); j++)
-//         Perim += (FacePos[j] - FacePos[(j + 1) % FacePos.size()]).Norm();
-
-//       ScalarType AvEL = Perim / FacePos.size();
-//       for (size_t j = 0; j < FacePos.size(); j++)
-//         Err += pow((FacePos[j] - TargetPoly[i][j]).Norm() / AvEL, 2);
-      
-//       Weights[i] = pow(Err, 2)+0.001;
-//     }
-//   }
-// }
 
 #ifndef PARALLEL_TARGET_POLY
 template <class ScalarType>
@@ -807,9 +401,9 @@ void GetTargetPoly(
     }
 
     std::vector<Geo::Point3<ScalarType>> CurrPoly;
-    //ScalarType W = BestAlignedPoly(FacePos, CurrPoly);
+    // ScalarType W = BestAlignedPoly(FacePos, CurrPoly);
     ScalarType W = BestAlignedPolyProcrustes(FacePos, CurrPoly);
-    
+
     // translate if on a border
     Geo::Point3<ScalarType> TranslateV(0, 0, 0);
     int TranslateNum = 0;
@@ -826,7 +420,8 @@ void GetTargetPoly(
       // HasB = true;
       TranslateV /= TranslateNum;
       for (size_t j = 0; j < CurrPoly.size(); j++)
-        CurrPoly[j] += (TranslateV*0.5); // only half to avoid overcompensation
+        CurrPoly[j] +=
+            (TranslateV * 0.5); // only half to avoid overcompensation
     }
 
     TargetPoly[i] = CurrPoly;
@@ -834,7 +429,7 @@ void GetTargetPoly(
     // set the weight as the distance
     if (weight_by_Aspect) {
       ScalarType Err = 0;
-      //normalized by average edge len
+      // normalized by average edge len
       ScalarType Perim = 0;
       for (size_t j = 0; j < FacePos.size(); j++)
         Perim += (FacePos[j] - FacePos[(j + 1) % FacePos.size()]).Norm();
@@ -842,8 +437,8 @@ void GetTargetPoly(
       ScalarType AvEL = Perim / FacePos.size();
       for (size_t j = 0; j < FacePos.size(); j++)
         Err += pow((FacePos[j] - TargetPoly[i][j]).Norm() / AvEL, 2);
-      
-      Weights[i] = pow(Err, 2)+0.001;
+
+      Weights[i] = pow(Err, 2) + 0.001;
     }
   }
 }
@@ -854,9 +449,7 @@ void GetTargetPoly(
     const std::vector<std::vector<int>> &Faces,
     const std::set<int> &LineSmoothV,
     std::vector<std::vector<Geo::Point3<ScalarType>>> &TargetPoly,
-    std::vector<ScalarType> &Weights,
-    bool weight_by_Aspect = true)
-{
+    std::vector<ScalarType> &Weights, bool weight_by_Aspect = true) {
   const ScalarType WDefault = ScalarType(1);
 
   const size_t nF = Faces.size();
@@ -867,22 +460,21 @@ void GetTargetPoly(
   TargetPoly.clear();
   TargetPoly.resize(nF);
 
-  if (nF == 0) return;
+  if (nF == 0)
+    return;
 
   unsigned int numThreads = std::thread::hardware_concurrency();
-  if (numThreads == 0) numThreads = 1;
+  if (numThreads == 0)
+    numThreads = 1;
   numThreads = static_cast<unsigned int>(std::min<size_t>(numThreads, nF));
 
-  auto worker = [&](size_t begin, size_t end)
-  {
-    for (size_t i = begin; i < end; ++i)
-    {
+  auto worker = [&](size_t begin, size_t end) {
+    for (size_t i = begin; i < end; ++i) {
       // Gather face vertex positions
       const auto &F = Faces[i];
       std::vector<Geo::Point3<ScalarType>> FacePos;
       FacePos.reserve(F.size());
-      for (size_t j = 0; j < F.size(); ++j)
-      {
+      for (size_t j = 0; j < F.size(); ++j) {
         const int IndexV = F[j];
         FacePos.push_back(VertPos[IndexV]);
       }
@@ -892,45 +484,44 @@ void GetTargetPoly(
       CurrPoly.reserve(FacePos.size());
 
       // ScalarType W = BestAlignedPoly(FacePos, CurrPoly);
-      (void)BestAlignedPolyProcrustes(FacePos, CurrPoly); // returns W but unused here
+      (void)BestAlignedPolyProcrustes(FacePos,
+                                      CurrPoly); // returns W but unused here
 
       // Translate if on a line-smooth "border"
       Geo::Point3<ScalarType> TranslateV(0, 0, 0);
       int TranslateNum = 0;
-      for (size_t j = 0; j < F.size(); ++j)
-      {
+      for (size_t j = 0; j < F.size(); ++j) {
         const int IndexV = F[j];
         const bool IsLineSmooth = (LineSmoothV.count(IndexV) > 0);
-        if (IsLineSmooth)
-        {
+        if (IsLineSmooth) {
           // CurrPoly is expected to have same size/order as FacePos
           TranslateV += VertPos[IndexV] - CurrPoly[j];
           ++TranslateNum;
         }
       }
 
-      if (TranslateNum > 0)
-      {
+      if (TranslateNum > 0) {
         TranslateV /= ScalarType(TranslateNum);
         for (size_t j = 0; j < CurrPoly.size(); ++j)
-          CurrPoly[j] += (TranslateV * ScalarType(0.5)); // half to avoid overcompensation
+          CurrPoly[j] +=
+              (TranslateV * ScalarType(0.5)); // half to avoid overcompensation
       }
 
       // Write output for this face index (no races: unique i per thread)
       TargetPoly[i] = std::move(CurrPoly);
 
       // Weight computation (optional)
-      if (weight_by_Aspect)
-      {
+      if (weight_by_Aspect) {
         ScalarType Perim = 0;
         for (size_t j = 0; j < FacePos.size(); ++j)
           Perim += (FacePos[j] - FacePos[(j + 1) % FacePos.size()]).Norm();
 
-        const ScalarType AvEL = (FacePos.empty() ? ScalarType(1) : (Perim / ScalarType(FacePos.size())));
+        const ScalarType AvEL =
+            (FacePos.empty() ? ScalarType(1)
+                             : (Perim / ScalarType(FacePos.size())));
 
         ScalarType Err = 0;
-        for (size_t j = 0; j < FacePos.size(); ++j)
-        {
+        for (size_t j = 0; j < FacePos.size(); ++j) {
           const ScalarType d = (FacePos[j] - TargetPoly[i][j]).Norm() / AvEL;
           Err += d * d; // was pow(d,2)
         }
@@ -944,15 +535,16 @@ void GetTargetPoly(
   threads.reserve(numThreads);
 
   const size_t block = (nF + numThreads - 1) / numThreads;
-  for (unsigned int t = 0; t < numThreads; ++t)
-  {
+  for (unsigned int t = 0; t < numThreads; ++t) {
     const size_t begin = t * block;
-    const size_t end   = std::min(nF, begin + block);
-    if (begin >= end) break;
+    const size_t end = std::min(nF, begin + block);
+    if (begin >= end)
+      break;
     threads.emplace_back(worker, begin, end);
   }
 
-  for (auto &th : threads) th.join();
+  for (auto &th : threads)
+    th.join();
 }
 #endif
 
@@ -964,7 +556,7 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
                              std::vector<std::pair<int, int>>(),
                          ScalarType Damp = 0.5,
                          bool line_neight_features = true,
-                          ScalarType LaplW = 0) {
+                         ScalarType LaplW = 0) {
   std::vector<Geo::Point3<ScalarType>> AvgPos(VertPos.size(),
                                               Geo::Point3<ScalarType>(0, 0, 0));
   std::vector<ScalarType> AvgW(VertPos.size(), 0);
@@ -996,6 +588,12 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
   std::vector<std::vector<Geo::Point3<ScalarType>>> TargetPoly;
   GetTargetPoly<ScalarType>(VertPos, Faces, LineSmoothVSet, TargetPoly,
                             Weights); //,TargetN );
+
+  // smooth the polygonal size to avoid too much distortion
+  std::vector<std::vector<int>> NextF, NextI;
+  getFFAdjacency(Faces, NextF, NextI);
+  SmoothPolyScale(TargetPoly, Weights, NextF, 3);
+
   for (size_t i = 0; i < Faces.size(); i++) {
     for (size_t j = 0; j < Faces[i].size(); j++) {
       int IndexV = Faces[i][j];
@@ -1035,29 +633,17 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
   }
 
   // add the laplacian term
-  std::vector<std::vector<int>> Neighbors;
-  if (line_neight_features)
-    GetLaplacianNeighbours(VertPos, Faces, Neighbors, LineSmooth);
-  else {
-    std::vector<std::pair<int, int>> LineSmoothTest;
-    GetLaplacianNeighbours(VertPos, Faces, Neighbors, LineSmoothTest);
-  }
-
-  // //get max displacement per vert
-  // ScalarType AvGE=AvgEdgeLen(VertPos,Faces);
-  // std::vector<ScalarType> MaxDispl(VertPos.size(), AvGE);
-  // for (size_t i = 0; i < Neighbors.size(); i++) {
-  //   for (size_t j = 0; j < Neighbors[i].size(); j++) {
-  //     int IndexV0 = i;
-  //     int IndexV1 = Neighbors[i][j];
-  //     ScalarType Dist = (VertPos[IndexV0] - VertPos[IndexV1]).Norm()/2;
-  //     MaxDispl[IndexV0] = std::min(MaxDispl[IndexV0], Dist);
-  //   }
-  // }
-
-  // get laplaxian values
   std::vector<Geo::Point3<ScalarType>> LaplVal;
+
   if (LaplW > 0) {
+    std::vector<std::vector<int>> Neighbors;
+    if (line_neight_features)
+      GetLaplacianNeighbours(VertPos, Faces, Neighbors, LineSmooth);
+    else {
+      std::vector<std::pair<int, int>> LineSmoothTest;
+      GetLaplacianNeighbours(VertPos, Faces, Neighbors, LineSmoothTest);
+    }
+    // get laplaxian values
     GetLaplacianValues(VertPos, Neighbors, LaplVal);
   }
 
@@ -1072,159 +658,15 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
     if (LaplW > 0)
       AvgPos[i] = AvgPos[i] * (1 - LaplW) + LaplVal[i] * LaplW;
   }
-  
+
   for (size_t i = 0; i < AvgPos.size(); i++) {
     Geo::Point3<ScalarType> OldP = VertPos[i];
     Geo::Point3<ScalarType> NewP = VertPos[i] * Damp + AvgPos[i] * (1 - Damp);
     Geo::Point3<ScalarType> Displ = NewP - OldP;
-    // if (Displ.Norm() > MaxDispl[i]) {
-    //   Displ = Displ * (MaxDispl[i] / Displ.Norm());
-    // }
     VertPos[i] = OldP + Displ;
   }
-  // for (size_t i = 0; i < AvgPos.size(); i++) {
-  //   Geo::Point3<ScalarType> OldP = VertPos[i];
-  //   VertPos[i] = VertPos[i] * Damp + AvgPos[i] * (1 - Damp);
-  // }
 }
 
-// template <class ScalarType>
-// void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
-//                          const std::vector<std::vector<int>> &Faces,
-//                          const std::set<int> &FixedV,
-//                          const std::vector<std::pair<int, int>> &LineSmooth =
-//                              std::vector<std::pair<int, int>>(),
-//                          ScalarType Damp = 0.5) {
-
-//   std::vector<std::vector<Geo::Point3<ScalarType>>> NeighPos(VertPos.size());
-
-//   // std::vector<int> AvgNum(VertPos.size(), 0);
-//   //std::vector<std::vector<bool>> FromBorder(VertPos.size());
-
-//   std::set<int> LineSmoothV;
-//   for (size_t i = 0; i < LineSmooth.size(); i++) {
-//     LineSmoothV.insert(LineSmooth[i].first);
-//     LineSmoothV.insert(LineSmooth[i].second);
-//   }
-
-//   // cumulate the non line
-//   for (size_t i = 0; i < Faces.size(); i++) {
-
-//     std::vector<Geo::Point3<ScalarType>> FacePos;
-//     for (size_t j = 0; j < Faces[i].size(); j++) {
-//       int IndexV = Faces[i][j];
-//       FacePos.push_back(VertPos[IndexV]);
-//     }
-
-//     std::vector<Geo::Point3<ScalarType>> TargetF = BestAlignedPoly(FacePos);
-
-//     // translate if on a border
-//     Geo::Point3<ScalarType> TranslateV(0, 0, 0);
-//     int TranslateNum = 0;
-//     for (size_t j = 0; j < Faces[i].size(); j++) {
-//       int IndexV = Faces[i][j];
-//       bool IsLineSmoothV = (LineSmoothV.count(IndexV) > 0);
-//       if (IsLineSmoothV) {
-//         TranslateV += VertPos[IndexV] - TargetF[j];
-//         TranslateNum++;
-//       }
-//     }
-
-//     //bool HasB = false;
-//     if (TranslateNum > 0) {
-//       //HasB = true;
-//       TranslateV /= TranslateNum;
-//       for (size_t j = 0; j < TargetF.size(); j++)
-//         TargetF[j] += TranslateV;
-//     }
-
-//     assert(Faces[i].size() == TargetF.size());
-
-//     for (size_t j = 0; j < Faces[i].size(); j++) {
-//       int IndexV = Faces[i][j];
-//       bool IsFixedV = (FixedV.count(IndexV) > 0);
-//       bool IsLineSmoothV = (LineSmoothV.count(IndexV) > 0);
-//       if ((!IsFixedV) && (!IsLineSmoothV)) {
-//         NeighPos[IndexV].push_back(TargetF[j]);
-//         // AvgPos[IndexV] += TargetF[j];
-//         // AvgNum[IndexV]++;
-//         //FromBorder[IndexV].push_back(HasB);
-//       }
-//     }
-//   }
-
-//   // cumulate the line
-//   for (size_t i = 0; i < LineSmooth.size(); i++) {
-//     int IndexV0 = LineSmooth[i].first;
-//     int IndexV1 = LineSmooth[i].second;
-//     bool IsFixedV0 = (FixedV.count(IndexV0) > 0);
-//     bool IsFixedV1 = (FixedV.count(IndexV1) > 0);
-//     if (!IsFixedV0) {
-//       // AvgPos[IndexV0] = VertPos[IndexV1];
-//       // AvgNum[IndexV0]++;
-//       NeighPos[IndexV0].push_back(VertPos[IndexV1]);
-//     }
-//     if (!IsFixedV1) {
-//       // AvgPos[IndexV1] += VertPos[IndexV0];
-//       // AvgNum[IndexV1]++;
-//       NeighPos[IndexV1].push_back(VertPos[IndexV0]);
-//     }
-//   }
-
-//   std::vector<Geo::Point3<ScalarType>> TargetPos = VertPos;
-//   // then average
-//   for (size_t i = 0; i < NeighPos.size(); i++) {
-//     int IndexV = i;
-//     bool IsLineSmoothV = (LineSmoothV.count(IndexV) > 0);
-
-//     Geo::Point3<ScalarType> AvgTarget(0, 0, 0);
-
-//     bool IsFixedV = (FixedV.count(IndexV) > 0);
-
-//     if (!IsFixedV) {
-//       if (IsLineSmoothV) {
-//         for (size_t j = 0; j < NeighPos[IndexV].size(); j++)
-//           AvgTarget += NeighPos[IndexV][j];
-
-//         AvgTarget /= NeighPos[IndexV].size();
-//         TargetPos[IndexV] = AvgTarget;
-//       } else {
-//         // bool HasB=false;
-//         // for (size_t j = 0; j < FromBorder[IndexV].size(); j++)
-//         //   HasB|=FromBorder[IndexV][j];
-
-//         // if (!HasB)
-//         // {
-//         for (size_t j = 0; j < NeighPos[IndexV].size(); j++)
-//           AvgTarget += NeighPos[IndexV][j];
-
-//         AvgTarget /= NeighPos[IndexV].size();
-//         // }
-//         // else {
-//         //   int Num=0;
-//         //   for (size_t j = 0; j < NeighPos[IndexV].size(); j++)
-//         //   {
-//         //     if (!FromBorder[IndexV][j])continue;
-//         //     AvgTarget += NeighPos[IndexV][j];
-//         //     Num++;
-//         //   }
-
-//         //   AvgTarget /= Num;
-//         // }
-
-//         TargetPos[IndexV] = AvgTarget;
-//       }
-//     }
-//     // if (AvgNum[i] == 0) {
-//     //   AvgPos[i] = VertPos[i];
-//     //   continue;
-//     // }
-//     // AvgPos[i] /= AvgNum[i];
-//   }
-//   for (size_t i = 0; i < TargetPos.size(); i++) {
-//     VertPos[i] = VertPos[i] * Damp + TargetPos[i] * (1 - Damp);
-//   }
-// }
 
 enum SmoothType {
   SMLaplacian,
@@ -1251,7 +693,10 @@ template <class ScalarType> struct SmoothParam {
   bool line_neight_features;
   bool reproject_voronoi_partition;
   bool check_multi_pass_fold;
-  //bool adaptive_features_smooth;
+  ScalarType reproj_dist_THR;
+  std::vector<Geo::Point3<ScalarType>> PrevVertPos;
+    
+  // bool adaptive_features_smooth;
 
   void Clear() {
     FixedVert.clear();
@@ -1273,53 +718,54 @@ template <class ScalarType> struct SmoothParam {
     line_neight_features = true;
     reproject_voronoi_partition = false;
     check_multi_pass_fold = false;
-    //adaptive_features_smooth = false;
+    reproj_dist_THR=0.1;
+    // adaptive_features_smooth = false;
   }
 };
 
-template <class ScalarType>
-void PostProject(std::vector<Geo::Point3<ScalarType>> &VertPosTarget,
-                 std::vector<Geo::Point3<ScalarType>> &VertProj,
-                 const std::vector<std::vector<int>> &FacesProj) {
-  std::vector<Geo::Point3<ScalarType>> AvgDiff(
-      VertProj.size(), Geo::Point3<ScalarType>(0, 0, 0));
-  std::vector<int> AvgNum(VertProj.size(), 0);
+// template <class ScalarType>
+// void PostProject(std::vector<Geo::Point3<ScalarType>> &VertPosTarget,
+//                  std::vector<Geo::Point3<ScalarType>> &VertProj,
+//                  const std::vector<std::vector<int>> &FacesProj) {
+//   std::vector<Geo::Point3<ScalarType>> AvgDiff(
+//       VertProj.size(), Geo::Point3<ScalarType>(0, 0, 0));
+//   std::vector<int> AvgNum(VertProj.size(), 0);
 
-  Geo::TriangleSpatialIndex<ScalarType> TriGrid;
-  TriGrid.Init(VertProj, FacesProj);
+//   Geo::TriangleSpatialIndex<ScalarType> TriGrid;
+//   TriGrid.Init(VertProj, FacesProj);
 
-  for (size_t i = 0; i < VertPosTarget.size(); i++) {
-    int closestF;
-    Geo::Point3<ScalarType> closestPt;
-    TriGrid.GridClosest(VertProj, FacesProj, VertPosTarget[i],
-                        TriGrid.bbox.Diag(), closestF, closestPt);
+//   for (size_t i = 0; i < VertPosTarget.size(); i++) {
+//     int closestF;
+//     Geo::Point3<ScalarType> closestPt;
+//     TriGrid.GridClosest(VertProj, FacesProj, VertPosTarget[i],
+//                         TriGrid.bbox.Diag(), closestF, closestPt);
 
-    Geo::Point3<ScalarType> Diff = VertPosTarget[i] - closestPt;
+//     Geo::Point3<ScalarType> Diff = VertPosTarget[i] - closestPt;
 
-    for (size_t j = 0; j < FacesProj[closestF].size(); j++) {
-      int IndexV = FacesProj[closestF][j];
-      // Geo::Point3<ScalarType> TargetP=VertProj[IndexV]+Diff;
-      AvgDiff[IndexV] += Diff;
-      AvgNum[IndexV]++;
-    }
-  }
+//     for (size_t j = 0; j < FacesProj[closestF].size(); j++) {
+//       int IndexV = FacesProj[closestF][j];
+//       // Geo::Point3<ScalarType> TargetP=VertProj[IndexV]+Diff;
+//       AvgDiff[IndexV] += Diff;
+//       AvgNum[IndexV]++;
+//     }
+//   }
 
-  std::set<int> FixedV;
-  int stepDiff = 3;
-  for (size_t i = 0; i < stepDiff; i++)
-    SmoothLaplacianStep(AvgDiff, FacesProj, FixedV);
+//   std::set<int> FixedV;
+//   int stepDiff = 3;
+//   for (size_t i = 0; i < stepDiff; i++)
+//     SmoothLaplacianStep(AvgDiff, FacesProj, FixedV);
 
-  // then smooth the displacement
-  for (size_t i = 0; i < AvgNum.size(); i++) {
-    if (AvgNum[i] == 0) {
-      // AvgDiff[i] = 0;
-      continue;
-    }
-    AvgDiff[i] /= AvgNum[i];
-  }
-  for (size_t i = 0; i < AvgDiff.size(); i++)
-    VertProj[i] += AvgDiff[i]; // VertProj[i] * Damp + AvgPos[i] * (1 - Damp);
-}
+//   // then smooth the displacement
+//   for (size_t i = 0; i < AvgNum.size(); i++) {
+//     if (AvgNum[i] == 0) {
+//       // AvgDiff[i] = 0;
+//       continue;
+//     }
+//     AvgDiff[i] /= AvgNum[i];
+//   }
+//   for (size_t i = 0; i < AvgDiff.size(); i++)
+//     VertProj[i] += AvgDiff[i]; // VertProj[i] * Damp + AvgPos[i] * (1 - Damp);
+// }
 
 template <class ScalarType>
 void SampleTargetNormals(const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -1435,13 +881,7 @@ void SetPositionIfBetter(const std::vector<Geo::Point3<ScalarType>> &OldPos,
 
     OldQ -= oldFlip;
     NewQ -= newFlip;
-    // if (newFlip > oldFlip) {
-    //   // std::cout<<"RESTORE BECAUSE OF CONCAVE"<<std::endl;
-    //   //  restore old pos
-    //   SolvedPos[IndexV] = OldPos[IndexV];
-    //   continue;
-    // }
-    // if ((NewQ < 0.25) && (NewQ < OldQ)) {
+    
     if ((OldQ < 0.25) && (NewQ < OldQ)) {
       // restore old pos
       SolvedPos[IndexV] = OldPos[IndexV];
@@ -1452,53 +892,75 @@ void SetPositionIfBetter(const std::vector<Geo::Point3<ScalarType>> &OldPos,
 }
 
 // template <class ScalarType>
-// void ReprojectIfNeeded2(const SmoothParam<ScalarType> &SParam,
-//                        std::vector<Geo::Point3<ScalarType>> &VertPos,
-//                        const std::vector<std::vector<int>> &Faces,
-//                        const std::vector<int> &ReprojFeatureV,
-//                        Geo::TriangleSpatialIndex<ScalarType> &TriGrid,
-//                        std::vector<Geo::Segment3<ScalarType>> &FeatureSegs,
-//                        Geo::SegmentSpatialIndex<ScalarType> &SegGrid,
-//                        const std::set<Geo::Point3<ScalarType>> &NoReprPoints)
-//                        {
+// void FindWichAttract(SmoothParam<ScalarType> &SParam,
+//                      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+//                      const std::vector<std::vector<int>> &Faces,
+//                      int SmoothSteps=3,ScalarType AttractDist=0.1)
+// {
+//   ScalarType AverageELen=AvgEdgeLen((*SParam.ReprojVert), 
+//                                    (*SParam.ReprojFaces));
+//   ScalarType AbsAttractDist = AttractDist * AverageELen;
+//   SParam.Attract=std::vector<bool>(SParam.ReprojVert->size(), true);
+//   std::vector<ScalarType> VertDist=std::vector<ScalarType>(SParam.ReprojVert->size(), 0);
+//   std::vector<Geo::Point3<ScalarType>> VertPosTest=VertPos;
 
-//   bool do_reproject = ((SParam.ReprojStep > 0) && (SParam.ReprojVert != NULL)
-//   &&
-//                        (SParam.ReprojFaces != NULL));
+//   SmoothParam<ScalarType> SParam2;
+//   SParam2.NumIte=SmoothSteps;
 
-//   bool post_project = (do_reproject && SParam.post_project);
+//   //smooth with laplacian
+//   SParam2=SParam;
+//   SParam2.post_project=false;
+//   SmoothLaplacian(VertPosTest, Faces, SParam2);
 
-//   // save the fixed one
-//   std::vector<Geo::Point3<ScalarType>> FixedPos;
-//   for (size_t i = 0; i < SParam.FixedVert.size(); i++)
-//     FixedPos.push_back(VertPos[SParam.FixedVert[i]]);
-
-//   if (post_project)
-//     Geo::AttractProject<ScalarType>(*SParam.ReprojVert, VertPos, Faces);
-
-//   if (do_reproject) {
-
-//     Geo::ProjectOn<ScalarType>(VertPos, Faces, ReprojFeatureV,
-//                                *SParam.ReprojVert, *SParam.ReprojFaces,
-//                                TriGrid, FeatureSegs, SegGrid,NoReprPoints);
+//   //compute the distance to the smoothed one and set attract if close enough
+//   Geo::AttractProject<ScalarType>(*SParam.ReprojVert, VertPosTest, Faces,
+//                                     &SParam.Attract, &VertDist);
+  
+//   int to_attract=0;
+//   for (size_t i = 0; i < SParam.Attract.size(); i++)
+//   {
+//     if (SParam.Attract[i] && VertDist[i] < AbsAttractDist)
+//       SParam.Attract[i] = false;
+//     else
+//     {
+//       SParam.Attract[i] = true;
+//       to_attract++;
+//     }
 //   }
-//   // restore the fixed one
-//   for (size_t i = 0; i < SParam.FixedVert.size(); i++)
-//     VertPos[SParam.FixedVert[i]] = FixedPos[i];
+//   //std::cout<<"Attract "<<to_attract<<" vertices out of "<<SParam.Attract.size()<<std::endl;
+//   // exit(0);
 // }
 
 template <class ScalarType>
-void ReprojectIfNeeded(const SmoothParam<ScalarType> &SParam,
+void ReprojectIfNeeded(SmoothParam<ScalarType> &SParam,
                        std::vector<Geo::Point3<ScalarType>> &VertPos,
                        const std::vector<std::vector<int>> &Faces,
                        Geo::TriangleSpatialIndex<ScalarType> &TriGrid,
                        Geo::FeatureReprojector<ScalarType> *FeatureReproj) {
-
+  
   bool do_reproject = ((SParam.ReprojStep > 0) && (SParam.ReprojVert != NULL) &&
                        (SParam.ReprojFaces != NULL));
 
   bool post_project = (do_reproject && SParam.post_project);
+  
+  if (!do_reproject && !post_project)
+    return;
 
+  std::vector<ScalarType> EdgeLenPerVert;
+  std::vector<bool> ToReprojVert(VertPos.size(), true);
+  if (SParam.reproj_dist_THR>0)
+  {
+    AvgEdgeLenPerVert<ScalarType>(VertPos, Faces, EdgeLenPerVert);
+    if (SParam.PrevVertPos.size() != VertPos.size())
+      SParam.PrevVertPos=VertPos;
+
+    for (size_t i = 0; i < VertPos.size(); i++  )
+    {
+      ScalarType Dist = (VertPos[i] - SParam.PrevVertPos[i]).Norm();
+      if (Dist < SParam.reproj_dist_THR*EdgeLenPerVert[i])
+        ToReprojVert[i] = false;
+    }
+  }
   // save the fixed one
   std::vector<Geo::Point3<ScalarType>> FixedPos;
   for (size_t i = 0; i < SParam.FixedVert.size(); i++)
@@ -1509,122 +971,25 @@ void ReprojectIfNeeded(const SmoothParam<ScalarType> &SParam,
 
   if (do_reproject) {
 
-    // Geo::ProjectOn<ScalarType>(VertPos, Faces, ReprojFeatureV,
-    //                            *SParam.ReprojVert, *SParam.ReprojFaces,
-    //                            TriGrid, FeatureSegs, SegGrid,NoReprPoints);
     Geo::ProjectOn<ScalarType>(VertPos, Faces, *SParam.ReprojVert,
-                               *SParam.ReprojFaces, TriGrid);
+                               *SParam.ReprojFaces, TriGrid,&ToReprojVert);
     if (FeatureReproj != NULL)
       (*FeatureReproj).Reproject();
+
+    if (SParam.reproj_dist_THR>0)
+    {
+      for (size_t i = 0; i < ToReprojVert.size(); i++)
+      {
+        if (ToReprojVert[i])
+          SParam.PrevVertPos[i] = VertPos[i];
+      }
+    }
   }
   // restore the fixed one
   for (size_t i = 0; i < SParam.FixedVert.size(); i++)
     VertPos[SParam.FixedVert[i]] = FixedPos[i];
 }
 
-// template <class ScalarType>
-// void SmoothLaplacian2(
-//     std::vector<Geo::Point3<ScalarType>> &VertPos,
-//     const std::vector<std::vector<int>> &Faces,
-//     const SmoothParam<ScalarType> &SParam = SmoothParam<ScalarType>()) {
-
-//   //  save the features
-//   std::vector<Point3<ScalarType>> OldFaceNormals;
-//   ComputeFaceNormals(VertPos, Faces, OldFaceNormals);
-
-//   bool has_reproj_features = ((SParam.Features.size() >
-//   0)&&(SParam.ReprojFeatures.size() > 0));
-//   Geo::SegmentSpatialIndex<ScalarType> SegGrid;
-//   std::vector<Geo::Segment3<ScalarType>> FeatureSegs;
-
-//   Geo::TriangleSpatialIndex<ScalarType> TriGrid;
-//   bool reproject = false;
-
-//   if ((SParam.ReprojVert != NULL) && (SParam.ReprojFaces != NULL)) {
-//     TriGrid.Init(*SParam.ReprojVert, *SParam.ReprojFaces);
-//     reproject = true;
-//   }
-
-//   std::vector<int> ReprojectVertIdx;
-
-//   std::set<int> FixedVertSet(SParam.FixedVert.begin(),
-//   SParam.FixedVert.end());
-
-//   std::set<Geo::Point3<ScalarType> > NoReprPoints;
-//   if ((SParam.no_reproj_feat_endpoints)&&(SParam.ReprojVert!=NULL))
-//   {
-//     std::vector<int> Valence1Idx;
-//     Geo::MeshFeatures<ScalarType>::VerticesWithValence1(SParam.ReprojFeatures,
-//     Valence1Idx);
-//     for (size_t j=0;j<Valence1Idx.size();j++)
-//     {
-//       int IndexV=Valence1Idx[j];
-//       assert(IndexV>=0);
-//       assert(IndexV<(*SParam.ReprojVert).size());
-//       NoReprPoints.insert((*SParam.ReprojVert)[IndexV]);
-//     }
-//     //std::sort(Valence1Idx.begin(), Valence1Idx.end());
-//   }
-
-//   if ((has_reproj_features) && (SParam.ReprojVert != NULL) &&
-//       (SParam.ReprojFaces != NULL)) {
-
-//     Geo::InitFromMeshFeatures<ScalarType>(
-//         *SParam.ReprojVert, SParam.ReprojFeatures, FeatureSegs, SegGrid);
-
-//     for (size_t i = 0; i < SParam.Features.size(); i++) {
-//       int IndexV0=SParam.Features[i].first;
-//       int IndexV1=SParam.Features[i].second;
-//       assert(IndexV0>=0);
-//       assert(IndexV1>=0);
-//       ReprojectVertIdx.push_back(IndexV0);
-//       ReprojectVertIdx.push_back(IndexV1);
-//     }
-//     std::sort(ReprojectVertIdx.begin(), ReprojectVertIdx.end());
-//     ReprojectVertIdx.erase(std::unique(ReprojectVertIdx.begin(),
-//     ReprojectVertIdx.end()), ReprojectVertIdx.end());
-
-//     GetToReprojectVert(VertPos, ReprojectVertIdx, FeatureSegs, SegGrid);
-//   }
-
-//   std::vector<std::vector<int>> VF, VFIndex;
-//   if (SParam.check_AspectR)
-//     getVFAdjacency(Faces, VF, VFIndex);
-
-//   for (int s = 0; s < SParam.NumIte; s++) {
-
-//     std::vector<Geo::Point3<ScalarType>> OldPos;
-//     if (SParam.check_AspectR)
-//       OldPos = VertPos;
-
-//     if (SParam.SType == SMLaplacian)
-//       SmoothLaplacianStep(VertPos, Faces, FixedVertSet, SParam.Features,
-//                           SParam.Damp);
-
-//     // if (SParam.SType == SMBiLaplacian)
-//     //   SmoothLaplacianStep(VertPos, Faces, FixedVertSet, SParam.Features,
-//     //                       SParam.Damp, true);
-
-//     if (SParam.SType == SMTaubin)
-//       SmoothTaubinStep(VertPos, Faces, FixedVertSet, SParam.Features,
-//                        SParam.Damp);
-
-//     if (SParam.SType == SMBestPoly)
-//       SmoothPolyAlignStep(VertPos, Faces, FixedVertSet, SParam.Features,
-//                           SParam.Damp);
-
-//     if (SParam.SType == SMCentroid)
-//       SmoothCentroidStep(VertPos, Faces, FixedVertSet, SParam.Features,
-//                          SParam.Damp);
-
-//     ReprojectIfNeeded2(SParam, VertPos, Faces, ReprojectVertIdx, TriGrid,
-//                       FeatureSegs, SegGrid, NoReprPoints);
-
-//     if (SParam.check_AspectR)
-//       SetPositionIfBetter(OldPos, VertPos, Faces, VF, OldFaceNormals);
-//   }
-
-// }
 template <class ScalarType>
 ScalarType mapAngleW(ScalarType angle, ScalarType k = (ScalarType)10) {
   angle = std::max((ScalarType)0, std::min((ScalarType)360, angle));
@@ -1635,229 +1000,12 @@ ScalarType mapAngleW(ScalarType angle, ScalarType k = (ScalarType)10) {
          (std::exp(k * d) - (ScalarType)1) / (ek - (ScalarType)1); // [1,2]
 }
 
-// template <class ScalarType>
-// void ComputeAdaptiveFeatureW(
-//     const std::vector<Geo::Point3<ScalarType>> &VertPos,
-//     const std::vector<std::vector<int>> &Faces,
-//     const std::vector<std::pair<int, int>> &Features,
-//     std::map<std::pair<int, int>, ScalarType> &edgeW) {
-//   edgeW.clear();
-//   // cut the mesh along features
-//   std::vector<Geo::Point3<ScalarType>> SplitVertPos = VertPos;
-//   std::vector<std::vector<int>> SplitFaces = Faces;
-//   std::vector<std::pair<int, int>> SplitFeatures = Features;
-//   SplitMeshFromEdges(SplitVertPos, SplitFaces, Features, SplitFeatures);
-
-//   // get the border vertices
-//   std::vector<int> BorderVSplit;
-//   std::set<int> BorderVSplitSet;
-//   getBorderVert(SplitFaces, BorderVSplit);
-//   BorderVSplitSet = std::set<int>(BorderVSplit.begin(), BorderVSplit.end());
-
-//   // compute the angle around each vertex
-//   std::vector<ScalarType> VertAngle;
-//   ComputePerVertAngleDeg(SplitVertPos, SplitFaces, VertAngle);
-
-//   // compute the map between the split vertices and the original ones
-//   std::vector<int> SplitToOrigV;
-//   FindVertCorrespondences(SplitVertPos, VertPos, SplitToOrigV);
-
-//   std::vector<std::vector<int>> SplitNeighbors;
-//   GetLaplacianNeighbours(SplitVertPos, SplitFaces, SplitNeighbors);
-//   // cycle over all faces if the vertex is not on the border,
-//   //  then the weight is 1, else it is 1-angle/180,
-//   // clamped to 0.1 to avoid too small weights
-//   // note the entries are not sorted as weight is not symmetric
-//   for (size_t i = 0; i < SplitNeighbors.size(); i++) {
-//     for (size_t j = 0; j < SplitNeighbors[i].size(); j++) {
-//       int IndexV0 = i;
-//       int IndexV1 = SplitNeighbors[i][j];
-//       ScalarType V01 = 1;
-//       ScalarType V10 = 1;
-//       if (BorderVSplitSet.count(IndexV1) > 0) {
-//         ScalarType Angle1 = VertAngle[IndexV1];
-//         // std::cout << "Angle for vertex " << IndexV1 << " is " << Angle1
-//         //           << std::endl;
-//         if (fabs(Angle1 - 180) < 0.1) V01 = 1;
-//         else
-//         {
-//           if (Angle1 < 180)
-//             V01 = 1;
-//           else
-//             V01 = 0.1;
-//         }
-       
-//         // V01 = std::max(0.1, mapAngleW(Angle1));
-//         // V01 = std::min(V01, (ScalarType)1.9);
-//       }
-//       if (BorderVSplitSet.count(IndexV0) > 0) {
-//         ScalarType Angle0 = VertAngle[IndexV0];
-//         // std::cout << "Angle for vertex " << IndexV0 << " is " << Angle0
-//         //           << std::endl;
-//         // V10 = std::max(0.1, mapAngleW(Angle0));
-//         // V10 = std::min(V10, (ScalarType)1.9);
-//         if (fabs(Angle0 - 180) < 0.1) V10 = 1;
-//         else
-//         {
-//           if (Angle0 < 180)
-//             V10 = 1;
-//           else
-//             V10 = 0.1;
-//         }
-//       }
-//       // edgeWSplit[std::pair<int, int>(IndexV0, IndexV1)] = V01;
-//       // edgeWSplit[std::pair<int, int>(IndexV1, IndexV0)] = V10;
-//       int OrigV0 = SplitToOrigV[IndexV0];
-//       int OrigV1 = SplitToOrigV[IndexV1];
-//       std::pair<int, int> Key0(OrigV0, OrigV1);
-//       std::pair<int, int> Key1(OrigV1, OrigV0);
-//       edgeW[Key0] = V01;
-//       edgeW[Key1] = V10;
-//     }
-//   }
-
-//   // // final check that all neibors are in the map
-//   // std::vector<std::vector<int>> Neighbors;
-//   // GetLaplacianNeighbours(VertPos, Faces, Neighbors);
-//   // std::vector<int> BorderV;
-//   // getBorderVert(Faces, BorderV);
-//   // std::vector<int> FeatureV;
-//   // for (size_t i = 0; i < Features.size(); i++) {
-//   //   FeatureV.push_back(Features[i].first);
-//   //   FeatureV.push_back(Features[i].second);
-//   // }
-//   // std::set<int> BorderFeatureVSet(BorderV.begin(), BorderV.end());
-//   // for (size_t i = 0; i < FeatureV.size(); i++)
-//   //   BorderFeatureVSet.insert(FeatureV[i]);
-
-//   // for (size_t i = 0; i < Neighbors.size(); i++) {
-//   //   for (size_t j = 0; j < Neighbors[i].size(); j++) {
-//   //     int IndexV0 = i;
-//   //     int IndexV1 = Neighbors[i][j];
-//   //     std::pair<int, int> Key0(IndexV0, IndexV1);
-//   //     std::pair<int, int> Key1(IndexV1, IndexV0);
-
-//   //     bool error_edge = false;
-//   //     if ((edgeW.count(Key0) == 0) && (BorderFeatureVSet.count(IndexV0) == 0)) {
-//   //       std::cout << "ERROR: edge (" << IndexV0 << "," << IndexV1
-//   //                 << ") not in the weight map" << std::endl;
-//   //       error_edge = true;
-//   //     }
-//   //     if ((edgeW.count(Key1) == 0) && (BorderFeatureVSet.count(IndexV1) == 0)) {
-//   //       std::cout << "ERROR: edge (" << IndexV1 << "," << IndexV0
-//   //                 << ") not in the weight map" << std::endl;
-//   //       error_edge = true;
-//   //     }
-//   //     if (error_edge) {
-//   //       if (BorderFeatureVSet.count(IndexV0) > 0)
-//   //         std::cout << "Vertex " << IndexV0 << " is a border/feature vertex."
-//   //                   << std::endl;
-//   //       if (BorderFeatureVSet.count(IndexV1) > 0)
-//   //         std::cout << "Vertex " << IndexV1 << " is a border/feature vertex."
-//   //                   << std::endl;
-//   //       exit(0);
-//   //     }
-//   //   }
-//   // }
-// }
-
-// template <class ScalarType>
-// void ReprojectVoronoiPartition(
-//     std::vector<Geo::Point3<ScalarType>> &ReprojVertPos,
-//     const std::vector<Geo::Point3<ScalarType>> &OriginalVertPos,
-//     const std::vector<std::vector<int>> &Faces,
-//     const ScalarType Shrink = (ScalarType)0.9)
-// {
-//   using Clock = std::chrono::high_resolution_clock;
-//   using Seconds = std::chrono::duration<double>;
-
-//   assert(OriginalVertPos.size()==ReprojVertPos.size());
-
-//   auto t0 = Clock::now();
-  
-//   //subdivide the mesh to have more vertices to reproject on, 
-//   // then find the correspondences between the original and subdivided vertices, and reproject only the subdivided ones, then transfer the positions to the original ones by averaging the subdivided vertices that correspond to each original vertex
-//   std::vector<Geo::Point3<ScalarType>> SubdividedVertPos=OriginalVertPos;
-//   std::vector<std::vector<int>> SubdividedFaces=Faces;
-//   std::vector<int> OldF;
-//   Geo::SubdivideMesh<ScalarType>::CatmullClark(SubdividedVertPos, SubdividedFaces, OldF);
-//   std::vector<int> OrigToSubdivV;
-//   auto t1 = Clock::now();
-
-//   FindVertCorrespondences(OriginalVertPos, SubdividedVertPos, OrigToSubdivV);
-//   //then find the reprojected triangles for each vertex
-//   std::vector<std::vector<Geo::Traingle3<ScalarType> > > ReprojBasis(OriginalVertPos.size());
-//   std::vector<std::vector<int>> VF, VFIndex;
-//   Geo::getVFAdjacency(SubdividedFaces, VF, VFIndex);
-//   for (size_t i = 0; i < OriginalVertPos.size(); i++) 
-//   {
-//     int OrigV=OrigToSubdivV[i];
-//     //go over all faces
-//     ReprojBasis[i].reserve(VF[OrigV].size()*2);
-//     for (size_t j=0;j<VF[OrigV].size();j++)
-//     {
-//       int IndexF=VF[OrigV][j];
-//       assert(IndexF >= 0 && IndexF < SubdividedFaces.size());
-//       assert(SubdividedFaces[IndexF].size() == 4);
-//       Point3<ScalarType> QuadFPos[4];
-//       for (size_t k=0;k<4;k++) QuadFPos[k]=SubdividedVertPos[SubdividedFaces[IndexF][k]];
-
-//       //then shrint with respect to the original vertex to avoid flipped reprojection
-//       for (size_t k=0;k<4;k++){
-//         QuadFPos[k]=OriginalVertPos[i]+(QuadFPos[k]-OriginalVertPos[i])*Shrink;
-//       }
-//       //then get the two triangles of the quad face and reproject them, and save the reprojection basis for this vertex
-//       Geo::Traingle3<ScalarType> T0(QuadFPos[0], QuadFPos[1], QuadFPos[2]);
-//       Geo::Traingle3<ScalarType> T1(QuadFPos[0], QuadFPos[2], QuadFPos[3]);
-//       ReprojBasis[i].push_back(T0);
-//       ReprojBasis[i].push_back(T1);
-//     }
-//   }
-
-//   auto t2 = Clock::now();
-
-//   //then finally reproject each vertex on the basis of its corresponding subdivided vertex, and average the reprojection if multiple basis
-//   for (size_t i = 0; i < ReprojVertPos.size(); i++)
-//   {
-//     Geo::Point3<ScalarType> ReprojP=ReprojVertPos[i];
-//     assert(i<ReprojBasis.size());
-//     assert(ReprojBasis[i].size()>0);
-//     Geo::Point3<ScalarType> ClosP;
-//     int IndexT;
-//     Geo::ClosestTris<ScalarType>(ReprojBasis[i], ReprojP, ClosP, IndexT);
-//     ReprojVertPos[i]=ClosP;
-//   }
-//   auto t3 = Clock::now();
-
-//   double delta0       = Seconds(t1 - t0).count();
-//   double delta1       = Seconds(t2 - t1).count();
-//   double delta2       = Seconds(t3 - t2).count();
-
-//   // std::cout<<"Time for subdividing mesh: "<<delta0<<" seconds."<<std::endl;
-//   // std::cout<<"Time for finding reprojection basis: "<<delta1<<" seconds."<<std::endl;
-//   // std::cout<<"Time for reprojecting vertices: "<<delta2<<" seconds."<<std::endl;
-  
-// }
-
-// template <class ScalarType>
-// void ReprojectVoronoiPartition(
-//     std::vector<Geo::Point3<ScalarType>> &ReprojVertPos,
-//     const std::vector<Geo::Point3<ScalarType>> &OriginalVertPos,
-//     const std::vector<std::vector<int>> &Faces,
-//     const ScalarType Shrink = (ScalarType)0.9)
-// {
-//   Geo::MeshVoronoiPartition<ScalarType> MeshVoro(OriginalVertPos, Faces);
-//   MeshVoro.Shrink=Shrink;
-//   MeshVoro.Init();
-//   MeshVoro.Reproject(ReprojVertPos);
-// }
-
 template <class ScalarType>
 void SmoothLaplacian(
     std::vector<Geo::Point3<ScalarType>> &VertPos,
     const std::vector<std::vector<int>> &Faces,
     SmoothParam<ScalarType> &SParam = SmoothParam<ScalarType>()) {
-  
+
   // make unique
   Geo::EdgeMeshFunctions<ScalarType>::MakeUnique(SParam.Features);
   Geo::EdgeMeshFunctions<ScalarType>::MakeUnique(SParam.ReprojFeatures);
@@ -1897,7 +1045,7 @@ void SmoothLaplacian(
   // if ((SParam.adaptive_features_smooth) && ((SParam.SType == SMLaplacian)))
   //   ComputeAdaptiveFeatureW(VertPos, Faces, SParam.Features, NeighWeights);
 
-  std::vector<Geo::Point3<ScalarType>> OldPos=VertPos;
+  std::vector<Geo::Point3<ScalarType>> OldPos = VertPos;
   Geo::MeshVoronoiPartition<ScalarType> MeshVoro(OldPos, Faces);
   MeshVoro.Init();
 
@@ -1907,8 +1055,7 @@ void SmoothLaplacian(
 
   for (int s = 0; s < SParam.NumIte; s++) {
 
-    if ((SParam.check_AspectR)||
-        (SParam.reproject_voronoi_partition)||
+    if ((SParam.check_AspectR) || (SParam.reproject_voronoi_partition) ||
         (SParam.check_multi_pass_fold))
       OldPos = VertPos;
 
@@ -1918,7 +1065,7 @@ void SmoothLaplacian(
     if (SParam.SType == SMLaplacian)
       SmoothLaplacianStep(VertPos, Faces, FixedVertSet, SParam.Features,
                           SParam.Damp, SParam.line_neight_features);
-                          //NeighWeights);
+    // NeighWeights);
 
     // if (SParam.SType == SMBiLaplacian)
     //   SmoothLaplacianStep(VertPos, Faces, FixedVertSet, SParam.Features,
@@ -1934,19 +1081,26 @@ void SmoothLaplacian(
 
     if (SParam.SType == SMCentroid)
       SmoothCentroidStep(VertPos, Faces, FixedVertSet, SParam.Features,
-                         SParam.Damp,SParam.line_neight_features); //);
-    
-    if (SParam.reproject_voronoi_partition)
-    {
+                         SParam.Damp, SParam.line_neight_features); //);
+
+    if (SParam.reproject_voronoi_partition) {
       MeshVoro.Reproject(VertPos);
-      //ReprojectVoronoiPartition(VertPos, OldPos, Faces);
+      // ReprojectVoronoiPartition(VertPos, OldPos, Faces);
     }
 
-    //if ((s % SParam.ReprojStep == 0) || ((s == SParam.NumIte - 1) && reproject))
+    // if ((s % SParam.ReprojStep == 0) || ((s == SParam.NumIte - 1) &&
+    // reproject))
+    ScalarType DistTHR = SParam.reproj_dist_THR;
+    if (s == SParam.NumIte - 1)
+    {
+      SParam.reproj_dist_THR = -1; // disable for the last step to be sure to reproject in the end
+    }
     ReprojectIfNeeded(SParam, VertPos, Faces, TriGrid, FeatureReproj);
+    SParam.reproj_dist_THR = DistTHR;
 
     if (SParam.check_multi_pass_fold) {
-     Geo::FoldGuardDisplacement<ScalarType>::ApplyIfNotFold(VertPos,OldPos, Faces, FaceNorm0);
+      Geo::FoldGuardDisplacement<ScalarType>::ApplyIfNotFold(VertPos, OldPos,
+                                                             Faces, FaceNorm0);
     }
 
     if (SParam.check_AspectR)
@@ -1956,6 +1110,7 @@ void SmoothLaplacian(
   if (FeatureReproj != NULL)
     delete (FeatureReproj);
 }
+
 
 template <class ScalarType>
 void SmoothLaplacian(
@@ -2132,74 +1287,6 @@ void SmoothLaplacianImplicit(std::vector<Geo::Point3<ScalarType>> &VertPos,
     VertPos[i] = Geo::Point3<ScalarType>(ValX, ValY, ValZ);
   }
 }
-
-// template <class ScalarType>
-// void SmoothLaplacianImplicit(std::vector<ScalarType> &Signal,
-//                              const std::vector<std::vector<int>> &Faces,
-//                              const std::vector<int> &FixedVert,
-//                              const std::vector<std::pair<int, int>> &Features
-//                              =
-//                                  std::vector<std::pair<int, int>>()) {
-
-//   ScalarType WeightFixed = 1000000;
-//   ScalarType WeightLap = 1;
-
-//   std::vector<std::vector<int>> KernelV;
-//   GetLaplacianNeighbours(VertPos, Faces, KernelV, Features);
-
-//   std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
-
-//   std::set<int> FixedSet(FixedVert.begin(), FixedVert.end());
-//   for (size_t i = 0; i < KernelV.size(); i++) {
-//     int IndexV0 = i;
-//     if (FixedSet.count(IndexV0) > 0)
-//       continue;
-//     for (size_t c = 0; c < 3; c++) {
-//       Geo::LinearConstraint<ScalarType> Constr;
-//       Constr.Weight = WeightLap;
-//       Constr.RHSide = 0;
-//       Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV0, c, -1));
-//       ScalarType OtherW = (ScalarType)1 / (ScalarType)KernelV[i].size();
-
-//       for (size_t j = 0; j < KernelV[i].size(); j++) {
-//         int IndexV1 = KernelV[i][j];
-
-//         assert(IndexV0 != IndexV1);
-
-//         Constr.LHSide.push_back(Geo::VarTerm<ScalarType>(IndexV1, c,
-//         OtherW));
-//       }
-//       LinConstr.push_back(Constr);
-//     }
-//   }
-
-//   for (size_t i = 0; i < FixedVert.size(); i++) {
-//     int IndexV = FixedVert[i];
-//     for (size_t c = 0; c < 3; c++) {
-//       Geo::LinearConstraint<ScalarType> Constr;
-//       Constr.RHSide = VertPos[IndexV].V(c);
-//       Constr.Weight = WeightFixed;
-//       Geo::VarTerm<ScalarType> Var(IndexV, c, 1);
-//       Constr.LHSide.push_back(Var);
-//       LinConstr.push_back(Constr);
-//     }
-//   }
-
-//   Geo::LinearConstraintLeastSQSolver<ScalarType> LinSqSolver;
-//   LinSqSolver.Init(LinConstr);
-//   std::vector<ScalarType> Solution;
-//   LinSqSolver.Solve(Solution);
-
-//   for (size_t i = 0; i < VertPos.size(); i++) {
-//     int IndexX = (i * 3);
-//     int IndexY = IndexX + 1;
-//     int IndexZ = IndexX + 2;
-//     ScalarType ValX = Solution[IndexX];
-//     ScalarType ValY = Solution[IndexY];
-//     ScalarType ValZ = Solution[IndexZ];
-//     VertPos[i] = Geo::Point3<ScalarType>(ValX, ValY, ValZ);
-//   }
-// }
 
 template <class ScalarType>
 void SmoothLaplacianImplicit(std::vector<Geo::Point2<ScalarType>> &VertPos,

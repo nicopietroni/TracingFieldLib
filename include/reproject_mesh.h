@@ -36,14 +36,15 @@
 #include "point3.h"
 #include "polyhedra_mesh_functions.h"
 #include "segment3.h"
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <set>
-//#include <sys/_types/_size_t.h>
-#include <cstddef>   // C++
+// #include <sys/_types/_size_t.h>
+#include <cstddef> // C++
 #include <utility>
 #include <vector>
 
@@ -54,22 +55,26 @@ void AttractProject(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
                     std::vector<Geo::Point3<ScalarType>> &VertProj,
                     const std::vector<std::vector<int>> &FacesProj,
                     const std::set<int> &FixedV = std::set<int>()) {
-
   std::vector<Geo::Point3<ScalarType>> AvgDiff(
       VertProj.size(), Geo::Point3<ScalarType>(0, 0, 0));
 
   std::vector<int> AvgNum(VertProj.size(), 0);
-
+  
   Geo::TriangleSpatialIndex<ScalarType> TriGrid;
   TriGrid.Init(VertProj, FacesProj);
 
+
+  int projected = 0;
   for (size_t i = 0; i < TargetVert.size(); i++) {
+
+    projected++;
     int closestF;
     Geo::Point3<ScalarType> closestPt;
     TriGrid.GridClosest(VertProj, FacesProj, TargetVert[i], TriGrid.bbox.Diag(),
                         closestF, closestPt);
 
     Geo::Point3<ScalarType> Diff = TargetVert[i] - closestPt;
+
 
     for (size_t j = 0; j < FacesProj[closestF].size(); j++) {
       int IndexV = FacesProj[closestF][j];
@@ -78,7 +83,8 @@ void AttractProject(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
       AvgNum[IndexV]++;
     }
   }
-
+  // std::cout << "Projected " << projected << " vertices out of " << TargetVert.size()
+  //           << std::endl;
   // average it
   for (size_t i = 0; i < AvgNum.size(); i++) {
     if (AvgNum[i] == 0)
@@ -167,10 +173,11 @@ void GetToReprojectVert(
   Geo::InitFromMeshFeatures<ScalarType>(ReprojPos, ReprojFeatures, FeatureSegs,
                                         SegGrid);
 
-  int Index0=CandidatesIDX.size();
+  int Index0 = CandidatesIDX.size();
   GetToReprojectVert(To_ReprojPos, CandidatesIDX, FeatureSegs, SegGrid, Thr);
-  int Index1=CandidatesIDX.size();
-  std::cout<<"Missing: "<<Index0-Index1<<" projecting vertices"<<std::endl;
+  int Index1 = CandidatesIDX.size();
+  std::cout << "Missing: " << Index0 - Index1 << " projecting vertices"
+            << std::endl;
 }
 
 template <class ScalarType>
@@ -262,7 +269,7 @@ template <class ScalarType> class FeatureReprojector {
     toReprojSeqIdx.clear();
 
     // for each candidate
-    int non_mapped=0;
+    int non_mapped = 0;
     for (size_t i = 0; i < CandidateIdx.size(); i++) {
       int IndexV = CandidateIdx[i];
       if (branchIDX.count(IndexV) > 0)
@@ -273,7 +280,7 @@ template <class ScalarType> class FeatureReprojector {
       int closestS = -1;
 
       // for each grid
-      bool found=false;
+      bool found = false;
       for (size_t j = 0; j < SequenceSegIndex.size(); j++) {
         SequenceSegIndex[j].GridClosest(SequenceSegs[j], CurrPos, Thr, closestS,
                                         closestPt);
@@ -282,54 +289,53 @@ template <class ScalarType> class FeatureReprojector {
 
         toReprojVert.push_back(IndexV);
         toReprojSeqIdx.push_back(j);
-        found=true;
+        found = true;
         break;
       }
 
-      if (!found)non_mapped++;
+      if (!found)
+        non_mapped++;
     }
-    if (print_info)
-    {
-      std::cout<<"Testing Size "<<CandidateIdx.size()<<std::endl;
-      std::cout<<"Branch Size "<<branchIDX.size()<<std::endl;
-      std::cout<<"Non Mapped "<<non_mapped<<std::endl;
-      std::cout<<"Mapped "<<toReprojVert.size()<<std::endl;
+    if (print_info) {
+      std::cout << "Testing Size " << CandidateIdx.size() << std::endl;
+      std::cout << "Branch Size " << branchIDX.size() << std::endl;
+      std::cout << "Non Mapped " << non_mapped << std::endl;
+      std::cout << "Mapped " << toReprojVert.size() << std::endl;
     }
-    
 
-    //exit(0);
+    // exit(0);
   }
 
 public:
-  bool print_info=false;
+  bool print_info = false;
 
-  void Reproject()
-  {
-    for (size_t i=0;i<toReprojVert.size();i++)
-    {
-      int IndexVert=toReprojVert[i];
-      int IndexPart=toReprojSeqIdx[i];
-      assert(IndexVert>=0);
-      assert(IndexVert<VertPos.size());
-      assert(IndexPart>=0);
-      assert(IndexPart<SequenceSegs.size());
-      assert(IndexPart>=0);
-      assert(IndexPart<SequenceSegIndex.size());
+  void Reproject() {
+    for (size_t i = 0; i < toReprojVert.size(); i++) {
+      int IndexVert = toReprojVert[i];
+      int IndexPart = toReprojSeqIdx[i];
+      assert(IndexVert >= 0);
+      assert(IndexVert < VertPos.size());
+      assert(IndexPart >= 0);
+      assert(IndexPart < SequenceSegs.size());
+      assert(IndexPart >= 0);
+      assert(IndexPart < SequenceSegIndex.size());
 
       Geo::Point3<ScalarType> closestPt;
       int closestS = -1;
-      SequenceSegIndex[IndexPart].GridClosest(SequenceSegs[IndexPart], VertPos[IndexVert], 
-                                              SequenceSegIndex[IndexPart].bbox.Diag(),
-                                              closestS, closestPt);
-      if (NoProjTargetPos.count(closestPt)>0)continue;
-      if (closestS==-1)continue;
-      VertPos[IndexVert]=closestPt;
+      SequenceSegIndex[IndexPart].GridClosest(
+          SequenceSegs[IndexPart], VertPos[IndexVert],
+          SequenceSegIndex[IndexPart].bbox.Diag(), closestS, closestPt);
+      if (NoProjTargetPos.count(closestPt) > 0)
+        continue;
+      if (closestS == -1)
+        continue;
+      VertPos[IndexVert] = closestPt;
     }
-  } 
+  }
 
   void Init() // const std::vector<int> &CornerIdx)
   {
-   
+
     // get the branched vertices
     InitBranchFeaturesCorn();
 
@@ -347,11 +353,11 @@ public:
     // int numE=0;
     // for (size_t i=0;i<subsequences.size();i++)
     // numE+=subsequences[i].size()-1;
-    
+
     // std::cout<<"Original Features Num:"<<TargetFeatures.size()<<std::endl;
     // std::cout<<"Subsequences Num:"<<subsequences.size()<<std::endl;
     // exit(0);
-    
+
     // then initialize the grids with subsequences
     SequenceSegs.resize(subsequences.size());
     SequenceSegIndex.resize(subsequences.size());
@@ -373,19 +379,22 @@ public:
   }
 };
 
-
 template <class ScalarType>
 void ProjectOn(std::vector<Geo::Point3<ScalarType>> &VertPos,
                const std::vector<std::vector<int>> &Faces,
                const std::vector<Geo::Point3<ScalarType>> &TargetPos,
                const std::vector<std::vector<int>> &TargetFaces,
-               Geo::TriangleSpatialIndex<ScalarType> &TriGrid) {
+               Geo::TriangleSpatialIndex<ScalarType> &TriGrid,
+               const std::vector<bool> *ReprojOnly = NULL) {
 
   for (size_t i = 0; i < VertPos.size(); i++) {
+    if ((ReprojOnly != NULL) && (!(*ReprojOnly)[i]))
+      continue;
+
     int closestF;
     Geo::Point3<ScalarType> closestPt = VertPos[i];
-    TriGrid.GridClosest(TargetPos, TargetFaces, VertPos[i],
-                          TriGrid.bbox.Diag(), closestF, closestPt);
+    TriGrid.GridClosest(TargetPos, TargetFaces, VertPos[i], TriGrid.bbox.Diag(),
+                        closestF, closestPt);
     VertPos[i] = closestPt;
   }
 }
@@ -412,6 +421,7 @@ void ProjectOn(std::vector<Geo::Point3<ScalarType>> &VertPos,
   }
 
   for (size_t i = 0; i < VertPos.size(); i++) {
+
     int closestF;
     Geo::Point3<ScalarType> closestPt = VertPos[i];
     if (!FeatureBool[i]) {
@@ -433,7 +443,6 @@ void ProjectOn(std::vector<Geo::Point3<ScalarType>> &VertPos,
     VertPos[i] = closestPt;
   }
 }
-
 
 } // namespace Geo
 #endif

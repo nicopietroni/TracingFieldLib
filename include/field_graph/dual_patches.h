@@ -599,7 +599,7 @@ public:
 
     DualVertexPlacement<ScalarType> DualVP(PData, CentralV, SplEdgesIDX);
 
-    DualVP.Init(ToSplit, PatchesParam.PatchVertUVArap,
+    DualVP.Init(ToSplit, PatchesParam.PatchVertUVLSC,
                 PatchesParam.PatchVertUVTutte);
     DualVP.Optimize();
 

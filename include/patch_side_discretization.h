@@ -29,6 +29,7 @@
 
 #include "./solve/constraint_graph.h"
 #include "./solve/iterative_integer_lin_constraint_solver.h"
+#include "./solve/linear_constraint_feasibility.h"
 #include "./solve/orient_flow_graph.h"
 #include "field_graph/graph.h"
 #include "mesh_functions.h"
@@ -912,6 +913,7 @@ public:
   }
 
   int SolveEqualityViaGraph(bool find_points = true) {
+
     std::vector<std::vector<std::vector<int>>> PatchVar;
     GetPerPatchVars(PatchVar);
 
@@ -969,6 +971,7 @@ public:
     if (OptimizeEquality)
       stepEq=SolveEqualityViaGraph(false);
 
+      
     if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
       DuplicateSolution();
 
@@ -1337,6 +1340,11 @@ public:
     InitOppositeEquivalences();
     InitOppEquivalencesW();
     VarTargetValueW = std::vector<ScalarType>(VarTargetValue.size(), 0);
+    
+    // std::cout << "Find Contracditory loops" << std::endl;
+    // std::vector<typename ConstraintCleaner<ScalarType>::Conflict> conflicts;
+    // ConstraintCleaner<ScalarType>::FindContradictoryLoops(OppEquivalences, conflicts, 6, 100);
+    // std::cout << "Found " << conflicts.size() << " contradictory loops" << std::endl;
 
     // NoParity, EvenVar, SolvePost
     bool pre_divide = false;

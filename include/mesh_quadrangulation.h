@@ -331,6 +331,10 @@ template <class ScalarType> class MeshQuadrangulator {
       PData.PatchSingularities.push_back(PatchSing);
     }
 
+    // optimize the primal
+    Geo::PrimalOptimizer<ScalarType> PrimalOpt(PData);
+    PrimalOpt.Optimize();
+
     std::vector<std::vector<int>> PerDualPatchFaceIDX;
     std::vector<std::vector<int>> PerDualPatchCornerIDX;
 
@@ -634,11 +638,10 @@ template <class ScalarType> class MeshQuadrangulator {
     Sep_SParam.Damp = 0.5;
     Sep_SParam.Steps = QuadSmoothSteps;
     Sep_SParam.fixBorder = true;
-    Sep_SParam.post_project = !(has_problematic_patches);
+    Sep_SParam.post_project = ((!has_problematic_patches)&&(reliable_smooth));
     Sep_SParam.ReprojVert = &TriVertPos;
     Sep_SParam.ReprojFaces = &TriConnectivity;
     Sep_SParam.ReprojFeatureLines = TriFeatures;
-
     Geo::QuadMeshSeparatrixSmooth<ScalarType>::Smooth(QuadVert, QuadFaces,
                                                       Sep_SParam);
   }
@@ -681,11 +684,25 @@ template <class ScalarType> class MeshQuadrangulator {
   // }
 
   void SmoothQuadrangulation() {
+    using Clock = std::chrono::high_resolution_clock;
+    using Seconds = std::chrono::duration<double>;
+
     // laplacian smooth to solve some artifacts
+    auto t0 = Clock::now();
     SmoothWithInversionControl();
+    auto t1 = Clock::now();
     // then to improve the alignment with the field and the quality of the
     // quads, smooth the separatrix SmoothQuadMeshSeparatrix();
-    SmoothQuadrUV();
+    //SmoothQuadrUV();
+    auto t2 = Clock::now();
+
+    ScalarType SmoothWithControl = (ScalarType)Seconds(t1 - t0).count();
+    ScalarType SmoothUV = (ScalarType)Seconds(t2 - t1).count();
+
+    std::cout << "  --- Smoothing Timing Report (seconds) ---" << std::endl;
+    std::cout << " Smooth with control:    " << SmoothWithControl << " s" << std::endl;
+    std::cout << " Smooth UV:             " << SmoothUV << " s" << std::endl;
+
     // SmoothWithPatches();
     Geo::QuadPatchFunctions<ScalarType>::PrintStats(QuadVert, QuadFaces);
   }
@@ -700,8 +717,8 @@ public:
   bool print_info;
   bool reliable_smooth;
 
-  ScalarType time_init,time_decompose,time_dual,time_quad;
-  ScalarType time_clean,time_smooth,total_time;
+  ScalarType time_init, time_decompose, time_dual, time_quad;
+  ScalarType time_clean, time_smooth, total_time;
 
   MeshQuadrangulator(std::vector<Geo::Point3<ScalarType>> &_TriVertPos,
                      std::vector<std::vector<int>> &_TriConnectivity,
@@ -733,7 +750,7 @@ public:
 
     QuadSmoothSteps = 10;
     // force_parity = true;
-    RegVsIso = 1.0;
+    RegVsIso = 0.5;
 
     OptimizeEquality = true;
     OptimizeSize = true;

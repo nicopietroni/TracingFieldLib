@@ -230,7 +230,7 @@ bool only_border_corners = false;
 bool add_features = false;
 bool save_layout = false;
 bool save_stats =true;
-int smooth_steps = 15;
+int smooth_steps = 50;
 std::string folderProjectName;
 std::string commandLine;
 
@@ -593,7 +593,7 @@ int main(int argc, char *argv[]) {
 
     MQuad.QuadSmoothSteps = smooth_steps;
     // MQuad.RegVsIso=0.1;
-    MQuad.CCAbility = 0.5;    // 25;
+    MQuad.CCAbility = 0.25;    // 25;
     MQuad.num_samples = 6000; // 3000;
 
     MQuad.ExtractQuad(TriFeatures);

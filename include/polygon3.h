@@ -158,6 +158,86 @@ ScalarType BestAlignedPolyProcrustes(const std::vector<Geo::Point3<ScalarType>> 
 }
 
 
+template <class ScalarType>
+void SmoothPolyScale(std::vector<std::vector<Geo::Point3<ScalarType>>> &TargetPoly,
+                     std::vector<ScalarType> &Weights,
+                     const std::vector<std::vector<int>> &Adj,
+                     const int Steps)
+{
+  assert(TargetPoly.size() == Weights.size());
+  assert(TargetPoly.size() == Adj.size());
+
+  if (Steps <= 0) return;
+  if (TargetPoly.empty()) return;
+
+  auto PolyBarycenter = [](const std::vector<Geo::Point3<ScalarType>> &Poly) -> Geo::Point3<ScalarType>
+  {
+    Geo::Point3<ScalarType> Bary(0, 0, 0);
+    if (Poly.empty()) return Bary;
+
+    for (const auto &p : Poly)
+      Bary += p;
+
+    Bary /= ScalarType(Poly.size());
+    return Bary;
+  };
+
+  auto PolyMeanEdge = [](const std::vector<Geo::Point3<ScalarType>> &Poly) -> ScalarType
+  {
+    if (Poly.size() < 2) return 0;
+
+    ScalarType Sum = 0;
+    for (size_t i = 0; i < Poly.size(); ++i)
+    {
+      const auto &p0 = Poly[i];
+      const auto &p1 = Poly[(i + 1) % Poly.size()];
+      Sum += (p1 - p0).Norm();
+    }
+    return Sum / ScalarType(Poly.size());
+  };
+
+  for (int step = 0; step < Steps; ++step)
+  {
+    std::vector<ScalarType> OldScale(TargetPoly.size(), 0);
+    for (size_t i = 0; i < TargetPoly.size(); ++i)
+      OldScale[i] = PolyMeanEdge(TargetPoly[i]);
+
+    std::vector<ScalarType> NewScale = OldScale;
+
+    for (size_t i = 0; i < TargetPoly.size(); ++i)
+    {
+      ScalarType SumW = 0;
+      ScalarType SumS = 0;
+
+      for (size_t j = 0; j < Adj[i].size(); ++j)
+      {
+        int idx = Adj[i][j];
+        if (idx < 0 || idx >= (int)TargetPoly.size()) continue;
+        if (Weights[idx] <= 0) continue;
+
+        SumW += Weights[idx];
+        SumS += Weights[idx] * OldScale[idx];
+      }
+
+      if (SumW > 0)
+        NewScale[i] = SumS / SumW;
+    }
+
+    for (size_t i = 0; i < TargetPoly.size(); ++i)
+    {
+      if (TargetPoly[i].empty()) continue;
+      if (OldScale[i] <= 0) continue;
+
+      ScalarType ScaleFactor = NewScale[i] / OldScale[i];
+      Geo::Point3<ScalarType> Bary = PolyBarycenter(TargetPoly[i]);
+
+      for (size_t k = 0; k < TargetPoly[i].size(); ++k)
+        TargetPoly[i][k] = Bary + (TargetPoly[i][k] - Bary) * ScaleFactor;
+    }
+  }
+}
+
+
 } // namespace Geo
 
 #endif

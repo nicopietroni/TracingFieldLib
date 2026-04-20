@@ -1570,53 +1570,53 @@ void SetExportBar() {
 
   if (ImGui::CollapsingHeader("DUAL")) {
 
-    ImGui::Checkbox("Only Non-Quad", &DualParam.OnlyNonQuad);
-    ImGui::Checkbox("Init Sing Pos", &DualParam.InitSingPos);
-    ImGui::Checkbox("Fix Sing Pos", &DualParam.FixSingPos);
-    ImGui::Checkbox("Joint Border", &DualParam.JointBorder);
-    ImGui::Checkbox("Reduce T-Junction", &DualParam.Minimize_t_junctions);
+    // ImGui::Checkbox("Only Non-Quad", &DualParam.OnlyNonQuad);
+    // ImGui::Checkbox("Init Sing Pos", &DualParam.InitSingPos);
+    // ImGui::Checkbox("Fix Sing Pos", &DualParam.FixSingPos);
+    // ImGui::Checkbox("Joint Border", &DualParam.JointBorder);
+    // ImGui::Checkbox("Reduce T-Junction", &DualParam.Minimize_t_junctions);
 
-    if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_UVDist_Tutte)
-      EvenMode = 0;
-    if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_UVDist_LSC)
-      EvenMode = 1;
-    if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_UVDist_ARAP)
-      EvenMode = 2;
-    if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_CCability)
-      EvenMode = 3;
+    // if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_UVDist_Tutte)
+    //   EvenMode = 0;
+    // if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_UVDist_LSC)
+    //   EvenMode = 1;
+    // if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_UVDist_ARAP)
+    //   EvenMode = 2;
+    // if (DualParam.RType == Geo::DualPatch<ScalarType>::RT_CCability)
+    //   EvenMode = 3;
 
-    static const char *itemsEvenMode[] = {"UV_Tutte", "UV_LSC", "UV_Arap",
-                                          "UV_CCability"};
+    // static const char *itemsEvenMode[] = {"UV_Tutte", "UV_LSC", "UV_Arap",
+    //                                       "UV_CCability"};
 
-    ImGui::Combo("Dual Mode", &EvenMode, itemsEvenMode,
-                 IM_ARRAYSIZE(itemsEvenMode));
+    // ImGui::Combo("Dual Mode", &EvenMode, itemsEvenMode,
+    //              IM_ARRAYSIZE(itemsEvenMode));
 
-    if (EvenMode == 0)
-      DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_Tutte;
-    if (EvenMode == 1)
-      DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_LSC;
-    if (EvenMode == 2)
-      DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_ARAP;
-    if (EvenMode == 3)
-      DualParam.RType = Geo::DualPatch<ScalarType>::RT_CCability;
+    // if (EvenMode == 0)
+    //   DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_Tutte;
+    // if (EvenMode == 1)
+    //   DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_LSC;
+    // if (EvenMode == 2)
+    //   DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_ARAP;
+    // if (EvenMode == 3)
+    //   DualParam.RType = Geo::DualPatch<ScalarType>::RT_CCability;
 
-    ImGui::InputInt("Only Patch", &OnlyDualP);
-    DualParam.OnlyPatch.clear();
-    if (OnlyDualP < -1)
-      OnlyDualP = -1;
-    OnlyDualP = std::min(OnlyDualP, PatchM.NumPatches() - 1);
+    // ImGui::InputInt("Only Patch", &OnlyDualP);
+    // DualParam.OnlyPatch.clear();
+    // if (OnlyDualP < -1)
+    //   OnlyDualP = -1;
+    // OnlyDualP = std::min(OnlyDualP, PatchM.NumPatches() - 1);
 
-    if (OnlyDualP >= 0)
-      DualParam.OnlyPatch.push_back(OnlyDualP);
+    // if (OnlyDualP >= 0)
+    //   DualParam.OnlyPatch.push_back(OnlyDualP);
 
-    if (ImGui::Button("Smooth Dual Patches")) {
-      Geo::PatchOptimize<ScalarType>::DualMeshSmooth(
-          VertPos, Connectivity, Features, DualVertPos, DualConnectivity);
+    // if (ImGui::Button("Smooth Dual Patches")) {
+    //   Geo::PatchOptimize<ScalarType>::DualMeshSmooth(
+    //       VertPos, Connectivity, Features, DualVertPos, DualConnectivity);
 
-      Geo::DualPatch<ScalarType>::ExtractCornerVisPos(
-          DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
-          PerDualPatchCornerIDX, VisDualCornerPos);
-    }
+    //   Geo::DualPatch<ScalarType>::ExtractCornerVisPos(
+    //       DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+    //       PerDualPatchCornerIDX, VisDualCornerPos);
+    // }
   }
 
   if (ImGui::Button("Extract Dual")) {
@@ -1628,7 +1628,7 @@ void SetExportBar() {
     //     VertPos, Connectivity, PatchM, DualParam, DualVertPos,
     //     DualConnectivity, PerDualPatchFaceIDX, PerDualPatchCornerIDX);
 
-    Geo::DualPatch<ScalarType>::PrimalPatchData PData;
+    Geo::PrimalPatchData<ScalarType> PData;
     PData.PatchFaces = PatchM.PData.SubPatchFaces;
     PData.PatchVertPos = PatchM.PData.SubPatchVertPos;
     PData.PatchCorners = PatchM.PData.PatchCorners;
@@ -1793,8 +1793,8 @@ void SetExportBar() {
     SideD.PMode = PMode;
     
 
-    ImGui::Checkbox("Graph Optimize", &SideD.graph_optimize);
-    ImGui::Checkbox("Optimize Size", &OptimizeSize);
+    // ImGui::Checkbox("Graph Optimize", &SideD.graph_optimize);
+    // ImGui::Checkbox("Optimize Size", &OptimizeSize);
     if (ImGui::Button("Find Subdivision")) {
       DrawSubdivision = true;
       DrawQuadMesh = false;
@@ -1805,7 +1805,7 @@ void SetExportBar() {
       SideD.PrioritizeTJunction = true;
 
       std::cout<<"Edge Size:"<<EdgeS<<std::endl;
-      SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeSize);
+      SideD.FindDiscretization(EdgeS, RegVsIso, true,true,true);
     }
 
     if (ImGui::CollapsingHeader("Solve Steps")) {

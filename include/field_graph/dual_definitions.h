@@ -36,14 +36,68 @@ enum PrimalParamType {
   RT_CCability
 };
 
-template<class ScalarType>
-struct PrimalPatchData {
+template <class ScalarType> struct PrimalPatchData {
   std::vector<std::vector<std::vector<int>>> PatchFaces;
   std::vector<std::vector<Geo::Point3<ScalarType>>> PatchVertPos;
   std::vector<std::vector<std::vector<int>>> PatchCorners;
   std::vector<std::vector<std::vector<std::vector<std::pair<int, int>>>>>
       EdgePatchSides;
   std::vector<std::vector<int>> PatchSingularities;
+
+  void InsertCorner(int IndexPatch, int IndexSide, int IndexEdge) {
+    assert(IndexPatch >= 0);
+    assert(IndexPatch < (int)PatchCorners.size());
+    assert(IndexPatch < (int)EdgePatchSides.size());
+    assert(!PatchCorners[IndexPatch].empty());
+    assert(!EdgePatchSides[IndexPatch].empty());
+
+    std::vector<int> &corners = PatchCorners[IndexPatch][0];
+    std::vector<std::vector<std::pair<int, int>>> &sides = EdgePatchSides[IndexPatch][0];
+
+    assert(IndexSide >= 0);
+    assert(IndexSide < (int)sides.size());
+    assert(IndexEdge >= 0);
+    assert(IndexEdge < (int)sides[IndexSide].size());
+    assert(corners.size() == sides.size());
+
+    std::pair<int,int> edgeSplit = sides[IndexSide][IndexEdge];
+    const int newCornerIndex = edgeSplit.second;
+
+    corners.insert(corners.begin() + IndexSide + 1, newCornerIndex);
+
+    auto &side = sides[IndexSide];
+    std::vector<std::pair<int, int>> newSide(side.begin() + IndexEdge + 1,
+                                             side.end());
+    side.erase(side.begin() + IndexEdge + 1, side.end());
+
+    sides.insert(sides.begin() + IndexSide + 1, std::move(newSide));
+  }
+
+  void RemoveCorner(int IndexPatch, int IndexCorner) {
+    assert(IndexPatch >= 0);
+    assert(IndexPatch < PatchCorners.size());
+    assert(!PatchCorners[IndexPatch].empty());
+    assert(!EdgePatchSides[IndexPatch].empty());
+
+    auto &corners = PatchCorners[IndexPatch][0];
+    auto &sides = EdgePatchSides[IndexPatch][0];
+
+    assert(IndexCorner >= 0);
+    assert(IndexCorner < (int)corners.size());
+    assert(corners.size() == sides.size());
+    assert(corners.size() >= 2);
+
+    int n = (int)corners.size();
+    int prevSide = (IndexCorner - 1 + n) % n;
+    int nextSide = IndexCorner;
+
+    corners.erase(corners.begin() + IndexCorner);
+
+    sides[prevSide].insert(sides[prevSide].end(), sides[nextSide].begin(),
+                           sides[nextSide].end());
+
+    sides.erase(sides.begin() + nextSide);
+  }
 };
 
 } // namespace Geo

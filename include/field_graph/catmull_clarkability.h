@@ -177,155 +177,18 @@ bool IsCatmullClarkable(const std::vector<ScalarType> &EdgeL,
 //         return 1;
 // }
 
-template <class ScalarType>
-void CCSideSubds_6(const ScalarType &e0, const ScalarType &e1,
-                 const ScalarType &e2, const ScalarType &e3, 
-                 const ScalarType &e4,const ScalarType &e5,
-                 ScalarType &s0,ScalarType &s1,
-                 ScalarType &s2, ScalarType &s3, 
-                 ScalarType &s4,ScalarType &s5) {
-  Geo::LinearConstraint<ScalarType> Constr0;
-  Constr0.Weight = 1;
-  // s1+s5=e0
-  Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
-  Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(5, 0, 1));
-  Constr0.RHSide = e0;
-
-  Geo::LinearConstraint<ScalarType> Constr1;
-  Constr1.Weight = 1;
-  // s0+s2=e1
-  Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
-  Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
-  Constr1.RHSide = e1;
-
-  Geo::LinearConstraint<ScalarType> Constr2;
-  Constr2.Weight = 1;
-  // s1+s3=e2
-  Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
-  Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(3, 0, 1));
-  Constr2.RHSide = e2;
-
-  Geo::LinearConstraint<ScalarType> Constr3;
-  Constr3.Weight = 1;
-  // s2+s4=e3
-  Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
-  Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(4, 0, 1));
-  Constr3.RHSide = e3;
-
-  Geo::LinearConstraint<ScalarType> Constr4;
-  Constr4.Weight = 1;
-  // s3+s5=e4
-  Constr4.LHSide.push_back(Geo::VarTerm<ScalarType>(3, 0, 1));
-  Constr4.LHSide.push_back(Geo::VarTerm<ScalarType>(5, 0, 1));
-  Constr4.RHSide = e4;
- 
-  Geo::LinearConstraint<ScalarType> Constr5;
-  Constr5.Weight = 1;
-  // s0+s4=e5
-  Constr5.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
-  Constr5.LHSide.push_back(Geo::VarTerm<ScalarType>(4, 0, 1));
-  Constr5.RHSide = e5;
-
-  std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
-  LinConstr.push_back(Constr0);
-  LinConstr.push_back(Constr1);
-  LinConstr.push_back(Constr2);
-  LinConstr.push_back(Constr3);
-  LinConstr.push_back(Constr4);
-  LinConstr.push_back(Constr5);
-
-  Geo::LinearConstraintLeastSQSolver<ScalarType> LQSolver;
-  LQSolver.Init(LinConstr);
-  std::vector<ScalarType> Solution;
-  LQSolver.Solve(Solution);
-
-  assert(Solution.size() == 6);
-  s0 = Solution[0];
-  s1 = Solution[1];
-  s2 = Solution[2];
-  s3 = Solution[3];
-  s4 = Solution[4];
-  s5 = Solution[5];
-
-}
-
-template <class ScalarType>
-void CCSideSubds_5(const ScalarType &e0, const ScalarType &e1,
-                 const ScalarType &e2, const ScalarType &e3, 
-                 const ScalarType &e4,
-                 ScalarType &s0,ScalarType &s1,
-                 ScalarType &s2, ScalarType &s3, 
-                 ScalarType &s4) {
-  Geo::LinearConstraint<ScalarType> Constr0;
-  Constr0.Weight = 1;
-  // s1+s4=e0
-  Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
-  Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(4, 0, 1));
-  Constr0.RHSide = e0;
-
-  Geo::LinearConstraint<ScalarType> Constr1;
-  Constr1.Weight = 1;
-  // s0+s2=e1
-  Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
-  Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
-  Constr1.RHSide = e1;
-
-  Geo::LinearConstraint<ScalarType> Constr2;
-  Constr2.Weight = 1;
-  // s1+s3=e2
-  Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
-  Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(3, 0, 1));
-  Constr2.RHSide = e2;
-
-  Geo::LinearConstraint<ScalarType> Constr3;
-  Constr3.Weight = 1;
-  // s2+s4=e3
-  Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
-  Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(4, 0, 1));
-  Constr3.RHSide = e3;
-
-  Geo::LinearConstraint<ScalarType> Constr4;
-  Constr4.Weight = 1;
-  // s0+s3=e4
-  Constr4.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
-  Constr4.LHSide.push_back(Geo::VarTerm<ScalarType>(3, 0, 1));
-  Constr4.RHSide = e4;
-
-  std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
-  LinConstr.push_back(Constr0);
-  LinConstr.push_back(Constr1);
-  LinConstr.push_back(Constr2);
-  LinConstr.push_back(Constr3);
-  LinConstr.push_back(Constr4);
-
-  Geo::LinearConstraintLeastSQSolver<ScalarType> LQSolver;
-  LQSolver.Init(LinConstr);
-  std::vector<ScalarType> Solution;
-  LQSolver.Solve(Solution);
-
-  assert(Solution.size() == 5);
-  s0 = Solution[0];
-  s1 = Solution[1];
-  s2 = Solution[2];
-  s3 = Solution[3];
-  s4 = Solution[4];
-
-}
-
-template <class ScalarType>
-void CCSideSubds_4(const ScalarType &e0, const ScalarType &e1,
-                 const ScalarType &e2, const ScalarType &e3, 
-                 ScalarType &s0,ScalarType &s1, 
-                 ScalarType &s2, ScalarType &s3) {
-s0=(e1+e3)/4;
-s1=(e0+e2)/4;
-s3=s1;
-s2=s0;
+// template <class ScalarType>
+// void CCSideSubds_6(const ScalarType &e0, const ScalarType &e1,
+//                  const ScalarType &e2, const ScalarType &e3, 
+//                  const ScalarType &e4,const ScalarType &e5,
+//                  ScalarType &s0,ScalarType &s1,
+//                  ScalarType &s2, ScalarType &s3, 
+//                  ScalarType &s4,ScalarType &s5) {
 //   Geo::LinearConstraint<ScalarType> Constr0;
 //   Constr0.Weight = 1;
-//   // s1+s3=e0
+//   // s1+s5=e0
 //   Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
-//   Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(3, 0, 1));
+//   Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(5, 0, 1));
 //   Constr0.RHSide = e0;
 
 //   Geo::LinearConstraint<ScalarType> Constr1;
@@ -344,181 +207,423 @@ s2=s0;
 
 //   Geo::LinearConstraint<ScalarType> Constr3;
 //   Constr3.Weight = 1;
-//   // s0+s2=e3
-//   Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
+//   // s2+s4=e3
 //   Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
+//   Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(4, 0, 1));
 //   Constr3.RHSide = e3;
-//   //A
+
+//   Geo::LinearConstraint<ScalarType> Constr4;
+//   Constr4.Weight = 1;
+//   // s3+s5=e4
+//   Constr4.LHSide.push_back(Geo::VarTerm<ScalarType>(3, 0, 1));
+//   Constr4.LHSide.push_back(Geo::VarTerm<ScalarType>(5, 0, 1));
+//   Constr4.RHSide = e4;
+ 
+//   Geo::LinearConstraint<ScalarType> Constr5;
+//   Constr5.Weight = 1;
+//   // s0+s4=e5
+//   Constr5.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
+//   Constr5.LHSide.push_back(Geo::VarTerm<ScalarType>(4, 0, 1));
+//   Constr5.RHSide = e5;
+
 //   std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
 //   LinConstr.push_back(Constr0);
 //   LinConstr.push_back(Constr1);
 //   LinConstr.push_back(Constr2);
 //   LinConstr.push_back(Constr3);
+//   LinConstr.push_back(Constr4);
+//   LinConstr.push_back(Constr5);
 
 //   Geo::LinearConstraintLeastSQSolver<ScalarType> LQSolver;
 //   LQSolver.Init(LinConstr);
 //   std::vector<ScalarType> Solution;
 //   LQSolver.Solve(Solution);
 
-//   assert(Solution.size() == 4);
+//   assert(Solution.size() == 6);
 //   s0 = Solution[0];
 //   s1 = Solution[1];
 //   s2 = Solution[2];
 //   s3 = Solution[3];
-}
+//   s4 = Solution[4];
+//   s5 = Solution[5];
 
-template <class ScalarType>
-void CCSideSubds_3(const ScalarType &e0, const ScalarType &e1,
-                 const ScalarType &e2, ScalarType &s0, ScalarType &s1,
-                 ScalarType &s2) {
-  Geo::LinearConstraint<ScalarType> Constr0;
-  Constr0.Weight = 1;
-  // s1+s2=e0
-  Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
-  Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
-  Constr0.RHSide = e0;
+// }
 
-  Geo::LinearConstraint<ScalarType> Constr1;
-  Constr1.Weight = 1;
-  // s0+s2=e1
-  Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
-  Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
-  Constr1.RHSide = e1;
+// template <class ScalarType>
+// void CCSideSubds_5(const ScalarType &e0, const ScalarType &e1,
+//                  const ScalarType &e2, const ScalarType &e3, 
+//                  const ScalarType &e4,
+//                  ScalarType &s0,ScalarType &s1,
+//                  ScalarType &s2, ScalarType &s3, 
+//                  ScalarType &s4) {
+//   Geo::LinearConstraint<ScalarType> Constr0;
+//   Constr0.Weight = 1;
+//   // s1+s4=e0
+//   Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
+//   Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(4, 0, 1));
+//   Constr0.RHSide = e0;
 
-  Geo::LinearConstraint<ScalarType> Constr2;
-  Constr2.Weight = 1;
-  // s0+s1=e2
-  Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
-  Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
-  Constr2.RHSide = e2;
+//   Geo::LinearConstraint<ScalarType> Constr1;
+//   Constr1.Weight = 1;
+//   // s0+s2=e1
+//   Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
+//   Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
+//   Constr1.RHSide = e1;
 
-  std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
-  LinConstr.push_back(Constr0);
-  LinConstr.push_back(Constr1);
-  LinConstr.push_back(Constr2);
+//   Geo::LinearConstraint<ScalarType> Constr2;
+//   Constr2.Weight = 1;
+//   // s1+s3=e2
+//   Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
+//   Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(3, 0, 1));
+//   Constr2.RHSide = e2;
 
-  Geo::LinearConstraintLeastSQSolver<ScalarType> LQSolver;
-  LQSolver.Init(LinConstr);
-  std::vector<ScalarType> Solution;
-  LQSolver.Solve(Solution);
+//   Geo::LinearConstraint<ScalarType> Constr3;
+//   Constr3.Weight = 1;
+//   // s2+s4=e3
+//   Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
+//   Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(4, 0, 1));
+//   Constr3.RHSide = e3;
 
-  assert(Solution.size() == 3);
-  s0 = Solution[0];
-  s1 = Solution[1];
-  s2 = Solution[2];
-}
+//   Geo::LinearConstraint<ScalarType> Constr4;
+//   Constr4.Weight = 1;
+//   // s0+s3=e4
+//   Constr4.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
+//   Constr4.LHSide.push_back(Geo::VarTerm<ScalarType>(3, 0, 1));
+//   Constr4.RHSide = e4;
 
-template <class ScalarType>
-void CCSideSubds_2(const ScalarType &e0, const ScalarType &e1, ScalarType &s0,
-                 ScalarType &s1) {
-  s1 = e0 / 2;
-  s0 = e1 / 2;
-}
+//   std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
+//   LinConstr.push_back(Constr0);
+//   LinConstr.push_back(Constr1);
+//   LinConstr.push_back(Constr2);
+//   LinConstr.push_back(Constr3);
+//   LinConstr.push_back(Constr4);
 
-template <class ScalarType>
-bool CCSideSubd(const std::vector<ScalarType> &EdgeL,
-              std::vector<ScalarType> &SideSubd) {
-  if (EdgeL.size() == 2) {
+//   Geo::LinearConstraintLeastSQSolver<ScalarType> LQSolver;
+//   LQSolver.Init(LinConstr);
+//   std::vector<ScalarType> Solution;
+//   LQSolver.Solve(Solution);
 
-    SideSubd.clear();
-    SideSubd.resize(2, 0);
-    CCSideSubds_2(EdgeL[0], EdgeL[1], SideSubd[0], SideSubd[1]);
-    return true;
-  }
+//   assert(Solution.size() == 5);
+//   s0 = Solution[0];
+//   s1 = Solution[1];
+//   s2 = Solution[2];
+//   s3 = Solution[3];
+//   s4 = Solution[4];
 
-  if (EdgeL.size() == 3) {
+// }
 
-    SideSubd.clear();
-    SideSubd.resize(3, 0);
+// template <class ScalarType>
+// void CCSideSubds_4(const ScalarType &e0, const ScalarType &e1,
+//                  const ScalarType &e2, const ScalarType &e3, 
+//                  ScalarType &s0,ScalarType &s1, 
+//                  ScalarType &s2, ScalarType &s3) {
+// s0=(e1+e3)/4;
+// s1=(e0+e2)/4;
+// s3=s1;
+// s2=s0;
+// //   Geo::LinearConstraint<ScalarType> Constr0;
+// //   Constr0.Weight = 1;
+// //   // s1+s3=e0
+// //   Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
+// //   Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(3, 0, 1));
+// //   Constr0.RHSide = e0;
 
-    CCSideSubds_3(EdgeL[0], EdgeL[1], EdgeL[2], SideSubd[0], SideSubd[1],
-                SideSubd[2]);
-    return true;
-  }
+// //   Geo::LinearConstraint<ScalarType> Constr1;
+// //   Constr1.Weight = 1;
+// //   // s0+s2=e1
+// //   Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
+// //   Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
+// //   Constr1.RHSide = e1;
 
-  if (EdgeL.size() == 4) {
+// //   Geo::LinearConstraint<ScalarType> Constr2;
+// //   Constr2.Weight = 1;
+// //   // s1+s3=e2
+// //   Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
+// //   Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(3, 0, 1));
+// //   Constr2.RHSide = e2;
 
-    SideSubd.clear();
-    SideSubd.resize(4, 0);
-    CCSideSubds_4(EdgeL[0], EdgeL[1], EdgeL[2], EdgeL[3], SideSubd[0],
-                SideSubd[1], SideSubd[2], SideSubd[3]);
-    return true;
-  }
+// //   Geo::LinearConstraint<ScalarType> Constr3;
+// //   Constr3.Weight = 1;
+// //   // s0+s2=e3
+// //   Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
+// //   Constr3.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
+// //   Constr3.RHSide = e3;
+// //   //A
+// //   std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
+// //   LinConstr.push_back(Constr0);
+// //   LinConstr.push_back(Constr1);
+// //   LinConstr.push_back(Constr2);
+// //   LinConstr.push_back(Constr3);
 
-  if (EdgeL.size() == 5) {
-    //std::cout<<"Size 5"<<std::endl;
+// //   Geo::LinearConstraintLeastSQSolver<ScalarType> LQSolver;
+// //   LQSolver.Init(LinConstr);
+// //   std::vector<ScalarType> Solution;
+// //   LQSolver.Solve(Solution);
 
-    SideSubd.clear();
-    SideSubd.resize(5, 0);
-    CCSideSubds_5(EdgeL[0], EdgeL[1], 
-                EdgeL[2], EdgeL[3],  EdgeL[4],
-                SideSubd[0],SideSubd[1], 
-                SideSubd[2], SideSubd[3],SideSubd[4]);
-    return true;
-  }
+// //   assert(Solution.size() == 4);
+// //   s0 = Solution[0];
+// //   s1 = Solution[1];
+// //   s2 = Solution[2];
+// //   s3 = Solution[3];
+// }
 
-  if (EdgeL.size() == 6) {
-    //std::cout<<"Size 6"<<std::endl;
+// template <class ScalarType>
+// void CCSideSubds_3(const ScalarType &e0, const ScalarType &e1,
+//                  const ScalarType &e2, ScalarType &s0, ScalarType &s1,
+//                  ScalarType &s2) {
+//   Geo::LinearConstraint<ScalarType> Constr0;
+//   Constr0.Weight = 1;
+//   // s1+s2=e0
+//   Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
+//   Constr0.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
+//   Constr0.RHSide = e0;
 
-    SideSubd.clear();
-    SideSubd.resize(6, 0);
-    CCSideSubds_6(EdgeL[0], EdgeL[1], 
-                EdgeL[2], EdgeL[3], 
-                EdgeL[4], EdgeL[5],
-                SideSubd[0],SideSubd[1], 
-                SideSubd[2], SideSubd[3],
-                SideSubd[4],SideSubd[5]);
-    return true;
-  }
+//   Geo::LinearConstraint<ScalarType> Constr1;
+//   Constr1.Weight = 1;
+//   // s0+s2=e1
+//   Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
+//   Constr1.LHSide.push_back(Geo::VarTerm<ScalarType>(2, 0, 1));
+//   Constr1.RHSide = e1;
 
-  return false;
-}
+//   Geo::LinearConstraint<ScalarType> Constr2;
+//   Constr2.Weight = 1;
+//   // s0+s1=e2
+//   Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(0, 0, 1));
+//   Constr2.LHSide.push_back(Geo::VarTerm<ScalarType>(1, 0, 1));
+//   Constr2.RHSide = e2;
+
+//   std::vector<Geo::LinearConstraint<ScalarType>> LinConstr;
+//   LinConstr.push_back(Constr0);
+//   LinConstr.push_back(Constr1);
+//   LinConstr.push_back(Constr2);
+
+//   Geo::LinearConstraintLeastSQSolver<ScalarType> LQSolver;
+//   LQSolver.Init(LinConstr);
+//   std::vector<ScalarType> Solution;
+//   LQSolver.Solve(Solution);
+
+//   assert(Solution.size() == 3);
+//   s0 = Solution[0];
+//   s1 = Solution[1];
+//   s2 = Solution[2];
+// }
+
+// template <class ScalarType>
+// void CCSideSubds_2(const ScalarType &e0, const ScalarType &e1, ScalarType &s0,
+//                  ScalarType &s1) {
+//   s1 = e0 / 2;
+//   s0 = e1 / 2;
+// }
+
+// template <class ScalarType>
+// bool CCSideSubd(const std::vector<ScalarType> &EdgeL,
+//               std::vector<ScalarType> &SideSubd) {
+//   if (EdgeL.size() == 2) {
+
+//     SideSubd.clear();
+//     SideSubd.resize(2, 0);
+//     CCSideSubds_2(EdgeL[0], EdgeL[1], SideSubd[0], SideSubd[1]);
+//     return true;
+//   }
+
+//   if (EdgeL.size() == 3) {
+
+//     SideSubd.clear();
+//     SideSubd.resize(3, 0);
+
+//     CCSideSubds_3(EdgeL[0], EdgeL[1], EdgeL[2], SideSubd[0], SideSubd[1],
+//                 SideSubd[2]);
+//     return true;
+//   }
+
+//   if (EdgeL.size() == 4) {
+
+//     SideSubd.clear();
+//     SideSubd.resize(4, 0);
+//     CCSideSubds_4(EdgeL[0], EdgeL[1], EdgeL[2], EdgeL[3], SideSubd[0],
+//                 SideSubd[1], SideSubd[2], SideSubd[3]);
+//     return true;
+//   }
+
+//   if (EdgeL.size() == 5) {
+//     //std::cout<<"Size 5"<<std::endl;
+
+//     SideSubd.clear();
+//     SideSubd.resize(5, 0);
+//     CCSideSubds_5(EdgeL[0], EdgeL[1], 
+//                 EdgeL[2], EdgeL[3],  EdgeL[4],
+//                 SideSubd[0],SideSubd[1], 
+//                 SideSubd[2], SideSubd[3],SideSubd[4]);
+//     return true;
+//   }
+
+//   if (EdgeL.size() == 6) {
+//     //std::cout<<"Size 6"<<std::endl;
+
+//     SideSubd.clear();
+//     SideSubd.resize(6, 0);
+//     CCSideSubds_6(EdgeL[0], EdgeL[1], 
+//                 EdgeL[2], EdgeL[3], 
+//                 EdgeL[4], EdgeL[5],
+//                 SideSubd[0],SideSubd[1], 
+//                 SideSubd[2], SideSubd[3],
+//                 SideSubd[4],SideSubd[5]);
+//     return true;
+//   }
+
+//   return false;
+// }
+
+
+// template <class ScalarType>
+// bool CCSideSubdRatio(const std::vector<ScalarType> &EdgeL,
+//                     std::vector<ScalarType> &SideSubRatio) {
+//     std::vector<ScalarType> SideSubd;
+//     bool found=CCSideSubd(EdgeL,SideSubd);
+//     if (!found)return false;
+//     SideSubRatio.clear();
+//     if (EdgeL.size() == 2) {
+//         //s1,s0
+//         // SideSubRatio.push_back(SideSubd[1]/EdgeL[1]);
+//         // SideSubRatio.push_back(SideSubd[0]/EdgeL[0]);
+//         SideSubRatio.push_back(0.5);
+//         SideSubRatio.push_back(0.5);
+//         return true;
+//     }
+//     if (EdgeL.size() == 3) {
+//         //s2,s0,s1
+//         // SideSubRatio.push_back(SideSubd[2]/EdgeL[2]);
+//         // SideSubRatio.push_back(SideSubd[0]/EdgeL[0]);
+//         // SideSubRatio.push_back(SideSubd[1]/EdgeL[1]);
+        
+//         ScalarType s0= (-EdgeL[0]+EdgeL[1]+EdgeL[2])/2;
+//         ScalarType s1= (EdgeL[0]-EdgeL[1]+EdgeL[2])/2;
+//         ScalarType s2= (EdgeL[0]+EdgeL[1]-EdgeL[2])/2;
+//         SideSubRatio.push_back(s2/EdgeL[0]);
+//         SideSubRatio.push_back(s0/EdgeL[1]);
+//         SideSubRatio.push_back(s1/EdgeL[2]);
+//         return true;
+//     }
+//     if (EdgeL.size() == 4) {
+//         //s3,s0,s1,s2
+//         // SideSubRatio.push_back(SideSubd[3]/EdgeL[3]);
+//         // SideSubRatio.push_back(SideSubd[0]/EdgeL[0]);
+//         // SideSubRatio.push_back(SideSubd[1]/EdgeL[1]);
+//         // SideSubRatio.push_back(SideSubd[2]/EdgeL[2]);
+//         SideSubRatio.push_back(0.5);
+//         SideSubRatio.push_back(0.5);
+//         SideSubRatio.push_back(0.5);
+//         SideSubRatio.push_back(0.5);
+//         return false;
+//     }
+//     if (EdgeL.size() == 5) {
+//         //s4,s0,s1,s2,s3
+//         ScalarType s0= (EdgeL[0]+EdgeL[1]-EdgeL[2]-EdgeL[3]+EdgeL[4])/2;
+//         ScalarType s1= (EdgeL[0]+EdgeL[1]+EdgeL[2]-EdgeL[3]-EdgeL[4])/2;
+//         ScalarType s2= (-EdgeL[0]+EdgeL[1]+EdgeL[2]+EdgeL[3]-EdgeL[4])/2;
+//         ScalarType s3= (-EdgeL[0]-EdgeL[1]+EdgeL[2]+EdgeL[3]+EdgeL[4])/2;
+//         ScalarType s4= (EdgeL[0]-EdgeL[1]-EdgeL[2]+EdgeL[3]+EdgeL[4])/2;
+//         SideSubRatio.push_back(s4/EdgeL[0]);
+//         SideSubRatio.push_back(s0/EdgeL[1]);
+//         SideSubRatio.push_back(s1/EdgeL[2]);
+//         SideSubRatio.push_back(s2/EdgeL[3]);
+//         SideSubRatio.push_back(s3/EdgeL[4]);
+//         // SideSubRatio.push_back(SideSubd[4]/EdgeL[4]);
+//         // SideSubRatio.push_back(SideSubd[0]/EdgeL[0]);
+//         // SideSubRatio.push_back(SideSubd[1]/EdgeL[1]);
+//         // SideSubRatio.push_back(SideSubd[2]/EdgeL[2]);
+//         // SideSubRatio.push_back(SideSubd[3]/EdgeL[3]);
+//         return true;
+//     }
+//     if (EdgeL.size() == 6) {
+//         //s5,s0,s1,s2,s3,s4
+//         ScalarType s0= (EdgeL[1]-EdgeL[3]+EdgeL[5])/2;
+//         ScalarType s1= (EdgeL[0]+EdgeL[2]-EdgeL[4])/2;
+//         ScalarType s2= (EdgeL[1]+EdgeL[3]-EdgeL[5])/2;
+//         ScalarType s3= (-EdgeL[0]+EdgeL[2]+EdgeL[4])/2;
+//         ScalarType s4= (-EdgeL[1]+EdgeL[3]+EdgeL[5])/2;
+//         ScalarType s5= (EdgeL[0]-EdgeL[2]+EdgeL[4])/2;
+//         SideSubRatio.push_back(s5/EdgeL[0]);
+//         SideSubRatio.push_back(s0/EdgeL[1]);
+//         SideSubRatio.push_back(s1/EdgeL[2]);
+//         SideSubRatio.push_back(s2/EdgeL[3]);
+//         SideSubRatio.push_back(s3/EdgeL[4]);
+//         SideSubRatio.push_back(s4/EdgeL[5]);
+
+//         // SideSubRatio.push_back(SideSubd[5]/EdgeL[5]);
+//         // SideSubRatio.push_back(SideSubd[0]/EdgeL[0]);
+//         // SideSubRatio.push_back(SideSubd[1]/EdgeL[1]);
+//         // SideSubRatio.push_back(SideSubd[2]/EdgeL[2]);
+//         // SideSubRatio.push_back(SideSubd[3]/EdgeL[3]);
+//         // SideSubRatio.push_back(SideSubd[4]/EdgeL[4]);
+//         return true;
+//     }
+//     return false;
+// }
+
+// template <class ScalarType>
+// void MakeCCable(std::vector<ScalarType> &EdgeL)
+// {
+
+// }
 
 template <class ScalarType>
 bool CCSideSubdRatio(const std::vector<ScalarType> &EdgeL,
                     std::vector<ScalarType> &SideSubRatio) {
     std::vector<ScalarType> SideSubd;
-    bool found=CCSideSubd(EdgeL,SideSubd);
-    if (!found)return false;
+   
     SideSubRatio.clear();
     if (EdgeL.size() == 2) {
-        //s1,s0
-        SideSubRatio.push_back(SideSubd[1]/EdgeL[1]);
-        SideSubRatio.push_back(SideSubd[0]/EdgeL[0]);
+        SideSubRatio.push_back(0.5);
+        SideSubRatio.push_back(0.5);
         return true;
     }
     if (EdgeL.size() == 3) {
         //s2,s0,s1
-        SideSubRatio.push_back(SideSubd[2]/EdgeL[2]);
-        SideSubRatio.push_back(SideSubd[0]/EdgeL[0]);
-        SideSubRatio.push_back(SideSubd[1]/EdgeL[1]);
+        ScalarType s0= (-EdgeL[0]+EdgeL[1]+EdgeL[2])/2;
+        ScalarType s1= (EdgeL[0]-EdgeL[1]+EdgeL[2])/2;
+        ScalarType s2= (EdgeL[0]+EdgeL[1]-EdgeL[2])/2;
+        SideSubRatio.push_back(s2/EdgeL[0]);
+        SideSubRatio.push_back(s0/EdgeL[1]);
+        SideSubRatio.push_back(s1/EdgeL[2]);
         return true;
     }
     if (EdgeL.size() == 4) {
         //s3,s0,s1,s2
-        SideSubRatio.push_back(SideSubd[3]/EdgeL[3]);
-        SideSubRatio.push_back(SideSubd[0]/EdgeL[0]);
-        SideSubRatio.push_back(SideSubd[1]/EdgeL[1]);
-        SideSubRatio.push_back(SideSubd[2]/EdgeL[2]);
-        return true;
+        SideSubRatio.push_back(0.5);
+        SideSubRatio.push_back(0.5);
+        SideSubRatio.push_back(0.5);
+        SideSubRatio.push_back(0.5);
+        return false;
     }
     if (EdgeL.size() == 5) {
         //s4,s0,s1,s2,s3
-        SideSubRatio.push_back(SideSubd[4]/EdgeL[4]);
-        SideSubRatio.push_back(SideSubd[0]/EdgeL[0]);
-        SideSubRatio.push_back(SideSubd[1]/EdgeL[1]);
-        SideSubRatio.push_back(SideSubd[2]/EdgeL[2]);
-        SideSubRatio.push_back(SideSubd[3]/EdgeL[3]);
+        ScalarType s0= (EdgeL[0]+EdgeL[1]-EdgeL[2]-EdgeL[3]+EdgeL[4])/2;
+        ScalarType s1= (EdgeL[0]+EdgeL[1]+EdgeL[2]-EdgeL[3]-EdgeL[4])/2;
+        ScalarType s2= (-EdgeL[0]+EdgeL[1]+EdgeL[2]+EdgeL[3]-EdgeL[4])/2;
+        ScalarType s3= (-EdgeL[0]-EdgeL[1]+EdgeL[2]+EdgeL[3]+EdgeL[4])/2;
+        ScalarType s4= (EdgeL[0]-EdgeL[1]-EdgeL[2]+EdgeL[3]+EdgeL[4])/2;
+        SideSubRatio.push_back(s4/EdgeL[0]);
+        SideSubRatio.push_back(s0/EdgeL[1]);
+        SideSubRatio.push_back(s1/EdgeL[2]);
+        SideSubRatio.push_back(s2/EdgeL[3]);
+        SideSubRatio.push_back(s3/EdgeL[4]);
         return true;
     }
     if (EdgeL.size() == 6) {
         //s5,s0,s1,s2,s3,s4
-        SideSubRatio.push_back(SideSubd[5]/EdgeL[5]);
-        SideSubRatio.push_back(SideSubd[0]/EdgeL[0]);
-        SideSubRatio.push_back(SideSubd[1]/EdgeL[1]);
-        SideSubRatio.push_back(SideSubd[2]/EdgeL[2]);
-        SideSubRatio.push_back(SideSubd[3]/EdgeL[3]);
-        SideSubRatio.push_back(SideSubd[4]/EdgeL[4]);
+        ScalarType s0= (EdgeL[1]-EdgeL[3]+EdgeL[5])/2;
+        ScalarType s1= (EdgeL[0]+EdgeL[2]-EdgeL[4])/2;
+        ScalarType s2= (EdgeL[1]+EdgeL[3]-EdgeL[5])/2;
+        ScalarType s3= (-EdgeL[0]+EdgeL[2]+EdgeL[4])/2;
+        ScalarType s4= (-EdgeL[1]+EdgeL[3]+EdgeL[5])/2;
+        ScalarType s5= (EdgeL[0]-EdgeL[2]+EdgeL[4])/2;
+        SideSubRatio.push_back(s5/EdgeL[0]);
+        SideSubRatio.push_back(s0/EdgeL[1]);
+        SideSubRatio.push_back(s1/EdgeL[2]);
+        SideSubRatio.push_back(s2/EdgeL[3]);
+        SideSubRatio.push_back(s3/EdgeL[4]);
+        SideSubRatio.push_back(s4/EdgeL[5]);
         return true;
     }
     return false;

@@ -321,34 +321,34 @@ void SetRenderBar() {
     UpdateCorners();
   }
 
-  if (ImGui::Button("Dualize")) {
-    std::vector<std::vector<Geo::Point3<ScalarType>>> PerClusterMeshVert;
-    std::vector<std::vector<std::vector<int>>> PerClusterMeshFaces;
-    std::vector<std::vector<int>> PerClusterCorners;
-    Geo::ClusterOperations<ScalarType>::AllClusterMeshes(
-        VertPos, Faces, ClusterFaces, AllCorners, 
-        PerClusterMeshVert,PerClusterMeshFaces, 
-        PerClusterCorners);
+  // if (ImGui::Button("Dualize")) {
+  //   std::vector<std::vector<Geo::Point3<ScalarType>>> PerClusterMeshVert;
+  //   std::vector<std::vector<std::vector<int>>> PerClusterMeshFaces;
+  //   std::vector<std::vector<int>> PerClusterCorners;
+  //   Geo::ClusterOperations<ScalarType>::AllClusterMeshes(
+  //       VertPos, Faces, ClusterFaces, AllCorners, 
+  //       PerClusterMeshVert,PerClusterMeshFaces, 
+  //       PerClusterCorners);
 
-    std::vector<std::vector<int> > CentridsV;
-    CentridsV.resize(PerClusterMeshFaces.size());
-    for (size_t i=0;i<PerClusterMeshFaces.size();i++)
-    {
-      int CurrCentroidV=Geo::Centroids<ScalarType>::FindCentroidsVertUV(PerClusterMeshVert[i],PerClusterMeshFaces[i]);
-      CentridsV[i].push_back(CurrCentroidV);
-    }
+  //   std::vector<std::vector<int> > CentridsV;
+  //   CentridsV.resize(PerClusterMeshFaces.size());
+  //   for (size_t i=0;i<PerClusterMeshFaces.size();i++)
+  //   {
+  //     int CurrCentroidV=Geo::Centroids<ScalarType>::FindCentroidsVertUV(PerClusterMeshVert[i],PerClusterMeshFaces[i]);
+  //     CentridsV[i].push_back(CurrCentroidV);
+  //   }
 
-    Geo::DualPatch<ScalarType>::PrimalPatchData PData;
-    PData.PatchVertPos=PerClusterMeshVert;
-    PData.PatchFaces=PerClusterMeshFaces;
-    PData.PatchSingularities=CentridsV;
-    assert(0);
-    // TO BE COMPLETED
+  //   Geo::DualPatch<ScalarType>::PrimalPatchData PData;
+  //   PData.PatchVertPos=PerClusterMeshVert;
+  //   PData.PatchFaces=PerClusterMeshFaces;
+  //   PData.PatchSingularities=CentridsV;
+  //   assert(0);
+  //   // TO BE COMPLETED
 
-    // Geo::DualPatch<ScalarType>::ExtractDual(
-    //     PData, DualParam, DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
-    //     PerDualPatchCornerIDX);
-  }
+  //   // Geo::DualPatch<ScalarType>::ExtractDual(
+  //   //     PData, DualParam, DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
+  //   //     PerDualPatchCornerIDX);
+  // }
 
   if (ImGui::Button("Save Patch Layout")) {
     std::string patch_path = ProjectPath + std::string(".patch");
