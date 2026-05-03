@@ -516,7 +516,7 @@ public:
     MaxSides = 6;
     CCAbility = -1;
     final_removal = false;
-    test_remove_only_once = true;
+    test_remove_only_once = false;
     InitDefaultDualParameters();
   }
 

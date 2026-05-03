@@ -674,8 +674,12 @@ public:
   void GetFeatureElem(std::vector<int> &FeatureElem) {
     std::vector<int> FixedPathsV(FixedPaths.begin(), FixedPaths.end());
     FeatureElem.clear();
+    std::cout << "Fixed Paths " << FixedPathsV.size() << std::endl;
     for (size_t i = 0; i < FixedPathsV.size(); i++) {
       int IndexP = FixedPathsV[i];
+      std::cout << "Index P " << IndexP << std::endl;
+      assert(IndexP >= 0);
+      assert(IndexP < PathSampl.SelectedPaths.size());
       std::vector<int> CurrFeatureEl;
       Field::CrossFieldGraph::ElemsOfNode(PathSampl.SelectedPaths[IndexP],
                                           CurrFeatureEl);
@@ -750,7 +754,17 @@ public:
     }
     UnsolvedPatches = UnsolvedPatchesNew;
 
-    PathSampl.CleanEmptySelectedPaths();
+    std::map<int, int> NewPathIdx;
+    PathSampl.CleanEmptySelectedPaths(NewPathIdx);
+    // iterate over FixedPaths and update the index
+    std::vector<int> FixedPathsV(FixedPaths.begin(), FixedPaths.end());
+    for (size_t i = 0; i < FixedPathsV.size(); i++) {
+      assert(NewPathIdx.count(FixedPathsV[i]) > 0);
+      FixedPathsV[i] = NewPathIdx[FixedPathsV[i]];
+    }
+    FixedPaths.clear();
+    FixedPaths.insert(FixedPathsV.begin(), FixedPathsV.end());
+
     std::map<int, int> PatchIdxRemap;
     PatchMan.CompactEmptyPatches(PatchIdxRemap);
 
@@ -1486,8 +1500,6 @@ public:
     }
     return true;
   }
-
-#define SAVE_STATUS_REMOVE
 
   bool RemoveIfPossible(const int &Path_To_remove, bool remove_unsolved = false,
                         int minGain = 0, bool debug_msg = false) {
@@ -3240,7 +3252,16 @@ public:
       has_added |= SolveAllMesh();
       // then remove unnecessary
       RemovePaths();
-      PathSampl.CleanEmptySelectedPaths();
+      std::map<int, int> NewPathIdx;
+      PathSampl.CleanEmptySelectedPaths(NewPathIdx);
+      // iterate over FixedPaths and update the index
+      std::vector<int> FixedPathsV(FixedPaths.begin(), FixedPaths.end());
+      for (size_t i = 0; i < FixedPathsV.size(); i++) {
+        assert(NewPathIdx.count(FixedPathsV[i]) > 0);
+        FixedPathsV[i] = NewPathIdx[FixedPathsV[i]];
+      }
+      FixedPaths.clear();
+      FixedPaths.insert(FixedPathsV.begin(), FixedPathsV.end());
 
       RankPaths.resize(PathSampl.SelectedPaths.size(), 1);
 

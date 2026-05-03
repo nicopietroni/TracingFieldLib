@@ -1984,8 +1984,9 @@ private:
   // }
 
 public:
-  void CleanEmptySelectedPaths() {
-    std::map<int, int> NewPathIdx;
+
+  void CleanEmptySelectedPaths(std::map<int, int> &NewPathIdx) {
+    NewPathIdx.clear();
     std::vector<std::vector<int>> SelectedPathsSwap;
     for (size_t i = 0; i < SelectedPaths.size(); i++) {
       if (SelectedPaths[i].size() == 0)
@@ -2962,7 +2963,9 @@ public:
 
     } while (has_joined);
     // SelectedPaths=NewPaths;
-    CleanEmptySelectedPaths();
+    std::map<int, int> NewPathIdx;
+    CleanEmptySelectedPaths(NewPathIdx);
+    
   }
 
   std::vector<std::vector<int>> &Faces() { return Connectivity; }
