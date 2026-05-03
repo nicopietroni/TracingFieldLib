@@ -410,6 +410,8 @@ public:
     IsVertCorner = _IsVertCorner;
   }
 
+  virtual ~LocalOperation() {}
+
   void UpdateFeatureReprojectInfo() {
     isFeatureV0 = false;
     isFeatureV1 = false;

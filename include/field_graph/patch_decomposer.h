@@ -3837,11 +3837,10 @@ public:
   //   return true;
   // }
 
-  //    ~PatchDecomposer()
-  //    {
-  //        for (size_t i=0;i<PConditions.size();i++)
-  //            delete(PConditions[i]);
-  //    }
+  // ~PatchDecomposer() {
+  //   for (size_t i = 0; i < PConditions.size(); i++)
+  //     delete (PConditions[i]);
+  // }
 };
 
 } // namespace Geo
