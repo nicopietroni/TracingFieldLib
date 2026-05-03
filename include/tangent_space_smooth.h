@@ -45,6 +45,7 @@
 #include "segment2.h"
 #include "segment3.h"
 #include "smooth_mesh.h"
+#include "smooth_mesh_param.h"
 #include "triangle2.h"
 #include "triangle3.h"
 #include <cassert>
@@ -58,6 +59,12 @@
 #include <vector>
 
 namespace Geo {
+
+//forward declaration for compilation issues
+template <class ScalarType>
+void SmoothLaplacian(std::vector<Geo::Point2<ScalarType>> &VertPos,
+                     const std::vector<std::vector<int>> &Faces,
+                     const SmoothParam<ScalarType> &SParam);
 
 template <class ScalarType> class Local_Param_Smooth {
 
@@ -1008,7 +1015,8 @@ public:
       SplitQuadIntoTris(VertPos, Faces, FTris);
 
     // //then parametrize
-    // bool had_param = Geo::UVParam<ScalarType>::TutteEmbedding(VertPos, FTris,VertUV);
+    // bool had_param = Geo::UVParam<ScalarType>::TutteEmbedding(VertPos,
+    // FTris,VertUV);
 
     bool had_param =
         Geo::UVParam<ScalarType>::LeastSquaresConformal(VertPos, FTris, VertUV);
@@ -1030,17 +1038,17 @@ public:
     // std::cout<<"Test 2"<<std::endl;
 
     // then smooth
-    //SmoothLaplacianImplicit(VertUV, Faces, FixUV);
-    //SmoothLaplacian(int &VertPos, const int &Faces)   
-    
+    // SmoothLaplacianImplicit(VertUV, Faces, FixUV);
+    // SmoothLaplacian(int &VertPos, const int &Faces)
+
     Geo::SmoothParam<ScalarType> SParamQuadSmooth;
     SParamQuadSmooth.FixedVert = FixUV;
     SParamQuadSmooth.post_project = false;
     SParamQuadSmooth.NumIte = 20;
-    //SParamQuadSmooth.SType = Geo::SMLaplacian;
+    // SParamQuadSmooth.SType = Geo::SMLaplacian;
     SParamQuadSmooth.SType = Geo::SMCentroid;
-    SParamQuadSmooth.Features=Features;
-    Geo::SmoothLaplacian<ScalarType>(VertUV, Faces, SParamQuadSmooth);
+    SParamQuadSmooth.Features = Features;
+    Geo::SmoothLaplacian(VertUV, Faces, SParamQuadSmooth);
 
     std::vector<Geo::Point3<ScalarType>> NewVertPos;
 

@@ -27,8 +27,10 @@
 #ifndef MESH_MAPPING
 #define MESH_MAPPING
 
-
-
+#include "Space_Query/point_grid_3D.h"
+#include "point3.h"
+#include "pos3.h"
+#include "triangle3.h"
 #include <cassert>
 #include <cstddef>
 #include <fstream>
@@ -39,33 +41,52 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "pos3.h"
-#include "point3.h"
-#include "triangle3.h"
-#include "Space_Query/point_grid_3D.h"
 
 namespace Geo {
+
+template <class ScalarType>
+void FindClosestVertCorrespondences(
+    const std::vector<Geo::Point3<ScalarType>> &FromVert,
+    const std::vector<Geo::Point3<ScalarType>> &ToVert,
+    std::vector<int> &VerteMap) {
+  VerteMap.clear();
+  VerteMap.resize(FromVert.size(), -1);
+
+  Geo::PointSpatialIndex<ScalarType> Grid;
+  Grid.Init(ToVert);
+
+  Geo::Box3<ScalarType> BBox;
+  BBox.Init(ToVert);
+  ScalarType MaxDist = BBox.Diag();
+
+  for (size_t i = 0; i < FromVert.size(); i++) {
+    int IndexV = -1;
+    bool found = Grid.GridClosest(ToVert, FromVert[i], MaxDist, IndexV);
+    assert(IndexV >= 0);
+    assert(IndexV < ToVert.size());
+    VerteMap[i] = IndexV;
+  }
+}
 
 template <class ScalarType>
 int FindVertCorrespondences(
     const std::vector<Geo::Point3<ScalarType>> &FromVert,
     const std::vector<Geo::Point3<ScalarType>> &ToVert,
-    std::vector<int> &VerteMap)
-{
+    std::vector<int> &VerteMap) {
   VerteMap.clear();
   VerteMap.resize(FromVert.size(), -1);
   std::map<Geo::Point3<ScalarType>, int> ToVertMap;
-  for (size_t i=0;i<ToVert.size();i++)
-    ToVertMap[ToVert[i]]=i;
-  
+  for (size_t i = 0; i < ToVert.size(); i++)
+    ToVertMap[ToVert[i]] = i;
+
   int Mapped = 0;
-  for (size_t i=0;i<FromVert.size();i++)
-  {
-    if (ToVertMap.count(FromVert[i])==0)continue;
-    int IndexV=ToVertMap[FromVert[i]];
-    assert(IndexV>=0);
-    assert(IndexV<ToVert.size());
-    VerteMap[i]=IndexV;
+  for (size_t i = 0; i < FromVert.size(); i++) {
+    if (ToVertMap.count(FromVert[i]) == 0)
+      continue;
+    int IndexV = ToVertMap[FromVert[i]];
+    assert(IndexV >= 0);
+    assert(IndexV < ToVert.size());
+    VerteMap[i] = IndexV;
     Mapped++;
   }
   return Mapped;
@@ -78,7 +99,7 @@ int FindVertCorrespondences(
 //     const std::vector<Geo::Point3<ScalarType>> &ToVert,
 //     std::vector<std::vector<int>> &VerteMap)
 // {
-  
+
 // }
 
 template <class ScalarType>
@@ -93,7 +114,8 @@ int FindFacesCorrespondences(
   std::map<Geo::Traingle3<ScalarType>, int> ToFacesMap;
   for (size_t i = 0; i < ToFaces.size(); i++) {
     assert(ToFaces[i].size() == 3);
-    std::vector<Geo::Point3<ScalarType>> TrPos(3, Geo::Point3<ScalarType>(0, 0, 0));
+    std::vector<Geo::Point3<ScalarType>> TrPos(
+        3, Geo::Point3<ScalarType>(0, 0, 0));
     Geo::Point3<ScalarType> P0 = ToVert[ToFaces[i][0]];
     Geo::Point3<ScalarType> P1 = ToVert[ToFaces[i][1]];
     Geo::Point3<ScalarType> P2 = ToVert[ToFaces[i][2]];
@@ -129,83 +151,79 @@ int FindFacesCorrespondences(
   return Mapped;
 }
 
-
 template <class ScalarType>
 void FindEdgeFacesCorrespondences(
-    const std::vector<Geo::Point3<ScalarType> > &Vert,
-    const std::vector<std::vector<int> > &Faces,
-    std::map<std::pair<int,int>,std::vector<std::pair<int,int> > > &EdgeMap) 
-{
+    const std::vector<Geo::Point3<ScalarType>> &Vert,
+    const std::vector<std::vector<int>> &Faces,
+    std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> &EdgeMap) {
   EdgeMap.clear();
-  for (size_t i=0;i<Faces.size();i++)
-  for (size_t j=0;j<Faces[i].size();j++)
-  {
-    int IndexV0=Faces[i][j];
-    int IndexV1=Faces[i][(j+1)%Faces[i].size()];
-    std::pair<int,int> Key(std::min(IndexV0,IndexV1),
-                           std::max(IndexV0,IndexV1));
-    std::pair<int,int> FaceEdge(i,j);
-    EdgeMap[Key].push_back(FaceEdge);
-  }
+  for (size_t i = 0; i < Faces.size(); i++)
+    for (size_t j = 0; j < Faces[i].size(); j++) {
+      int IndexV0 = Faces[i][j];
+      int IndexV1 = Faces[i][(j + 1) % Faces[i].size()];
+      std::pair<int, int> Key(std::min(IndexV0, IndexV1),
+                              std::max(IndexV0, IndexV1));
+      std::pair<int, int> FaceEdge(i, j);
+      EdgeMap[Key].push_back(FaceEdge);
+    }
 }
 
 template <class ScalarType>
 void FindEdgeFacesCorrespondences(
-    const std::vector<Geo::Point3<ScalarType> > &Vert,
-    const std::vector<std::vector<int> > &Faces,
-    const std::vector<std::pair<int,int> > &Edges,
-    std::vector<std::vector<std::pair<int,int> > > &EdgeFaces) 
-{
+    const std::vector<Geo::Point3<ScalarType>> &Vert,
+    const std::vector<std::vector<int>> &Faces,
+    const std::vector<std::pair<int, int>> &Edges,
+    std::vector<std::vector<std::pair<int, int>>> &EdgeFaces) {
   EdgeFaces.clear();
-  if (Edges.size()==0)return;
-  std::map<std::pair<int,int>,std::vector<std::pair<int,int> > > EdgeMap;
-  FindEdgeFacesCorrespondences<ScalarType>(Vert,Faces,EdgeMap);
-  for (size_t i=0;i<Edges.size();i++)
-  {
-    assert(EdgeMap.count(Edges[i])>0);
+  if (Edges.size() == 0)
+    return;
+  std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> EdgeMap;
+  FindEdgeFacesCorrespondences<ScalarType>(Vert, Faces, EdgeMap);
+  for (size_t i = 0; i < Edges.size(); i++) {
+    assert(EdgeMap.count(Edges[i]) > 0);
     EdgeFaces.push_back(EdgeMap[Edges[i]]);
   }
 }
 
 template <class ScalarType>
 bool FindEdgePosCorrespondences(
-    const std::vector<Geo::Point3<ScalarType> > &Vert,
-    const std::vector<std::vector<int> > &Faces,
-    const std::vector<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &EdgePos,
-    std::vector<std::pair<int,int> > &EdgeIdx) 
-{
-  std::map<Geo::Point3<ScalarType>,int> VertIdx;
-  for (size_t i=0;i<Vert.size();i++)
-    VertIdx[Vert[i]]=i;
+    const std::vector<Geo::Point3<ScalarType>> &Vert,
+    const std::vector<std::vector<int>> &Faces,
+    const std::vector<
+        std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> &EdgePos,
+    std::vector<std::pair<int, int>> &EdgeIdx) {
+  std::map<Geo::Point3<ScalarType>, int> VertIdx;
+  for (size_t i = 0; i < Vert.size(); i++)
+    VertIdx[Vert[i]] = i;
 
   EdgeIdx.clear();
-  bool all_mapped=true;
-  for (size_t i=0;i<EdgePos.size();i++)
-  {
-    Geo::Point3<ScalarType> P0=EdgePos[i].first;
-    Geo::Point3<ScalarType> P1=EdgePos[i].second;
-    if (VertIdx.count(P0)==0)all_mapped=false;
-    if (VertIdx.count(P1)==0)all_mapped=false;
-    int IndexV0=VertIdx[P0];
-    int IndexV1=VertIdx[P1];
-    
-    EdgeIdx.push_back(std::pair<int,int>(std::min(IndexV0,IndexV1),
-                                         std::max(IndexV0,IndexV1)));
+  bool all_mapped = true;
+  for (size_t i = 0; i < EdgePos.size(); i++) {
+    Geo::Point3<ScalarType> P0 = EdgePos[i].first;
+    Geo::Point3<ScalarType> P1 = EdgePos[i].second;
+    if (VertIdx.count(P0) == 0)
+      all_mapped = false;
+    if (VertIdx.count(P1) == 0)
+      all_mapped = false;
+    int IndexV0 = VertIdx[P0];
+    int IndexV1 = VertIdx[P1];
+
+    EdgeIdx.push_back(std::pair<int, int>(std::min(IndexV0, IndexV1),
+                                          std::max(IndexV0, IndexV1)));
   }
   std::sort(EdgeIdx.begin(), EdgeIdx.end());
-  EdgeIdx.erase(std::unique(EdgeIdx.begin(), EdgeIdx.end()),
-                     EdgeIdx.end());
+  EdgeIdx.erase(std::unique(EdgeIdx.begin(), EdgeIdx.end()), EdgeIdx.end());
   return all_mapped;
 }
 
 template <class ScalarType>
 bool FindCloseEdgePosCorrespondences(
-    const std::vector<Geo::Point3<ScalarType> > &Vert,
-    const std::vector<std::vector<int> > &Faces,
-    const std::vector<std::pair<Geo::Point3<ScalarType>,Geo::Point3<ScalarType> > > &EdgePos,
-    std::vector<std::pair<int,int> > &EdgeIdx) 
-{
-  
+    const std::vector<Geo::Point3<ScalarType>> &Vert,
+    const std::vector<std::vector<int>> &Faces,
+    const std::vector<
+        std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> &EdgePos,
+    std::vector<std::pair<int, int>> &EdgeIdx) {
+
   // std::map<Geo::Point3<ScalarType>,int> VertIdx;
   // for (size_t i=0;i<Vert.size();i++)
   //   VertIdx[Vert[i]]=i;
@@ -213,31 +231,33 @@ bool FindCloseEdgePosCorrespondences(
   PointSpatial.Init(Vert);
 
   EdgeIdx.clear();
-  ScalarType Thr=0.000001;
-  bool all_mapped=true;
-  for (size_t i=0;i<EdgePos.size();i++)
-  {
-    Geo::Point3<ScalarType> P0=EdgePos[i].first;
-    Geo::Point3<ScalarType> P1=EdgePos[i].second;
-    int IndexV0=-1;
-    bool found0=PointSpatial.GridClosest(Vert, P0,Thr,IndexV0);
-    
-    int IndexV1=-1;
-    bool found1=PointSpatial.GridClosest(Vert, P1,Thr,IndexV1);
-    
-    if (!found1)all_mapped=false;
-    if (!found0)all_mapped=false;
-    if (IndexV0==-1)all_mapped=false;
-    if (IndexV1==-1)all_mapped=false;
-    
-    EdgeIdx.push_back(std::pair<int,int>(std::min(IndexV0,IndexV1),
-                                         std::max(IndexV0,IndexV1)));
+  ScalarType Thr = 0.000001;
+  bool all_mapped = true;
+  for (size_t i = 0; i < EdgePos.size(); i++) {
+    Geo::Point3<ScalarType> P0 = EdgePos[i].first;
+    Geo::Point3<ScalarType> P1 = EdgePos[i].second;
+    int IndexV0 = -1;
+    bool found0 = PointSpatial.GridClosest(Vert, P0, Thr, IndexV0);
+
+    int IndexV1 = -1;
+    bool found1 = PointSpatial.GridClosest(Vert, P1, Thr, IndexV1);
+
+    if (!found1)
+      all_mapped = false;
+    if (!found0)
+      all_mapped = false;
+    if (IndexV0 == -1)
+      all_mapped = false;
+    if (IndexV1 == -1)
+      all_mapped = false;
+
+    EdgeIdx.push_back(std::pair<int, int>(std::min(IndexV0, IndexV1),
+                                          std::max(IndexV0, IndexV1)));
   }
   std::sort(EdgeIdx.begin(), EdgeIdx.end());
-  EdgeIdx.erase(std::unique(EdgeIdx.begin(), EdgeIdx.end()),
-                     EdgeIdx.end());
+  EdgeIdx.erase(std::unique(EdgeIdx.begin(), EdgeIdx.end()), EdgeIdx.end());
   return all_mapped;
 }
 
-};
+}; // namespace Geo
 #endif

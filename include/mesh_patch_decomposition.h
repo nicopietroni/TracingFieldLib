@@ -60,6 +60,7 @@
 #include <patch_side_discretization.h>
 
 #include "edge_mesh_functions.h"
+#include "math_utils.h"
 #include "mesh_mapping.h"
 #include "polyline3.h"
 #include "smooth_mesh.h"
@@ -148,6 +149,8 @@ template <class ScalarType> class MeshPatchDecomposition {
     // PDeco.InitBorderVertType();
 
     // initialise the decomposer
+    PDeco.final_removal = final_removal;
+    PDeco.test_remove_only_once = test_remove_only_once;
     PDeco.Init();
     PatchM.CheckConsistentData();
 
@@ -207,10 +210,10 @@ template <class ScalarType> class MeshPatchDecomposition {
 
     // get the "false border" vertices which are the one NewBorder but not
     // PatchM.ModSameBVert
-    
+
     std::set<int> SplitNewB(PatchM.ModSameBVert.begin(),
                             PatchM.ModSameBVert.end());
-   
+
     FalseBorder.clear();
     for (size_t i = 0; i < NewBorder.size(); i++) {
       if (SplitNewB.count(NewBorder[i]) > 0)
@@ -218,7 +221,7 @@ template <class ScalarType> class MeshPatchDecomposition {
       FalseBorder.push_back(NewBorder[i]);
     }
 
-    PDeco.AvoidArriveTo=FalseBorder;
+    PDeco.AvoidArriveTo = FalseBorder;
 
     // std::vector<Geo::Point3<ScalarType>> FalseBorderPos;
     // for (size_t i = 0; i < FalseBorder.size(); i++) {
@@ -228,8 +231,8 @@ template <class ScalarType> class MeshPatchDecomposition {
     //   FalseBorderPos.push_back(TriVertPos[IndexV]);
     // }
     // WriteOBJ("TestSplitCorner.obj", TriVertPos, TriConnectivity);
-    // WriteOBJ("FalseBorder.obj", FalseBorderPos, std::vector<std::vector<int>>());
-    // exit(0);
+    // WriteOBJ("FalseBorder.obj", FalseBorderPos,
+    // std::vector<std::vector<int>>()); exit(0);
     UpdateAfterRemesh();
   }
 
@@ -251,7 +254,17 @@ template <class ScalarType> class MeshPatchDecomposition {
 
     Geo::PatchOptimize<ScalarType>::SmoothPaths(TriVertPos, TriConnectivity,
                                                 VertPaths, TriFeatures);
-
+    
+    // std::vector<Geo::Point3<ScalarType>> EdgeMeshVertPos;
+    // std::vector<std::vector<int>> ConnectivityEdges;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromIdxSequences(
+    //   TriVertPos,
+    //   VertPaths,
+    //   EdgeMeshVertPos,
+    //   ConnectivityEdges);
+    // WriteOBJ("EdgeMesh.obj", EdgeMeshVertPos, ConnectivityEdges);
+    // WriteOBJ("SmoothedPaths.obj", TriVertPos, TriConnectivity);
+    // exit(0);
     ComputeNormals(TriVertPos, TriConnectivity, TriFaceNormals, TriVertNormals);
 
     // update cross F poistion
@@ -261,6 +274,13 @@ template <class ScalarType> class MeshPatchDecomposition {
     AdaptFieldToMesh(TriVertPos, TriConnectivity, VertCurv, FaceCurv);
 
     PatchM.UpdateSubPatchPos();
+
+    // std::vector<Geo::Point3<ScalarType>> TestVertPos;
+    // std::vector<std::vector<int>> TestConnectivity;
+    // PatchM.ComposeMeshFromPatches(TestVertPos, TestConnectivity);
+    // WriteOBJ("TestPatchMesh.obj", TestVertPos, TestConnectivity);
+    // WriteOBJ("TestAllMesh.obj", TriVertPos, TriConnectivity);
+    // exit(0);
     PatchM.InitVisualCornersEdges();
   }
 
@@ -285,16 +305,14 @@ template <class ScalarType> class MeshPatchDecomposition {
     // }
   }
 
-  
-
   void InitDefaultDualParameters() {
     DualParam.OnlyNonQuad = false;
     DualParam.InitSingPos = true;
     DualParam.FixSingPos = false;
     DualParam.JointBorder = true;
     DualParam.MaxIte = 50;
-    DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_ARAP;
-    //RT_UVDist_Tutte, RT_UVDist_LSC, RT_UVDist_ARAP, RT_CCability
+    DualParam.RType = Geo::PrimalParamType::RT_UVDist_ARAP;
+    // RT_UVDist_Tutte, RT_UVDist_LSC, RT_UVDist_ARAP, RT_CCability
   }
 
   // void UpdateQuadFeatures() {
@@ -332,7 +350,7 @@ template <class ScalarType> class MeshPatchDecomposition {
   // }
 
   void InitializeData() {
-   
+
     if (print_info)
       std::cout << "*** INITIALIZATION *** " << std::endl;
     InitMesh();
@@ -340,18 +358,20 @@ template <class ScalarType> class MeshPatchDecomposition {
 
     if (print_info)
       std::cout << "*** REFINE AND SPLIT *** " << std::endl;
-    
+
     auto start = std::chrono::high_resolution_clock::now();
     PreprocessMesh();
     auto end0 = std::chrono::high_resolution_clock::now();
     auto elapsed0 =
         std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
-        
+
     if (print_info)
-       std::cout << "*** INIT GRAPHS *** " << std::endl;
+      std::cout << "*** INIT GRAPHS *** " << std::endl;
 
     InitGraph();
 
+    AddPrioritySampleVert();
+    
     InitPatches();
   }
 
@@ -360,6 +380,7 @@ template <class ScalarType> class MeshPatchDecomposition {
     PDeco.add_only_where_needed = true;
     PDeco.stop_when_solved = true;
 
+    PDeco.dynamic_smooth = true;
     PDeco.BatchDecompose(remove_batch);
 
     SmoothPaths();
@@ -389,13 +410,18 @@ public:
   bool dynamicUpdates;
   bool dynamicSmoothing;
   int num_samples;
+  bool final_removal;
+  bool test_remove_only_once;
+
+  std::vector<Geo::Point3<ScalarType> > PrioritySamplePos;
+  std::vector<Geo::Point3<ScalarType> > PrioritySampleDir;
 
   void ExtractDualPatches(std::vector<Geo::Point3<ScalarType>> &DualVertPos,
-  std::vector<std::vector<int>> &DualConnectivity) {
+                          std::vector<std::vector<int>> &DualConnectivity) {
     RestoreOriginalPosOnSplitBorders();
     Geo::DualPatch<ScalarType>::DisambiguateForDual(PatchM);
 
-    typename Geo::DualPatch<ScalarType>::PrimalPatchData PData;
+    typename Geo::PrimalPatchData<ScalarType> PData;
     PData.PatchFaces = PatchM.PData.SubPatchFaces;
     PData.PatchVertPos = PatchM.PData.SubPatchVertPos;
     PData.PatchCorners = PatchM.PData.PatchCorners;
@@ -409,12 +435,11 @@ public:
     std::vector<std::vector<int>> PerDualPatchFaceIDX;
     std::vector<std::vector<int>> PerDualPatchCornerIDX;
 
-    int num_problematic_patches =
-    Geo::DualPatch<ScalarType>::ExtractDual(
+    int num_problematic_patches = Geo::DualPatch<ScalarType>::ExtractDual(
         PData, DualParam, DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
         PerDualPatchCornerIDX);
 
-    //has_problematic_patches|=(num_problematic_patches!=0);
+    // has_problematic_patches|=(num_problematic_patches!=0);
 
     std::vector<int> PrimalCorners;
     Geo::DualPatch<ScalarType>::RetrieveDualFeatures(
@@ -485,12 +510,13 @@ public:
     match_sing_cond = true;
     prefer_feature_features = true;
     split_removal = false;
-    print_info = false;
-    
+    print_info = true;
+
     MinSides = 3;
     MaxSides = 6;
     CCAbility = -1;
-
+    final_removal = false;
+    test_remove_only_once = true;
     InitDefaultDualParameters();
   }
 
@@ -526,7 +552,8 @@ public:
     ExtractPatches(VertPaths);
     PatchM.GetVertexPaths(VertPaths);
     PatchM.GetAllSideGlobalEdges(PathBoundaries);
-
+  
+    
     // get all original boundaries
     std::vector<std::pair<int, int>> BorderEdges;
     Geo::getBorderEdges(TriConnectivity, BorderEdges);
@@ -548,31 +575,52 @@ public:
 
     std::vector<std::pair<int, int>> BorderEdges;
     Geo::getBorderEdges(TriConnectivity, BorderEdges);
-                        
-    Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgePairFromIdxSequences(VertPaths,Paths);
-  
+
+    Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgePairFromIdxSequences(
+        VertPaths, Paths);
+
     Paths.push_back(BorderEdges);
 
     PatchM.GetAllCorners(PathCorners);
+
+
+    std::vector<Geo::Point3<ScalarType>> EdgeMeshVertPos;
+    std::vector<std::vector<int>> ConnectivityEdges;
+    // Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgeMeshFromIdxSequences(
+    //   TriVertPos,
+    //   VertPaths,
+    //   EdgeMeshVertPos,
+    //   ConnectivityEdges);
+    // WriteOBJ("SmoothedPaths.obj", TriVertPos, TriConnectivity);
+    // exit(0);
+    // std::vector<Geo::Point3<ScalarType>> TestVertPos;
+    // std::vector<std::vector<int>> TestConnectivity;
+    // PatchM.ComposeMeshFromPatches(TestVertPos, TestConnectivity);
+    // WriteOBJ("TestPatchMeshDE.obj", TestVertPos, TestConnectivity);
+    // WriteOBJ("TestAllMeshDE.obj", TriVertPos, TriConnectivity);
+    // exit(0);
   }
 
-  //return for each patch for each side the vertex path
-  void GetSidesVertIdx(std::vector<std::vector<std::vector<int>>> &PatchSidesVertIdx)const  {
+  // return for each patch for each side the vertex path
+  void GetSidesVertIdx(
+      std::vector<std::vector<std::vector<int>>> &PatchSidesVertIdx) const {
     PatchM.GetAllSideVertGlobal(PatchSidesVertIdx);
   }
 
-  void GetAllSidesPos(std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> &PatchSidesPos)const  {
-    std::vector<std::vector<std::vector<int>>>  PatchSidesVertIdx;
+  void
+  GetAllSidesPos(std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+                     &PatchSidesPos) const {
+    std::vector<std::vector<std::vector<int>>> PatchSidesVertIdx;
     PatchM.GetAllSideVertGlobal(PatchSidesVertIdx);
     PatchSidesPos.clear();
-    for (size_t i=0;i<PatchSidesVertIdx.size();i++) {
+    for (size_t i = 0; i < PatchSidesVertIdx.size(); i++) {
       std::vector<std::vector<Geo::Point3<ScalarType>>> PatchSidePos;
-      for (size_t j=0;j<PatchSidesVertIdx[i].size();j++) {
+      for (size_t j = 0; j < PatchSidesVertIdx[i].size(); j++) {
         std::vector<Geo::Point3<ScalarType>> SidePos;
-        for (size_t k=0;k<PatchSidesVertIdx[i][j].size();k++) {
-          int IndexV=PatchSidesVertIdx[i][j][k];
-          assert(IndexV>=0);
-          assert(IndexV<TriVertPos.size());
+        for (size_t k = 0; k < PatchSidesVertIdx[i][j].size(); k++) {
+          int IndexV = PatchSidesVertIdx[i][j][k];
+          assert(IndexV >= 0);
+          assert(IndexV < TriVertPos.size());
           SidePos.push_back(TriVertPos[IndexV]);
         }
         PatchSidePos.push_back(SidePos);
@@ -581,18 +629,367 @@ public:
     }
   }
 
-  void GetAllSidesPolyLines(std::vector<Geo::Polyline3<ScalarType>> &AllPolyLines)const  {
-    std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> PatchSidesPos;
+  void GetAllSidesPolyLines(
+      std::vector<Geo::Polyline3<ScalarType>> &AllPolyLines) const {
+    std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+        PatchSidesPos;
     GetAllSidesPos(PatchSidesPos);
     AllPolyLines.clear();
-    for (size_t i=0;i<PatchSidesPos.size();i++) {
-      for (size_t j=0;j<PatchSidesPos[i].size();j++) {
+    for (size_t i = 0; i < PatchSidesPos.size(); i++) {
+      for (size_t j = 0; j < PatchSidesPos[i].size(); j++) {
         Geo::Polyline3<ScalarType> PL;
-        PL.PolyPos=PatchSidesPos[i][j];
+        PL.PolyPos = PatchSidesPos[i][j];
         AllPolyLines.push_back(PL);
       }
     }
   }
 
+  void
+  GetPathsPolylines(std::vector<std::vector<int>> &VertPaths,
+                    std::vector<std::vector<int>> &VertDirs,
+                    std::vector<Geo::Polyline3<ScalarType>> &Polylines) const {
+    PatchM.GetVertexFieldPaths(VertPaths, VertDirs);
+    Polylines.clear();
+
+    for (size_t i = 0; i < VertPaths.size(); i++) {
+      Geo::Polyline3<ScalarType> CurrPolyLoop;
+      for (size_t j = 0; j < VertPaths[i].size(); j++) {
+        int IndexV = VertPaths[i][j];
+        assert(IndexV >= 0);
+        assert(IndexV < TriVertPos.size());
+        Geo::Point3<ScalarType> CurrPos = TriVertPos[IndexV];
+        CurrPolyLoop.AddPoint(CurrPos);
+      }
+      Polylines.push_back(CurrPolyLoop);
+    }
+  }
+
+  void GetPathsEdgeMesh(std::vector<Geo::Point3<ScalarType>> &EdgeMeshPos,
+                        std::vector<std::pair<int, int>> &Edges,
+                        std::vector<int> &OrigVertPaths,
+                        std::vector<int> &FieldDir,
+                        const ScalarType &SplitAngle) const {
+    OrigVertPaths.clear();
+    FieldDir.clear();
+
+    PatchM.GetPathEdgeMesh(EdgeMeshPos, Edges, OrigVertPaths, FieldDir,
+                           SplitAngle);
+
+    // Geo::EdgeMeshFunctions<ScalarType>::SmoothStep(EdgeMeshPos, Edges);
+    // WriteOBJ("testDE.obj", EdgeMeshPos, Edges);
+    // exit(0);
+  }
+
+  void GetPathsEdgeMeshWithCurvature(
+      std::vector<Geo::Point3<ScalarType>> &EdgeMeshPos,
+      std::vector<std::pair<int, int>> &Edges, const ScalarType CurvKernel,
+      std::vector<ScalarType> &EdgeCurv, const ScalarType &SplitAngle) const {
+    std::vector<int> OrigVertPaths;
+    std::vector<int> FieldDir;
+    GetPathsEdgeMesh(EdgeMeshPos, Edges, OrigVertPaths, FieldDir, SplitAngle);
+
+    std::vector<Geo::Point3<ScalarType>> VertNorm;
+    Geo::EdgeMeshFunctions<ScalarType>::ComputeSignedCurvatureAngle(
+        EdgeMeshPos, VertNorm, Edges, CurvKernel, EdgeCurv);
+  }
+
+  void GetCurvatureChangeClusters(
+      const ScalarType CurvKernel, const ScalarType &SplitAngle,
+      const ScalarType CurvatureChangeClusters,
+      std::vector<Geo::Point3<ScalarType>> &EdgeMeshPos,
+      std::vector<std::pair<int, int>> &Edges,
+      std::vector<ScalarType> &EdgeCurv, std::vector<int> &EdgeCluster) const {
+
+    // compute the curvature on the edge mesh
+    GetPathsEdgeMeshWithCurvature(EdgeMeshPos, Edges, CurvKernel, EdgeCurv,
+                                  SplitAngle);
+
+    // get the edges that composes the polyline
+    std::vector<std::vector<int>> PolylinesE;
+    std::vector<bool> IsLoop;
+    Geo::EdgeMeshFunctions<ScalarType>::ExtractEdgePolylines(Edges, PolylinesE,
+                                                             IsLoop);
+
+    EdgeCluster.resize(Edges.size(), -1);
+    int CurrCluster = 0;
+    for (size_t i = 0; i < PolylinesE.size(); i++) {
+
+      std::vector<ScalarType> CurvCurrPolyL;
+      for (size_t j = 0; j < PolylinesE[i].size(); j++) {
+        int IndexE = PolylinesE[i][j];
+        ScalarType Curv = EdgeCurv[IndexE];
+        CurvCurrPolyL.push_back(Curv);
+      }
+
+      std::vector<std::vector<int>> Clusters;
+      Geo::ClusterValuesHysteresis<ScalarType>(
+          CurvCurrPolyL, IsLoop[i], CurvatureChangeClusters, Clusters);
+      // Geo::RefineClusterLloyd<ScalarType>(CurvCurrPolyL, IsLoop[i],
+      // Clusters);
+
+      for (size_t j = 0; j < Clusters.size(); j++) {
+        for (size_t k = 0; k < Clusters[j].size(); k++) {
+          int IndexE = PolylinesE[i][Clusters[j][k]];
+          EdgeCluster[IndexE] = j + CurrCluster;
+        }
+      }
+      CurrCluster += Clusters.size();
+    }
+  }
+
+  void GetCurvatureChangeClustersNodeDirection(
+      const ScalarType CurvKernel, const ScalarType &SplitAngle,
+      const ScalarType CurvatureChangeClusters,
+      std::vector<Geo::Point3<ScalarType>> &EdgeMeshPos,
+      std::vector<std::pair<int, int>> &Edges,
+      std::vector<ScalarType> &EdgeCurv, std::vector<int> &EdgeCluster,
+      std::vector<Geo::Point3<ScalarType>> &CrossVertex, 
+      std::vector<Geo::Point3<ScalarType>> &CrossDir) {
+
+    CrossVertex.clear();
+    CrossDir.clear();
+    GetCurvatureChangeClusters(CurvKernel, SplitAngle, CurvatureChangeClusters,
+                               EdgeMeshPos, Edges, EdgeCurv, EdgeCluster);
+
+    //get the vertex paths
+    std::vector<std::vector<int>> VertPaths;
+    std::vector<std::vector<int>> VertDirs;
+
+    PatchM.GetVertexFieldPaths(VertPaths, VertDirs);
+
+    //then add to a map
+    std::vector<int> VerteMap;
+    Geo::FindVertCorrespondences<ScalarType>(EdgeMeshPos,TriVertPos,VerteMap);
+
+    //get the VE adjacency
+    std::vector<std::vector<int>> VEAdj,VEAdjIndex;
+    Geo::getVEAdjacency(Edges,VEAdj,VEAdjIndex);
+
+    //then for each vertex
+    for (size_t i=0;i<VEAdj.size();i++)
+    {
+      if (VEAdj[i].size()!=2)continue;//either an endpoint or a brench
+      
+      int IndexE0=VEAdj[i][0];
+      int IndexE1=VEAdj[i][1];
+      int Cluster0=EdgeCluster[IndexE0];
+      int Cluster1=EdgeCluster[IndexE1];
+      if (Cluster0==Cluster1)continue;//not a curvature change point
+      assert(IndexE0>=0);
+      assert(IndexE1>=0);
+      assert(IndexE0<Edges.size());
+      assert(IndexE1<Edges.size());
+      std::vector<int> NonSharedV;
+      NonSharedVert(Edges[IndexE0],Edges[IndexE1],NonSharedV);
+      if (NonSharedV.size()!=2)
+      {
+        std::cout<<"Structural problem on the Edge mesh"<<std::endl;
+        exit(0);
+      }
+      int OrigV= VerteMap[i];
+      assert(OrigV>=0);
+      assert(OrigV<VertCurv.size());
+      //CrossVertex.push_back(OrigV);
+
+      CrossVertex.push_back(EdgeMeshPos[i]);
+
+      int IndexV0=NonSharedV[0];
+      int IndexV1=NonSharedV[1];
+      Geo::Point3<ScalarType> Dir=EdgeMeshPos[IndexV0]-EdgeMeshPos[IndexV1];
+      Dir.Normalize();
+      int IndexDir=VertCurv[OrigV].BestDirectionI(Dir);
+      //then go to the orthogonal direction
+      IndexDir=(IndexDir+1)%4;
+      assert(IndexDir>=0);
+      assert(IndexDir<4);
+      CrossDir.push_back(VertCurv[OrigV].GetDirection(IndexDir));
+    }
+  }
+
+  void AddPrioritySampleVert()
+  {
+    if (PrioritySamplePos.size()==0)return;
+    if (PrioritySamplePos.size()!=PrioritySampleDir.size())return;
+    
+    std::vector<int> VerteMap;
+    FindClosestVertCorrespondences<ScalarType>(PrioritySamplePos,TriVertPos,VerteMap);
+
+    PathSampl.PrioritySampleVert.clear();
+    PathSampl.PrioritySampleDir.clear();
+
+    for (size_t i=0;i<VerteMap.size();i++)
+    {
+      int IndexV=VerteMap[i];
+      if (IndexV<0)continue;
+      assert(IndexV>0);
+      assert(IndexV<TriVertPos.size());
+      assert(IndexV<VertCurv.size());
+      int IndexDir=VertCurv[IndexV].BestDirectionI(PrioritySampleDir[i]);
+      PathSampl.PrioritySampleVert.push_back(IndexV);
+      PathSampl.PrioritySampleDir.push_back(IndexDir);
+    }
+
+  }
+  // void GetPathsPolylinesWithCurvature(std::vector<std::vector<int>>
+  // &VertPaths,
+  //                                     std::vector<std::vector<int>>
+  //                                     &VertDirs,
+  //                                     std::vector<Geo::Polyline3<ScalarType>>
+  //                                     &Polylines,
+  //                                     std::vector<std::vector<ScalarType>>
+  //                                     &EdgeAngles, int SmoothSteps)const
+  // {
+  //   VertPaths.clear();
+  //   VertDirs.clear();
+
+  //   //find the excluding points
+  //   std::set<int> ExcludeVertSet;
+  //   std::vector<int> CornerVert;
+  //   PatchM.GetAllCorners(CornerVert);
+  //   std::set<int> CornerVertSet(CornerVert.begin(), CornerVert.end());
+  //   for (size_t i=0;i<RemainingF.size();i++)
+  //   {
+  //     int IndexV0=RemainingF[i].first;
+  //     int IndexV1=RemainingF[i].second;
+  //     if (CornerVertSet.count(IndexV0)>0)ExcludeVertSet.insert(IndexV0);
+  //     if (CornerVertSet.count(IndexV1)>0)ExcludeVertSet.insert(IndexV1);
+  //   }
+
+  //   GetPathsPolylines(VertPaths, VertDirs, Polylines);
+  //   EdgeAngles.clear();
+  //   for (size_t i=0;i<VertPaths.size();i++)
+  //   {
+  //     std::set<int> ExcludeLocalSet;
+  //     for (size_t j=0;j<VertPaths[i].size();j++)
+  //     {
+  //       int IndexV=VertPaths[i][j];
+  //       assert(IndexV>=0);
+  //       assert(IndexV<TriVertPos.size());
+  //       if (ExcludeVertSet.count(IndexV)>0)ExcludeLocalSet.insert(j);
+  //     }
+
+  //     std::vector<ScalarType> CurrEdgeAngles;
+  //     Polylines[i].ComputeEdgeAngles(CurrEdgeAngles,ExcludeLocalSet,SmoothSteps);
+  //     EdgeAngles.push_back(CurrEdgeAngles);
+  //   }
+  // }
+
+  // void GetCurvatureChangeNodes(std::vector<int> &CurvChangeNodes,
+  //                              std::vector<Geo::Polyline3<ScalarType>>
+  //                              &Polylines,
+  //                              std::vector<std::vector<ScalarType>>
+  //                              &EdgeAngles, int SmoothSteps, ScalarType
+  //                              AngleThr)const
+  // {
+  //   std::vector<std::vector<int>> VertPaths;
+  //   std::vector<std::vector<int>> VertDirs;
+
+  //   Polylines.clear();
+  //   EdgeAngles.clear();
+  //   GetPathsPolylinesWithCurvature(VertPaths,VertDirs,Polylines, EdgeAngles,
+  //   SmoothSteps);
+
+  //   for (size_t i=0;i<EdgeAngles.size();i++)
+  //   {
+  //     Geo::Polyline3<ScalarType> &CurrPolyLoop = Polylines[i];
+  //     bool IsLoop = (CurrPolyLoop.PolyPos.front() ==
+  //     CurrPolyLoop.PolyPos.back()); std::vector<std::vector<int>> Clusters;
+  //     Geo::ClusterValues<ScalarType>(EdgeAngles[i], IsLoop, AngleThr,
+  //     Clusters);
+
+  //     if (Clusters.size()==1)continue;
+
+  //     std::vector<int> CurvChangeNodesLoop;
+  //     for (size_t j=0;j<Clusters.size()-1;j++){
+  //       int LastClusterIdx=Clusters[j].back();
+  //       int LastIdx=VertPaths[i][LastClusterIdx];
+  //       CurvChangeNodesLoop.push_back(LastIdx);
+  //     }
+  //     if (IsLoop) {
+  //       int LastClusterIdx=Clusters.back().back();
+  //       int LastIdx=VertPaths[i][LastClusterIdx];
+  //       CurvChangeNodesLoop.push_back(LastIdx);
+  //     }
+
+  //     CurvChangeNodes.insert(CurvChangeNodes.end(),
+  //     CurvChangeNodesLoop.begin(), CurvChangeNodesLoop.end());
+  //   }
+  //   std::cout<<"Found "<<CurvChangeNodes.size()<<" curvature change nodes
+  //   with angle threshold "<<AngleThr<<std::endl;
+  // }
+
+  // void GetCurvatureChangeNodes(std::vector<Geo::Point3<ScalarType>>
+  // &CurvChangePos,
+  //                             std::vector<Geo::Polyline3<ScalarType>>
+  //                             &Polylines,
+  //                              std::vector<std::vector<ScalarType>>
+  //                              &EdgeAngles, int SmoothSteps,ScalarType
+  //                              AngleThr)const
+  // {
+  //   std::vector<int> CurvChangeNodes;
+  //   GetCurvatureChangeNodes(CurvChangeNodes, Polylines, EdgeAngles,
+  //   SmoothSteps, AngleThr); CurvChangePos.clear(); for (size_t
+  //   i=0;i<CurvChangeNodes.size();i++)
+  //   {
+  //     int IndexV=CurvChangeNodes[i];
+  //     assert(IndexV>=0);
+  //     assert(IndexV<TriVertPos.size());
+  //     CurvChangePos.push_back(TriVertPos[IndexV]);
+  //   }
+  // }
+
+  // void GetCurvatureChangeNodes(std::vector<int> &CurvChangeNodes,
+  //                              int SmoothSteps=3,
+  //                              ScalarType AngleThr=30)const
+  // {
+  //   std::vector<std::vector<int>> VertPaths;
+  //   std::vector<std::vector<int>> VertDirs;
+
+  //   PatchM.GetVertexFieldPaths(VertPaths, VertDirs);
+
+  //   CurvChangeNodes.clear();
+  //   std::vector<Geo::Polyline3<ScalarType>> Polylines;
+  //   GetPathsPolylines(VertPaths, VertDirs, Polylines);
+
+  //   for (size_t i=0;i<VertPaths.size();i++)
+  //   {
+  //     Geo::Polyline3<ScalarType> &CurrPolyLoop = Polylines[i];
+  //     std::vector<std::vector<int>> Clusters;
+  //     CurrPolyLoop.ClusterEdgesByCurvature(SmoothSteps,AngleThr, Clusters);
+  //     if (Clusters.size()==1)continue;
+  //     std::vector<int> CurvChangeNodesLoop;
+  //     bool IsLoop = (CurrPolyLoop.PolyPos.front() ==
+  //     CurrPolyLoop.PolyPos.back()); for (size_t j=0;j<Clusters.size()-1;j++){
+  //       int LastClusterIdx=Clusters[j].back();
+  //       int LastIdx=VertPaths[i][LastClusterIdx];
+  //       CurvChangeNodesLoop.push_back(LastIdx);
+  //     }
+  //     if (IsLoop) {
+  //       int LastClusterIdx=Clusters.back().back();
+  //       int LastIdx=VertPaths[i][LastClusterIdx];
+  //       CurvChangeNodesLoop.push_back(LastIdx);
+  //     }
+  //     CurvChangeNodes.insert(CurvChangeNodes.end(),
+  //     CurvChangeNodesLoop.begin(), CurvChangeNodesLoop.end());
+  //   }
+  //   std::cout<<"Found "<<CurvChangeNodes.size()<<" curvature change nodes
+  //   with angle threshold "<<AngleThr<<std::endl;
+  // }
+
+  // void GetCurvatureChangeNodes(std::vector<Geo::Point3<ScalarType>>
+  // &CurvChangePos,
+  //                              ScalarType AngleThr=30)const
+  // {
+  //   std::vector<int> CurvChangeNodes;
+  //   GetCurvatureChangeNodes(CurvChangeNodes, AngleThr);
+  //   CurvChangePos.clear();
+  //   for (size_t i=0;i<CurvChangeNodes.size();i++)
+  //   {
+  //     int IndexV=CurvChangeNodes[i];
+  //     assert(IndexV>=0);
+  //     assert(IndexV<TriVertPos.size());
+  //     CurvChangePos.push_back(TriVertPos[IndexV]);
+  //   }
+  // }
 };
 #endif

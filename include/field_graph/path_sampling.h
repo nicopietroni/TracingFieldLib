@@ -34,8 +34,8 @@
 #include <cstddef>
 #include <iostream>
 #include <ostream>
-//#include <sys/_types/_size_t.h>
-#include <cstddef>   // C++
+// #include <sys/_types/_size_t.h>
+#include <cstddef> // C++
 #include <utility>
 #include <vector>
 #define VERT_MARK_SIZE 2
@@ -111,6 +111,9 @@ public:
   std::vector<SP_Status> SampledPaths_Status;
   std::vector<std::pair<ScalarType, int>> Candidates;
 
+  std::vector<int> PrioritySampleVert;
+  std::vector<int> PrioritySampleDir;
+
   enum PriorityType { PrioLen, PrioLenW, PrioDist };
   PriorityType PType;
 
@@ -170,7 +173,7 @@ public:
 
   std::vector<int> FilterDisableVert;
   std::vector<int> FilterDisableN;
-  double TimeUpdateDist[4]={0,0,0,0};
+  double TimeUpdateDist[4] = {0, 0, 0, 0};
 
   Geo::TracingGraph<ScalarType> &Graph() const { return TGraph; }
 
@@ -334,8 +337,8 @@ public:
 
   //   SampledVert.clear();
   //   Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(
-  //       VertPos.size(), Connectivity, RadiusStar, MinBorderSample, SampledVert,
-  //       &SampleableV);
+  //       VertPos.size(), Connectivity, RadiusStar, MinBorderSample,
+  //       SampledVert, &SampleableV);
 
   //   std::vector<int> ForcedV;
   //   GetForcedSampleVert(ForcedV);
@@ -358,7 +361,8 @@ public:
   //   //   {
   //   //     if (s >= SelectedPaths[i].size())
   //   //       break;
-  //   //     int IndexV = Field::CrossFieldGraph::ElemOfNode(SelectedPaths[i][s]);
+  //   //     int IndexV =
+  //   Field::CrossFieldGraph::ElemOfNode(SelectedPaths[i][s]);
   //   //     assert(IndexV < VertPos.size());
   //   //     assert(IndexV >= 0);
   //   //     // if (!SampleableV[IndexV])continue;
@@ -371,16 +375,20 @@ public:
   //   //  {
   //   //      std::vector<int> MarkedV;
   //   //      GetMarkedVert(IndexMark,MarkedV);
-  //   //      //           std::cout<<" There are "<< MarkedV.size()<<"places to
+  //   //      //           std::cout<<" There are "<< MarkedV.size()<<"places
+  //   to
   //   //      sample "<<std::endl;
   //   //      //RadiusStar=MarkedV.size()/NumSources;
-  //   //      RadiusStar=Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(MarkedV.size(),NumSources);
-  //   //      Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,
-  //   //                                                             RadiusStar,4,SampledVert,&MarkedV);
+  //   //
+  //   RadiusStar=Geo::MeshSampling<ScalarType>::EsteemSamplingRadius(MarkedV.size(),NumSources);
+  //   //
+  //   Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,
+  //   // RadiusStar,4,SampledVert,&MarkedV);
   //   //  }
   //   //  else
-  //   //      Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,
-  //   //                                                             RadiusStar,4,SampledVert);
+  //   //
+  //   Geo::MeshSampling<ScalarType>::SampleWithBorderRegular(VertPos.size(),Connectivity,
+  //   // RadiusStar,4,SampledVert);
   // }
 
   void SampleTracingVert(int NumSources, std::vector<int> &SampledVert,
@@ -515,8 +523,71 @@ public:
     return true;
   }
 
-  void FindSampledNodesFromVertex(const std::vector<int> &SampledVert,
-                                  std::vector<int> &SelectedNodes) {
+  // void FindSampledNodesFromVertex(const std::vector<int> &SampledVert,
+  //                                 std::vector<int> &SelectedNodes) {
+  //   SelectedNodes.clear();
+  //   std::set<int> SingSetId;
+
+  //   if (avoidSingularities)
+  //     SingSetId.insert(SingIndex.begin(), SingIndex.end());
+
+  //   // get nodes from sampled vertices
+  //   for (size_t i = 0; i < SampledVert.size(); i++) {
+  //     // not start tracing from singularities
+  //     if (avoidSingularities)
+  //       if (SingSetId.count(SampledVert[i]) > 0)
+  //         continue;
+
+  //     // then get possible tracing nodes
+  //     std::vector<int> IndexN;
+  //     Field::CrossFieldGraph::NodesOfElem(SampledVert[i], IndexN);
+
+  //     // get only one per direction (the one with more neigh)
+  //     int StartN[2] = {-1, -1};
+  //     int NumNeigh[2] = {-1, -1};
+  //     for (size_t j = 0; j < IndexN.size(); j++) {
+  //       // if (AddedDir2[j%2]==true)continue;//already added in this or
+  //       opposite
+  //       // dir
+  //       if (!IsTraceable(IndexN[j]))
+  //         continue; // if not traceable then skip
+  //       if (ConflictNodes.count(IndexN[j]) > 0)
+  //         continue; // if conflict that node than skip
+  //       // check at the end
+  //       if (!CanStartFrom(IndexN[j]))
+  //         continue;
+
+  //       int NumNeghTest = TGraph.NeighSize(IndexN[j]);
+  //       // if (IndexMark!=-1)
+  //       //     NumNeghTest=(NumMarkedNeigh(IndexN[j],IndexMark));
+
+  //       // no neighbour continue
+  //       if (NumNeghTest == 0)
+  //         continue;
+
+  //       // in case is dart ortho add boths
+  //       if (TGraph.NodeType(IndexN[j]) == DartOrthoDomain) {
+  //         SelectedNodes.push_back(IndexN[j]);
+  //         continue;
+  //       }
+
+  //       int IndexM2 = (j % 2);
+  //       if (NumNeigh[IndexM2] > NumNeghTest)
+  //         continue;
+
+  //       NumNeigh[IndexM2] = NumNeghTest;
+  //       StartN[IndexM2] = IndexN[j];
+  //     }
+  //     if (StartN[0] != -1)
+  //       SelectedNodes.push_back(StartN[0]);
+  //     if (StartN[1] != -1)
+  //       SelectedNodes.push_back(StartN[1]);
+  //   }
+  // }
+
+  void FindSampledNodesFromVertex(
+      const std::vector<int> &SampledVert, std::vector<int> &SelectedNodes,
+      const std::vector<int> &SampledCrossdir = std::vector<int>()) {
     SelectedNodes.clear();
     std::set<int> SingSetId;
 
@@ -532,8 +603,13 @@ public:
 
       // then get possible tracing nodes
       std::vector<int> IndexN;
-      Field::CrossFieldGraph::NodesOfElem(SampledVert[i], IndexN);
-
+      if (SampledCrossdir.size() != SampledVert.size())
+        Field::CrossFieldGraph::NodesOfElem(SampledVert[i], IndexN);
+      else {
+        int CurrIndexN = Field::CrossFieldGraph::NodeOfElemDir(
+            SampledVert[i], SampledCrossdir[i]);
+        IndexN.push_back(CurrIndexN);
+      }
       // get only one per direction (the one with more neigh)
       int StartN[2] = {-1, -1};
       int NumNeigh[2] = {-1, -1};
@@ -692,7 +768,6 @@ private:
   //    }
 
 public:
-
   void InitializeDistance() {
 
     // save the enabled
@@ -790,7 +865,7 @@ private:
     for (size_t i = 0; i < EndIdx; i++) {
       int N0 = TestPath[i];
       int N1 = Field::CrossFieldGraph::OppositeNodeCrossField(N0);
-      assert(N0!=N1);
+      assert(N0 != N1);
       assert(N0 >= 0);
       assert(N1 >= 0);
       assert(N0 < (int)TGraph.NumNodes());
@@ -1151,7 +1226,8 @@ private:
 
           std::vector<int> TracedPath;
           ScalarType PathL;
-          bool has_traced = TraceCandidate(GraphInstances[t], i,ArrivalNodes,TracedPath, PathL);
+          bool has_traced = TraceCandidate(GraphInstances[t], i, ArrivalNodes,
+                                           TracedPath, PathL);
 
           if (!has_traced)
             continue;
@@ -1167,25 +1243,26 @@ private:
     for (auto &th : threads)
       th.join();
 
-    int CurrIdx=0;
-    bool added=false;
-    do{
-      added=false;
-    for (int t = 0; t < parallel_proc; ++t) {
-      if (CurrIdx>=thread_paths[t].size())continue;
+    int CurrIdx = 0;
+    bool added = false;
+    do {
+      added = false;
+      for (int t = 0; t < parallel_proc; ++t) {
+        if (CurrIdx >= thread_paths[t].size())
+          continue;
 
-      SampledPaths.push_back(thread_paths[t][CurrIdx]);
-      SampledPathsLenghtW.push_back(thread_lengths[t][CurrIdx]);
-      NewStartingNodes.push_back(thread_start_nodes[t][CurrIdx]);
-      added=true;
-    }
-    CurrIdx++;
-    }while (added);
+        SampledPaths.push_back(thread_paths[t][CurrIdx]);
+        SampledPathsLenghtW.push_back(thread_lengths[t][CurrIdx]);
+        NewStartingNodes.push_back(thread_start_nodes[t][CurrIdx]);
+        added = true;
+      }
+      CurrIdx++;
+    } while (added);
 
-    for (size_t i=0;i<GraphInstances.size();i++)
-        Geo::PathFunctions<ScalarType>::CopyNonEnabledConnections(GraphInstances[i],TGraph);
+    for (size_t i = 0; i < GraphInstances.size(); i++)
+      Geo::PathFunctions<ScalarType>::CopyNonEnabledConnections(
+          GraphInstances[i], TGraph);
   }
-
 
   void SampleNormal(std::vector<int> &ArrivalNodes,
                     std::vector<int> &NewStartingNodes) {
@@ -1214,47 +1291,45 @@ private:
     SampledPaths.clear();
     SampledPathsLenghtW.clear();
 
-    if (print_info)
-    {
+    if (print_info) {
       std::cout << "Sampling starting Nodes" << std::endl;
       std::cout << "Target Samples " << NumSamples << std::endl;
     }
     // auto t0 = std::chrono::high_resolution_clock::now();
 
     // sample the initial vertices
-    std::vector<int> SampledVert;
-    int NumSampleable;
-    SampleTracingVert(NumSamples, SampledVert,NumSampleable);
-    // std::cout << "Test 1 " << SampledVert.size() << " Vertices"
-    //           << std::endl;
-    //  add in between singularity samples
-    if (minSingResample > 0) {
-      std::vector<int> SingSingSampledVert;
-      SampleCloseSingTracingVert(SingSingSampledVert, minSingResample);
-      for (size_t i = 0; i < SingSingSampledVert.size(); i++) {
-        if (!sample_on[SingSingSampledVert[i]])
-          continue;
-        SampledVert.push_back(SingSingSampledVert[i]);
+    if (PrioritySampleVert.size() == 0) {
+      std::vector<int> SampledVert;
+      int NumSampleable;
+      SampleTracingVert(NumSamples, SampledVert, NumSampleable);
+      // std::cout << "Test 1 " << SampledVert.size() << " Vertices"
+      //           << std::endl;
+      //  add in between singularity samples
+      if (minSingResample > 0) {
+        std::vector<int> SingSingSampledVert;
+        SampleCloseSingTracingVert(SingSingSampledVert, minSingResample);
+        for (size_t i = 0; i < SingSingSampledVert.size(); i++) {
+          if (!sample_on[SingSingSampledVert[i]])
+            continue;
+          SampledVert.push_back(SingSingSampledVert[i]);
+        }
       }
+
+      // NEW, make it unique
+      std::sort(SampledVert.begin(), SampledVert.end());
+      std::vector<int>::iterator last =
+          std::unique(SampledVert.begin(), SampledVert.end());
+      SampledVert.erase(last, SampledVert.end());
+
+      if (print_info) {
+        std::cout << "Sampling on " << SampledVert.size() << " Vertices"
+                  << std::endl;
+      }
+
+      FindSampledNodesFromVertex(SampledVert, StartingNodes);
+    } else {
+      FindSampledNodesFromVertex(PrioritySampleVert, StartingNodes,PrioritySampleDir);
     }
-
-    // NEW, make it unique
-    std::sort(SampledVert.begin(), SampledVert.end());
-    std::vector<int>::iterator last =
-        std::unique(SampledVert.begin(), SampledVert.end());
-    SampledVert.erase(last, SampledVert.end());
-
-    if (print_info)
-    {
-      std::cout << "Sampling on " << SampledVert.size() << " Vertices"
-                << std::endl;
-    }
-    // std::cout << "Num Sampleable Vertices " << NumSampleable << std::endl;
-    // std::cout << "Num Sampled Vertices " << SampledVert.size() << std::endl<< std::endl;
-    // exit(0);
-    //  FindSampledNodesFromVertex(SampledVert,StartingNodes,MarkSample);
-    FindSampledNodesFromVertex(SampledVert, StartingNodes);
-
     // std::cout << "Sampled " << StartingNodes.size()<<" starting Nodes de
     // de"<<std::endl; for (size_t i=0;i<StartingNodes.size();i++)
     //   std::cout << "Sampling N " << StartingNodes[i]<<std::endl;
@@ -1272,10 +1347,9 @@ private:
     GetArrivalNodes(ArrivalNodes);
 
     // std::unordered_set<int> SampledNodes;
-    if (print_info)
-    {
-    std::cout << "There are " << StartingNodes.size() << " starting nodes"
-              << std::endl;
+    if (print_info) {
+      std::cout << "There are " << StartingNodes.size() << " starting nodes"
+                << std::endl;
     }
 
     // for (size_t i=0;i<FilterDisableN.size();i++)
@@ -1291,20 +1365,31 @@ private:
     TGraph.DisableNodes(FilterDisableN);
 
     // int parallel_proc = 8;
-  #ifdef PARALLEL_SAMPLE
+#ifdef PARALLEL_SAMPLE
     if (StartingNodes.size() >= 2 * MIN_PARALLEL)
       SampleParallel(ArrivalNodes, NewStartingNodes);
     else
       SampleNormal(ArrivalNodes, NewStartingNodes);
-  #else
+#else
     SampleNormal(ArrivalNodes, NewStartingNodes);
-  #endif
+#endif
     StartingNodes = NewStartingNodes;
     SampledPaths_Status.clear();
     SampledPaths_Status.resize(SampledPaths.size(), SP_Evaluate);
 
-    if (print_info)
-    {
+    if (PrioritySampleVert.size() != 0) {
+      //clear them for the sequent steps
+      PrioritySampleVert.clear();
+      PrioritySampleDir.clear();
+       std::cout << "There are " << StartingNodes.size() << " starting nodes"
+                << std::endl;
+      std::cout << "Sampled " << SampledPaths.size() << " Paths" << std::endl;
+      std::cout << "self intersected " << self_intersected << std::endl;
+      std::cout << "Non traced " << non_traced << std::endl;
+      std::cout << "Non direct " << non_direct << std::endl;
+      std::cout << "max jump " << max_jump << std::endl;
+    }
+    if (print_info) {
       std::cout << "Sampled " << SampledPaths.size() << " Paths" << std::endl;
       std::cout << "self intersected " << self_intersected << std::endl;
       std::cout << "Non traced " << non_traced << std::endl;
@@ -1361,7 +1446,7 @@ public:
       //       PathSampl.force_sample[VertFeatures[j]] = true;
       //   }
       // }
-      
+
       // Prio = 1 / (ScalarType)SampledPaths[IndexPath].size();
 
       Candidates[i].first = Prio;
@@ -1716,10 +1801,9 @@ public:
   }
 
 private:
-
   void UpdateDistancesWithLastInsertedPath() {
     auto t0 = std::chrono::high_resolution_clock::now();
-   
+
     // TGraph.SaveEnabledNodes();
     // TGraph.SaveEnabledArcs();
     // TGraph.EnableAllNodes();
@@ -1753,21 +1837,23 @@ private:
     //     SwapDisable.push_back(StartN[i]);
     //   }
     // }
-   
+
     TGraph.CurrDistIndex() = 0;
     Geo::GraphQuery<ScalarType>::Dijkstra(TGraph, StartN, SParam, StopNode);
-    
+
     auto t2 = std::chrono::high_resolution_clock::now();
 
-    
     // TGraph.RestoreEnabledNodes();
     // TGraph.RestoreEnabledArcs();
-    //TGraph.DisableNodes(SwapDisable);
+    // TGraph.DisableNodes(SwapDisable);
     auto t3 = std::chrono::high_resolution_clock::now();
 
-    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
-    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2);
+    auto elapsed0 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    auto elapsed1 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+    auto elapsed2 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2);
     TimeUpdateDist[0] += elapsed0.count() * 1e-6;
     TimeUpdateDist[1] += elapsed1.count() * 1e-6;
     TimeUpdateDist[2] += elapsed2.count() * 1e-6;
@@ -1961,7 +2047,7 @@ public:
   void GetSamplableVert(std::vector<int> &SamplVert) {
     SamplVert.clear();
     assert(sample_on.size() == VertPos.size());
-    //SamplVert.reserve(sample_on.size());
+    // SamplVert.reserve(sample_on.size());
     for (size_t i = 0; i < sample_on.size(); i++) {
       if (!sample_on[i])
         continue;
@@ -2031,15 +2117,15 @@ public:
   //         true;
   //     return false;
   // }
-  
- std::vector<int> StartingNodesSave;
- std::vector<std::vector<int>> SampledPathsSave;
- std::vector<ScalarType> SampledPathsLenghtWSave;
- std::vector<SP_Status> SampledPaths_StatusSave;
- std::vector<std::pair<ScalarType, int>> CandidatesSave;
+
+  std::vector<int> StartingNodesSave;
+  std::vector<std::vector<int>> SampledPathsSave;
+  std::vector<ScalarType> SampledPathsLenghtWSave;
+  std::vector<SP_Status> SampledPaths_StatusSave;
+  std::vector<std::pair<ScalarType, int>> CandidatesSave;
 
   void SaveSampledPaths() {
-    //save only the ones that are evaluate
+    // save only the ones that are evaluate
 
     for (size_t i = 0; i < Candidates.size(); i++) {
       int IdxPath = Candidates[i].second;
@@ -2050,10 +2136,11 @@ public:
       SampledPathsLenghtWSave.push_back(SampledPathsLenghtW[IdxPath]);
       SampledPaths_StatusSave.push_back(SampledPaths_Status[IdxPath]);
       ScalarType Prio = Candidates[i].first;
-      CandidatesSave.push_back(std::pair<ScalarType, int>(Prio, SampledPathsSave.size() - 1));
+      CandidatesSave.push_back(
+          std::pair<ScalarType, int>(Prio, SampledPathsSave.size() - 1));
     }
 
-     for (size_t i = 0; i < CandidatesSave.size(); i++) {
+    for (size_t i = 0; i < CandidatesSave.size(); i++) {
       assert(CandidatesSave[i].second >= 0);
       assert(CandidatesSave[i].second < SampledPathsSave.size());
     }
@@ -2072,7 +2159,6 @@ public:
     StartingNodes.insert(StartingNodes.end(), StartingNodesSave.begin(),
                          StartingNodesSave.end());
 
-   
     for (size_t i = 0; i < CandidatesSave.size(); i++) {
       ScalarType Prio = CandidatesSave[i].first;
       int IdxPath = CandidatesSave[i].second;
@@ -2083,14 +2169,13 @@ public:
       Candidates.push_back(std::pair<ScalarType, int>(Prio, IdxPath));
     }
     std::sort(Candidates.begin(), Candidates.end());
-    
+
     // clear saved
     CandidatesSave.clear();
     StartingNodesSave.clear();
     SampledPathsSave.clear();
     SampledPathsLenghtWSave.clear();
     SampledPaths_StatusSave.clear();
-
   }
 
   void ClearSampledPaths() {
@@ -2365,7 +2450,7 @@ public:
         EnableSingularities();
 
       TGraph.CurrDistIndex() = 0;
-      //InitializeDistance();
+      // InitializeDistance();
       UpdateDistancesWithLastInsertedPath();
 
       if (avoidSingularities)
@@ -2473,18 +2558,18 @@ public:
   // }
 
   void SetBorderCanPassToExit(const std::vector<int> &TestVertex) {
-    //SwapNodeType.clear();
-    // set ones possible to exit
+    // SwapNodeType.clear();
+    //  set ones possible to exit
     std::vector<int> IndexN;
-    
+
     FindExitAllowPathAreaNodes(TestVertex, IndexN);
 
     // set as exit node
     for (size_t i = 0; i < IndexN.size(); i++) {
       int currN = IndexN[i];
-      assert(currN>=0);
-      assert(currN<TGraph.NumNodes());
-      assert(currN<TGraph.NT.size());
+      assert(currN >= 0);
+      assert(currN < TGraph.NumNodes());
+      assert(currN < TGraph.NT.size());
       std::pair<int, NType> Entry(currN, TGraph.NodeType(currN));
       SwapNodeType.push_back(Entry);
       TGraph.NodeType(currN) = Geo::ExitDomain;
@@ -2519,7 +2604,7 @@ public:
   void RestoreNodeType() {
     if (print_info)
       std::cout << "Restoring nodes:" << SwapNodeType.size() << std::endl;
-    
+
     for (size_t i = 0; i < SwapNodeType.size(); i++) {
       int IndexN = SwapNodeType[i].first;
       NType TypeNode = SwapNodeType[i].second;
@@ -2531,6 +2616,7 @@ public:
   void SampleCandidates(bool Init_Distances) {
 
     // clear all sampled paths
+    //bool has_priority = (PrioritySampleVert.size() > 0);
     ClearSampledPaths();
 
     if (avoidSingularities)
@@ -2558,6 +2644,12 @@ public:
     InitCandidates();
     UpdateCandidatePriority();
 
+    // if (has_priority)
+    // {
+    //   std::cout<<"Priority Sample Vertices: "<<PrioritySampleVert.size()<<std::endl;
+    //   std::cout<<"Candidates Size: "<<Candidates.size()<<std::endl;
+    //   exit(0);
+    // }
     WriteTiming();
   }
 
@@ -2617,7 +2709,7 @@ public:
   }
 
   void GetVertexSelectedPaths(const std::vector<int> &IndexPaths,
-                              std::vector<std::vector<int>> &VertPaths)const {
+                              std::vector<std::vector<int>> &VertPaths) const {
     VertPaths.clear();
     VertPaths.resize(IndexPaths.size());
 

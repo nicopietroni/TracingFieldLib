@@ -45,6 +45,7 @@
 #include <utility>
 #include <vector>
 // #include "mesh_mapping.h"
+
 #include "Space_Query/segment_grid_3D.h"
 #include "Space_Query/triangle_grid_3D.h"
 #include "best_rotation.h"
@@ -63,6 +64,8 @@
 #include "quad3.h"
 #include "reproject_mesh.h"
 #include "triangle3.h"
+#include "smooth_mesh_param.h"
+
 // #include "polyhedra_connectivity.h"
 // #include "header"
 
@@ -668,60 +671,60 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
 }
 
 
-enum SmoothType {
-  SMLaplacian,
-  // SMBiLaplacian,
-  SMTaubin,
-  SMBestPoly,
-  SMCentroid
-};
+// enum SmoothType {
+//   SMLaplacian,
+//   // SMBiLaplacian,
+//   SMTaubin,
+//   SMBestPoly,
+//   SMCentroid
+// };
 
-template <class ScalarType> struct SmoothParam {
-  int NumIte;
-  std::vector<int> FixedVert;
-  std::vector<std::pair<int, int>> Features;
-  bool line_border;
-  bool post_project;
-  ScalarType Damp;
-  std::vector<Geo::Point3<ScalarType>> *ReprojVert;
-  std::vector<std::vector<int>> *ReprojFaces;
-  std::vector<std::pair<int, int>> ReprojFeatures;
-  int ReprojStep;
-  SmoothType SType;
-  bool check_AspectR;
-  bool no_reproj_feat_endpoints;
-  bool line_neight_features;
-  bool reproject_voronoi_partition;
-  bool check_multi_pass_fold;
-  ScalarType reproj_dist_THR;
-  std::vector<Geo::Point3<ScalarType>> PrevVertPos;
+// template <class ScalarType> struct SmoothParam {
+//   int NumIte;
+//   std::vector<int> FixedVert;
+//   std::vector<std::pair<int, int>> Features;
+//   bool line_border;
+//   bool post_project;
+//   ScalarType Damp;
+//   std::vector<Geo::Point3<ScalarType>> *ReprojVert;
+//   std::vector<std::vector<int>> *ReprojFaces;
+//   std::vector<std::pair<int, int>> ReprojFeatures;
+//   int ReprojStep;
+//   SmoothType SType;
+//   bool check_AspectR;
+//   bool no_reproj_feat_endpoints;
+//   bool line_neight_features;
+//   bool reproject_voronoi_partition;
+//   bool check_multi_pass_fold;
+//   ScalarType reproj_dist_THR;
+//   std::vector<Geo::Point3<ScalarType>> PrevVertPos;
     
-  // bool adaptive_features_smooth;
+//   // bool adaptive_features_smooth;
 
-  void Clear() {
-    FixedVert.clear();
-    Features.clear();
-  }
+//   void Clear() {
+//     FixedVert.clear();
+//     Features.clear();
+//   }
 
-  SmoothParam() {
-    NumIte = 10;
-    line_border = true;
+//   SmoothParam() {
+//     NumIte = 10;
+//     line_border = true;
 
-    Damp = 0.5;
-    ReprojVert = NULL;
-    ReprojFaces = NULL;
-    post_project = false;
-    ReprojStep = 1;
-    SType = SMLaplacian;
-    check_AspectR = false;
-    no_reproj_feat_endpoints = true;
-    line_neight_features = true;
-    reproject_voronoi_partition = false;
-    check_multi_pass_fold = false;
-    reproj_dist_THR=0.1;
-    // adaptive_features_smooth = false;
-  }
-};
+//     Damp = 0.5;
+//     ReprojVert = NULL;
+//     ReprojFaces = NULL;
+//     post_project = false;
+//     ReprojStep = 1;
+//     SType = SMLaplacian;
+//     check_AspectR = false;
+//     no_reproj_feat_endpoints = true;
+//     line_neight_features = true;
+//     reproject_voronoi_partition = false;
+//     check_multi_pass_fold = false;
+//     reproj_dist_THR=0.1;
+//     // adaptive_features_smooth = false;
+//   }
+// };
 
 // template <class ScalarType>
 // void PostProject(std::vector<Geo::Point3<ScalarType>> &VertPosTarget,
@@ -1116,7 +1119,7 @@ template <class ScalarType>
 void SmoothLaplacian(
     std::vector<Geo::Point2<ScalarType>> &VertPos,
     const std::vector<std::vector<int>> &Faces,
-    const SmoothParam<ScalarType> &SParam = SmoothParam<ScalarType>()) {
+    const SmoothParam<ScalarType> &SParam) {
   std::vector<Geo::Point3<ScalarType>> VertPos3D;
   for (size_t i = 0; i < VertPos.size(); i++)
     VertPos3D.push_back(Geo::Point3<ScalarType>(VertPos[i].X, VertPos[i].Y, 0));

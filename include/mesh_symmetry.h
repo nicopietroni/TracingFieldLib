@@ -42,7 +42,6 @@
 #include <subdivide.h>
 // #include <sys/_types/_size_t.h>
 #include <cstddef> // C++
-#include <tangent_space_smooth.h>
 #include <utility>
 #include <vector>
 

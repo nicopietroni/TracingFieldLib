@@ -153,6 +153,7 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
   int all_steps = 0;
 
   // std::vector<ScalarType> VertDens;
+ 
   if (TRemParam.adaptive) {
     assert(TRemParam.VertSize.size() == VertPos.size());
   }
@@ -215,14 +216,9 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
     // SMOOTH STEP
     if (TRemParam.smooth_mesh) {
       t0 = std::chrono::high_resolution_clock::now();
-      // int min_smooth_steps = 1;
-      // int max_smooth_steps = 3;
+     
       int smooth_steps = 3;
-      // if (!TRemParam.iterative) {
-      //   smooth_steps = max_smooth_steps - s;
-      //   smooth_steps = std::max(smooth_steps, min_smooth_steps);
-      // }
-
+    
       SmoothReproject3DStep(VertPos, Faces, smooth_steps,
                             TRemParam.feature_angle, TRemParam.IsFaceEFeature,
                             TRemParam.IsVertCorner, VertPos0, Faces0, TriGrid);

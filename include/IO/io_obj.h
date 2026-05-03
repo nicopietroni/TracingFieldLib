@@ -497,5 +497,19 @@ bool WriteOBJ(std::string meshFile,
     return (WriteOBJ(meshFile,VertPosVect,Connectivity));
 }
 
-
+template <class ScalarType>
+bool WriteOBJ(std::string meshFile,
+              const std::vector<Geo::Point3<ScalarType> > &VertPos,
+              const std::vector<std::pair<int, int> > &Edges)
+{
+    std::vector<std::vector<int>> ConnectivityEdges;
+    ConnectivityEdges.resize(Edges.size());
+    for (size_t i = 0; i < Edges.size(); i++) {
+      int IndexV0 = Edges[i].first;
+      int IndexV1 = Edges[i].second;
+      ConnectivityEdges[i].push_back(IndexV0);
+      ConnectivityEdges[i].push_back(IndexV1);
+    }
+    return (WriteOBJ(meshFile, VertPos, ConnectivityEdges));
+}
 #endif

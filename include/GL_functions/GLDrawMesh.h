@@ -27,16 +27,17 @@
 #ifndef GL_DRAW_MESH
 #define GL_DRAW_MESH
 
+#include "../color_functions.h"
 #include "../point3.h"
+#include "../polyline3.h"
 #include "GLDrawBase.h"
 #include "connectivity.h"
 #include "field_graph/t_junction.h"
-#include "../color_functions.h"
 #include "normal.h"
 #include <GL/glew.h>
 #include <cassert>
-//#include <sys/_types/_size_t.h>
-#include <cstddef>   // C++
+// #include <sys/_types/_size_t.h>
+#include <cstddef> // C++
 #include <vector>
 
 namespace GLDraw {
@@ -75,6 +76,43 @@ void DrawNormal(const std::vector<Geo::Point3<ScalarType>> &VertPos,
   ScalarType AvgL = AvgEdgeLen(VertPos, Faces, IndexF);
   Geo::Segment3<ScalarType> SegNorm(Bary, Bary + NormF * AvgL * 0.3);
   GLDraw::GLDrawSegment<ScalarType>(SegNorm.P(0), SegNorm.P(1), size, 0, Col);
+}
+
+template <class ScalarType>
+void GLDrawPolyline(const Geo::Polyline3<ScalarType> &PolyL,
+                    const std::vector<Geo::Point3<ScalarType>> &SegmentCol,
+                    int LineWidth = 20) {
+
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+  glDepthRange(0.0, 0.9999);
+  glEnable(GL_COLOR_MATERIAL);
+  glDisable(GL_LIGHTING);
+  glDisable(GL_BLEND);
+
+  glLineWidth(LineWidth);
+
+  glBegin(GL_LINES);
+  for (size_t i = 0; i < PolyL.PolyPos.size() - 1; i++) {
+    Geo::Point3<ScalarType> P0 = PolyL.PolyPos[i];
+    Geo::Point3<ScalarType> P1 = PolyL.PolyPos[i + 1];
+    Geo::Point3<ScalarType> Col = SegmentCol[i];
+    glColor(Col);
+    glVertex(P0);
+    glVertex(P1);
+  }
+
+  glEnd();
+
+  glPopAttrib();
+}
+
+template <class ScalarType>
+void GLDrawPolylines(
+    const std::vector<Geo::Polyline3<ScalarType>> &PolyL,
+    const std::vector<std::vector<Geo::Point3<ScalarType>>> &SegmentCol,
+    int LineWidth = 20) {
+  for (size_t i = 0; i < PolyL.size(); i++)
+    GLDrawPolyline(PolyL[i], SegmentCol[i], LineWidth);
 }
 
 template <class ScalarType>
@@ -217,8 +255,7 @@ void DrawSurfaceFill3D(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                        bool SmoothShade, TypeRendMesh TRM = TRTriangle,
                        std::vector<Geo::Point3<ScalarType>> *FaceCol = NULL,
                        std::vector<Geo::Point3<ScalarType>> *VertCol = NULL,
-                       bool use_blend = false,
-                       bool use_light = true) {
+                       bool use_blend = false, bool use_light = true) {
   assert(Connectivity.size() == FaceNormal.size());
   if (use_light) {
     glEnable(GL_LIGHTING);
@@ -387,7 +424,7 @@ void GLDrawEdges(const std::vector<Geo::Point3<ScalarType>> &Pos,
   glDisable(GL_LIGHTING);
   glDisable(GL_BLEND);
 
-  glLineWidth(LineWidth);
+  glLineWidth((GLfloat)LineWidth);
 
   glBegin(GL_LINES);
 
@@ -614,8 +651,8 @@ void DrawSurfaceMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 
   if (drawsurface)
     DrawSurfaceFill3D<ScalarType>(VertPos, Connectivity, FaceNormal, VertNormal,
-                                  smoothShade, TRM, FaceCol, VertCol,
-                                  use_blend,use_light);
+                                  smoothShade, TRM, FaceCol, VertCol, use_blend,
+                                  use_light);
 
   glDisable(GL_POLYGON_OFFSET_FILL);
   glEnable(GL_COLOR_MATERIAL);

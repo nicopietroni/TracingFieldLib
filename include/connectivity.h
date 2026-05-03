@@ -137,12 +137,12 @@ inline void FindVertexStar(const std::vector<std::vector<int>> &connections,
   Kernel.clear();
   Kernel.resize(NumVert);
   for (size_t i = 0; i < connections.size(); i++) {
-   
+
     int sizeF = connections[i].size();
     for (size_t j = 0; j < connections[i].size(); j++) {
       int VertIDX0 = connections[i][j];
       int VertIDX1 = connections[i][(j + 1) % sizeF];
-     
+
       Kernel[VertIDX0].push_back(VertIDX1);
       Kernel[VertIDX1].push_back(VertIDX0);
     }
@@ -237,7 +237,8 @@ inline void FindVertexStar(const std::vector<std::vector<int>> &connections,
 //   NextE.resize(Faces.size());
 
 //   // std::map<sizeTPair, std::vector<sizeTPair>> EdgeVToFaceE;
-//   std::unordered_map<sizeTPair, std::vector<sizeTPair>, hashPairSizeTFunction>
+//   std::unordered_map<sizeTPair, std::vector<sizeTPair>,
+//   hashPairSizeTFunction>
 //       EdgeVToFaceE;
 
 //   for (size_t i = 0; i < Faces.size(); i++) {
@@ -284,11 +285,9 @@ inline void FindVertexStar(const std::vector<std::vector<int>> &connections,
 //   }
 // }
 
-inline void getFFAdjacency(
-    const std::vector<std::vector<int>> &Faces,
-    std::vector<std::vector<int>> &NextF,
-    std::vector<std::vector<int>> &NextE)
-{
+inline void getFFAdjacency(const std::vector<std::vector<int>> &Faces,
+                           std::vector<std::vector<int>> &NextF,
+                           std::vector<std::vector<int>> &NextE) {
   using sizeTPair = std::pair<size_t, size_t>;
 
   struct EdgeAdj {
@@ -297,8 +296,15 @@ inline void getFFAdjacency(
     uint8_t count = 0;
 
     inline void add(size_t f, size_t e) {
-      if (count == 0) { f0=f; e0=e; count=1; }
-      else            { f1=f; e1=e; count=2; }
+      if (count == 0) {
+        f0 = f;
+        e0 = e;
+        count = 1;
+      } else {
+        f1 = f;
+        e1 = e;
+        count = 2;
+      }
     }
   };
 
@@ -306,7 +312,8 @@ inline void getFFAdjacency(
   NextE.assign(Faces.size(), {});
 
   size_t totHalfEdges = 0;
-  for (const auto &f : Faces) totHalfEdges += f.size();
+  for (const auto &f : Faces)
+    totHalfEdges += f.size();
 
   std::unordered_map<sizeTPair, EdgeAdj, hashPairSizeTFunction> edge2adj;
   edge2adj.reserve(totHalfEdges);
@@ -331,13 +338,16 @@ inline void getFFAdjacency(
 
   for (const auto &kv : edge2adj) {
     const EdgeAdj &a = kv.second;
-    if (a.count != 2) continue; // border or non-manifold
+    if (a.count != 2)
+      continue; // border or non-manifold
 
     const int f0 = (int)a.f0, e0 = (int)a.e0;
     const int f1 = (int)a.f1, e1 = (int)a.e1;
 
-    NextF[f0][e0] = f1;  NextF[f1][e1] = f0;
-    NextE[f0][e0] = e1;  NextE[f1][e1] = e0;
+    NextF[f0][e0] = f1;
+    NextF[f1][e1] = f0;
+    NextE[f0][e0] = e1;
+    NextE[f1][e1] = e0;
   }
 }
 
@@ -713,7 +723,8 @@ inline void UpdateFF(const std::vector<std::vector<int>> &Faces,
         NextE[IndexF1][IndexE1] = IndexE0;
         continue;
       }
-      std::cout << "WARNING FF Topology Face Sharing Edge Num:" << EdgeVToFaceE[KeyE].size() << std::endl;
+      std::cout << "WARNING FF Topology Face Sharing Edge Num:"
+                << EdgeVToFaceE[KeyE].size() << std::endl;
       // can't be
       assert(0);
     }
@@ -796,6 +807,24 @@ inline void getVVAdjacency(const std::vector<std::pair<int, int>> &Edges,
   }
 }
 
+inline void getVEAdjacency(const std::vector<std::pair<int, int>> &Edges,
+                           std::vector<std::vector<int>> &VEAdj,
+                           std::vector<std::vector<int>> &VEAdjIndex) {
+  int NumV = FindMaxVertIdx(Edges);
+  VEAdj.clear();
+  VEAdjIndex.clear();
+  VEAdj.resize(NumV + 1);
+  VEAdjIndex.resize(NumV + 1);
+  for (size_t i = 0; i < Edges.size(); i++) {
+    int indexV0 = Edges[i].first;
+    int indexV1 = Edges[i].second;
+    VEAdj[indexV0].push_back(i);
+    VEAdjIndex[indexV0].push_back(0);
+    VEAdj[indexV1].push_back(i);
+    VEAdjIndex[indexV1].push_back(1);
+  }
+}
+
 inline void
 getEVAdjacency(const std::vector<std::vector<int>> &Faces,
                std::map<std::pair<int, int>, std::vector<std::pair<int, int>>>
@@ -813,6 +842,38 @@ getEVAdjacency(const std::vector<std::vector<int>> &Faces,
       std::pair<int, int> FaceE(i, j);
       EdgeFaceMap[Key].push_back(FaceE);
     }
+}
+
+inline void getEEAdjacency(const std::vector<std::pair<int,int>> &Edges,
+                           std::vector<std::vector<int>> &EEAdj,
+                           std::vector<std::vector<int>> &EEAdjIndex) {
+  std::vector<std::vector<int>> VEAdj,VEAdjIndex;
+  getVEAdjacency(Edges,VEAdj,VEAdjIndex);
+  int NumE = Edges.size();
+  EEAdj.clear();
+  EEAdjIndex.clear();
+  EEAdj.resize(NumE);
+  EEAdjIndex.resize(NumE);
+  for (size_t i = 0; i < Edges.size(); i++) {
+    int indexV0 = Edges[i].first;
+    int indexV1 = Edges[i].second;
+
+    for (size_t j = 0; j < VEAdj[indexV0].size(); j++) {
+      int TestE = VEAdj[indexV0][j];
+      if (TestE == i)
+        continue;
+      EEAdj[i].push_back(TestE);
+      EEAdjIndex[i].push_back(VEAdjIndex[indexV0][j]);
+    }
+
+    for (size_t j = 0; j < VEAdj[indexV1].size(); j++) {
+      int TestE = VEAdj[indexV1][j];
+      if (TestE == i)
+        continue;
+      EEAdj[i].push_back(TestE);
+      EEAdjIndex[i].push_back(VEAdjIndex[indexV1][j]);
+    }
+  }
 }
 
 inline void getVVStar(const std::vector<std::vector<int>> &Faces,

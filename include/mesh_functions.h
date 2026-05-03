@@ -1127,6 +1127,27 @@ AppendMesh(std::vector<Geo::Point3<ScalarType>> &Vert,
 
 template <class ScalarType>
 inline void
+AppendEdgeMesh(std::vector<Geo::Point3<ScalarType>> &Vert,
+               std::vector<std::pair<int,int>> &Edges,
+           const std::vector<Geo::Point3<ScalarType>> &To_append_Vert,
+           const std::vector<std::pair<int,int>> &To_append_Edges)
+{
+  int NumV0 = Vert.size();
+  Vert.insert(Vert.end(), To_append_Vert.begin(), To_append_Vert.end());
+
+  int NumE0 = Edges.size();
+  Edges.insert(Edges.end(), To_append_Edges.begin(),
+                  To_append_Edges.end());
+
+  for (size_t i = NumE0; i < Edges.size(); i++)
+  {
+    Edges[i].first += NumV0;
+    Edges[i].second += NumV0;
+  }
+}
+
+template <class ScalarType>
+inline void
 AppendMesh(std::vector<Geo::Point2<ScalarType>> &Vert,
            std::vector<std::vector<int>> &Elements,
            const std::vector<Geo::Point2<ScalarType>> &To_append_Vert,
@@ -2124,4 +2145,35 @@ static void SharedEdges(const std::vector<Geo::Point3<ScalarType>> &VertPos0,
     }
 }
 
+static void SharedVert(std::pair<int, int> &Edge0,
+                       std::pair<int, int> &Edge1,
+                       std::vector<int> &SharedV)
+{
+    SharedV.clear();
+
+    if (Edge0.first  == Edge1.first  || Edge0.first  == Edge1.second)
+        SharedV.push_back(Edge0.first);
+
+    if (Edge0.second == Edge1.first  || Edge0.second == Edge1.second)
+        SharedV.push_back(Edge0.second);
+}
+
+static void NonSharedVert(std::pair<int, int> &Edge0,
+                          std::pair<int, int> &Edge1,
+                          std::vector<int> &NonSharedV)
+{
+    NonSharedV.clear();
+
+    if (Edge0.first  != Edge1.first && Edge0.first  != Edge1.second)
+        NonSharedV.push_back(Edge0.first);
+
+    if (Edge0.second != Edge1.first && Edge0.second != Edge1.second)
+        NonSharedV.push_back(Edge0.second);
+
+    if (Edge1.first  != Edge0.first && Edge1.first  != Edge0.second)
+        NonSharedV.push_back(Edge1.first);
+
+    if (Edge1.second != Edge0.first && Edge1.second != Edge0.second)
+        NonSharedV.push_back(Edge1.second);
+}
 #endif

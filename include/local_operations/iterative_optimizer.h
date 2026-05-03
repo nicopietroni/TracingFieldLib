@@ -1211,9 +1211,6 @@ void ReprojectStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
     if (FixedVertSet.find(i) != FixedVertSet.end())
       continue;
 
-    if (!FixedVert.empty() && FixedVert[i])
-      continue;
-
     Geo::Point3<ScalarType> Pos = VertPos[i];
     int closestF;
     Geo::Point3<ScalarType> closestPt;
@@ -1292,7 +1289,7 @@ void SmoothReproject3DStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
   std::vector<std::pair<int, int>> FeatureLines;
   Geo::MeshFeatures<ScalarType>::FeatureCorners(
       VertPos, Faces, NextF, feature_angle, FeatureLines, FixedVert, true);
-
+  
   std::vector<int> FixedVert1;
   std::vector<std::pair<int, int>> FeatureLines1;
   Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(
@@ -1322,7 +1319,9 @@ void SmoothReproject3DStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
     // Geo::SmoothLaplacian(VertPos, Faces, 1, FixedVert, FeatureLines, false);
     Geo::SmoothLaplacian(VertPos, Faces, SParam);
     if (reproject)
+    {
       ReprojectStep(VertPos, VertPos0, Faces0, TriGrid, SParam.FixedVert);
+    }
   }
 }
 

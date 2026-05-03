@@ -131,12 +131,13 @@ public:
 
   void SaveStatus() { OldPData = PData; }
 
-  //void RestoreStatus() { PData = OldPData; }
+  // void RestoreStatus() { PData = OldPData; }
 
   void RestoreStatus() { std::swap(PData, OldPData); }
- 
+
   double TimeUpdatePatches[6] = {0, 0, 0, 0, 0, 0};
   double TimeUpdateSubPatches[2] = {0, 0};
+
 private:
   // adjacency on the mesh
   std::vector<std::vector<int>> NextF;
@@ -935,7 +936,7 @@ private:
   void SplitSubMeshWithInternalEdges(int IndexPatch) {
     auto t0 = std::chrono::high_resolution_clock::now();
     std::vector<std::vector<int>> NextFPatch, NextEPatch;
-    
+
     getFFAdjacency(PData.SubPatchFaces[IndexPatch], NextFPatch, NextEPatch);
     auto t1 = std::chrono::high_resolution_clock::now();
 
@@ -958,8 +959,8 @@ private:
         assert(IndexV1 < PData.SubPatchVertToOriginal[IndexPatch].size());
         int IndexV1Or = PData.SubPatchVertToOriginal[IndexPatch][IndexV1];
 
-        //only once ofr each edge
-        if (IndexV0Or> IndexV1Or)
+        // only once ofr each edge
+        if (IndexV0Or > IndexV1Or)
           continue;
 
         std::pair<int, int> EdgeKOr(std::min(IndexV0Or, IndexV1Or),
@@ -974,10 +975,12 @@ private:
         SplitEdgeSet.insert(EdgeK);
       }
     }
-    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    auto elapsed1 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     TimeUpdateSubPatches[0] += elapsed1.count() * 1e-6;
-   
-    if (SplitEdgeSet.size() == 0) return;
+
+    if (SplitEdgeSet.size() == 0)
+      return;
 
     std::vector<std::pair<int, int>> SplitEdges(SplitEdgeSet.begin(),
                                                 SplitEdgeSet.end());
@@ -985,7 +988,8 @@ private:
     // std::map<Geo::Point3<ScalarType>, int> PosToIDX;
     std::unordered_map<Geo::Point3<ScalarType>, int,
                        Geo::Point3Hash<ScalarType>,
-                       Geo::Point3Equal<ScalarType>> PosToIDX;
+                       Geo::Point3Equal<ScalarType>>
+        PosToIDX;
 
     for (size_t i = 0; i < PData.SubPatchVertPos[IndexPatch].size(); i++) {
       Geo::Point3<ScalarType> Pos = PData.SubPatchVertPos[IndexPatch][i];
@@ -1015,9 +1019,9 @@ private:
       }
     }
     auto t2 = std::chrono::high_resolution_clock::now();
-    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+    auto elapsed2 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
     TimeUpdateSubPatches[1] += elapsed2.count() * 1e-6;
-
   }
 
   void UpdateSubMesh(int IndexPatch) {
@@ -1036,8 +1040,8 @@ private:
     PData.SubPatchVertToOriginal[IndexPatch].clear();
     PData.SubPatchFacesToOriginal[IndexPatch].clear();
 
-    int EsteemedNumVert = PData.PatchOriginalFaces[IndexPatch].size() /2;
-    int EsteemedNumFaces = PData.PatchOriginalFaces[IndexPatch].size() ;
+    int EsteemedNumVert = PData.PatchOriginalFaces[IndexPatch].size() / 2;
+    int EsteemedNumFaces = PData.PatchOriginalFaces[IndexPatch].size();
     PData.SubPatchVertPos[IndexPatch].reserve(EsteemedNumVert);
     PData.SubPatchFaces[IndexPatch].reserve(EsteemedNumFaces);
     PData.SubPatchVertToOriginal[IndexPatch].reserve(EsteemedNumVert);
@@ -1174,10 +1178,16 @@ private:
   }
 
   void UpdateSubPatchPos(int IndexPatch) {
+    // int NumCorrisp = PData.SubPatchVertToOriginal[IndexPatch].size();
+    // int NumVert = PData.SubPatchVertPos[IndexPatch].size();
+    // if (NumCorrisp !=NumVert)
+    // {
+    //   std::cout<<"ERROR Num vert in patch "<<IndexPatch<<std::endl;
+    //   exit(0);
+    // }
     assert(IndexPatch >= 0);
     assert(IndexPatch < PData.SubPatchVertToOriginal.size());
-    for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();
-         i++) {
+    for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();i++) {
       int IndexVOr = PData.SubPatchVertToOriginal[IndexPatch][i];
       PData.SubPatchVertPos[IndexPatch][i] = VertPos[IndexVOr];
     }
@@ -1469,7 +1479,7 @@ public:
     }
     for (size_t i = 0; i < PData.OLDPathNodes.size(); i++) {
       if (PData.OLDPathNodes[i].size() == 0)
-          continue;
+        continue;
       bool found = false;
       for (size_t j = 0; j < PathNodes.size(); j++) {
         if (PathNodes[j].size() == 0)
@@ -2396,7 +2406,11 @@ public:
 
   void UpdateSubPatchPos() {
     for (size_t i = 0; i < NumPatches(); i++)
+    {
+      if (isEmpty(i))
+        continue;
       UpdateSubPatchPos(i);
+    }
   }
 #ifndef PARALLEL_PATCH_UPDATE
   void FindPatchCorners() {
@@ -2540,9 +2554,9 @@ public:
   void Update(const std::vector<int> &AddedPaths,
               const std::vector<int> &RemovedPaths,
               std::vector<int> &UpdatedPatches) {
-    
+
     auto t0 = std::chrono::high_resolution_clock::now();
-   
+
     UpdatedPatches.clear();
 
     // std::vector<int> ToAdd,ToRemove;
@@ -2633,12 +2647,18 @@ public:
 
     auto t6 = std::chrono::high_resolution_clock::now();
 
-    auto elapsed0 = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
-    auto elapsed1 = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-    auto elapsed2 = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2);
-    auto elapsed3 = std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3);
-    auto elapsed4 = std::chrono::duration_cast<std::chrono::microseconds>(t5 - t4);
-    auto elapsed5 = std::chrono::duration_cast<std::chrono::microseconds>(t6 - t5);
+    auto elapsed0 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    auto elapsed1 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+    auto elapsed2 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2);
+    auto elapsed3 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3);
+    auto elapsed4 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t5 - t4);
+    auto elapsed5 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t6 - t5);
 
     TimeUpdatePatches[0] += elapsed0.count() * 1e-6;
     TimeUpdatePatches[1] += elapsed1.count() * 1e-6;
@@ -2646,7 +2666,6 @@ public:
     TimeUpdatePatches[3] += elapsed3.count() * 1e-6;
     TimeUpdatePatches[4] += elapsed4.count() * 1e-6;
     TimeUpdatePatches[5] += elapsed5.count() * 1e-6;
-
   }
 
   void InitEdgeToFace() {
@@ -2812,6 +2831,7 @@ public:
     // std::vector<std::vector<int> > OLDPathNodes=PathNodes;
     PData.OLDPathNodes.clear();
   }
+
   void CheckConsistentData() {
     int TestPNum = PData.PatchCorners.size();
     assert(TestPNum == PData.TypeOfCorner.size());
@@ -3503,6 +3523,251 @@ public:
         VertPaths[i].push_back(IndexV);
       }
   }
+
+  void GetVertexFieldPaths(std::vector<std::vector<int>> &VertPaths,
+                           std::vector<std::vector<int>> &FieldDir) const {
+    VertPaths.clear();
+    VertPaths.resize(PathNodes.size());
+    FieldDir.clear();
+    FieldDir.resize(PathNodes.size());
+    for (size_t i = 0; i < PathNodes.size(); i++)
+      for (size_t j = 0; j < PathNodes[i].size(); j++) {
+        int IndexV = Field::CrossFieldGraph::ElemOfNode(PathNodes[i][j]);
+        VertPaths[i].push_back(IndexV);
+        int IndexDir = Field::CrossFieldGraph::DirOfNode(PathNodes[i][j]);
+        FieldDir[i].push_back(IndexDir);
+      }
+  }
+
+  void GetVertexFieldPath(const int IndexPath, std::vector<int> &VertPaths,
+                          std::vector<int> &FieldDir) const {
+    VertPaths.clear();
+    FieldDir.clear();
+    assert(IndexPath >= 0);
+    assert(IndexPath < PathNodes.size());
+    for (size_t j = 0; j < PathNodes[IndexPath].size(); j++) {
+      int IndexV = Field::CrossFieldGraph::ElemOfNode(PathNodes[IndexPath][j]);
+      VertPaths.push_back(IndexV);
+      int IndexDir = Field::CrossFieldGraph::DirOfNode(PathNodes[IndexPath][j]);
+      FieldDir.push_back(IndexDir);
+    }
+  }
+
+  void GetPathEdgeMesh(const int IndexPath,
+                       std::vector<Geo::Point3<ScalarType>> &EdgeMeshPos,
+                       std::vector<std::pair<int, int>> &Edges,
+                       std::vector<int> &OrigVertPaths,
+                       std::vector<int> &FieldDir,
+                       const ScalarType &SplitAngle) const {
+
+    assert(IndexPath >= 0);
+    assert(IndexPath < PathNodes.size());
+
+    std::vector<int> VertIdx, VertDir;
+    GetVertexFieldPath(IndexPath, VertIdx, VertDir);
+
+    bool isLoop = (VertIdx.front() == VertIdx.back());
+
+    // // if should be splitted in the last one then no loop
+    // if (isLoop) {
+    //   int LastIdx = VertIdx.back();
+    //   // check if last one is to split or not
+    //   if (SplitAlong.count(LastIdx) > 0)
+    //     isLoop = false;
+    // }
+
+    std::set<int> AngleFeatures;
+
+    for (size_t i = 1; i < VertIdx.size() - 1; i++) {
+      int IndexV0 = VertIdx[i - 1];
+      int IndexV1 = VertIdx[i];
+      int IndexV2 = VertIdx[i + 1];
+      Geo::Point3<ScalarType> Dir0 = VertPos[IndexV1] - VertPos[IndexV0];
+      Geo::Point3<ScalarType> Dir1 = VertPos[IndexV2] - VertPos[IndexV1];
+      Dir0.Normalize();
+      Dir1.Normalize();
+      if (AngleDeg(Dir0, Dir1) > SplitAngle)
+        AngleFeatures.insert(IndexV1);
+    }
+
+    EdgeMeshPos.clear();
+    Edges.clear();
+    OrigVertPaths.clear();
+    FieldDir.clear();
+
+    // add first one
+    int IndexV = VertIdx[0];
+    EdgeMeshPos.push_back(VertPos[IndexV]);
+    OrigVertPaths.push_back(IndexV);
+    FieldDir.push_back(VertDir[0]);
+
+    // then add all the vertices but first and last
+    for (size_t i = 1; i < VertIdx.size() - 1; i++) {
+      int IndexV = VertIdx[i];
+      EdgeMeshPos.push_back(VertPos[IndexV]);
+      OrigVertPaths.push_back(IndexV);
+      FieldDir.push_back(VertDir[i]);
+
+      if (AngleFeatures.count(IndexV) > 0) {
+        EdgeMeshPos.push_back(VertPos[IndexV]);
+        OrigVertPaths.push_back(IndexV);
+        FieldDir.push_back(VertDir[i]);
+      }
+    }
+
+    // add last one if not loop (can't duplicate it)
+    if (!isLoop) {
+      IndexV = VertIdx.back();
+      // add last vertex
+      EdgeMeshPos.push_back(VertPos[IndexV]);
+      OrigVertPaths.push_back(IndexV);
+      FieldDir.push_back(VertDir.back());
+    }
+
+    // then add all the edges
+    for (size_t i = 0; i < EdgeMeshPos.size() - 1; i++) {
+      int IndexV0 = i;
+      int IndexV1 = i + 1;
+      // if the same is a splitted edge then skip
+      if (OrigVertPaths[IndexV0] == OrigVertPaths[IndexV1])
+        continue;
+      Edges.push_back(std::make_pair(IndexV0, IndexV1));
+    }
+
+    if (isLoop) {
+      int IndexV0 = EdgeMeshPos.size() - 1;
+      int IndexV1 = 0;
+      if (IndexV0 != IndexV1)
+        Edges.push_back(std::make_pair(IndexV0, IndexV1));
+    }
+  }
+
+  void GetBorderLoopsVert(std::vector<std::vector<int>> &BorderLoopsVert,
+                          std::vector<std::vector<int>> &BorderLoopsDir) const {
+    BorderLoopsVert.clear();
+    BorderLoopsDir.clear();
+    getBorderSequncesVert(Faces, BorderLoopsVert);
+    // then get the direction for each loop
+    for (size_t i = 0; i < BorderLoopsVert.size(); i++) {
+      std::vector<int> CurrLoopDir;
+      for (size_t j = 0; j < BorderLoopsVert[i].size(); j++) {
+        int IndexV0 = BorderLoopsVert[i][j];
+        int IndexV1 = BorderLoopsVert[i][(j + 1) % BorderLoopsVert[i].size()];
+        Geo::Point3<ScalarType> EdgeDir = VertPos[IndexV1] - VertPos[IndexV0];
+        EdgeDir.Normalize();
+        // get the field direction at the first vertex
+        int BestDirI = Cross[IndexV0].BestDirectionI(EdgeDir);
+        CurrLoopDir.push_back(BestDirI);
+      }
+      BorderLoopsDir.push_back(CurrLoopDir);
+    }
+  }
+
+  void GetPathEdgeMesh(std::vector<Geo::Point3<ScalarType>> &EdgeMeshPos,
+                       std::vector<std::pair<int, int>> &Edges,
+                       std::vector<int> &OrigVertPaths,
+                       std::vector<int> &FieldDir,
+                       const ScalarType &SplitAngle) const {
+    EdgeMeshPos.clear();
+    Edges.clear();
+    for (size_t i = 0; i < PathNodes.size(); i++) {
+      std::vector<Geo::Point3<ScalarType>> CurrEdgeMeshPos;
+      std::vector<std::pair<int, int>> CurrEdges;
+      std::vector<int> CurrOrigVertPaths, CurrFieldDir;
+
+      //std::set<int> CurrSplitAlong = SplitAlong;
+      // if (NoSplitPaths.count(i) > 0)
+      //   CurrSplitAlong.clear();
+
+      GetPathEdgeMesh(i, CurrEdgeMeshPos, CurrEdges, CurrOrigVertPaths,
+                      CurrFieldDir, SplitAngle);
+
+      AppendEdgeMesh(EdgeMeshPos, Edges, CurrEdgeMeshPos, CurrEdges);
+      OrigVertPaths.insert(OrigVertPaths.end(), CurrOrigVertPaths.begin(),
+                           CurrOrigVertPaths.end());
+      FieldDir.insert(FieldDir.end(), CurrFieldDir.begin(), CurrFieldDir.end());
+    }
+
+    // then get the borders
+    std::vector<std::vector<int>> BorderLoopsVert, BorderLoopsDir;
+    GetBorderLoopsVert(BorderLoopsVert, BorderLoopsDir);
+
+    for (size_t i = 0; i < BorderLoopsVert.size(); i++) {
+
+      std::set<int> AngleFeatures;
+
+      for (size_t j = 1; j < BorderLoopsVert[i].size() - 1; j++) {
+        int IndexV0 = BorderLoopsVert[i][j - 1];
+        int IndexV1 = BorderLoopsVert[i][j];
+        int IndexV2 = BorderLoopsVert[i][j + 1];
+        Geo::Point3<ScalarType> Dir0 = VertPos[IndexV1] - VertPos[IndexV0];
+        Geo::Point3<ScalarType> Dir1 = VertPos[IndexV2] - VertPos[IndexV1];
+        Dir0.Normalize();
+        Dir1.Normalize();
+        if (AngleDeg(Dir0, Dir1) > SplitAngle)
+          AngleFeatures.insert(IndexV1);
+      }
+
+      std::vector<int> &CurrBorder = BorderLoopsVert[i];
+      std::vector<int> &CurrBorderDir = BorderLoopsDir[i];
+
+      std::vector<Geo::Point3<ScalarType>> CurrEdgeMeshPos;
+      std::vector<std::pair<int, int>> CurrEdges;
+      std::vector<int> CurrOrigVertPaths, CurrFieldDir;
+
+      // add all the vertices
+      for (size_t j = 0; j < CurrBorder.size(); j++) {
+        int IndexV = CurrBorder[j];
+        CurrEdgeMeshPos.push_back(VertPos[IndexV]);
+        CurrOrigVertPaths.push_back(IndexV);
+        CurrFieldDir.push_back(CurrBorderDir[j]);
+        // duplicate if splitted
+        if (AngleFeatures.count(IndexV) > 0) {
+          CurrEdgeMeshPos.push_back(VertPos[IndexV]);
+          CurrOrigVertPaths.push_back(IndexV);
+          CurrFieldDir.push_back(CurrBorderDir[j]);
+        }
+      }
+      // then add the edges (are all loops)
+      for (size_t j = 0; j < CurrEdgeMeshPos.size(); j++) {
+        int IndexV0 = j;
+        int IndexV1 = (j + 1) % CurrEdgeMeshPos.size();
+        // if the same is a splitted edge then skip
+        if (CurrOrigVertPaths[IndexV0] == CurrOrigVertPaths[IndexV1])
+          continue;
+        CurrEdges.push_back(std::make_pair(IndexV0, IndexV1));
+      }
+      // append the mesh
+      AppendEdgeMesh(EdgeMeshPos, Edges, CurrEdgeMeshPos, CurrEdges);
+      OrigVertPaths.insert(OrigVertPaths.end(), CurrOrigVertPaths.begin(),
+                           CurrOrigVertPaths.end());
+      FieldDir.insert(FieldDir.end(), CurrFieldDir.begin(), CurrFieldDir.end());
+    }
+  }
+
+  // void GetPathsEdgeMesh(bool SplitCornersFeatures = true) {
+  //   std::vector<std::vector<int>> VertPaths, FieldDir;
+  //   GetVertexFieldPaths(VertPaths, FieldDir);
+
+  //   std::vector<Geo::Point3<ScalarType>> PathVertPos;
+  //   std::vector<std::pair<int, int>> Edges;
+
+  //   for (size_t i = 0; i < VertPaths.size(); i++) {
+  //     std::vector<int> &CurrPath = VertPaths[i];
+  //     std::vector<int> &CurrDir = FieldDir[i];
+  //     bool isLoop = (CurrPath.front() == CurrPath.back());
+  //     for (size_t j = 0; j < CurrPath.size() - 1; j++) {
+  //       int IndexV0 = CurrPath[j];
+  //       int IndexV1 = CurrPath[j + 1];
+  //       // if (SplitCornersFeatures)
+  //       // {
+  //       //   if (IsFeatureVertex(IndexV0) || IsFeatureVertex(IndexV1))
+  //       //     continue;
+  //       // }
+  //       Edges.push_back(std::make_pair(IndexV0, IndexV1));
+  //     }
+  //   }
+  // }
 
   PatchManaging(std::vector<Geo::Point3<ScalarType>> &_VertPos,
                 std::vector<std::vector<int>> &_Faces,

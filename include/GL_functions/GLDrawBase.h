@@ -136,6 +136,18 @@ void GLDrawSegment(
 }
 
 template <class ScalarType>
+void GLDrawSegments(
+    const std::vector<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>> &segments,
+    const ScalarType LineWidth, const ScalarType PointWidth = -1,
+    const Geo::Point3<ScalarType> colorPoint = Geo::Point3<ScalarType>(0, 0, 0),
+    const Geo::Point3<ScalarType> colorLine = Geo::Point3<ScalarType>(0, 0,
+                                                                      0)) {
+  for (size_t i = 0; i < segments.size(); i++) {
+    GLDrawSegment(segments[i].first, segments[i].second, LineWidth, PointWidth, colorPoint, colorLine);
+  }
+}
+
+template <class ScalarType>
 void GLDrawSegment(
     const Geo::Point2<ScalarType> &p0, const Geo::Point2<ScalarType> &p1,
     const ScalarType LineWidth, const ScalarType PointWidth = -1,

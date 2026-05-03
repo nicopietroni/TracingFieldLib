@@ -447,6 +447,130 @@ public:
   //     }
   //     return false;
   // }
+
+  void ComputeVertexAngles(std::vector<ScalarType> &VertexAngles,
+                           std::set<int> ExcludeVertSet=std::set<int>(),
+                           int SmoothSteps = 3) const {
+    const size_t n = PolyPos.size();
+    VertexAngles.resize(n, ScalarType(0));
+    std::vector<bool> ComputedAngles(n, false);
+
+    if (n < 3)
+      return;
+
+    bool isLoop = (PolyPos.front() == PolyPos.back());
+    std::vector<Geo::Point3<ScalarType>> VertPos=PolyPos;
+
+    if (isLoop)
+      VertPos.pop_back(); // work on unique vertices
+
+    int startIdx = isLoop ? 0 : 1;
+    int endIdx = isLoop ? n : n - 1;
+
+    for (size_t i = startIdx; i < endIdx; ++i) {
+      if (ExcludeVertSet.find((int)i) != ExcludeVertSet.end())
+        continue;
+      ComputedAngles[i] = true;
+      const Point3<ScalarType> &Pcurr = VertPos[i];
+      const Point3<ScalarType> &Pprev = VertPos[(i + VertPos.size() - 1) % VertPos.size()];
+      const Point3<ScalarType> &Pnext = VertPos[(i + 1) % VertPos.size()];
+
+      // Point3<ScalarType> Dir0 = Pnext - Pcurr;
+      // Point3<ScalarType> Dir1 = Pprev - Pcurr;
+      Point3<ScalarType> Dir0 = Pnext - Pcurr;
+      Point3<ScalarType> Dir1 = Pcurr - Pprev ;
+      Dir0.Normalize();
+      Dir1.Normalize();
+      const ScalarType Angle = AngleDeg(Dir0, Dir1);
+      VertexAngles[i] = Angle;
+    }
+
+    //check if all non computed then return
+    bool AllNonComputed = true;
+    for (size_t i = startIdx; i < endIdx; ++i)
+      AllNonComputed&=(!ComputedAngles[i]);
+
+    if (AllNonComputed){
+      if (isLoop) 
+        VertexAngles.push_back(VertexAngles[0]);
+      return;
+    }
+
+    //then diffuse the computed angles to the non computed ones 
+    //with a simple laplacian smoothing approach, 
+    bool hasNonComputed = true;
+    while (hasNonComputed)
+    {
+      hasNonComputed = false;
+      for (size_t i = startIdx; i < endIdx; ++i) {
+        if (ComputedAngles[i])
+          continue;
+        size_t im = (i + VertPos.size() - 1) % VertPos.size();
+        size_t ip = (i + 1) % VertPos.size();
+        //if both neighbors are computed then compute the average and mark as computed
+        if (ComputedAngles[im] && ComputedAngles[ip]) {
+          VertexAngles[i] = (VertexAngles[im] + VertexAngles[ip]) / ScalarType(2);
+          ComputedAngles[i] = true;
+          continue;
+        }
+        if (ComputedAngles[im]) {
+          VertexAngles[i] = VertexAngles[im];
+          ComputedAngles[i] = true;
+          continue;
+        }
+        if (ComputedAngles[ip]) {
+          VertexAngles[i] = VertexAngles[ip];
+          ComputedAngles[i] = true;
+          continue;
+        }
+      }
+    }
+
+    if (SmoothSteps == 0)
+    {
+       if (isLoop)
+        VertexAngles.push_back(VertexAngles[0]);
+      return;
+    }
+    for (size_t i = 0; i < SmoothSteps; i++) {
+      std::vector<ScalarType> smoothed = VertexAngles;
+      for (size_t j = 0; j < VertexAngles.size(); j++) {
+        ScalarType curr = VertexAngles[j];
+        if ((!isLoop) && (j == 0)) {
+          ScalarType next = VertexAngles[j + 1];
+          smoothed[j] = (curr + next) / ScalarType(2);
+          continue;
+        }
+        if ((!isLoop) && (j == VertexAngles.size() - 1)) {
+          ScalarType prev = VertexAngles[j - 1];
+          smoothed[j] = (prev + curr) / ScalarType(2);
+          continue;
+        }
+        ScalarType prev =
+            VertexAngles[(j + VertexAngles.size() - 1) % VertexAngles.size()];
+        ScalarType next = VertexAngles[(j + 1) % VertexAngles.size()];
+        smoothed[j] = (prev + VertexAngles[j] + next) / ScalarType(3);
+      }
+      VertexAngles = smoothed;
+    }
+    // add again the last one if loop
+    if (isLoop)
+      VertexAngles.push_back(VertexAngles[0]);
+  }
+
+   void ComputeEdgeAngles(std::vector<ScalarType> &EdgeAngles,
+                          std::set<int> ExcludeVertSet=std::set<int>(),
+                          int SmoothSteps = 3) const {
+    std::vector<ScalarType> VertexAngles; 
+    ComputeVertexAngles( VertexAngles, ExcludeVertSet,SmoothSteps);
+
+    // then edges are average of vertex angles at their endpoints
+    EdgeAngles.resize(VertexAngles.size() - 1);
+    for (size_t i = 0; i < EdgeAngles.size(); i++) {
+      EdgeAngles[i] = (VertexAngles[i] + VertexAngles[i + 1]) / ScalarType(2);
+    }
+  }
+
 };
 
 template <class ScalarType>
@@ -1121,195 +1245,212 @@ template <class ScalarType> class BezierFitting {
     return poly;
   }
 
-  // ===================== ADDED: general-degree Bezier fitting & sampling =====================
+  // ===================== ADDED: general-degree Bezier fitting & sampling
+  // =====================
 
-// Uniform params on [0,1]
-static inline std::vector<ScalarType> UniformParams(size_t n) {
-  std::vector<ScalarType> t(n, ScalarType(0));
-  if (n <= 1) return t;
-  for (size_t i = 0; i < n; ++i)
-    t[i] = ScalarType(i) / ScalarType(n - 1);
-  return t;
-}
-
-// Binomial coefficient C(n,k)
-static inline ScalarType Binom(int n, int k) {
-  if (k < 0 || k > n) return ScalarType(0);
-  if (k == 0 || k == n) return ScalarType(1);
-  k = std::min(k, n - k);
-  ScalarType res = ScalarType(1);
-  for (int i = 1; i <= k; ++i) {
-    res *= ScalarType(n - (k - i));
-    res /= ScalarType(i);
+  // Uniform params on [0,1]
+  static inline std::vector<ScalarType> UniformParams(size_t n) {
+    std::vector<ScalarType> t(n, ScalarType(0));
+    if (n <= 1)
+      return t;
+    for (size_t i = 0; i < n; ++i)
+      t[i] = ScalarType(i) / ScalarType(n - 1);
+    return t;
   }
-  return res;
-}
 
-// Bernstein basis for all j=0..deg at parameter t
-static inline void BernsteinAll(int deg, ScalarType t, std::vector<ScalarType>& B) {
-  B.assign(deg + 1, ScalarType(0));
-  t = Clamp01(t);
-  const ScalarType u = ScalarType(1) - t;
-
-  for (int j = 0; j <= deg; ++j) {
-    const ScalarType c = Binom(deg, j);
-    B[j] = c * std::pow(u, ScalarType(deg - j)) * std::pow(t, ScalarType(j));
+  // Binomial coefficient C(n,k)
+  static inline ScalarType Binom(int n, int k) {
+    if (k < 0 || k > n)
+      return ScalarType(0);
+    if (k == 0 || k == n)
+      return ScalarType(1);
+    k = std::min(k, n - k);
+    ScalarType res = ScalarType(1);
+    for (int i = 1; i <= k; ++i) {
+      res *= ScalarType(n - (k - i));
+      res /= ScalarType(i);
+    }
+    return res;
   }
-}
 
-// Evaluate Bezier (degree = P.size()-1)
-static inline Point3<ScalarType>
-EvalBezier(const std::vector<Point3<ScalarType>>& P, ScalarType t) {
-  const int deg = int(P.size()) - 1;
-  std::vector<ScalarType> B;
-  BernsteinAll(deg, t, B);
+  // Bernstein basis for all j=0..deg at parameter t
+  static inline void BernsteinAll(int deg, ScalarType t,
+                                  std::vector<ScalarType> &B) {
+    B.assign(deg + 1, ScalarType(0));
+    t = Clamp01(t);
+    const ScalarType u = ScalarType(1) - t;
 
-  Point3<ScalarType> out = P[0] * ScalarType(0);
-  for (int j = 0; j <= deg; ++j)
-    out = out + P[j] * B[j];
-  return out;
-}
-
-// Solve SPD linear system M x = b with Cholesky.
-// M is kxk (ScalarType), b and x are length k (Point3)
-static inline bool SolveSPD_Cholesky(
-    const std::vector<std::vector<ScalarType>>& M,
-    const std::vector<Point3<ScalarType>>& b,
-    std::vector<Point3<ScalarType>>& x,
-    ScalarType eps = ScalarType(1e-20)) {
-
-  const int k = int(M.size());
-  x.assign(k, Point3<ScalarType>(ScalarType(0), ScalarType(0), ScalarType(0)));
-  if (k == 0) return true;
-
-  std::vector<std::vector<ScalarType>> L(k, std::vector<ScalarType>(k, ScalarType(0)));
-
-  for (int i = 0; i < k; ++i) {
-    for (int j = 0; j <= i; ++j) {
-      ScalarType sum = M[i][j];
-      for (int s = 0; s < j; ++s) sum -= L[i][s] * L[j][s];
-
-      if (i == j) {
-        if (sum <= eps) return false;
-        L[i][j] = std::sqrt(sum);
-      } else {
-        L[i][j] = sum / L[j][j];
-      }
+    for (int j = 0; j <= deg; ++j) {
+      const ScalarType c = Binom(deg, j);
+      B[j] = c * std::pow(u, ScalarType(deg - j)) * std::pow(t, ScalarType(j));
     }
   }
 
-  // Forward: L y = b
-  std::vector<Point3<ScalarType>> y(k, Point3<ScalarType>(ScalarType(0),ScalarType(0),ScalarType(0)));
-  for (int i = 0; i < k; ++i) {
-    Point3<ScalarType> sum = b[i];
-    for (int s = 0; s < i; ++s) sum = sum - y[s] * L[i][s];
-    y[i] = sum / L[i][i];
+  // Evaluate Bezier (degree = P.size()-1)
+  static inline Point3<ScalarType>
+  EvalBezier(const std::vector<Point3<ScalarType>> &P, ScalarType t) {
+    const int deg = int(P.size()) - 1;
+    std::vector<ScalarType> B;
+    BernsteinAll(deg, t, B);
+
+    Point3<ScalarType> out = P[0] * ScalarType(0);
+    for (int j = 0; j <= deg; ++j)
+      out = out + P[j] * B[j];
+    return out;
   }
 
-  // Backward: L^T x = y
-  for (int i = k - 1; i >= 0; --i) {
-    Point3<ScalarType> sum = y[i];
-    for (int s = i + 1; s < k; ++s) sum = sum - x[s] * L[s][i];
-    x[i] = sum / L[i][i];
-  }
+  // Solve SPD linear system M x = b with Cholesky.
+  // M is kxk (ScalarType), b and x are length k (Point3)
+  static inline bool
+  SolveSPD_Cholesky(const std::vector<std::vector<ScalarType>> &M,
+                    const std::vector<Point3<ScalarType>> &b,
+                    std::vector<Point3<ScalarType>> &x,
+                    ScalarType eps = ScalarType(1e-20)) {
 
-  return true;
-}
+    const int k = int(M.size());
+    x.assign(k,
+             Point3<ScalarType>(ScalarType(0), ScalarType(0), ScalarType(0)));
+    if (k == 0)
+      return true;
 
-// Fit Bezier of degree 'deg' by least squares.
-// If fixEndpoints=true, P0=Q.front and Pdeg=Q.back are fixed, we solve only internal controls.
-// fitUseChordLength decides how to parameterize the data points for the LS.
-static inline bool FitBezierControlPoints_LS(
-    const std::vector<Point3<ScalarType>>& Q,
-    int deg,
-    std::vector<Point3<ScalarType>>& P_out,
-    bool fitUseChordLength = true,
-    bool fixEndpoints = true,
-    ScalarType ridge = ScalarType(1e-10),
-    ScalarType eps = ScalarType(1e-20)) {
+    std::vector<std::vector<ScalarType>> L(
+        k, std::vector<ScalarType>(k, ScalarType(0)));
 
-  const int m = int(Q.size());
-  if (m < 2) return false;
-  if (deg < 1) return false;
+    for (int i = 0; i < k; ++i) {
+      for (int j = 0; j <= i; ++j) {
+        ScalarType sum = M[i][j];
+        for (int s = 0; s < j; ++s)
+          sum -= L[i][s] * L[j][s];
 
-  // Data parameterization for fitting
-  std::vector<ScalarType> t = fitUseChordLength ? ChordLengthParams(Q)
-                                                : UniformParams(Q.size());
+        if (i == j) {
+          if (sum <= eps)
+            return false;
+          L[i][j] = std::sqrt(sum);
+        } else {
+          L[i][j] = sum / L[j][j];
+        }
+      }
+    }
 
-  P_out.assign(deg + 1, Point3<ScalarType>(ScalarType(0),ScalarType(0),ScalarType(0)));
+    // Forward: L y = b
+    std::vector<Point3<ScalarType>> y(
+        k, Point3<ScalarType>(ScalarType(0), ScalarType(0), ScalarType(0)));
+    for (int i = 0; i < k; ++i) {
+      Point3<ScalarType> sum = b[i];
+      for (int s = 0; s < i; ++s)
+        sum = sum - y[s] * L[i][s];
+      y[i] = sum / L[i][i];
+    }
 
-  Point3<ScalarType> P0 = Q.front();
-  Point3<ScalarType> Pn = Q.back();
+    // Backward: L^T x = y
+    for (int i = k - 1; i >= 0; --i) {
+      Point3<ScalarType> sum = y[i];
+      for (int s = i + 1; s < k; ++s)
+        sum = sum - x[s] * L[s][i];
+      x[i] = sum / L[i][i];
+    }
 
-  // Unknown count
-  const int k = fixEndpoints ? std::max(0, deg - 1) : (deg + 1);
-
-  if (fixEndpoints) {
-    P_out[0] = P0;
-    P_out[deg] = Pn;
-  }
-
-  if (k == 0) {
-    // deg==1 with fixed endpoints: straight segment
-    P_out[0] = P0;
-    P_out[deg] = Pn;
     return true;
   }
 
-  // Normal equations: M = A^T A (kxk), b = A^T rhs (k Point3)
-  std::vector<std::vector<ScalarType>> M(k, std::vector<ScalarType>(k, ScalarType(0)));
-  std::vector<Point3<ScalarType>> b(k, Point3<ScalarType>(ScalarType(0),ScalarType(0),ScalarType(0)));
+  // Fit Bezier of degree 'deg' by least squares.
+  // If fixEndpoints=true, P0=Q.front and Pdeg=Q.back are fixed, we solve only
+  // internal controls. fitUseChordLength decides how to parameterize the data
+  // points for the LS.
+  static inline bool FitBezierControlPoints_LS(
+      const std::vector<Point3<ScalarType>> &Q, int deg,
+      std::vector<Point3<ScalarType>> &P_out, bool fitUseChordLength = true,
+      bool fixEndpoints = true, ScalarType ridge = ScalarType(1e-10),
+      ScalarType eps = ScalarType(1e-20)) {
 
-  std::vector<ScalarType> B;
-  for (int i = 0; i < m; ++i) {
-    BernsteinAll(deg, t[i], B);
+    const int m = int(Q.size());
+    if (m < 2)
+      return false;
+    if (deg < 1)
+      return false;
 
-    Point3<ScalarType> rhs = Q[i];
+    // Data parameterization for fitting
+    std::vector<ScalarType> t =
+        fitUseChordLength ? ChordLengthParams(Q) : UniformParams(Q.size());
+
+    P_out.assign(deg + 1, Point3<ScalarType>(ScalarType(0), ScalarType(0),
+                                             ScalarType(0)));
+
+    Point3<ScalarType> P0 = Q.front();
+    Point3<ScalarType> Pn = Q.back();
+
+    // Unknown count
+    const int k = fixEndpoints ? std::max(0, deg - 1) : (deg + 1);
+
     if (fixEndpoints) {
-      rhs = rhs - P0 * B[0] - Pn * B[deg];
+      P_out[0] = P0;
+      P_out[deg] = Pn;
+    }
+
+    if (k == 0) {
+      // deg==1 with fixed endpoints: straight segment
+      P_out[0] = P0;
+      P_out[deg] = Pn;
+      return true;
+    }
+
+    // Normal equations: M = A^T A (kxk), b = A^T rhs (k Point3)
+    std::vector<std::vector<ScalarType>> M(
+        k, std::vector<ScalarType>(k, ScalarType(0)));
+    std::vector<Point3<ScalarType>> b(
+        k, Point3<ScalarType>(ScalarType(0), ScalarType(0), ScalarType(0)));
+
+    std::vector<ScalarType> B;
+    for (int i = 0; i < m; ++i) {
+      BernsteinAll(deg, t[i], B);
+
+      Point3<ScalarType> rhs = Q[i];
+      if (fixEndpoints) {
+        rhs = rhs - P0 * B[0] - Pn * B[deg];
+      }
+
+      for (int u = 0; u < k; ++u) {
+        const int j_u = fixEndpoints ? (u + 1) : u;
+        const ScalarType a_u = B[j_u];
+
+        b[u] = b[u] + rhs * a_u;
+
+        for (int v = 0; v <= u; ++v) {
+          const int j_v = fixEndpoints ? (v + 1) : v;
+          const ScalarType a_v = B[j_v];
+          M[u][v] += a_u * a_v;
+        }
+      }
+    }
+
+    // Symmetrize + ridge
+    for (int u = 0; u < k; ++u) {
+      for (int v = 0; v < u; ++v)
+        M[v][u] = M[u][v];
+      M[u][u] += ridge;
+    }
+
+    std::vector<Point3<ScalarType>> x;
+    if (!SolveSPD_Cholesky(M, b, x, eps)) {
+      // Fallback: linear guess along segment
+      for (int j = 0; j <= deg; ++j) {
+        const ScalarType a = ScalarType(j) / ScalarType(deg);
+        P_out[j] = P0 * (ScalarType(1) - a) + Pn * a;
+      }
+      return true;
     }
 
     for (int u = 0; u < k; ++u) {
-      const int j_u = fixEndpoints ? (u + 1) : u;
-      const ScalarType a_u = B[j_u];
-
-      b[u] = b[u] + rhs * a_u;
-
-      for (int v = 0; v <= u; ++v) {
-        const int j_v = fixEndpoints ? (v + 1) : v;
-        const ScalarType a_v = B[j_v];
-        M[u][v] += a_u * a_v;
-      }
+      const int j = fixEndpoints ? (u + 1) : u;
+      P_out[j] = x[u];
     }
-  }
 
-  // Symmetrize + ridge
-  for (int u = 0; u < k; ++u) {
-    for (int v = 0; v < u; ++v) M[v][u] = M[u][v];
-    M[u][u] += ridge;
-  }
-
-  std::vector<Point3<ScalarType>> x;
-  if (!SolveSPD_Cholesky(M, b, x, eps)) {
-    // Fallback: linear guess along segment
-    for (int j = 0; j <= deg; ++j) {
-      const ScalarType a = ScalarType(j) / ScalarType(deg);
-      P_out[j] = P0 * (ScalarType(1) - a) + Pn * a;
+    if (!fixEndpoints) {
+      // if endpoints are free, they are already part of x and were set above
     }
+
     return true;
   }
-
-  for (int u = 0; u < k; ++u) {
-    const int j = fixEndpoints ? (u + 1) : u;
-    P_out[j] = x[u];
-  }
-
-  if (!fixEndpoints) {
-    // if endpoints are free, they are already part of x and were set above
-  }
-
-  return true;
-}
 
 public:
   // Sample the fitted quadratic Bezier at the same number of points
@@ -1387,29 +1528,27 @@ public:
         PolyL.PolyPos, deg, sampleUniformT, fitUseChordLength, fixEndpoints);
     return outPoly;
   }
-
-  // Local Bezier smoothing using sliding windows + averaging.
-  // - iters: number of smoothing passes
-  // - winSize: window size (recommended odd). Must be >= deg+1.
-  // - deg: Bezier degree
-  // - sampleUniformT: if true, sample fitted Bezier uniformly in t; else use
-  // chord-length of the window
-  // - fitUseChordLength: parameterization used for FITTING (recommended true)
-  //
-  // Behavior:
-  // - If polyline is a loop (first==last): preserves closure.
-  // - If open: endpoints are preserved (never changed).
-  static inline Polyline3<ScalarType>
-  SmoothLocalBezierPolyline(const Polyline3<ScalarType> &polyIn, int iters,
-                            int winSize, int deg, 
-                            bool sampleUniformT= true,
-                            bool fitUseChordLength = true) {
-    Polyline3<ScalarType> out = polyIn;
-    out.PolyPos = SmoothLocalBezierPolyline(polyIn.PolyPos, iters, winSize, deg,
-                                            sampleUniformT, fitUseChordLength);
-    return out;
-  }
 };
+  // // Local Bezier smoothing using sliding windows + averaging.
+  // // - iters: number of smoothing passes
+  // // - winSize: window size (recommended odd). Must be >= deg+1.
+  // // - deg: Bezier degree
+  // // - sampleUniformT: if true, sample fitted Bezier uniformly in t; else use
+  // // chord-length of the window
+  // // - fitUseChordLength: parameterization used for FITTING (recommended true)
+  // //
+  // // Behavior:
+  // // - If polyline is a loop (first==last): preserves closure.
+  // // - If open: endpoints are preserved (never changed).
+  // static inline Polyline3<ScalarType>
+  // SmoothLocalBezierPolyline(const Polyline3<ScalarType> &polyIn, int iters,
+  //                           int winSize, int deg, bool sampleUniformT = true,
+  //                           bool fitUseChordLength = true) {
+  //   Polyline3<ScalarType> out = polyIn;
+  //   out.PolyPos = SmoothLocalBezierPolyline(polyIn.PolyPos, iters, winSize, deg,
+  //                                           sampleUniformT, fitUseChordLength);
+  //   return out;
+  // }
 
 } // namespace Geo
 

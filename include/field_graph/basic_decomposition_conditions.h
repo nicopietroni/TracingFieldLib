@@ -102,6 +102,10 @@ public:
                         const std::vector<int> &MergedPatches) const {
     return true;
   }
+
+  virtual bool NeedSaveStatus() const {
+    return false;
+  }
   // PatchCondition()
   // {elapsed_time=0;}
 };
