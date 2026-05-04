@@ -359,7 +359,7 @@ void InitDefaultFrame(const std::vector<Geo::Point3<ScalarType>> &TetraVertPos,
   }
 }
 
-void OrthoFrameDirs(const int Dir, std::vector<int> &OrthoD) {
+inline void OrthoFrameDirs(const int Dir, std::vector<int> &OrthoD) {
   assert(Dir >= 0);
   assert(Dir < 6);
   OrthoD.clear();
@@ -371,7 +371,7 @@ void OrthoFrameDirs(const int Dir, std::vector<int> &OrthoD) {
   // return ((Dir+3)%6);
 }
 
-int OppositeFrameDir(const int Dir) {
+inline int OppositeFrameDir(const int Dir) {
   assert(Dir >= 0);
   assert(Dir < 6);
   return ((Dir + 3) % 6);
@@ -379,7 +379,7 @@ int OppositeFrameDir(const int Dir) {
 
 enum RelationType { NodeCollinear, NodeOpposite, NodeOrthogonal };
 
-RelationType FrameRelationDir(const int Dir0, const int Dir1) {
+inline RelationType FrameRelationDir(const int Dir0, const int Dir1) {
   assert(Dir0 >= 0);
   assert(Dir1 >= 0);
   if (Dir0 == Dir1)
@@ -514,7 +514,7 @@ void OrthoNormalize(Field::FrameField<ScalarType> &Frame) {
 //}
 
 template <typename ScalarType>
-RelationType
+inline RelationType
 FrameRelationDir(const Field::FrameField<ScalarType> &Frame0, const int Dir0,
                  const Field::FrameField<ScalarType> &Frame1, const int Dir1) {
   const int Dir1Transf = Frame0.FollowDirection(Frame1, Dir1);

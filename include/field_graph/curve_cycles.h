@@ -222,7 +222,8 @@ public:
           if (Curves[k] == TestC) {
             CurvIdx = k;
             Verse = 2;
-            IndexP = 1;
+            //Verse = 1;
+            IndexP = 0;
             Curves[k].NumPatches++;
             typename CurveData::PosPair PPair0 = Curves[k].Extremes();
             typename CurveData::PosPair PPair1 = TestC.Extremes();

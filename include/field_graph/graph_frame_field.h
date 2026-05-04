@@ -272,7 +272,7 @@ public:
   }
 };
 
-void FrameFieldGraph::ToM3(int IndexN, std::vector<int> &M3Nodes) {
+inline void FrameFieldGraph::ToM3(int IndexN, std::vector<int> &M3Nodes) {
   int IndexE = PolyOfNode(IndexN);
   int IndexD = FrameOfNode(IndexN);
   if (IndexD > 3)

@@ -27,6 +27,7 @@
 #ifndef SMOOTH_CROSS_FIELD
 #define SMOOTH_CROSS_FIELD
 
+#include "IO/io_obj.h"
 #include "cross_field.h"
 #include "eigen_interface.h"
 #include "point3.h"
@@ -64,7 +65,6 @@ void ComputeCurvatureField(
   const ScalarType Eps = 0.00000001;
   Eigen::MatrixXi F;
   typename EigenInterface<ScalarType>::MatrixXm Vf;
-
   Eigen::MatrixXd PD1, PD2, PV1, PV2;
   EigenInterface<ScalarType>::GetTriMeshData(VertPos, Faces, F, Vf);
   Eigen::MatrixXd V = Vf.template cast<double>();
