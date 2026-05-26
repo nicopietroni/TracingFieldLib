@@ -35,6 +35,9 @@ if(NOT GLEW_LIB OR NOT GLEW_INCLUDE_DIR)
   message(FATAL_ERROR "GLEW not found")
 endif()
 
+set(LUT_PATH "../../../include/Lut.txt")
+add_compile_definitions(LUT_PATH="${LUT_PATH}")
+
 add_executable(${PROJECT_NAME} main.cpp
                ${IMGUI_DIR}/imgui.cpp
                ${IMGUI_DIR}/imgui_demo.cpp
