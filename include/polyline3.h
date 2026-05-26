@@ -449,7 +449,7 @@ public:
   // }
 
   void ComputeVertexAngles(std::vector<ScalarType> &VertexAngles,
-                           std::set<int> ExcludeVertSet=std::set<int>(),
+                           std::set<int> ExcludeVertSet = std::set<int>(),
                            int SmoothSteps = 3) const {
     const size_t n = PolyPos.size();
     VertexAngles.resize(n, ScalarType(0));
@@ -459,7 +459,7 @@ public:
       return;
 
     bool isLoop = (PolyPos.front() == PolyPos.back());
-    std::vector<Geo::Point3<ScalarType>> VertPos=PolyPos;
+    std::vector<Geo::Point3<ScalarType>> VertPos = PolyPos;
 
     if (isLoop)
       VertPos.pop_back(); // work on unique vertices
@@ -472,44 +472,46 @@ public:
         continue;
       ComputedAngles[i] = true;
       const Point3<ScalarType> &Pcurr = VertPos[i];
-      const Point3<ScalarType> &Pprev = VertPos[(i + VertPos.size() - 1) % VertPos.size()];
+      const Point3<ScalarType> &Pprev =
+          VertPos[(i + VertPos.size() - 1) % VertPos.size()];
       const Point3<ScalarType> &Pnext = VertPos[(i + 1) % VertPos.size()];
 
       // Point3<ScalarType> Dir0 = Pnext - Pcurr;
       // Point3<ScalarType> Dir1 = Pprev - Pcurr;
       Point3<ScalarType> Dir0 = Pnext - Pcurr;
-      Point3<ScalarType> Dir1 = Pcurr - Pprev ;
+      Point3<ScalarType> Dir1 = Pcurr - Pprev;
       Dir0.Normalize();
       Dir1.Normalize();
       const ScalarType Angle = AngleDeg(Dir0, Dir1);
       VertexAngles[i] = Angle;
     }
 
-    //check if all non computed then return
+    // check if all non computed then return
     bool AllNonComputed = true;
     for (size_t i = startIdx; i < endIdx; ++i)
-      AllNonComputed&=(!ComputedAngles[i]);
+      AllNonComputed &= (!ComputedAngles[i]);
 
-    if (AllNonComputed){
-      if (isLoop) 
+    if (AllNonComputed) {
+      if (isLoop)
         VertexAngles.push_back(VertexAngles[0]);
       return;
     }
 
-    //then diffuse the computed angles to the non computed ones 
-    //with a simple laplacian smoothing approach, 
+    // then diffuse the computed angles to the non computed ones
+    // with a simple laplacian smoothing approach,
     bool hasNonComputed = true;
-    while (hasNonComputed)
-    {
+    while (hasNonComputed) {
       hasNonComputed = false;
       for (size_t i = startIdx; i < endIdx; ++i) {
         if (ComputedAngles[i])
           continue;
         size_t im = (i + VertPos.size() - 1) % VertPos.size();
         size_t ip = (i + 1) % VertPos.size();
-        //if both neighbors are computed then compute the average and mark as computed
+        // if both neighbors are computed then compute the average and mark as
+        // computed
         if (ComputedAngles[im] && ComputedAngles[ip]) {
-          VertexAngles[i] = (VertexAngles[im] + VertexAngles[ip]) / ScalarType(2);
+          VertexAngles[i] =
+              (VertexAngles[im] + VertexAngles[ip]) / ScalarType(2);
           ComputedAngles[i] = true;
           continue;
         }
@@ -526,9 +528,8 @@ public:
       }
     }
 
-    if (SmoothSteps == 0)
-    {
-       if (isLoop)
+    if (SmoothSteps == 0) {
+      if (isLoop)
         VertexAngles.push_back(VertexAngles[0]);
       return;
     }
@@ -558,11 +559,11 @@ public:
       VertexAngles.push_back(VertexAngles[0]);
   }
 
-   void ComputeEdgeAngles(std::vector<ScalarType> &EdgeAngles,
-                          std::set<int> ExcludeVertSet=std::set<int>(),
-                          int SmoothSteps = 3) const {
-    std::vector<ScalarType> VertexAngles; 
-    ComputeVertexAngles( VertexAngles, ExcludeVertSet,SmoothSteps);
+  void ComputeEdgeAngles(std::vector<ScalarType> &EdgeAngles,
+                         std::set<int> ExcludeVertSet = std::set<int>(),
+                         int SmoothSteps = 3) const {
+    std::vector<ScalarType> VertexAngles;
+    ComputeVertexAngles(VertexAngles, ExcludeVertSet, SmoothSteps);
 
     // then edges are average of vertex angles at their endpoints
     EdgeAngles.resize(VertexAngles.size() - 1);
@@ -570,7 +571,6 @@ public:
       EdgeAngles[i] = (VertexAngles[i] + VertexAngles[i + 1]) / ScalarType(2);
     }
   }
-
 };
 
 template <class ScalarType>
@@ -1117,6 +1117,7 @@ template <class ScalarType> class BezierFitting {
     return true;
   }
 
+public:
   static inline std::vector<Point3<ScalarType>> SmoothLocalBezierPolyline(
       const std::vector<Point3<ScalarType>> &polyIn, int iters, int winSize,
       int deg, bool sampleUniformT, bool fitUseChordLength = true) {
@@ -1245,9 +1246,19 @@ template <class ScalarType> class BezierFitting {
     return poly;
   }
 
+  static inline Geo::Polyline3<ScalarType>
+  SmoothLocalBezierPolyline(const Geo::Polyline3<ScalarType> &polyIn, int iters,
+                            int winSize, int deg, bool sampleUniformT,
+                            bool fitUseChordLength = true) {
+    Geo::Polyline3<ScalarType> polySmooth;
+    polySmooth.PolyPos = SmoothLocalBezierPolyline(
+        polyIn.PolyPos, iters, winSize, deg, sampleUniformT, fitUseChordLength);
+    return polySmooth;
+  }
   // ===================== ADDED: general-degree Bezier fitting & sampling
   // =====================
 
+private:
   // Uniform params on [0,1]
   static inline std::vector<ScalarType> UniformParams(size_t n) {
     std::vector<ScalarType> t(n, ScalarType(0));
@@ -1529,26 +1540,27 @@ public:
     return outPoly;
   }
 };
-  // // Local Bezier smoothing using sliding windows + averaging.
-  // // - iters: number of smoothing passes
-  // // - winSize: window size (recommended odd). Must be >= deg+1.
-  // // - deg: Bezier degree
-  // // - sampleUniformT: if true, sample fitted Bezier uniformly in t; else use
-  // // chord-length of the window
-  // // - fitUseChordLength: parameterization used for FITTING (recommended true)
-  // //
-  // // Behavior:
-  // // - If polyline is a loop (first==last): preserves closure.
-  // // - If open: endpoints are preserved (never changed).
-  // static inline Polyline3<ScalarType>
-  // SmoothLocalBezierPolyline(const Polyline3<ScalarType> &polyIn, int iters,
-  //                           int winSize, int deg, bool sampleUniformT = true,
-  //                           bool fitUseChordLength = true) {
-  //   Polyline3<ScalarType> out = polyIn;
-  //   out.PolyPos = SmoothLocalBezierPolyline(polyIn.PolyPos, iters, winSize, deg,
-  //                                           sampleUniformT, fitUseChordLength);
-  //   return out;
-  // }
+// // Local Bezier smoothing using sliding windows + averaging.
+// // - iters: number of smoothing passes
+// // - winSize: window size (recommended odd). Must be >= deg+1.
+// // - deg: Bezier degree
+// // - sampleUniformT: if true, sample fitted Bezier uniformly in t; else use
+// // chord-length of the window
+// // - fitUseChordLength: parameterization used for FITTING (recommended true)
+// //
+// // Behavior:
+// // - If polyline is a loop (first==last): preserves closure.
+// // - If open: endpoints are preserved (never changed).
+// static inline Polyline3<ScalarType>
+// SmoothLocalBezierPolyline(const Polyline3<ScalarType> &polyIn, int iters,
+//                           int winSize, int deg, bool sampleUniformT = true,
+//                           bool fitUseChordLength = true) {
+//   Polyline3<ScalarType> out = polyIn;
+//   out.PolyPos = SmoothLocalBezierPolyline(polyIn.PolyPos, iters, winSize,
+//   deg,
+//                                           sampleUniformT, fitUseChordLength);
+//   return out;
+// }
 
 } // namespace Geo
 

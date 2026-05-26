@@ -72,7 +72,7 @@ public:
     EM_ScaledJacobian
   };
 
-  InitEnergyType InitMode = IET_CCAbility;//IET_Heuristic;
+  InitEnergyType InitMode = IET_CCAbility; // IET_Heuristic;
   DistanceType DistType = DT_TangentDDist;
   EnergyMode EMode_Side = EM_Quadrangulation;   // EM_Heuristic;
   EnergyMode EMode_Center = EM_Quadrangulation; // EM_Angle;
@@ -834,7 +834,7 @@ private:
       std::vector<ScalarType> FaceAR;
       Geo::AspectRatioScaledJacobian(CurrQuadVert3D, CurrQuadFaces, FaceAR);
       // Geo::AspectRatioAlignPoly(CurrQuadVert3D, CurrQuadFaces, FaceAR);
-      //Geo::AspectRatioWorstAngle(CurrQuadVert3D, CurrQuadFaces, FaceAR);
+      // Geo::AspectRatioWorstAngle(CurrQuadVert3D, CurrQuadFaces, FaceAR);
       ScalarType AvgAR = 0;
       for (size_t i = 0; i < FaceAR.size(); i++)
         AvgAR += FaceAR[i];
@@ -1362,11 +1362,11 @@ private:
       assert(PData.PatchCorners[i].size() == 1);
 
       std::vector<ScalarType> SideL = GetSideLength(i);
-      //std::cout << "Patch " << i << " side lengths: ";
-      // for (size_t s = 0; s < SideL.size(); s++) {
-      //   std::cout << SideL[s] << " ";
-      // }
-      // std::cout << std::endl;
+      // std::cout << "Patch " << i << " side lengths: ";
+      //  for (size_t s = 0; s < SideL.size(); s++) {
+      //    std::cout << SideL[s] << " ";
+      //  }
+      //  std::cout << std::endl;
 
       // int sizeSideL = SideL.size();
       // SideL=std::vector<ScalarType>(sizeSideL, 1);
@@ -1377,7 +1377,7 @@ private:
       // }
       EdgeCCRatios.push_back(SideRatio);
     }
-    //exit(0);
+    // exit(0);
   }
 
   void SnapBorderSidePos() {
@@ -1443,8 +1443,9 @@ private:
           std::pair<int, int> CandidateBestE = SidePatch[BestEdge];
           ScalarType MoveDist =
               BorderDistanceToCorner(i, CandidateBestE, BestSplEdges[i][s]);
-          //ScalarType DistToCentral = Distance(i, CandidateBestE, CentralV[i]);
-          //doSnap = (MoveDist / DistToCentral) < BorderSnapRatio;
+          // ScalarType DistToCentral = Distance(i, CandidateBestE,
+          // CentralV[i]); doSnap = (MoveDist / DistToCentral) <
+          // BorderSnapRatio;
           ScalarType SideL = SideLengths[i][s];
           doSnap = (MoveDist / SideL) < BorderSnapRatio;
         }
@@ -1488,7 +1489,7 @@ private:
         }
       }
     }
-    //std::cout << "SNAPPED EDGES: " << snappedCount << std::endl;
+    // std::cout << "SNAPPED EDGES: " << snappedCount << std::endl;
   }
 
 public:
@@ -1520,14 +1521,14 @@ public:
   void Optimize(int num_steps = 10) {
 
     if ((InitMode == IET_CCAbility) && (EMode_Side == EM_CCAbility))
-      return;//alreadt optimized in intiializetion step
+      return; // alreadt optimized in intiializetion step
 
     ScalarType OldSnapRatio = BorderSnapRatio;
     BorderSnapRatio = -1;
     int todoSteps = num_steps;
     if (EMode_Side == EM_CCAbility)
-      todoSteps = 1;//only one step needed to optimize the CC ability energy
-    
+      todoSteps = 1; // only one step needed to optimize the CC ability energy
+
     for (size_t i = 0; i < todoSteps; i++) {
       bool modified = false;
 
@@ -1544,7 +1545,7 @@ public:
     }
     // check only at the end
     BorderSnapRatio = OldSnapRatio;
-    if ((BorderSnapRatio > 0)&&(SnapBorders)) {
+    if ((BorderSnapRatio > 0) && (SnapBorders)) {
       FindBestSidePos(EMode_Side);
       FindBestCentralPos(EMode_Center);
     }
@@ -1611,9 +1612,9 @@ public:
 
     InitCentralPos();
     InitSidePos();
-    
+
     if (InitMode == IET_CCAbility)
-        FindBestCentralPos(EM_Quadrangulation);
+      FindBestCentralPos(EM_Quadrangulation);
 
     BorderSnapRatio = OldSnapRatio;
   }
@@ -1631,9 +1632,9 @@ public:
   int MaxValence = 6;
   int MinValence = 3;
 
-  bool TutteParam(const int IndexPatch,
-                  std::vector<Geo::Point2<ScalarType>> &PatchVertUVTutte)const 
-  {
+  bool
+  TutteParam(const int IndexPatch,
+             std::vector<Geo::Point2<ScalarType>> &PatchVertUVTutte) const {
 
     const std::vector<Geo::Point3<ScalarType>> &PatchVertPos =
         PData.PatchVertPos[IndexPatch];
@@ -1717,47 +1718,57 @@ public:
     return (Dist1 - Dist0);
   }
 
-  void FindCandidates(int IndexPatch, std::vector<int> &CandidateRemoveCorners,
-                      std::vector<std::pair<int, int>> &CandidateAddCorners)const {
+  void
+  FindCandidates(int IndexPatch, std::vector<int> &CandidateRemoveCorners,
+                 std::vector<std::pair<int, int>> &CandidateAddCorners) const {
     // get all possible candidates to remove
-    if (PData.EdgePatchSides[IndexPatch].size() !=1)
-    {
-      std::cout<<"ERROR ONLY ONE BOUNDARY SUPPORTED" << std::endl;
+    if (PData.EdgePatchSides[IndexPatch].size() != 1) {
+      std::cout << "ERROR ONLY ONE BOUNDARY SUPPORTED" << std::endl;
       exit(0);
     }
-    if (PData.EdgePatchSides[IndexPatch][0].size() <MinValence)
-    {
-      std::cout<<"ERROR MIN VALENCE NOT MET" << std::endl;
+    if (PData.EdgePatchSides[IndexPatch][0].size() < MinValence) {
+      std::cout << "ERROR MIN VALENCE NOT MET" << std::endl;
       exit(0);
     }
+
+    //compute the angle over the border
+    std::vector<ScalarType> VertAngle;
+    ComputePerVertAngleDeg(PData.PatchVertPos[IndexPatch], PData.PatchFaces[IndexPatch], VertAngle);
 
     int NumSides = PData.EdgePatchSides[IndexPatch][0].size();
     // std::cout<<"Checking Removing Corners"<<std::endl;
     // std::cout<<"Num Sides: "<<NumSides<<std::endl;
     for (size_t s = 0; s < NumSides; s++) {
-      //std::cout<<"Size Edges 0: "<<PData.EdgePatchSides[IndexPatch][0][s].size()<<std::endl;
+      // std::cout<<"Size Edges 0:
+      // "<<PData.EdgePatchSides[IndexPatch][0][s].size()<<std::endl;
       std::pair<int, int> Edge0 = PData.EdgePatchSides[IndexPatch][0][s].back();
       int nextS = (s + 1) % NumSides;
-      //std::cout<<"Size Edges 1: "<<PData.EdgePatchSides[IndexPatch][0][nextS].size()<<std::endl;
-      
+      // std::cout<<"Size Edges 1:
+      // "<<PData.EdgePatchSides[IndexPatch][0][nextS].size()<<std::endl;
+
       std::pair<int, int> Edge1 = PData.EdgePatchSides[IndexPatch][0][nextS][0];
       Geo::Point3<ScalarType> P0 = PData.PatchVertPos[IndexPatch][Edge0.first];
       Geo::Point3<ScalarType> P1 = PData.PatchVertPos[IndexPatch][Edge0.second];
-      Geo::Point3<ScalarType> P1_test = PData.PatchVertPos[IndexPatch][Edge1.first];
+      Geo::Point3<ScalarType> P1_test =
+          PData.PatchVertPos[IndexPatch][Edge1.first];
       Geo::Point3<ScalarType> P2 = PData.PatchVertPos[IndexPatch][Edge1.second];
       assert(P1 == P1_test);
       Geo::Point3<ScalarType> Dir0 = (P0 - P1);
       Geo::Point3<ScalarType> Dir1 = (P2 - P1);
       Dir0.Normalize();
       Dir1.Normalize();
-      ScalarType Angle = AngleDeg(Dir0, Dir1);
+      // ScalarType Angle = AngleDeg(Dir0, Dir1);
+
+      // if (Angle > (180 - MinAngle))
+      //   CandidateRemoveCorners.push_back(nextS);
+      ScalarType Angle = VertAngle[Edge0.second];
 
       if (Angle > (180 - MinAngle))
         CandidateRemoveCorners.push_back(nextS);
     }
 
     // find all candidates to add
-    //std::cout<<"Checking Adding Corners"<<std::endl;
+    // std::cout<<"Checking Adding Corners"<<std::endl;
     for (size_t s = 0; s < NumSides; s++) {
       int NumEdges = PData.EdgePatchSides[IndexPatch][0][s].size();
       for (size_t e = 0; e < NumEdges - 1; e++) {
@@ -1777,9 +1788,13 @@ public:
         Geo::Point3<ScalarType> Dir1 = (P2 - P1);
         Dir0.Normalize();
         Dir1.Normalize();
-        ScalarType Angle = AngleDeg(Dir0, Dir1);
-        if (Angle < (180 - MinAngle))
-          CandidateAddCorners.push_back(std::make_pair(s, e));
+        // ScalarType Angle = AngleDeg(Dir0, Dir1);
+        // if (Angle < (180 - MinAngle))
+        //   CandidateAddCorners.push_back(std::make_pair(s, e));
+        ScalarType Angle = VertAngle[Edge0.second];
+
+      if (Angle < (180 - MinAngle))
+        CandidateAddCorners.push_back(std::make_pair(s, e));
       }
     }
   }
@@ -1824,17 +1839,16 @@ public:
   }
 
   bool FindCandidateMoves(int IndexPatch,
-                          std::vector<CandidateMove> &CandidateMoves) 
-  {
+                          std::vector<CandidateMove> &CandidateMoves) {
     CandidateMoves.clear();
 
     int NumPatches = PData.PatchVertPos.size();
     std::vector<int> CandidateRemoveCorners;
     std::vector<std::pair<int, int>> CandidateAddCorners;
 
-    //std::cout<<"find candidates"<<std::endl;
+    // std::cout<<"find candidates"<<std::endl;
     FindCandidates(IndexPatch, CandidateRemoveCorners, CandidateAddCorners);
-    //std::cout<<"done!"<<std::endl;
+    // std::cout<<"done!"<<std::endl;
     CandidateMoves.clear();
 
     // initialize all moves
@@ -1855,46 +1869,48 @@ public:
     if (CandidateMoves.empty())
       return false;
 
-     // compute the previsus parameterization for the current patch
-      // configuration, so that we can
+    // compute the previsus parameterization for the current patch
+    // configuration, so that we can
     std::vector<Geo::Point2<ScalarType>> CurrPatchUV;
-    //std::cout<<"updating priority"<<std::endl;
+    // std::cout<<"updating priority"<<std::endl;
     bool has_param = TutteParam(IndexPatch, CurrPatchUV);
     if (!has_param)
       return false;
 
-       // update and sort the moves by energy change
-      for (size_t i = 0; i < CandidateMoves.size(); i++)
-        UpdateEnergyChange(CandidateMoves[i], IndexPatch, CurrPatchUV);
+    // update and sort the moves by energy change
+    for (size_t i = 0; i < CandidateMoves.size(); i++)
+      UpdateEnergyChange(CandidateMoves[i], IndexPatch, CurrPatchUV);
 
-      // sort them
-      std::sort(CandidateMoves.begin(), CandidateMoves.end());
-       //std::cout<<"done"<<std::endl;
+    // sort them
+    std::sort(CandidateMoves.begin(), CandidateMoves.end());
+    // std::cout<<"done"<<std::endl;
 
     return true;
   }
 
-  void Optimize(const int &IndexPatch, int &addedNum, int &removedNum) {
+  void Optimize(const int &IndexPatch, int &addedNum, int &removedNum,
+                int MaxValence = 5, int MinValence = 3) {
     addedNum = 0;
     removedNum = 0;
-      
     bool has_changed = false;
+    
     do {
 
       has_changed = false;
 
       std::vector<CandidateMove> CandidateMoves;
-      //std::cout<<"UPDATE CANDIDATE MOVES Patch:"<<IndexPatch<<std::endl;
-      bool found=FindCandidateMoves(IndexPatch, CandidateMoves);
+      // std::cout<<"UPDATE CANDIDATE MOVES Patch:"<<IndexPatch<<std::endl;
+      bool found = FindCandidateMoves(IndexPatch, CandidateMoves);
 
       if (!found)
         return;
-      //std::cout<<"DONE"<<std::endl;
+      // std::cout<<"DONE"<<std::endl;
 
-      if (CandidateMoves.empty()) return;
-      if (CandidateMoves[0].EnergyChange >= 0)return;
+      if (CandidateMoves.empty())
+        return;
+      if (CandidateMoves[0].EnergyChange >= 0)
+        return;
 
-     
       for (size_t i = 0; i < CandidateMoves.size(); i++) {
         CandidateMove Move = CandidateMoves[i];
         int CurrCornersNum = PData.PatchCorners[IndexPatch][0].size();
@@ -1908,24 +1924,24 @@ public:
           continue;
 
         has_changed = true;
-        //std::cout<<"PERFORMING CANDIDATE MOVE Patch:"<<IndexPatch<<std::endl;
+        // std::cout<<"PERFORMING CANDIDATE MOVE Patch:"<<IndexPatch<<std::endl;
 
         switch (Move.Type) {
-          case MT_Add:
-             PData.InsertCorner(IndexPatch, Move.Side, Move.IndexEdge);
-            addedNum++;
-            break;
-          case MT_Remove:
-            PData.RemoveCorner(IndexPatch, Move.Side);
-            removedNum++;
-            break;
-           default: {
-            std::cout << "ERROR UNKNOWN MOVE TYPE" << std::endl;
-            exit(0);
-           }
+        case MT_Add:
+          PData.InsertCorner(IndexPatch, Move.Side, Move.IndexEdge);
+          addedNum++;
+          break;
+        case MT_Remove:
+          PData.RemoveCorner(IndexPatch, Move.Side);
+          removedNum++;
+          break;
+        default: {
+          std::cout << "ERROR UNKNOWN MOVE TYPE" << std::endl;
+          exit(0);
         }
-        //std::cout<<"DONE"<<std::endl;
-        break;//need then to update the possible moves after each change
+        }
+        // std::cout<<"DONE"<<std::endl;
+        break; // need then to update the possible moves after each change
       }
     } while (has_changed);
   }

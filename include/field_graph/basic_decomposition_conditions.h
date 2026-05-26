@@ -28,6 +28,7 @@
 #define BASIC_DECOMPOSITION_CONDITION
 
 #include "catmull_clarkability.h"
+#include "connectivity.h"
 #include "patch_managing.h"
 #include <cassert>
 #include <cstddef>
@@ -253,22 +254,22 @@ public:
 
   bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                  const int &IndexPatch) const override {
-    // std::vector<int> Istances;
-    // PosInstances<ScalarType>(PatchM.PData.SubPatchVertPos[IndexPatch],Istances);
-    // for (size_t i=0;i<Istances.size();i++)
-    // {
-    //     assert(Istances[i]>0);
-    //     if (Istances[i]>1)return false;
-    // }
-    // return true;
-    // auto t0 = std::chrono::high_resolution_clock::now();
     bool HasDupl = HasDuplicateVert(PatchM.PData.SubPatchVertPos[IndexPatch]);
-    // auto t1 = std::chrono::high_resolution_clock::now();
-    // auto elapsed=std::chrono::duration_cast<std::chrono::microseconds>(t1 -
-    // t0);
-    // //this->elapsed_time+=std::chrono::duration_cast<std::chrono::microseconds>(t1
-    // - t0); std::cout<<"ELAPSED Self Conn:"<<elapsed.count()<<std::endl;
-    return (!HasDupl);
+    if (HasDupl) return false;
+    std::vector<std::pair<int, int>> BorderE;
+    getBorderEdges(PatchM.PData.SubPatchFaces[IndexPatch], BorderE);
+    std::vector<int> BorderCount(PatchM.PData.SubPatchVertPos[IndexPatch].size(), 0);
+    for (size_t i = 0; i < BorderE.size(); i++) {
+      int IndexV0 = BorderE[i].first;
+      int IndexV1 = BorderE[i].second;
+      BorderCount[IndexV0]++;
+      BorderCount[IndexV1]++;
+    }
+    for (size_t i = 0; i < BorderCount.size(); i++)
+      if (BorderCount[i] > 2)
+        return false;
+      
+    return (true);
   }
 
   bool Mandatory() const override { return true; }

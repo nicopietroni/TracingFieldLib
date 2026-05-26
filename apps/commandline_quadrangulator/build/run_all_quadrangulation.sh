@@ -1,4 +1,26 @@
-./run_quadrangulation_organic_symm.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/symm/no_features/
-./run_quadrangulation_features_symm.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/symm/features/
-./run_quadrangulation_features.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/300/Mechanical/remeshed/
-./run_quadrangulation_organic.sh  /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/300/Organic/remeshed/
+#abc
+./run_quadrangulation_organic_symm.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/abc/symm/no_features/
+./run_quadrangulation_features_symm.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/abc/symm/features/
+#./run_quadrangulation_organic.sh  /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/abc/no_symm/no_features/
+./run_quadrangulation_features.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/abc/no_symm/features/
+
+#moldex
+./run_quadrangulation_features.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/Moldex/no_symm/
+./run_quadrangulation_features_symm.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/Moldex/symm/
+
+#tingi
+./run_quadrangulation_features_symm.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/tingi/symm/features/
+
+#tractive
+./run_quadrangulation_organic_symm.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/Tractive/symm/
+
+#ansys
+./run_quadrangulation_features.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/Ansys/
+
+#300
+./run_quadrangulation_organic_symm.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/300/symm/no_features/
+./run_quadrangulation_features_symm.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/300/symm/features/
+./run_quadrangulation_organic.sh  /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/300/no_symm/no_features/
+./run_quadrangulation_features.sh /Users/134750/Desktop/00_GeoProjects/Quadrangulation_Test/300/no_symm/features/
+
+

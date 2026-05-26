@@ -208,10 +208,50 @@ static ScalarType Clamp01(ScalarType v)
     return std::max(ScalarType(0), std::min(ScalarType(1), v));
 }
 
-// ---------------------------------------------------
-// Write .mtl file with one material per face
-// Each material encodes a face RGB color
-// ---------------------------------------------------
+// // ---------------------------------------------------
+// // Write .mtl file with one material per face
+// // Each material encodes a face RGB color
+// // ---------------------------------------------------
+// template <class ScalarType>
+// bool WriteMTLFromFaceColor(const std::string &mtlFile,
+//                            const std::vector<std::vector<ScalarType>> &FaceColor,
+//                            bool clampColors = true)
+// {
+//     std::ofstream mout(mtlFile.c_str());
+//     if (!mout) return false;
+
+//     mout << std::setprecision(17);
+
+//     for (size_t i = 0; i < FaceColor.size(); ++i)
+//     {
+//         assert(FaceColor[i].size() == 3);
+
+//         ScalarType r = FaceColor[i][0];
+//         ScalarType g = FaceColor[i][1];
+//         ScalarType b = FaceColor[i][2];
+
+//         // Optionally clamp color values into [0,1]
+//         if (clampColors)
+//         {
+//             r = Clamp01(r);
+//             g = Clamp01(g);
+//             b = Clamp01(b);
+//         }
+
+//         // Define a unique material for each face
+//         mout << "newmtl face_mat_" << i << "\n";
+//         mout << "Ka 0 0 0\n";                     // ambient
+//         mout << "Kd " << r << " " << g << " " << b << "\n"; // diffuse color
+//         mout << "Ks 0 0 0\n";                     // no specular
+//         mout << "d 1.0\n";                        // fully opaque
+//         mout << "illum 1\n\n";                    // simple illumination model
+//     }
+
+//     mout.close();
+//     return true;
+// }
+
+
 template <class ScalarType>
 bool WriteMTLFromFaceColor(const std::string &mtlFile,
                            const std::vector<std::vector<ScalarType>> &FaceColor,
@@ -230,7 +270,6 @@ bool WriteMTLFromFaceColor(const std::string &mtlFile,
         ScalarType g = FaceColor[i][1];
         ScalarType b = FaceColor[i][2];
 
-        // Optionally clamp color values into [0,1]
         if (clampColors)
         {
             r = Clamp01(r);
@@ -238,13 +277,13 @@ bool WriteMTLFromFaceColor(const std::string &mtlFile,
             b = Clamp01(b);
         }
 
-        // Define a unique material for each face
         mout << "newmtl face_mat_" << i << "\n";
-        mout << "Ka 0 0 0\n";                     // ambient
-        mout << "Kd " << r << " " << g << " " << b << "\n"; // diffuse color
-        mout << "Ks 0 0 0\n";                     // no specular
-        mout << "d 1.0\n";                        // fully opaque
-        mout << "illum 1\n\n";                    // simple illumination model
+        mout << "Ka " << r << " " << g << " " << b << "\n"; // ambient = colore
+        mout << "Kd " << r << " " << g << " " << b << "\n"; // diffuse = colore
+        mout << "Ke " << r << " " << g << " " << b << "\n"; // emissive = colore (MeshLab)
+        mout << "Ks 0 0 0\n";
+        mout << "d 1.0\n";
+        mout << "illum 1\n\n";
     }
 
     mout.close();
@@ -316,6 +355,91 @@ bool WriteOBJWithFaceColor(const std::string &meshFile,
     fout.close();
     return true;
 }
+
+template <class ScalarType>
+bool WriteOBJWithVertColor(const std::string &meshFile,
+                           const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                           const std::vector<std::vector<int>> &Connectivity,
+                           const std::vector<Geo::Point3<ScalarType>> &VertColor)
+{
+    
+    std::ofstream fout(meshFile.c_str());
+    if (!fout) return false;
+    fout << std::setprecision(17);
+
+    for (size_t i = 0; i < VertPos.size(); i++)
+    {
+        Geo::Point3<ScalarType> c = VertColor[i];
+        c.X = Clamp01(c.X);
+        c.Y = Clamp01(c.Y);
+        c.Z = Clamp01(c.Z);
+        fout << "v "
+             << VertPos[i].X << " " << VertPos[i].Y << " " << VertPos[i].Z << " "
+             << c.X << " " << c.Y << " " << c.Z << "\n";
+    }
+
+    for (size_t i = 0; i < Connectivity.size(); i++)
+    {
+        std::string key = (Connectivity[i].size() == 2) ? "l" : "f";
+        fout << key;
+        for (size_t j = 0; j < Connectivity[i].size(); j++)
+            fout << " " << Connectivity[i][j] + 1;
+        fout << "\n";
+    }
+
+    fout.close();
+    return true;
+}
+
+// template <class ScalarType>
+// bool WriteOBJWithFaceColorOnOBJ(const std::string &meshFile,
+//                            const std::vector<Geo::Point3<ScalarType>> &VertPos,
+//                            const std::vector<std::vector<int>> &Connectivity,
+//                            const std::vector<Geo::Point3<ScalarType>> &FaceColor)
+// {
+//     if (Connectivity.size() != FaceColor.size())
+//         return false;
+
+//     std::vector<Geo::Point3<ScalarType>> VertColor(VertPos.size(), Geo::Point3<ScalarType>(0,0,0));
+//     std::vector<int> VertCount(VertPos.size(), 0);
+
+//     for (size_t i = 0; i < Connectivity.size(); i++)
+//         for (size_t j = 0; j < Connectivity[i].size(); j++)
+//         {
+//             int v = Connectivity[i][j];
+//             VertColor[v] = VertColor[v] + FaceColor[i];
+//             VertCount[v]++;
+//         }
+
+//     std::ofstream fout(meshFile.c_str());
+//     if (!fout) return false;
+//     fout << std::setprecision(17);
+
+//     for (size_t i = 0; i < VertPos.size(); i++)
+//     {
+//         Geo::Point3<ScalarType> c = VertColor[i];
+//         if (VertCount[i] > 0) c = c / ScalarType(VertCount[i]);
+//         c.X = Clamp01(c.X);
+//         c.Y = Clamp01(c.Y);
+//         c.Z = Clamp01(c.Z);
+//         fout << "v "
+//              << VertPos[i].X << " " << VertPos[i].Y << " " << VertPos[i].Z << " "
+//              << c.X << " " << c.Y << " " << c.Z << "\n";
+//     }
+
+//     for (size_t i = 0; i < Connectivity.size(); i++)
+//     {
+//         std::string key = (Connectivity[i].size() == 2) ? "l" : "f";
+//         fout << key;
+//         for (size_t j = 0; j < Connectivity[i].size(); j++)
+//             fout << " " << Connectivity[i][j] + 1;
+//         fout << "\n";
+//     }
+
+//     fout.close();
+//     return true;
+// }
+
 
 template <class ScalarType>
 bool WriteOBJ(std::string meshFile,

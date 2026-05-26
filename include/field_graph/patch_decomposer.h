@@ -674,10 +674,10 @@ public:
   void GetFeatureElem(std::vector<int> &FeatureElem) {
     std::vector<int> FixedPathsV(FixedPaths.begin(), FixedPaths.end());
     FeatureElem.clear();
-    std::cout << "Fixed Paths " << FixedPathsV.size() << std::endl;
+    //std::cout << "Fixed Paths " << FixedPathsV.size() << std::endl;
     for (size_t i = 0; i < FixedPathsV.size(); i++) {
       int IndexP = FixedPathsV[i];
-      std::cout << "Index P " << IndexP << std::endl;
+      //std::cout << "Index P " << IndexP << std::endl;
       assert(IndexP >= 0);
       assert(IndexP < PathSampl.SelectedPaths.size());
       std::vector<int> CurrFeatureEl;

@@ -129,6 +129,78 @@ public:
   std::vector<std::vector<Geo::Point3<ScalarType>>> SampleSidePoints;
   std::vector<typeMatching> VarMatching;
 
+  void InitVarSequences() {
+    VarSequences.clear();
+
+    // Adjacency list for size-1/size-1 pairs only.
+    // Using a flat array indexed by variable — faster than unordered_map.
+    std::vector<std::vector<int>> EqGraph(NumVariables);
+    std::vector<bool> Visited(NumVariables, false);
+
+    for (size_t i = 0; i < OppEquivalences.size(); i++) {
+      const int Size0 = OppEquivalences[i].first.size();
+      const int Size1 = OppEquivalences[i].second.size();
+
+      if (Size0 != 1 || Size1 != 1) {
+        // Each side with more than one variable becomes its own sequence.
+        // Size-1 sides are handled as potential chain nodes — but since the
+        // other side is multi-var, they won't be chained to anything here;
+        // they'll become singleton sequences in the final pass.
+        if (Size0 > 1) {
+          VarSequences.push_back(OppEquivalences[i].first);
+          for (int v : OppEquivalences[i].first)
+            Visited[v] = true;
+        }
+        if (Size1 > 1) {
+          VarSequences.push_back(OppEquivalences[i].second);
+          for (int v : OppEquivalences[i].second)
+            Visited[v] = true;
+        }
+        continue;
+      }
+
+      const int IndexVar0 = OppEquivalences[i].first[0];
+      const int IndexVar1 = OppEquivalences[i].second[0];
+
+      assert(IndexVar0 != IndexVar1);
+      assert(IndexVar0 >= 0 && IndexVar0 < NumVariables);
+      assert(IndexVar1 >= 0 && IndexVar1 < NumVariables);
+
+      EqGraph[IndexVar0].push_back(IndexVar1);
+      EqGraph[IndexVar1].push_back(IndexVar0);
+    }
+
+    // BFS/DFS over connected components of EqGraph.
+    // Reuse a single stack across all components to avoid repeated allocation.
+    std::vector<int> Stack;
+    Stack.reserve(NumVariables);
+
+    for (int i = 0; i < NumVariables; i++) {
+      if (Visited[i])
+        continue;
+
+      // Start a new sequence for this component.
+      VarSequences.emplace_back();
+      std::vector<int> &Seq = VarSequences.back();
+
+      Stack.push_back(i);
+      do {
+        const int IndexVar = Stack.back();
+        Stack.pop_back();
+
+        if (Visited[IndexVar])
+          continue;
+        Visited[IndexVar] = true;
+        Seq.push_back(IndexVar);
+
+        for (const int IndexNVar : EqGraph[IndexVar]) {
+          if (!Visited[IndexNVar])
+            Stack.push_back(IndexNVar);
+        }
+      } while (!Stack.empty());
+    }
+  }
+
   int NumPatches() const { return PatchSides.size(); }
 
   int NumSides(const int &PatchIdx) const {
@@ -871,7 +943,6 @@ private:
     // InitMinMaxVectors(MinVal,MaxVal);
     IntLSQ.Init(LSQCostr, MinVal, MaxVal, SoftLow, SoftHigh, SoftOptimal,
                 RoundPrio);
-    // std::cout<<"DE 1 "<<VarTargetValue.size()<<std::endl;
     IntLSQ.Solve(VarValue);
 
     if (post_duplicate)
@@ -888,7 +959,6 @@ private:
   }
 
 public:
-
   int SolveParityViaGraph(bool find_points = true) {
     std::vector<std::vector<std::vector<int>>> PatchVar;
 
@@ -897,12 +967,12 @@ public:
     OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
     // FlowG.MinRatio = MinRatio;
     // FlowG.MaxRatio = MaxRatio;
-    int steps=FlowG.SolveParity();
+    int steps = FlowG.SolveParity();
 
     // then the one that allow invert u and v
     GetPerPatchVars(PatchVar);
     ConstraintGraph<ScalarType> CostrGraph(VarValue, VarTargetValue);
-    steps+=CostrGraph.SolveParity(PatchVar);
+    steps += CostrGraph.SolveParity(PatchVar);
 
     if (find_points) {
       InitMatchingType();
@@ -937,7 +1007,7 @@ public:
     GetPerPatchVars(PatchVar);
 
     OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
-    int steps=FlowG.ImproveSize();
+    int steps = FlowG.ImproveSize();
 
     if (find_points) {
       InitMatchingType();
@@ -958,28 +1028,25 @@ public:
   }
 
   void AutomaticGraphOptimize(const bool OptimizeEquality,
-                              const bool OptimizeSize, 
-                              const bool MakeEven,
-                              bool find_points = true) 
-  {
+                              const bool OptimizeSize, const bool MakeEven,
+                              bool find_points = true) {
     if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
       DivideTargetVal();
 
-    int stepEq=0;
-    int stepSize=0;
-    int stepParity=0;
+    int stepEq = 0;
+    int stepSize = 0;
+    int stepParity = 0;
     if (OptimizeEquality)
-      stepEq=SolveEqualityViaGraph(false);
+      stepEq = SolveEqualityViaGraph(false);
 
-      
     if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
       DuplicateSolution();
 
     if (OptimizeSize)
-      stepSize=SolveSizeViaGraphCycles(false);
+      stepSize = SolveSizeViaGraphCycles(false);
 
     if ((PMode == Geo::SideDiscretization<ScalarType>::SolvePost) && MakeEven)
-      stepParity=SolveParityViaGraph(false);
+      stepParity = SolveParityViaGraph(false);
 
     if (find_points) {
       InitMatchingType();
@@ -987,9 +1054,9 @@ public:
       WritePatchStats();
     }
 
-    std::cout<<"Performed:"<<stepEq<<" Equality Steps, "<<std::endl;
-    std::cout<<"Performed:"<<stepSize<<" Size Steps, "<<std::endl;
-    std::cout<<"Performed:"<<stepParity<<" Parity Steps."<<std::endl;
+    std::cout << "Performed:" << stepEq << " Equality Steps, " << std::endl;
+    std::cout << "Performed:" << stepSize << " Size Steps, " << std::endl;
+    std::cout << "Performed:" << stepParity << " Parity Steps." << std::endl;
   }
 
   bool LessThanRatio(const int IndexVar) const {
@@ -1021,6 +1088,7 @@ public:
     std::cout << "<<< Label STATS >>>" << std::endl;
     std::cout << "* Num Variables: " << NumVariables << std::endl;
     std::cout << "* Num TJunctions: " << NumTJunctions << std::endl;
+    std::cout << "* Num Sequences: " << VarSequences.size() << std::endl;
   }
 
   void InitFromLabels(const std::vector<Geo::Point3<ScalarType>> &Vert,
@@ -1120,7 +1188,8 @@ public:
 
     InitFeatureVariables(Vert, Features);
 
-    PrintStats();
+
+    // PrintStats();
   }
 
   void GetSubSideExtremes(const int IndexP, const int IndexS,
@@ -1276,9 +1345,7 @@ public:
     //_GeoFeatures = GeoFeatures;
   }
 
-  void GetPatchStats(int &NumOK,int &NumNoQuad,
-                     int &NumNoMatch,int &NumOdd)
-  {
+  void GetPatchStats(int &NumOK, int &NumNoQuad, int &NumNoMatch, int &NumOdd) {
     NumOK = 0;
     NumNoQuad = 0;
     NumNoMatch = 0;
@@ -1302,16 +1369,16 @@ public:
     }
   }
 
-  void WritePatchStats(int &NumOK0,int &NumNoQuad0,
-                       int &NumNoMatch0,int &NumOdd0,
-                       int &NumOK1,int &NumNoQuad1,
-                       int &NumNoMatch1,int &NumOdd1)
-  {
+  void WritePatchStats(int &NumOK0, int &NumNoQuad0, int &NumNoMatch0,
+                       int &NumOdd0, int &NumOK1, int &NumNoQuad1,
+                       int &NumNoMatch1, int &NumOdd1) {
     std::cout << "<<< Integer Optimization STATS >>>" << std::endl;
-   
-    std::cout << "* Num Non Quad: " << NumNoQuad0 << "-->" << NumNoQuad1 << std::endl;
+
+    std::cout << "* Num Non Quad: " << NumNoQuad0 << "-->" << NumNoQuad1
+              << std::endl;
     std::cout << "* Num Odd: " << NumOdd0 << "-->" << NumOdd1 << std::endl;
-    std::cout << "* Num No Match: " << NumNoMatch0 << "-->" << NumNoMatch1 << std::endl;
+    std::cout << "* Num No Match: " << NumNoMatch0 << "-->" << NumNoMatch1
+              << std::endl;
     std::cout << "* Num OK Match: " << NumOK0 << "-->" << NumOK1 << std::endl;
   }
 
@@ -1339,12 +1406,17 @@ public:
     InitTargetValue(_TargetL);
     InitOppositeEquivalences();
     InitOppEquivalencesW();
-    VarTargetValueW = std::vector<ScalarType>(VarTargetValue.size(), 0);
     
+    InitVarSequences();
+    PrintStats();
+
+    VarTargetValueW = std::vector<ScalarType>(VarTargetValue.size(), 0);
+
     // std::cout << "Find Contracditory loops" << std::endl;
     // std::vector<typename ConstraintCleaner<ScalarType>::Conflict> conflicts;
-    // ConstraintCleaner<ScalarType>::FindContradictoryLoops(OppEquivalences, conflicts, 6, 100);
-    // std::cout << "Found " << conflicts.size() << " contradictory loops" << std::endl;
+    // ConstraintCleaner<ScalarType>::FindContradictoryLoops(OppEquivalences,
+    // conflicts, 6, 100); std::cout << "Found " << conflicts.size() << "
+    // contradictory loops" << std::endl;
 
     // NoParity, EvenVar, SolvePost
     bool pre_divide = false;
@@ -1368,28 +1440,26 @@ public:
                           const ScalarType _RegVsIso,
                           const bool OptimizeEquality, const bool OptimizeSize,
                           const bool MakeEven) {
-
-    std::cout<<"Solving Integer System..."<<std::endl;
+    
+    std::cout << "Solving Integer System..." << std::endl;
     SolveSystem(_TargetL, _RegVsIso, false);
 
     int NumOK0 = 0, NumNoQuad0 = 0, NumNoMatch0 = 0, NumOdd0 = 0;
     GetPatchStats(NumOK0, NumNoQuad0, NumNoMatch0, NumOdd0);
-    
-    std::cout<<"Graph Optimization..."<<std::endl;
+
+    std::cout << "Graph Optimization..." << std::endl;
     AutomaticGraphOptimize(OptimizeEquality, OptimizeSize, MakeEven, false);
 
     InitMatchingType();
 
     FindDiscretizationPoint();
 
-    //WritePatchStats();
+    // WritePatchStats();
     int NumOK1 = 0, NumNoQuad1 = 0, NumNoMatch1 = 0, NumOdd1 = 0;
     GetPatchStats(NumOK1, NumNoQuad1, NumNoMatch1, NumOdd1);
-    
-    WritePatchStats(NumOK0, NumNoQuad0,
-                       NumNoMatch0, NumOdd0,
-                       NumOK1, NumNoQuad1,
-                       NumNoMatch1, NumOdd1);
+
+    WritePatchStats(NumOK0, NumNoQuad0, NumNoMatch0, NumOdd0, NumOK1,
+                    NumNoQuad1, NumNoMatch1, NumOdd1);
   }
 
   void SetToTarget(ScalarType _TargetL) {

@@ -362,6 +362,8 @@ public:
     return true;
   }
 
+public:
+
   static bool QuadrangulateQuadPatchWithSubs(
       const std::vector<Geo::Point3<ScalarType>> &PatchVert,
       const std::vector<std::vector<int>> &Patch_Faces,
@@ -439,7 +441,6 @@ public:
     return has_sampled;
   }
 
-public:
   // return the amount of non quadrangulated patches
   static int QuadrangulateQuadPatchsWithSubs(
       const std::vector<Geo::Point3<ScalarType>> &Vert_3D,

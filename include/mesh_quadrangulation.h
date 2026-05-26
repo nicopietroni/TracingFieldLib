@@ -361,7 +361,7 @@ template <class ScalarType> class MeshQuadrangulator {
   void InitDefaultDualParameters() {
     // DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_Tutte;
     // DualParam.RType = Geo::DualPatch<ScalarType>::RT_UVDist_ARAP;
-    // DualParam.RType = Geo::DualPatch<ScalarType>::RT_CCability;
+    DualParam.RType = Geo::RT_CCability;
     DualParam.OnlyNonQuad = true;
     DualParam.InitSingPos = true;
     DualParam.FixSingPos = false;
@@ -750,7 +750,7 @@ public:
 
     QuadSmoothSteps = 10;
     // force_parity = true;
-    RegVsIso = 0.5;
+    RegVsIso = 0.5;//1.0;
 
     OptimizeEquality = true;
     OptimizeSize = true;
