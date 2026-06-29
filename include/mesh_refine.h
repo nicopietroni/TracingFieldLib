@@ -800,7 +800,7 @@ public:
       const std::vector<std::vector<Geo::Point2<ScalarType>>> &PolyL,
       std::vector<std::pair<int, int>> &NewEdges, ScalarType minAlpha = 0.05,
       bool split_edpoints = true) {
-    if (PolyL.size() < 2)
+    if (PolyL.size() < 1)
       return;
 
     std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>

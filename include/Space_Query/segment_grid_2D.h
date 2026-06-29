@@ -369,6 +369,19 @@ void InitFromMeshBorders(const std::vector<Geo::Point2<ScalarType>> &VertPos,
   SegIndex.Init(Segs);
 }
 
+
+template <class ScalarType>
+void InitFromMeshBorders(const std::vector<Geo::Point2<ScalarType>> &VertPos,
+                         const std::vector<std::vector<int>> &Faces,
+                         std::vector<Geo::Segment2<ScalarType>> &Segs,
+                         Geo::SegmentSpatialIndex2D<ScalarType> &SegIndex)
+{
+  std::vector<int> BorderF;
+  std::vector<int> BorderE;
+  Geo::getBorderEdges(Faces, BorderF, BorderE);
+  InitFromMeshBorders(VertPos, Faces, BorderF, BorderE, Segs, SegIndex);
+}
+
 } // namespace Geo
 
 #endif

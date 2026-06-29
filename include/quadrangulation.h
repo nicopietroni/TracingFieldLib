@@ -33,9 +33,11 @@
 #include "UV_param.h"
 #include "UV_utils.h"
 #include "box2.h"
+#include "mesh_clean.h"
 #include "mesh_functions.h"
 #include "point2.h"
 #include "point3.h"
+#include "polyline3.h"
 #include "quad2.h"
 #include "quadrangulationLUT.h"
 #include "segment2.h"
@@ -132,7 +134,7 @@ public:
         QuadFaces.back().push_back(IndexV3);
       }
     }
-    
+
     return true;
   }
 
@@ -264,6 +266,21 @@ public:
             (size2 > QLut.MaxSubdVal) || (size3 > QLut.MaxSubdVal));
   }
 
+  static bool OutofLUTBounds(
+      const QuadrangulationLUT<ScalarType> &QLut,
+      const std::vector<std::vector<Geo::Point3<ScalarType>>> &SideSubd) {
+    assert(SideSubd.size() == 4);
+    int size0 = SideSubd[0].size();
+    int size1 = SideSubd[1].size();
+    int size2 = SideSubd[2].size();
+    int size3 = SideSubd[3].size();
+    assert(size0 >= 0);
+    assert(size1 >= 0);
+    assert(size2 >= 0);
+    assert(size3 >= 0);
+    return ((size0 > QLut.MaxSubdVal) || (size1 > QLut.MaxSubdVal) ||
+            (size2 > QLut.MaxSubdVal) || (size3 > QLut.MaxSubdVal));
+  }
   // static bool QuadrangulateExtendLUT(const QuadrangulationLUT<ScalarType>
   // &QLut,
   //                                   const
@@ -335,11 +352,12 @@ public:
       GridUV.FirstTrianglesOverPoint(PatchVertUV, Patch_Faces, QuadVertUV[i],
                                      IndexF, BaryCoords);
       if (IndexF == -1) {
-        std::cout << "Error Quadrangulation 3D Mapping" << std::endl;
-        WriteOBJ("Test0.obj", PatchVertUV, Patch_Faces);
-        WriteOBJ("Test1.obj", QuadVertUV, QuadFaces);
+        std::cout << "Warning: Quadrangulation 3D Mapping" << std::endl;
+        // WriteOBJ("Test0.obj", PatchVertUV, Patch_Faces);
+        // WriteOBJ("Test1.obj", QuadVertUV, QuadFaces);
         // QuadVertUV
-        exit(0);
+        //exit(1);
+        return false;
       }
       assert(IndexF != -1);
 
@@ -362,8 +380,15 @@ public:
     return true;
   }
 
-public:
+  static int SumSideSubdivision(
+      const std::vector<std::vector<Geo::Point3<ScalarType>>> &SideSubd) {
+    int TotSub = 0;
+    for (size_t i = 0; i < SideSubd.size(); i++)
+      TotSub += (SideSubd[i].size() - 1);
+    return TotSub;
+  }
 
+public:
   static bool QuadrangulateQuadPatchWithSubs(
       const std::vector<Geo::Point3<ScalarType>> &PatchVert,
       const std::vector<std::vector<int>> &Patch_Faces,
@@ -382,11 +407,30 @@ public:
       return false;
     if (PatchCorners.size() != 4)
       return false;
+    // must be even number of subdivision
+    if ((SumSideSubdivision(SideSubd) % 2) != 0)
+      return false;
     std::vector<Geo::Point2<ScalarType>> VertUV;
 
     // paremetrize the patch also considering corners
+
+    // WriteOBJ("TestPatch.obj", PatchVert, Patch_Faces);
+    // // write the Corners on a file
+    // std::ofstream CornerFile("TestPatchCorners.txt");
+    // for (size_t i = 0; i < PatchCorners.size(); i++)
+    //   CornerFile << PatchCorners[i] << std::endl;
+    // CornerFile.close();
+
+    std::vector<Geo::Point3<ScalarType>> CornerPos;
+    for (size_t i = 0; i < PatchCorners.size(); i++)
+      CornerPos.push_back(PatchVert[PatchCorners[i]]);
+
+    // WriteOBJ("CornerPositions.obj", CornerPos,
+    // std::vector<std::vector<int>>());
+
     Geo::UVParam<ScalarType>::TutteEmbedding(PatchVert, Patch_Faces,
                                              PatchCorners, VertUV, true);
+
     Geo::TriangleSpatialIndex<ScalarType> Grid;
     Grid.Init(PatchVert, Patch_Faces);
     Geo::Box3<ScalarType> BB;
@@ -429,6 +473,7 @@ public:
 
     bool IsRegular = ((Size0 == Size2) && (Size1 == Size3));
     bool has_sampled = true;
+
     if (IsRegular) {
       SampleRegular(VertUV, PatchVert, Patch_Faces, Size0, Size1, SideSubd,
                     UVSideSubd, QuadVert, QuadFaces);
@@ -439,6 +484,228 @@ public:
     }
 
     return has_sampled;
+  }
+
+  static bool CanQuadrangulateDirect(
+      const std::vector<std::vector<Geo::Point3<ScalarType>>> &SideSubd,
+      const QuadrangulationLUT<ScalarType> &QLut) {
+    size_t Size0 = SideSubd[0].size();
+    size_t Size1 = SideSubd[1].size();
+    size_t Size2 = SideSubd[2].size();
+    size_t Size3 = SideSubd[3].size();
+
+    bool IsRegular = ((Size0 == Size2) && (Size1 == Size3));
+    bool out_of_lut = OutofLUTBounds(QLut, SideSubd);
+    // in that case do not need a split
+    if (!IsRegular && out_of_lut)
+      return false;
+    return true;
+  }
+
+  // then start splitting until we can sample with the LUT
+  struct QuadrData {
+    std::vector<Geo::Point3<ScalarType>> PatchVert;
+    std::vector<std::vector<int>> Patch_Faces;
+    std::vector<int> PatchCorners;
+    std::vector<std::vector<Geo::Point3<ScalarType>>> SideSubd;
+  };
+
+  static void SaveQuadrData(const QuadrData &Data, const std::string &Name) {
+    // std::cout<<"Saving Patch "<<std::endl;
+    std::string OutNamePatch = Name + "_patch.obj";
+    WriteOBJ(OutNamePatch.c_str(), Data.PatchVert, Data.Patch_Faces);
+
+    std::vector<Geo::Point3<ScalarType>> AllSide3D;
+    std::vector<Geo::Point3<ScalarType>> AllCorner3D;
+    for (size_t i = 0; i < Data.SideSubd.size(); i++)
+      AllSide3D.insert(AllSide3D.end(), Data.SideSubd[i].begin(),
+                       Data.SideSubd[i].end());
+
+    AllSide3D.erase(std::unique(AllSide3D.begin(), AllSide3D.end()),
+                    AllSide3D.end());
+
+    AllCorner3D.resize(Data.PatchCorners.size());
+    for (size_t i = 0; i < Data.PatchCorners.size(); i++)
+      AllCorner3D[i] = Data.PatchVert[Data.PatchCorners[i]];
+
+    std::string OutNameSide = Name + "_side.obj";
+    WriteOBJ(OutNameSide.c_str(), AllSide3D, std::vector<std::vector<int>>());
+
+    std::string OutNameCorner = Name + "_corner.obj";
+    WriteOBJ(OutNameCorner.c_str(), AllCorner3D,
+             std::vector<std::vector<int>>());
+  }
+
+  static bool QuadrangulateQuadPatchWithSubsRecursive(
+      const std::vector<Geo::Point3<ScalarType>> &PatchVert,
+      const std::vector<std::vector<int>> &Patch_Faces,
+      const std::vector<int> &PatchCorners,
+      const std::vector<std::vector<Geo::Point3<ScalarType>>> &SideSubd,
+      const QuadrangulationLUT<ScalarType> &QLut,
+      std::vector<Geo::Point3<ScalarType>> &QuadVert,
+      std::vector<std::vector<int>> &QuadFaces) {
+
+    bool canQuadDirect = CanQuadrangulateDirect(SideSubd, QLut);
+
+    if (canQuadDirect)
+      return QuadrangulateQuadPatchWithSubs(PatchVert, Patch_Faces,
+                                            PatchCorners, SideSubd, QLut,
+                                            QuadVert, QuadFaces);
+
+    // OTHERWISE we need to split the patch
+    bool must_split = true;
+
+    std::vector<QuadrData> ToQuadrangulate;
+    QuadrData InitialData;
+
+    InitialData.PatchVert = PatchVert;
+    InitialData.Patch_Faces = Patch_Faces;
+    InitialData.PatchCorners = PatchCorners;
+    InitialData.SideSubd = SideSubd;
+    ToQuadrangulate.push_back(InitialData);
+
+    // std::cout << "Side Subd Size: "
+    //           << SideSubd[0].size() - 1 << " "
+    //           << SideSubd[1].size() - 1 << " "
+    //           << SideSubd[2].size() - 1 << " "
+    //           << SideSubd[3].size() - 1 << std::endl;
+
+    struct OutQuadData {
+      std::vector<Geo::Point3<ScalarType>> QuadVert;
+      std::vector<std::vector<int>> QuadFaces;
+    };
+    std::vector<OutQuadData> QuadrangulatedData;
+
+    // std::cout << "QUADRANGULATE SPLITITNG PATCHES " << std::endl;
+    do {
+      // std::cout << "Num Patch to Quad 0: " << ToQuadrangulate.size()
+      //           << std::endl;
+
+      QuadrData CurrData = ToQuadrangulate.back();
+      ToQuadrangulate.pop_back();
+      bool canQuadDirect = CanQuadrangulateDirect(CurrData.SideSubd, QLut);
+      // std::cout << "Num Patch to Quad 1: " << ToQuadrangulate.size()
+      //           << std::endl;
+      // std::cout << "Side Subd Size: " << CurrData.SideSubd[0].size() - 1 << "
+      // "
+      //           << CurrData.SideSubd[1].size() - 1 << " "
+      //           << CurrData.SideSubd[2].size() - 1 << " "
+      //           << CurrData.SideSubd[3].size() - 1 << std::endl;
+
+      if (canQuadDirect) {
+
+        QuadrangulatedData.resize(QuadrangulatedData.size() + 1);
+        // std::cout << "Quadrangulating Patch " << std::endl;
+        // SaveQuadrData(CurrData, "BeforeQuad");
+        bool has_quad = QuadrangulateQuadPatchWithSubs(
+            CurrData.PatchVert, CurrData.Patch_Faces, CurrData.PatchCorners,
+            CurrData.SideSubd, QLut, QuadrangulatedData.back().QuadVert,
+            QuadrangulatedData.back().QuadFaces);
+        // std::cout << "Done " << std::endl;
+        if (!has_quad)
+          return false;
+
+        continue;
+      }
+      // otherwise split the patch
+      QuadrangulatedData.resize(QuadrangulatedData.size() + 1);
+      int Size0 = (int)CurrData.SideSubd[0].size();
+      int Size1 = (int)CurrData.SideSubd[1].size();
+      int Size2 = (int)CurrData.SideSubd[2].size();
+      int Size3 = (int)CurrData.SideSubd[3].size();
+
+      // std::cout << "Sizes: " << Size0 << " " << Size1 << " " << Size2 << " "
+      //           << Size3 << std::endl;
+      std::array<int, 4> SideSubdNum = {Size0, Size1, Size2, Size3};
+
+      // std::cout <<"Deriving Split Info "<<std::endl;
+      SplitInfo Sinfo = DeriveSplitInfo(SideSubdNum);
+      // std::cout <<"Done "<<std::endl;
+
+      // std::cout << "Split Edge: " << Sinfo.SplitEdge << std::endl;
+      // std::cout << "Split Num0: " << Sinfo.SplitNum0 << std::endl;
+      // std::cout << "Split Num1: " << Sinfo.SplitNum1 << std::endl;
+      // std::cout << "New Split Num: " << Sinfo.NewSplitNum << std::endl;
+
+      // then split the patch into 2 subpatches
+      std::vector<std::vector<Geo::Point3<ScalarType>>> SubPatchVert;
+      std::vector<std::vector<std::vector<int>>> SubPatchFaces;
+      std::vector<std::vector<int>> SubPatchCorners;
+      std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+          SubPatchSideSubd;
+
+      // SaveQuadrData(CurrData, "BeforeSplit");
+      // std::cout << "Splitting Patch " << std::endl;
+      bool OkSplit = Geo::Quadrangulation<ScalarType>::SplitSideIntoSubPatches(
+          CurrData.PatchVert, CurrData.Patch_Faces, CurrData.PatchCorners,
+          CurrData.SideSubd, Sinfo, SubPatchVert, SubPatchFaces,
+          SubPatchCorners, SubPatchSideSubd);
+      if (!OkSplit) {
+        return false;
+      }
+      // std::cout << "Done " << std::endl;
+
+      // then push into the stack the 2 subpatches
+      // std::cout << "Splitted Into " << SubPatchVert.size() << " Subpatches"
+      //           << std::endl;
+
+      // std::cout<<"Subpatch Vert Size: "<<SubPatchVert.size()<<std::endl;
+      // std::cout<<"Subpatch Faces Size: "<<SubPatchFaces.size()<<std::endl;
+      // std::cout<<"Subpatch Corners Size:
+      // "<<SubPatchCorners.size()<<std::endl;
+      // "<<SubPatchCorners.size()<<std::endl; std::cout<<"Subpatch SideSubd
+      // Size: "<<SubPatchSideSubd.size()<<std::endl;
+
+      if (SubPatchCorners.size() != 2 || SubPatchVert.size() != 2 ||
+          SubPatchFaces.size() != 2 || SubPatchSideSubd.size() != 2) {
+        std::cout << "Error in splitting patch, more than 2 subpatches"
+                  << std::endl;
+        QuadrData NewData0, NewData1;
+        NewData0.PatchVert = SubPatchVert[0];
+        NewData0.Patch_Faces = SubPatchFaces[0];
+        NewData0.SideSubd = SubPatchSideSubd[0];
+        NewData0.PatchCorners = SubPatchCorners[0];
+        SaveQuadrData(NewData0, "SubPatch_0");
+
+        NewData1.PatchVert = SubPatchVert[1];
+        NewData1.Patch_Faces = SubPatchFaces[1];
+        NewData1.SideSubd = SubPatchSideSubd[1];
+        NewData1.PatchCorners = SubPatchCorners[1];
+        SaveQuadrData(NewData1, "SubPatch_1");
+        exit(1);
+      }
+
+      for (size_t i = 0; i < SubPatchVert.size(); i++) {
+        QuadrData NewData;
+        NewData.PatchVert = SubPatchVert[i];
+        NewData.Patch_Faces = SubPatchFaces[i];
+        NewData.PatchCorners = SubPatchCorners[i];
+        NewData.SideSubd = SubPatchSideSubd[i];
+        ToQuadrangulate.push_back(NewData);
+      }
+      // std::cout << "Step 4"<<std::endl;
+      //  std::cout << "Num Patch to Quad 2: " << ToQuadrangulate.size()
+      //            << std::endl;
+
+    } while (ToQuadrangulate.size() > 0);
+
+    // std::cout << "DONE! " << std::endl;
+
+    // then stitch the quadrangulated patches together
+    QuadVert.clear();
+    QuadFaces.clear();
+    // std::cout << "Num Quad Patch: " << QuadrangulatedData.size() <<
+    // std::endl;
+    for (size_t i = 0; i < QuadrangulatedData.size(); i++) {
+      AppendMesh(QuadVert, QuadFaces, QuadrangulatedData[i].QuadVert,
+                 QuadrangulatedData[i].QuadFaces);
+    }
+
+    RemoveDuplicatedVert(QuadVert, QuadFaces);
+    // std::cout << "Num Quad Vert: " << QuadVert.size() << std::endl;
+    // std::cout << "Num Quad Faces: " << QuadFaces.size() << std::endl;
+
+    return true;
   }
 
   // return the amount of non quadrangulated patches
@@ -502,9 +769,14 @@ public:
       std::vector<std::vector<int>> Curr_Patch_QuadFaces;
 
       // then quadrangulate returning also the side samples
-      bool has_quadrangulated = QuadrangulateQuadPatchWithSubs(
+      // bool has_quadrangulated = QuadrangulateQuadPatchWithSubs(
+      //     CurrPatchVert, CurrPatchFaces, CurrPatchCorners, SideSamples3D[i],
+      //     QLut, Curr_Patch_QuadVert, Curr_Patch_QuadFaces);
+
+      bool has_quadrangulated = QuadrangulateQuadPatchWithSubsRecursive(
           CurrPatchVert, CurrPatchFaces, CurrPatchCorners, SideSamples3D[i],
           QLut, Curr_Patch_QuadVert, Curr_Patch_QuadFaces);
+
       if (!has_quadrangulated) {
         problematic_patches++;
         std::cout << "WARNING: Problem Quadrangulating patch " << i
@@ -522,6 +794,450 @@ public:
       QuadPatch.resize(QuadFaces.size(), i);
     }
     return problematic_patches;
+  }
+
+  // // return the amount of non quadrangulated patches
+  // static void SplitIntoSubPatches(
+  //     const std::vector<Geo::Point3<ScalarType>> &PatchVert,
+  //     const std::vector<std::vector<int>> &Patch_Faces,
+  //     const std::vector<int> &PatchCorners,
+  //     const std::vector<std::vector<Geo::Point3<ScalarType>>> &SideSubd,
+  //     const std::vector<std::vector<int>> &SubPatchSplit,
+  //     std::vector<std::vector<Geo::Point3<ScalarType>>> &SubPatchVert,
+  //     std::vector<std::vector<std::vector<int>>> &SubPatchFaces,
+  //     std::vector<std::vector<int>> &SubPatchCorners,
+  //     std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+  //         &SubPatchSideSubd) {
+  //   // initial checks
+  //   assert(PatchCorners.size() == SideSubd.size());
+  //   for (size_t i = 0; i < SubPatchSplit.size(); i++) {
+  //     int SumSplit = 0;
+  //     for (size_t j = 0; j < SubPatchSplit[i].size(); j++) {
+  //       SumSplit += SubPatchSplit[i][j];
+  //     }
+  //     if (SumSplit == 0)
+  //       continue;
+  //     assert(SumSplit == SideSubd[i].size() - 1);
+  //   }
+
+  //   // parametrize the patch also considering corners
+  //   std::vector<Geo::Point2<ScalarType>> VertUV;
+
+  //   // paremetrize the patch also considering corners
+  //   Geo::UVParam<ScalarType>::TutteEmbedding(PatchVert, Patch_Faces,
+  //                                            PatchCorners, VertUV, true);
+
+  //   //get the polylines used to split
+  //   std::vector<std::vector<Geo::Point2<ScalarType>>> >
+  //   SideSplitPos(SubPatchSplit.size()); for (size_t i = 0; i <
+  //   SubPatchSplit.size(); i++) {
+  //     if (SubPatchSplit[i].size()==0)continue;
+  //     //dont' consider the last one as should sum up to current splits
+  //     for (size_t j = 0; j < SubPatchSplit[i].size()-1; j++) {
+  //       int IndexSplit=SubPatchSplit[i][j];
+  //       assert(IndexSplit>=0);
+  //       assert(IndexSplit<);
+  //     }
+  //     Geo::Point3<ScalarType> SplitPos3D=SubPatchVert
+  //   }
+
+  //   //then refine it
+  //   // void SplitMeshWithUVPolylines(
+  //   //   std::vector<Geo::Point3<ScalarType>> &Pos3D,
+  //   //   std::vector<Geo::Point2<ScalarType>> &PosUV,
+  //   //   std::vector<std::vector<int>> &Faces,
+  //   //   const std::vector<std::vector<Geo::Point2<ScalarType>>> &PolyL,
+  //   //   std::vector<std::pair<int, int>> &NewEdges, ScalarType minAlpha =
+  //   0.05,
+  //   //   bool split_edpoints = true)
+  // }
+
+  struct SplitInfo {
+    int SplitEdge;
+    int SplitNum0;
+    int SplitNum1;
+    int NewSplitNum;
+
+    bool IsProper() const {
+      if (SplitEdge != 0 && SplitEdge != 1)
+        return false;
+      if (SplitNum0 <= 0)
+        return false;
+      if (SplitNum1 <= 0)
+        return false;
+      return true;
+    }
+  };
+
+  // Given a patch with 4 sides, each with a number of subdivisions (segments),
+  // derive the SplitInfo parameters to split the longest side into two
+  // sub-patches as balanced as possible, each with an even total subdivision
+  // count. Precondition: the sum of all 4 subdivision counts is even.
+  static SplitInfo DeriveSplitInfo(const std::array<int, 4> &SideSubdNum) {
+    assert((SideSubdNum[0] + SideSubdNum[1] + SideSubdNum[2] + SideSubdNum[3]) %
+               2 ==
+           0);
+
+    // Find the side with the most subdivisions (SplitEdge).
+    // In case of tie, pick the first one found.
+    int S0 = 0;
+    for (int i = 1; i < 4; ++i)
+      if (SideSubdNum[i] > SideSubdNum[S0])
+        S0 = i;
+    S0 = S0 % 2; // map to 0 or 1 (2->0, 3->1)
+
+    int S2 = (S0 + 2) % 4;  // opposite side
+    int SL1 = (S0 + 1) % 4; // right lateral side
+    int SL0 = (S0 + 3) % 4; // left lateral side
+
+    int n0 = SideSubdNum[S0];
+    int n2 = SideSubdNum[S2];
+    int nL0 = SideSubdNum[SL0];
+    int nL1 = SideSubdNum[SL1];
+
+    // SplitNum0: split S0 as close to half as possible (any parity, must be in
+    // [1, n0-1]).
+    int SplitNum0 = n0 / 2;
+
+    // SplitNum1: split S2 as close to half as possible (any parity, must be in
+    // [1, n2-1]).
+    int SplitNum1 = n2 / 2;
+
+    // NewSplitNum: number of segments for the new central edge.
+    // Target: average of the two lateral sides, closest integer >= 1.
+    int lateralAvg = (nL0 + nL1) / 2; // floor of average
+    int NewSplitNum = std::max(lateralAvg, 1);
+
+    // Check parity of sub-patch 0: SplitNum0 + NewSplitNum + (n2 - SplitNum1) +
+    // nL0 If odd, adjust NewSplitNum by +1 or -1 to make it even, staying as
+    // close as possible to the target and keeping NewSplitNum >= 1. Note: if
+    // sub-patch 0 sum is even, sub-patch 1 sum is automatically even because
+    // the total patch sum is even.
+    int sum0 = SplitNum0 + NewSplitNum + (n2 - SplitNum1) + nL0;
+    if (sum0 % 2 != 0) {
+      // Try adjusting by -1 first (closer to floor average), then +1
+      if (NewSplitNum - 1 >= 1)
+        NewSplitNum -= 1;
+      else
+        NewSplitNum += 1;
+    }
+
+    SplitInfo SI;
+    SI.SplitEdge = S0;
+    SI.SplitNum0 = SplitNum0;
+    SI.SplitNum1 = SplitNum1;
+    SI.NewSplitNum = NewSplitNum;
+    return SI;
+  }
+
+  static bool SplitSideSubdivisions(
+      const std::vector<std::vector<Geo::Point3<ScalarType>>> &SideSubd,
+      const SplitInfo &SI, Geo::Polyline3<ScalarType> &SeparationPoly,
+      std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+          &SubPatchSideSubd) {
+    if (!SI.IsProper())
+      return false;
+    assert(SideSubd.size() == 4);
+
+    // SplitEdge and its opposite side
+    int S0 = SI.SplitEdge; // e.g. 0
+    int S2 = (S0 + 2) % 4; // opposite, e.g. 2
+
+    // The two lateral sides (not involved in the split)
+    int SL0 = (S0 + 3) % 4; // "left"  lateral side in CCW order, e.g. 3
+    int SL1 = (S0 + 1) % 4; // "right" lateral side in CCW order, e.g. 1
+
+    const auto &side0 = SideSubd[S0];
+    const auto &side2 = SideSubd[S2];
+    const auto &sideL = SideSubd[SL0];
+    const auto &sideR = SideSubd[SL1];
+
+    int n0 = (int)side0.size();
+    int n2 = (int)side2.size();
+
+    // Validate split indices: must be strictly inside the side (not at
+    // endpoints)
+    if (SI.SplitNum0 <= 0 || SI.SplitNum0 >= n0 - 1)
+      return false;
+    if (SI.SplitNum1 <= 0 || SI.SplitNum1 >= n2 - 1)
+      return false;
+
+    // Split points on S0 and S2.
+    // Both sides are stored in CCW order, so SplitNum0 and SplitNum1
+    // are direct indices into their respective sample arrays.
+    Geo::Point3<ScalarType> P0 = side0[SI.SplitNum0];
+    Geo::Point3<ScalarType> P2 = side2[SI.SplitNum1];
+
+    // reverse the separation polyline if needed to maintain CCW order in
+    // sub-patch 0
+    ScalarType Dist0 = (P0 - SeparationPoly.PolyPos[0]).Norm();
+    ScalarType Dist1 = (P0 - SeparationPoly.PolyPos.back()).Norm();
+
+    if (Dist1 < Dist0)
+      std::reverse(SeparationPoly.PolyPos.begin(),
+                   SeparationPoly.PolyPos.end());
+
+    // sample the polyline , as it takes the number of segments, we need to
+    // sample NewSplitNum+1 points std::cout<<"Sampling Separation Polyline with
+    // NewSplitNum: "<<SI.NewSplitNum<<std::endl;
+    std::vector<Geo::Point3<ScalarType>> SampledP =
+        SeparationPoly.SampleUniformly(SI.NewSplitNum + 1);
+    // std::cout<<"Size Sampled Polyline before adding endpoints:
+    // "<<SampledP.size()<<std::endl;
+    SampledP.insert(SampledP.begin(), P0);
+    SampledP.push_back(P2);
+    std::vector<Geo::Point3<ScalarType>> newEdge = SampledP;
+    // // New edge: uniform sampling from P0 to P2.
+    // // NewSplitNum is the number of segments, so we need NewSplitNum+1
+    // samples
+    // // (e.g. 4 segments -> 3 interior points + 2 endpoints = 5 samples).
+    // int numSamples = SI.NewSplitNum + 1;
+    // std::vector<Geo::Point3<ScalarType>> newEdge(numSamples);
+    // for (int i = 0; i < numSamples; ++i) {
+    //   ScalarType t = ScalarType(i) / ScalarType(SI.NewSplitNum);
+    //   newEdge[i] = P0 * (ScalarType(1) - t) + P2 * t;
+    // }
+
+    // std::cout<<"Size Sampled Polyline: "<<SampledP.size()<<std::endl;
+    // std::cout<<"Size New Edge: "<<newEdge.size()<<std::endl;
+    // Reversed new edge (P2 -> P0), used by sub-patch 1 to maintain CCW order
+    std::vector<Geo::Point3<ScalarType>> newEdgeRev(newEdge.rbegin(),
+                                                    newEdge.rend());
+
+    // Portion of S2 from P2 to the TL corner (side2[SplitNum1..end]).
+    // S2 runs CCW (e.g. TR->TL), so side2[SplitNum1] = P2 and side2[end] = TL.
+    // This is the top side of sub-patch 0, traversed P2 -> TL (CCW).
+    std::vector<Geo::Point3<ScalarType>> top0(side2.begin() + SI.SplitNum1,
+                                              side2.end());
+
+    // Portion of S0 from P0 to the BR corner (side0[SplitNum0..end]).
+    // S0 runs CCW (e.g. BL->BR), so side0[SplitNum0] = P0 and side0[end] = BR.
+    // This is the bottom side of sub-patch 1, traversed P0 -> BR (CCW).
+    std::vector<Geo::Point3<ScalarType>> bot1(side0.begin() + SI.SplitNum0,
+                                              side0.end());
+
+    // Portion of S2 from TR corner to P2 (side2[0..SplitNum1]).
+    // side2[0] = TR, side2[SplitNum1] = P2.
+    // This is the top side of sub-patch 1, traversed TR -> P2 (CCW).
+    std::vector<Geo::Point3<ScalarType>> top1(side2.begin(),
+                                              side2.begin() + SI.SplitNum1 + 1);
+
+    SubPatchSideSubd.resize(2);
+
+    // Sub-patch 0 corners (CCW): BL -> P0 -> P2 -> TL -> BL
+    // Side indices are the same as in the original patch for consistency.
+    SubPatchSideSubd[0].resize(4);
+    SubPatchSideSubd[0][S0] = std::vector<Geo::Point3<ScalarType>>(
+        side0.begin(), side0.begin() + SI.SplitNum0 + 1); // BL -> P0  (bottom)
+    SubPatchSideSubd[0][SL1] = newEdge; // P0 -> P2  (new edge, right)
+    SubPatchSideSubd[0][S2] = top0;     // P2 -> TL  (top)
+    SubPatchSideSubd[0][SL0] = sideL;   // TL -> BL  (left, unchanged)
+
+    // Sub-patch 1 corners (CCW): P0 -> BR -> TR -> P2 -> P0
+    // The new edge is reversed so it runs P2 -> P0, keeping CCW order.
+    SubPatchSideSubd[1].resize(4);
+    SubPatchSideSubd[1][S0] = bot1;   // P0 -> BR  (bottom)
+    SubPatchSideSubd[1][SL1] = sideR; // BR -> TR  (right, unchanged)
+    SubPatchSideSubd[1][S2] = top1;   // TR -> P2  (top)
+    SubPatchSideSubd[1][SL0] =
+        newEdgeRev; // P2 -> P0  (new edge reversed, left)
+
+    return true;
+  }
+
+  // return the amount of non quadrangulated patches
+  static bool SplitSideIntoSubPatches(
+      const std::vector<Geo::Point3<ScalarType>> &PatchVert,
+      const std::vector<std::vector<int>> &Patch_Faces,
+      const std::vector<int> &PatchCorners,
+      const std::vector<std::vector<Geo::Point3<ScalarType>>> &SideSubd,
+      const SplitInfo &SplitInfo,
+      std::vector<std::vector<Geo::Point3<ScalarType>>> &SubPatchVert,
+      std::vector<std::vector<std::vector<int>>> &SubPatchFaces,
+      std::vector<std::vector<int>> &SubPatchCorners,
+      std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+          &SubPatchSideSubd) {
+    if (PatchCorners.size() != 4)
+      return false;
+    if (SideSubd.size() != 4)
+      return false;
+
+    if (!SplitInfo.IsProper())
+      return false;
+
+    int OppositeEdge = (SplitInfo.SplitEdge + 2) % 4;
+    int TotSegment0 = SideSubd[SplitInfo.SplitEdge].size() - 1;
+    int TotSegment1 = SideSubd[OppositeEdge].size() - 1;
+
+    if (SplitInfo.SplitNum0 >= TotSegment0)
+      return false;
+    if (SplitInfo.SplitNum1 >= TotSegment1)
+      return false;
+
+    // parametrize the patch also considering corners
+    std::vector<Geo::Point2<ScalarType>> VertUV;
+    // paremetrize the patch also considering corners
+    Geo::UVParam<ScalarType>::TutteEmbedding(PatchVert, Patch_Faces,
+                                             PatchCorners, VertUV, true);
+    // get the polyline to split
+    std::vector<Geo::Point3<ScalarType>> SplitPos3D;
+    SplitPos3D.push_back(SideSubd[SplitInfo.SplitEdge][SplitInfo.SplitNum0]);
+    SplitPos3D.push_back(SideSubd[OppositeEdge][SplitInfo.SplitNum1]);
+
+    std::vector<Geo::Point2<ScalarType>> SplitPos_UV;
+    // bool found = Geo::UVUtils<ScalarType>::MapToUV(
+    //     PatchVert, VertUV, Patch_Faces, SplitPos3D, SplitPos_UV);
+
+    Geo::UVUtils<ScalarType>::MapToUVBorder(PatchVert, VertUV, Patch_Faces,
+                                            SplitPos3D, SplitPos_UV);
+
+    assert(SplitPos_UV.size() == 2);
+
+    // inflate a bit
+    Geo::Segment2<ScalarType> SplitSeg(SplitPos_UV[0], SplitPos_UV[1]);
+    Geo::Segment2<ScalarType> SplitSeg1 = SplitSeg;
+    Scale(SplitSeg, 1.01);
+
+    std::vector<std::vector<int>> SplitSegVect;
+    std::vector<Geo::Point2<ScalarType>> SplitSegPos;
+    SplitSegPos.push_back(SplitSeg.P(0));
+    SplitSegPos.push_back(SplitSeg.P(1));
+    SplitSegVect.push_back({0, 1});
+
+    std::vector<std::vector<int>> SplitSegVect1;
+    std::vector<Geo::Point2<ScalarType>> SplitSegPos1;
+    SplitSegPos1.push_back(SplitSeg1.P(0));
+    SplitSegPos1.push_back(SplitSeg1.P(1));
+    SplitSegVect1.push_back({0, 1});
+
+    // then split the patch with the polyline
+    std::vector<std::vector<Geo::Point2<ScalarType>>> PolyL(1);
+    PolyL[0].push_back(SplitSeg.P(0));
+    PolyL[0].push_back(SplitSeg.P(1));
+
+    // then refine it
+    std::vector<std::pair<int, int>> NewEdges;
+    std::vector<Geo::Point3<ScalarType>> SplitVert = PatchVert;
+    std::vector<std::vector<int>> SplitFaces = Patch_Faces;
+    RefineMesh<ScalarType>::SplitMeshWithUVPolylines(
+        SplitVert, VertUV, SplitFaces, PolyL, NewEdges);
+    Geo::CleanMesh<ScalarType>::RemoveDegenerateFaces(SplitVert, SplitFaces);
+
+    // get the border vertices of the split mesh
+    std::vector<bool> IsBorderV;
+    Geo::getBorderVert(SplitFaces, IsBorderV);
+
+    // get the ones that are on the split line and border in the beginning
+    for (size_t i = 0; i < NewEdges.size(); i++) {
+      int IndexV0 = NewEdges[i].first;
+      int IndexV1 = NewEdges[i].second;
+      if (IsBorderV[IndexV0]) {
+        ScalarType Dist0 = (SplitVert[IndexV0] - SplitPos3D[0]).Norm();
+        ScalarType Dist1 = (SplitVert[IndexV0] - SplitPos3D[1]).Norm();
+        if (Dist0 < Dist1)
+          SplitVert[IndexV0] = SplitPos3D[0];
+        else
+          SplitVert[IndexV0] = SplitPos3D[1];
+      }
+
+      if (IsBorderV[IndexV1]) {
+        ScalarType Dist0 = (SplitVert[IndexV1] - SplitPos3D[0]).Norm();
+        ScalarType Dist1 = (SplitVert[IndexV1] - SplitPos3D[1]).Norm();
+        if (Dist0 < Dist1)
+          SplitVert[IndexV1] = SplitPos3D[0];
+        else
+          SplitVert[IndexV1] = SplitPos3D[1];
+      }
+    }
+
+    // get the polilines
+    std::vector<Geo::Polyline3<ScalarType>> PolylineSplit;
+    Geo::InitFromEdges(SplitVert, NewEdges, PolylineSplit);
+
+    if (PolylineSplit.size() != 1) {
+      std::cout << "WARNING: Split resulted in multiple polylines" << std::endl;
+      // std::cout << "Size PolylineSplit: " << PolylineSplit.size() <<
+      // std::endl; WriteOBJ("SplitMesh.obj", SplitVert, SplitFaces);
+      // WriteOBJ("New_EdgeSplit.obj", SplitVert, NewEdges);
+      return false;
+    }
+    // get the submeshes from the split one
+    SplitMeshFromEdges(SplitVert, SplitFaces, NewEdges);
+
+    SplitByFFConnectedComponenent(SplitVert, SplitFaces, SubPatchVert,
+                                  SubPatchFaces);
+
+    // then retrieve the side subdivisions for the subpatches
+    SplitSideSubdivisions(SideSubd, SplitInfo, PolylineSplit[0],
+                          SubPatchSideSubd);
+
+    std::vector<std::vector<Geo::Point3<ScalarType>>> CornerPos;
+    CornerPos.resize(SubPatchSideSubd.size());
+
+    // set the first sample of esh edge as this is the corner
+    for (size_t i = 0; i < SubPatchSideSubd.size(); i++) {
+      for (size_t j = 0; j < SubPatchSideSubd[i].size(); j++)
+        CornerPos[i].push_back(SubPatchSideSubd[i][j][0]);
+    }
+
+    std::map<Geo::Point3<ScalarType>, int> PosIndex[2];
+    for (size_t i = 0; i < SubPatchVert[0].size(); i++)
+      PosIndex[0][SubPatchVert[0][i]] = i;
+
+    for (size_t i = 0; i < SubPatchVert[1].size(); i++)
+      PosIndex[1][SubPatchVert[1][i]] = i;
+
+    int IndexCorner[2] = {-1, -1};
+
+    for (size_t i = 0; i < CornerPos.size(); i++) {
+      bool AsCorner[2] = {true, true};
+
+      for (size_t j = 0; j < CornerPos[i].size(); j++) {
+        if (PosIndex[0].find(CornerPos[i][j]) == PosIndex[0].end())
+          AsCorner[0] = false;
+        if (PosIndex[1].find(CornerPos[i][j]) == PosIndex[1].end())
+          AsCorner[1] = false;
+      }
+      // can only have one set of corners
+      if ((!AsCorner[0]) && (!AsCorner[1]))
+        assert(false);
+
+      if ((AsCorner[0]) && (AsCorner[1]))
+        assert(false);
+
+      // swap if necessary
+      if ((AsCorner[1]) && (!AsCorner[0]))
+        IndexCorner[i] = 1;
+      if ((AsCorner[0]) && (!AsCorner[1]))
+        IndexCorner[i] = 0;
+    }
+
+    if ((IndexCorner[0] == -1) || (IndexCorner[1] == -1))
+      return false;
+    if (IndexCorner[0] == IndexCorner[1])
+      return false;
+
+    // the index of meshes should match the index of the rest
+    if (IndexCorner[0] == 1) {
+      std::swap(SubPatchVert[0], SubPatchVert[1]);
+      std::swap(SubPatchFaces[0], SubPatchFaces[1]);
+      std::swap(PosIndex[0], PosIndex[1]);
+    }
+
+    // then map corners to indexes
+    SubPatchCorners.clear();
+    SubPatchCorners.resize(SubPatchFaces.size());
+
+    for (size_t i = 0; i < CornerPos.size(); i++)
+      for (size_t j = 0; j < CornerPos[i].size(); j++) {
+        Geo::Point3<ScalarType> TestPos = CornerPos[i][j];
+        if (PosIndex[i].find(TestPos) == PosIndex[i].end())
+          return (false);
+        int IndexV = PosIndex[i][CornerPos[i][j]];
+        SubPatchCorners[i].push_back(IndexV);
+      }
+
+    return true;
   }
 };
 

@@ -327,7 +327,7 @@ private:
     IndexEdge = SideEdgeIndex.second;
     if (IndexSide == -1 || IndexEdge == -1) {
       std::cout << "Error: edge not found in any side" << std::endl;
-      exit(0);
+      exit(1);
     }
 
     int SideNum = PData.EdgePatchSides[IndexPatch][0].size();
@@ -337,7 +337,7 @@ private:
 
     if ((IndexC != TestCorner0) && (IndexC != TestCorner1)) {
       std::cout << "Error: corner not in the side" << std::endl;
-      exit(0);
+      exit(1);
     }
 
     // find the index of the edge in the side
@@ -356,11 +356,11 @@ private:
     if (SideEdgeIndex0.first == -1 || SideEdgeIndex0.second == -1 ||
         SideEdgeIndex1.first == -1 || SideEdgeIndex1.second == -1) {
       std::cout << "Error: edge not found in any side" << std::endl;
-      exit(0);
+      exit(1);
     }
     if (SideEdgeIndex0.first != SideEdgeIndex1.first) {
       std::cout << "Error: edges not in the same side" << std::endl;
-      exit(0);
+      exit(1);
     }
     int IndexSide = SideEdgeIndex0.first;
     int IndexEdge0 = SideEdgeIndex0.second;
@@ -1081,7 +1081,7 @@ private:
       }
       if (BestEdge < 0) {
         std::cout << "ERROR NO BEST EDGE" << std::endl;
-        exit(0);
+        exit(1);
       }
       if (BestEdge >= 0) {
         BestEdges.push_back(SidePatch[s][BestEdge]);
@@ -1127,7 +1127,7 @@ private:
 
     if (IndexMin < 0) {
       std::cout << "WARNING NON CENTRAL POS" << std::endl;
-      exit(0);
+      exit(1);
     }
     CentralV[IndexPatch] = IndexMin;
   }
@@ -1195,7 +1195,7 @@ private:
       if (EMode == EM_CCAbility) {
         std::cout << "ERROR CCABILITY ENERGY NOT IMPLEMENTED FOR CENTRAL POS"
                   << std::endl;
-        exit(0);
+        exit(1);
       }
       if (EMode == EM_Heuristic)
         EnergyVal = HeuristicEnergy(IndexPatch);
@@ -1211,7 +1211,7 @@ private:
         EnergyVal = ScaledJacobianEnergy(IndexPatch);
       // else {
       //   std::cout << "ERROR ENERGY NOT IMPLEMENTED" << std::endl;
-      //   exit(0);
+      //   exit(1);
       // }
       CentralEnergy[i] = EnergyVal;
     }
@@ -1340,7 +1340,7 @@ private:
 
           if ((Dist0 < 0) || (Dist1 < 0)) {
             std::cout << "ERROR NEGATIVE DISTANCE TO CORNER" << std::endl;
-            exit(0);
+            exit(1);
           }
 
           CurrSideToCornerDist.push_back(std::make_pair(Dist0, Dist1));
@@ -1463,7 +1463,7 @@ private:
     for (auto &It : CandidatureCountMap) {
       if (It.second > 2) {
         std::cout << "ERROR EDGE WITH MORE THAN 2 CANDIDATURE" << std::endl;
-        exit(0);
+        exit(1);
       }
     }
 
@@ -1724,11 +1724,12 @@ public:
     // get all possible candidates to remove
     if (PData.EdgePatchSides[IndexPatch].size() != 1) {
       std::cout << "ERROR ONLY ONE BOUNDARY SUPPORTED" << std::endl;
-      exit(0);
+      WriteOBJ("NoDiskPatch.obj",PData.PatchVertPos[IndexPatch], PData.PatchFaces[IndexPatch]);
+      exit(1);
     }
     if (PData.EdgePatchSides[IndexPatch][0].size() < MinValence) {
       std::cout << "ERROR MIN VALENCE NOT MET" << std::endl;
-      exit(0);
+      exit(1);
     }
 
     //compute the angle over the border
@@ -1833,7 +1834,7 @@ public:
       break;
     default: {
       std::cout << "ERROR UNKNOWN MOVE TYPE" << std::endl;
-      exit(0);
+      exit(1);
     }
     }
   }
@@ -1937,7 +1938,7 @@ public:
           break;
         default: {
           std::cout << "ERROR UNKNOWN MOVE TYPE" << std::endl;
-          exit(0);
+          exit(1);
         }
         }
         // std::cout<<"DONE"<<std::endl;
@@ -1961,6 +1962,7 @@ public:
         numRemovedCorners += removedNum;
       }
     }
+    if (modifiedPatches > 0)
     std::cout << "Modified Patches: " << modifiedPatches
               << " Added Corners: " << numAddedCorners
               << " Removed Corners: " << numRemovedCorners << std::endl;

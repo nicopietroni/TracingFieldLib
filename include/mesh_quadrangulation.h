@@ -445,7 +445,7 @@ template <class ScalarType> class MeshQuadrangulator {
     // WriteOBJ("dual_layout.obj", DualVertPos, DualConnectivity);
   }
 
-  void Quadrangulate() {
+  void FindSubdivisions() {
 
     ScalarType EdgeS = MeshBox.Diag() * QuadSize;
 
@@ -466,6 +466,34 @@ template <class ScalarType> class MeshQuadrangulator {
     }
     if (print_info)
       std::cout << "GET QUADRANGULATION DATA" << std::endl;
+
+    // std::vector<std::vector<int>> PatchFaces, PatchCorners;
+    // std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> SideSamples;
+    // SideD.GetQuadrangulationData(PatchFaces, PatchCorners, SideSamples);
+
+  }
+
+  void TassellateQuadrangulation() {
+
+    // ScalarType EdgeS = MeshBox.Diag() * QuadSize;
+
+    // // std::cout << "Edge Size:" << EdgeS << std::endl;
+    // SideD.PrioritizeTJunction = true;
+
+    // SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeEquality, OptimizeSize,
+    //                          true);
+
+    // int OddNum = SideD.NumOdd();
+    // // then reoptimize making them
+    // if (OddNum > 0) {
+    //   if (print_info)
+    //     std::cout << "Recompute with Even Variables" << std::endl;
+    //   SideD.PMode = Geo::SideDiscretization<ScalarType>::EvenVar;
+    //   SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeEquality, OptimizeSize,
+    //                            true);
+    // }
+    // if (print_info)
+    //   std::cout << "GET QUADRANGULATION DATA" << std::endl;
 
     std::vector<std::vector<int>> PatchFaces, PatchCorners;
     std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> SideSamples;
@@ -501,7 +529,7 @@ template <class ScalarType> class MeshQuadrangulator {
 
   void CleanQuadMesh(int MinV = 4, int MinF = 4, bool RemDoublets = true) {
     std::vector<int> OriginalEl, OriginalV;
-    bool has_split = SplitNonManifoldBorderV(QuadVert, QuadFaces);
+    //bool has_split = SplitNonManifoldBorderV(QuadVert, QuadFaces);
     int deleted_num = RemoveSmallConnectedComponents(
         QuadVert, QuadFaces, MinV, MinF, OriginalEl, OriginalV);
     if (deleted_num > 0) {
@@ -529,6 +557,7 @@ template <class ScalarType> class MeshQuadrangulator {
         int IndexP = QuadPatch[OldF];
         NewQuadPatch[i] = IndexP;
       }
+      QuadPatch = std::move(NewQuadPatch);
     }
     // QuadFeatures, QuadCorners, QuadPatch
     SolveDoublets();
@@ -817,21 +846,30 @@ public:
     auto t0 = Clock::now();
 
     auto t_start = Clock::now();
+    std::cout << std::endl <<  "=== Starting Mesh Quadrangulation ===" << std::endl<< std::endl;
     InitializeData();
     auto t_init = Clock::now();
-
+    
+    std::cout << std::endl <<  "=== Decomposing Patches ===" << std::endl<< std::endl;
     DecomposePatches();
     auto t_decompose = Clock::now();
-
+    
+    std::cout << std::endl << "=== Extracting Dual Patches ===" << std::endl<< std::endl;
     ExtractDualPatches();
     auto t_dual = Clock::now();
+    
+    std::cout << std::endl << "=== Find Subdivisions ===" << std::endl<< std::endl;
+    FindSubdivisions  ();
 
-    Quadrangulate();
+    std::cout << std::endl << "=== Tassellate Quadrangulation ===" << std::endl<< std::endl;
+    TassellateQuadrangulation();
     auto t_quad = Clock::now();
 
+    std::cout << std::endl << "=== Cleaning Quad Mesh ===" << std::endl<< std::endl;
     CleanQuadMesh();
     auto t_clean = Clock::now();
 
+    std::cout << std::endl << "=== Smoothing Quadrangulation ===" << std::endl<< std::endl;
     SmoothQuadrangulation();
     auto t_smooth = Clock::now();
 

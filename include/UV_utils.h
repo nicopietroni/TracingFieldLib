@@ -28,9 +28,13 @@
 #define UV_UTILS
 
 #include "Space_Query/triangle_grid_2D.h"
-#include <Space_Query/segment_grid_2D.h>
+#include "Space_Query/triangle_grid_3D.h"
+#include "Space_Query/segment_grid_2D.h"
+#include "Space_Query/segment_grid_3D.h"
 #include <cassert>
+#include <codecvt>
 #include <cross_field.h>
+#include <iostream>
 #include <point2.h>
 #include <triangle2.h>
 
@@ -335,12 +339,11 @@ public:
     std::vector<int> BorderF, BorderE;
     std::vector<Geo::Segment2<ScalarType>> Segs;
     if (!only_overlap)
-      InitFromMeshBorders<ScalarType>(vert1, face1, 
-                                      BorderF, BorderE, 
-                                      Segs,SegIndex2D);
+      InitFromMeshBorders<ScalarType>(vert1, face1, BorderF, BorderE, Segs,
+                                      SegIndex2D);
 
     Geo::TriangleSpatialIndex2D<ScalarType> Grid_2D;
-    Grid_2D.Init(vert1,face1);
+    Grid_2D.Init(vert1, face1);
 
     faceIDx.resize(vert0.size(), -1);
     bary.resize(vert0.size(), Geo::Point3<ScalarType>(0, 0, 0));
@@ -348,8 +351,9 @@ public:
     for (size_t i = 0; i < vert0.size(); i++) {
       bool found = Grid_2D.FirstTrianglesOverPoint(vert1, face1, vert0[i],
                                                    faceIDx[i], bary[i]);
-      if (found)continue;
-      
+      if (found)
+        continue;
+
       if ((!found) && (only_overlap))
         continue;
 
@@ -677,8 +681,8 @@ public:
     return -1;
   }
 
-  static void TranslateCenterToZero(std::vector<Geo::Point2<ScalarType>> &VertPos)
-  {
+  static void
+  TranslateCenterToZero(std::vector<Geo::Point2<ScalarType>> &VertPos) {
     if (VertPos.size() == 0)
       return;
     Geo::Box2<ScalarType> BB;
@@ -686,6 +690,69 @@ public:
     Geo::Point2<ScalarType> Center = BB.Center();
     for (size_t i = 0; i < VertPos.size(); i++)
       VertPos[i] = VertPos[i] - Center;
+  }
+
+  static bool MapToUV(const std::vector<Geo::Point3<ScalarType>> &VertPos3D,
+                      const std::vector<Geo::Point2<ScalarType>> &VertUV,
+                      const std::vector<std::vector<int>> &Faces,
+                      const std::vector<Geo::Point3<ScalarType>> &Vert3DTest,
+                      std::vector<Geo::Point2<ScalarType>> &VertUVTest) {
+    VertUVTest.clear();
+    Geo::TriangleSpatialIndex<ScalarType> Grid_3D;
+    Grid_3D.Init(VertPos3D, Faces);
+
+    for (size_t i = 0; i < Vert3DTest.size(); i++) {
+      int FaceIdx = -1;
+      Geo::Point3<ScalarType> Bary;
+      bool found = Grid_3D.GridClosestBary(VertPos3D, Faces, Vert3DTest[i],
+                                           FaceIdx, Bary);
+      if (!found)
+        return false;
+
+      Geo::Point2<ScalarType> UV0 = VertUV[Faces[FaceIdx][0]];
+      Geo::Point2<ScalarType> UV1 = VertUV[Faces[FaceIdx][1]];
+      Geo::Point2<ScalarType> UV2 = VertUV[Faces[FaceIdx][2]];
+      Geo::Point2<ScalarType> UVTest =
+          UV0 * Bary.X + UV1 * Bary.Y + UV2 * Bary.Z;
+      VertUVTest.push_back(UVTest);
+    }
+    return true;
+  }
+
+  static void
+  MapToUVBorder(const std::vector<Geo::Point3<ScalarType>> &VertPos3D,
+                const std::vector<Geo::Point2<ScalarType>> &VertUV,
+                const std::vector<std::vector<int>> &Faces,
+                const std::vector<Geo::Point3<ScalarType>> &Vert3DTest,
+                std::vector<Geo::Point2<ScalarType>> &VertUVTest) {
+    VertUVTest.clear();
+    std::vector<Geo::Segment3<ScalarType>> Segs;
+    Geo::SegmentSpatialIndex<ScalarType> SegIndex;
+    std::vector<std::pair<int, int>> VertIdx;
+    InitFromMeshBorder(VertPos3D, Faces, VertIdx, Segs, SegIndex);
+
+    for (size_t i = 0; i < Vert3DTest.size(); i++) {
+      Geo::Point3<ScalarType> PTest = Vert3DTest[i];
+      int closestS;
+      Geo::Point3<ScalarType> closestPt;
+      SegIndex.GridClosest(Segs, PTest, std::numeric_limits<ScalarType>::max(), closestS, closestPt);
+
+      assert(closestS >= 0);
+      assert(closestS < Segs.size());
+      assert(closestS < VertIdx.size());
+
+      Geo::Point3<ScalarType> P0 = VertPos3D[VertIdx[closestS].first];
+      Geo::Point3<ScalarType> P1 = VertPos3D[VertIdx[closestS].second];
+      ScalarType lambda = 1- ((P0-PTest).Norm() / (P0 - P1).Norm());
+
+      int VIdx0 = VertIdx[closestS].first;
+      int VIdx1 = VertIdx[closestS].second;
+      Geo::Point2<ScalarType> UV0 = VertUV[VIdx0];
+      Geo::Point2<ScalarType> UV1 = VertUV[VIdx1];
+
+      Geo::Point2<ScalarType> UVTest = UV0 * lambda + UV1 * (1 - lambda);
+      VertUVTest.push_back(UVTest);
+    }
   }
 };
 

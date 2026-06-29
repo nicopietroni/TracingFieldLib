@@ -574,6 +574,127 @@ public:
 };
 
 template <class ScalarType>
+void InitFromEdges(std::vector<Geo::Point3<ScalarType>> &Samples3D,
+                    std::vector<std::pair<int, int>> &Edges,
+                    std::vector<Geo::Polyline3<ScalarType>> &OutPolylines)
+{
+    OutPolylines.clear();
+
+    // Remove duplicate edges (order-independent: (a,b) == (b,a)).
+    // Normalize each edge so first <= second, then sort+unique.
+    std::vector<std::pair<int, int>> UniqueEdges = Edges;
+    for (auto &e : UniqueEdges)
+    {
+        assert(e.first != e.second);  // self-loops are not expected
+        if (e.first > e.second)
+            std::swap(e.first, e.second);
+    }
+    std::sort(UniqueEdges.begin(), UniqueEdges.end());
+    UniqueEdges.erase(std::unique(UniqueEdges.begin(), UniqueEdges.end()),
+                       UniqueEdges.end());
+
+    // Build adjacency list: for each vertex, the list of neighbors.
+    std::map<int, std::vector<int>> Adj;
+    for (const auto &e : UniqueEdges)
+    {
+        Adj[e.first].push_back(e.second);
+        Adj[e.second].push_back(e.first);
+    }
+
+    // Track which (undirected) edges have already been consumed.
+    std::set<std::pair<int, int>> UsedEdges;
+    auto MakeKey = [](int a, int b) {
+        return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
+    };
+
+    // Helper: trace a simple chain starting at vertex 'start' going through
+    // neighbor 'next', stopping as soon as we reach a vertex that is an
+    // endpoint/branch point (degree != 2), or we close back on 'start'.
+    auto TraceChain = [&](int start, int next) -> std::vector<int>
+    {
+        std::vector<int> chain;
+        chain.push_back(start);
+
+        int prev = start;
+        int curr = next;
+        UsedEdges.insert(MakeKey(prev, curr));
+
+        while (true)
+        {
+            chain.push_back(curr);
+
+            int deg = (int)Adj[curr].size();
+            if (deg != 2)
+                break;  // reached an endpoint or branch point: stop here
+
+            // Degree-2 vertex: continue to the neighbor that is not 'prev'
+            int n0 = Adj[curr][0];
+            int n1 = Adj[curr][1];
+            int nxt = (n0 == prev) ? n1 : n0;
+
+            auto key = MakeKey(curr, nxt);
+            if (UsedEdges.count(key))
+                break;  // safety: edge already consumed, avoid infinite loop
+
+            UsedEdges.insert(key);
+            prev = curr;
+            curr = nxt;
+
+            if (curr == start)
+            {
+                // Closed back onto the starting vertex: this is a loop
+                chain.push_back(curr);
+                break;
+            }
+        }
+        return chain;
+    };
+
+    // Pass 1: start chains from every vertex that is an endpoint (degree 1)
+    // or a branch point (degree > 2). These vertices always act as
+    // polyline endpoints, never as pass-through points.
+    for (auto &kv : Adj)
+    {
+        int v = kv.first;
+        int deg = (int)kv.second.size();
+        if (deg == 2)
+            continue;  // regular pass-through vertex, handled in pass 2 if part of a pure loop
+
+        for (int nb : kv.second)
+        {
+            auto key = MakeKey(v, nb);
+            if (UsedEdges.count(key))
+                continue;
+
+            std::vector<int> chainIdx = TraceChain(v, nb);
+
+            Geo::Polyline3<ScalarType> PL;
+            PL.PolyPos.reserve(chainIdx.size());
+            for (int idx : chainIdx)
+                PL.PolyPos.push_back(Samples3D[idx]);
+            OutPolylines.push_back(PL);
+        }
+    }
+
+    // Pass 2: any remaining unused edges belong to pure loops
+    // (all vertices on them have degree 2, so pass 1 never started there).
+    for (const auto &e : UniqueEdges)
+    {
+        auto key = MakeKey(e.first, e.second);
+        if (UsedEdges.count(key))
+            continue;
+
+        std::vector<int> chainIdx = TraceChain(e.first, e.second);
+
+        Geo::Polyline3<ScalarType> PL;
+        PL.PolyPos.reserve(chainIdx.size());
+        for (int idx : chainIdx)
+            PL.PolyPos.push_back(Samples3D[idx]);
+        OutPolylines.push_back(PL);
+    }
+}
+
+template <class ScalarType>
 void SmoothReproject(Polyline3<ScalarType> &Poly, int SmoothSteps,
                      const std::vector<Geo::Point3<ScalarType>> &TargetPos,
                      const std::vector<std::vector<int>> &TargetFaces,

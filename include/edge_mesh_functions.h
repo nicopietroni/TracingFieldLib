@@ -79,6 +79,22 @@ template <class ScalarType> class EdgeMeshFunctions {
   }
 
 public:
+
+  static ScalarType
+  Lenght(std::vector<Geo::Point3<ScalarType>> EdgeMeshVertPos,
+  std::vector<std::vector<int>> ConnectivityEdges)
+  {
+    ScalarType Lenght = 0;
+    for (size_t i = 0; i < ConnectivityEdges.size(); i++) {
+      int IndexV0 = ConnectivityEdges[i][0];
+      int IndexV1 = ConnectivityEdges[i][1];
+      Geo::Point3<ScalarType> P0 = EdgeMeshVertPos[IndexV0];
+      Geo::Point3<ScalarType> P1 = EdgeMeshVertPos[IndexV1];
+      Lenght += (P1 - P0).Norm();
+    }
+    return Lenght;
+  }
+
   static std::vector<int>
   getBranchIndexes(const std::vector<std::pair<int, int>> &Edges) {
     std::vector<std::vector<int>> AdjList;

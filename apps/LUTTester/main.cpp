@@ -36,25 +36,24 @@
 #include <mesh_clean.h>
 #include <mesh_functions.h>
 #include <point3.h>
-#include <color_functions.h>
-#include <string>
-#include <vector>
 #include <quadrangulation.h>
+#include <string>
+#include <utility>
+#include <vector>
 typedef double ScalarType;
 
 /// MESH DATA
 bool loadedMesh = false;
 
 std::string PathMesh = "../test_mesh.obj";
-std::string OutMesh = "../test_mesh_quad.obj";
-// positions in 3D 
+std::string OutMesh = "test_mesh_quad.obj";
+// positions in 3D
 std::vector<typename Geo::Point3<ScalarType>> VertPosTris;
 std::vector<typename Geo::Point2<ScalarType>> VertPosUV;
 std::vector<std::vector<int>> ConnectivityTris;
 
 std::vector<typename Geo::Point3<ScalarType>> VertPosQuad;
 std::vector<std::vector<int>> ConnectivityQuad;
-
 
 bool LoadMesh(const std::string &path,
               std::vector<typename Geo::Point3<ScalarType>> &CurrVertPos,
@@ -86,102 +85,151 @@ int main(int argc, char *argv[]) {
   Q_LUT.Initialize();
 
   if (argc > 4) {
-      Div[0] = std::stoi(argv[1]);
-      Div[1] = std::stoi(argv[2]);
-      Div[2] = std::stoi(argv[3]);
-      Div[3] = std::stoi(argv[4]);
+    Div[0] = std::stoi(argv[1]);
+    Div[1] = std::stoi(argv[2]);
+    Div[2] = std::stoi(argv[3]);
+    Div[3] = std::stoi(argv[4]);
   }
 
-  bool loaded=  LoadMesh(PathMesh.c_str(), VertPosTris, ConnectivityTris);
+  bool loaded = LoadMesh(PathMesh.c_str(), VertPosTris, ConnectivityTris);
+  //Geo::CleanMesh<ScalarType>::RemoveDegenerateFaces(VertPosTris, ConnectivityTris);
+
   if (!loaded) {
     std::cout << "Mesh not loaded" << std::endl;
     exit(0);
   }
 
-  //then find the vertices of the quadrangulation
+  // then find the vertices of the quadrangulation
   
-  //ScalarType Threshold = 0.01;
+  std::vector<ScalarType> VertAngle;
+  ComputePerVertAngleDeg(VertPosTris, ConnectivityTris, VertAngle);
+  std::vector<std::pair<int, ScalarType>> VertAnglePair;
+  // get the 4 corners of the quadrangulation, which are the vertices with
+  // smaller angle
+  for (size_t i = 0; i < VertAngle.size(); i++)
+    VertAnglePair.push_back({VertAngle[i], (int)i});
+
+  std::sort(VertAnglePair.begin(), VertAnglePair.end());
+  std::vector<int> CornerIdx(4, -1);
+  CornerIdx[0] = VertAnglePair[0].second;
+  CornerIdx[1] = VertAnglePair[1].second;
+  CornerIdx[2] = VertAnglePair[2].second;
+  CornerIdx[3] = VertAnglePair[3].second;
+
+  // then sort the vertices in counterclockwise order
+  std::vector<std::pair<ScalarType, int>> Angles(4, {0, -1});
+  for (size_t i = 0; i < 4; i++) {
+    Geo::Point3<ScalarType> P = VertPosTris[CornerIdx[i]];
+    ScalarType Angle = atan2(P.Y, P.X);
+    Angles[i] = {Angle, CornerIdx[i]};
+  }
+  std::sort(Angles.begin(), Angles.end());
+  std::reverse(Angles.begin(), Angles.end());
+  for (size_t i = 0; i < 4; i++)
+    CornerIdx[i] = Angles[i].second;
+
+  // CornerIdx[0] = 73;
+  // CornerIdx[1] = 2;
+  // CornerIdx[2] = 21;
+  // CornerIdx[3] = 42;
+  // then set the vertices position by interpolating the position of the 4
+  // corners on the original mesh
+  std::vector<std::vector<Geo::Point3<ScalarType>>> SideSubd;
+  for (size_t i = 0; i < 4; i++) {
+    Geo::Point3<ScalarType> P0 = VertPosTris[CornerIdx[i]];
+    Geo::Point3<ScalarType> P1 = VertPosTris[CornerIdx[(i + 1) % 4]];
+    int NumSubd = Div[i];
+    // then push number of subdivision points on the side
+    std::vector<Geo::Point3<ScalarType>> CurrSideSubd;
+    CurrSideSubd.push_back(P0);
+    for (size_t j = 1; j < NumSubd; j++) {
+      ScalarType t = (ScalarType)(j) / (NumSubd);
+      Geo::Point3<ScalarType> P = P0 * (1 - t) + P1 * t;
+      CurrSideSubd.push_back(P);
+    }
+    CurrSideSubd.push_back(P1);
+    SideSubd.push_back(CurrSideSubd);
+  }
   
-  // MeshBox.Init(VertPos0);
+  // CornerIdx[0] = 73;
+  // CornerIdx[1] = 2;
+  // CornerIdx[2] = 21;
+  // CornerIdx[3] = 42;
 
-  // ScalarType Diag = MeshBox.Diag();
-  // Threshold = Diag * Threshold;
+  bool done=Geo::Quadrangulation<ScalarType>::QuadrangulateQuadPatchWithSubsRecursive(
+      VertPosTris, ConnectivityTris, CornerIdx, SideSubd, Q_LUT, VertPosQuad,
+      ConnectivityQuad);
+  if (!done) {
+    std::cout << "Quadrangulation failed" << std::endl;
+    return 0;
+  }
 
-  // TwoWayFaceHausdorff(VertPos0, Connectivity0, VertPos1, Connectivity1,
-  //                     ErrorFace0, ErrorFace1);
+  SaveQuadMesh();
 
-  // // for (size_t i = 0; i < ErrorFace0.size(); i++)
-  // //   ErrorFace0[i] = std::min(ErrorFace0[i], Threshold);
-  // // for (size_t i = 0; i < ErrorFace1.size(); i++)
-  // //   ErrorFace1[i] = std::min(ErrorFace1[i], Threshold);
-  // // for (size_t i = 0; i < ErrorFace0.size(); i++)
-  // //   ErrorFace0[i] = std::max(ErrorFace0[i], (ScalarType)0);
-  // // for (size_t i = 0; i < ErrorFace1.size(); i++)
-  // //   ErrorFace1[i] = std::max(ErrorFace1[i], (ScalarType)0);
+  // // test split
+  // int SubSplitEdgeIdx = 0;
+  // int SubSplitNum0 = Div[SubSplitEdgeIdx] / 2;
+  // int SubSplitNum1 = Div[SubSplitEdgeIdx + 2] / 2;
+  // std::cout<<"SubSplitEdge "<<SubSplitEdgeIdx<<" SubSplitNum0 "<<SubSplitNum0<<" SubSplitNum1 "<<SubSplitNum1<<std::endl;
+  // SubSplitNum0 = std::max(1, SubSplitNum0);
+  // SubSplitNum1 = std::max(1, SubSplitNum1);
 
-  // // check if there is nan
-  // for (size_t i = 0; i < ErrorFace0.size(); i++) {
-  //   if (ErrorFace0[i] < 0) {
-  //     std::cout << "ErrorFace0 is < 0 at index " << i << std::endl;
-  //     exit(0);
-  //   }
+  // std::vector<std::vector<Geo::Point3<ScalarType>>> SubPatchVert;
+  // std::vector<std::vector<std::vector<int>>> SubPatchFaces;
+  // std::vector<std::vector<int>> SubPatchCorners;
+  // std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>> SubPatchSideSubd;
 
-  //   if (std::isnan(ErrorFace0[i])) {
-  //     std::cout << "ErrorFace0 has nan at index " << i << std::endl;
-  //     exit(0);
-  //   }
-  // }
-  // for (size_t i = 0; i < ErrorFace1.size(); i++) {
-  //   if (ErrorFace1[i] < 0) {
-  //     std::cout << "ErrorFace1 is < 0 at index " << i << std::endl;
-  //     exit(0);
-  //   }
-
-  //   if (std::isnan(ErrorFace1[i])) {
-  //     std::cout << "ErrorFace1 has nan at index " << i << std::endl;
-  //     exit(0);
-  //   }
-  // }
-  // // WriteScalarVector("error_face0.txt", ErrorFace0);
-  // // WriteScalarVector("error_face1.txt", ErrorFace1);
-
-
-  // Geo::GetColorByScalar<ScalarType>(ErrorFace0, Threshold, 0, ColorFace0);
-  // Geo::GetColorByScalar<ScalarType>(ErrorFace1, Threshold, 0, ColorFace1);
-
-
-  // // WriteColorFace("color_face0.txt", ColorFace0);
-  // // WriteColorFace("color_face1.txt", ColorFace1);
+  // Geo::Quadrangulation<ScalarType>::SplitInfo SInfo;
+  // SInfo.SplitEdge = SubSplitEdgeIdx;
+  // SInfo.SplitNum0 = SubSplitNum0;
+  // SInfo.SplitNum1 = SubSplitNum1;
+  // SInfo.NewSplitNum = Div[(SubSplitEdgeIdx+1)%4];
+  // std::cout<<"SplitInfo: SplitEdge "<<SInfo.SplitEdge<<" SplitNum0 "<<SInfo.SplitNum0<<" SplitNum1 "<<SInfo.SplitNum1<<" NewSplitNum "<<SInfo.NewSplitNum<<std::endl;
   
-  // // then compute average and max error
-  // ScalarType AvgError0 = 0, MaxError0 = 0;
-  // for (size_t i = 0; i < ErrorFace0.size(); i++) {
-  //   AvgError0 += ErrorFace0[i];
-  //   MaxError0 = std::max(MaxError0, ErrorFace0[i]);
+  // done=
+  // Geo::Quadrangulation<ScalarType>::SplitSideIntoSubPatches(
+  //     VertPosTris, ConnectivityTris, CornerIdx, 
+  //     SideSubd, SInfo, SubPatchVert, SubPatchFaces, SubPatchCorners, SubPatchSideSubd);
+  // if (!done)
+  // {
+  //   std::cout<<"Split failed"<<std::endl;
+  //   return 0;
   // }
-  // AvgError0 /= ErrorFace0.size();
-  // ScalarType AvgError1 = 0, MaxError1 = 0;
-  // for (size_t i = 0; i < ErrorFace1.size(); i++) {
-  //   AvgError1 += ErrorFace1[i];
-  //   MaxError1 = std::max(MaxError1, ErrorFace1[i]);
+
+  // for (size_t i = 0; i < SubPatchVert.size(); i++)
+  // {
+  //   std::cout<<"SubPatch "<<i<<" Vert "<<SubPatchVert[i].size()<<" Faces "<<SubPatchFaces[i].size()<<" Corners "<<SubPatchCorners[i].size()<<std::endl;
+  //   std::string out_file = std::string("sub_patch_") + std::to_string(i) + std::string(".obj");
+  //   WriteOBJ(out_file.c_str(), SubPatchVert[i], SubPatchFaces[i]);
+
+  //   //save the mesh of corners
+  //   std::vector<Geo::Point3<ScalarType>> SubPatchCornerVert;
+  //   for (size_t j = 0; j < SubPatchCorners[i].size(); j++)
+  //     SubPatchCornerVert.push_back(SubPatchVert[i][SubPatchCorners[i][j]]);
+  //   out_file = std::string("sub_patch_corner_") + std::to_string(i) + std::string(".obj");
+  //   WriteOBJ(out_file.c_str(), SubPatchCornerVert, std::vector<std::vector<int>>());
+
+  //   //save boundary samples
+  //   std::vector<Geo::Point3<ScalarType>> SubPatchBoundaryVert;
+  //   for (size_t j = 0; j < SubPatchSideSubd[i].size(); j++)
+  //     for (size_t k = 0; k < SubPatchSideSubd[i][j].size(); k++)
+  //       SubPatchBoundaryVert.push_back(SubPatchSideSubd[i][j][k]);
+  //   out_file = std::string("sub_patch_boundary_") + std::to_string(i) + std::string(".obj");
+  //   WriteOBJ(out_file.c_str(), SubPatchBoundaryVert, std::vector<std::vector<int>>());
+
+  //   std::vector<Geo::Point3<ScalarType>> SubPatchVertQuad;
+  //   std::vector<std::vector<int>> SubPatchFacesQuad;
+  //   bool done=Geo::Quadrangulation<ScalarType>::QuadrangulateQuadPatchWithSubs(
+  //     SubPatchVert[i], SubPatchFaces[i], SubPatchCorners[i], SubPatchSideSubd[i], 
+  //     Q_LUT, SubPatchVertQuad,SubPatchFacesQuad);
+  //   if (!done)
+  //   {
+  //     std::cout<<"Quadrangulation of subpatch "<<i<<" failed"<<std::endl;
+  //     continue;
+  //   }
+  //    out_file = std::string("sub_patch_quad_") + std::to_string(i) + std::string(".obj");
+  //    WriteOBJ(out_file.c_str(), SubPatchVertQuad, SubPatchFacesQuad);
   // }
-  // AvgError1 /= ErrorFace1.size();
-  // // scale wrt the threshold
-  // AvgError0 /= Diag;
-  // MaxError0 /= Diag;
-  // AvgError1 /= Diag;
-  // MaxError1 /= Diag;
-  // // in percentage
-  // AvgError0 *= 100;
-  // MaxError0 *= 100;
-  // AvgError1 *= 100;
-  // MaxError1 *= 100;
-  // std::cout << "Mesh 0: Avg Error: " << AvgError0
-  //           << "% Max Error: " << MaxError0 << "%" << std::endl;
-  // std::cout << "Mesh 1: Avg Error: " << AvgError1
-  //           << "% Max Error: " << MaxError1 << "%" << std::endl;
-
-  // SaveMeshes();
-
+  
   return 0;
-}
+} 

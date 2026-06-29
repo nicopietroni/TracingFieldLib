@@ -343,6 +343,33 @@ void InitFromMeshBorder(const std::vector<Geo::Point3<ScalarType>> &VertPos,
 }
 
 template <class ScalarType>
+void InitFromMeshEdges(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                       const std::vector<std::vector<int>> &Faces,
+                       const std::vector<std::pair<int, int>> &Edges,
+                       std::vector<Geo::Segment3<ScalarType>> &Segs,
+                       Geo::SegmentSpatialIndex<ScalarType> &SegIndex) {
+  Segs.clear();
+  for (size_t i = 0; i < Edges.size(); i++) {
+    int IndexV0 = Edges[i].first;
+    int IndexV1 = Edges[i].second;
+    Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
+    Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
+    Segs.push_back(Geo::Segment3<ScalarType>(P0, P1));
+  }
+  SegIndex.Init(Segs);
+}
+
+template <class ScalarType>
+void InitFromMeshBorder(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                        const std::vector<std::vector<int>> &Faces,
+                        std::vector<std::pair<int, int>> &VertIdx,
+                        std::vector<Geo::Segment3<ScalarType>> &Segs,
+                        Geo::SegmentSpatialIndex<ScalarType> &SegIndex) {
+  getBorderEdges(Faces, VertIdx);
+  InitFromMeshEdges(VertPos, Faces, VertIdx, Segs, SegIndex);
+}
+
+template <class ScalarType>
 void InitFromMeshFeatures(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                           const std::vector<std::pair<int, int>> &Features,
                           std::vector<Geo::Segment3<ScalarType>> &Segs,
@@ -364,13 +391,13 @@ void InitFromSequence(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                       std::vector<Geo::Segment3<ScalarType>> &Segs,
                       Geo::SegmentSpatialIndex<ScalarType> &SegIndex) {
   Segs.clear();
-  for (size_t i = 0; i < VertSeq.size()-1; i++) {
+  for (size_t i = 0; i < VertSeq.size() - 1; i++) {
     int IndexV0 = VertSeq[i];
-    int IndexV1 = VertSeq[i+1];
-    assert(IndexV0>=0);
-    assert(IndexV1>=0);
-    assert(IndexV0<VertPos.size());
-    assert(IndexV1<VertPos.size());
+    int IndexV1 = VertSeq[i + 1];
+    assert(IndexV0 >= 0);
+    assert(IndexV1 >= 0);
+    assert(IndexV0 < VertPos.size());
+    assert(IndexV1 < VertPos.size());
     Geo::Point3<ScalarType> P0 = VertPos[IndexV0];
     Geo::Point3<ScalarType> P1 = VertPos[IndexV1];
     Segs.push_back(Geo::Segment3<ScalarType>(P0, P1));

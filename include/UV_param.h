@@ -36,6 +36,7 @@
 #include <igl/arap.h>
 #include <igl/harmonic.h>
 #include <igl/lscm.h>
+#include <iostream>
 #include <mesh_functions.h>
 #include <point2.h>
 #include <point3.h>
@@ -394,10 +395,14 @@ public:
     std::vector<std::vector<int>> NextF, NextE;
     getFFAdjacency(Faces, NextF, NextE);
     std::vector<std::vector<int>> BorderVIdx;
+      
     getBorderSequncesVert(Faces, NextF, NextE, BorderVIdx);
+
+
     // if (BorderVIdx.size() == 0)
     if (BorderVIdx.size() != 1)
       return false; // no or multiple boundaries
+
 
     ScalarType AreaM = Area(VertPos, Faces);
     ScalarType Radius = sqrt(AreaM / M_PI);
@@ -412,6 +417,7 @@ public:
       if (!done_map)
         return false;
     }
+
 
     // check if there is at least one unknown or not
     if ((BorderVIdx[0].size() == VertPos.size()) && (fix_all_border)) {

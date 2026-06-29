@@ -246,12 +246,32 @@ public:
     return (closestF != -1);
   }
 
+  bool GridClosestBary(const std::vector<Geo::Point3<ScalarType>> &vert,
+                       const std::vector<std::vector<int>> &face,
+                       const CoordType &_p, const ScalarType &_maxDist,
+                       int &closestF, CoordType &_baryCoords) {
+    CoordType closestPt;
+    bool found = GridClosest(vert, face, _p, _maxDist, closestF, closestPt);
+    if (!found)
+      return false;
+
+    BarycentricCoords(vert, face, closestF, closestPt, _baryCoords.X,
+                      _baryCoords.Y, _baryCoords.Z);
+    return true;
+  }
+
+  bool GridClosestBary(const std::vector<Geo::Point3<ScalarType>> &vert,
+                       const std::vector<std::vector<int>> &face,
+                       const CoordType &_p,int &closestF, CoordType &_baryCoords)
+  {
+    ScalarType _maxDist = bbox.Diag();
+    return GridClosestBary(vert, face, _p, _maxDist, closestF, _baryCoords);
+  }
+
   void FacesInInSphere(const std::vector<Geo::Point3<ScalarType>> &vert,
                        const std::vector<std::vector<int>> &face,
                        const Geo::Point3<ScalarType> &center,
-                       const ScalarType &radius,
-                       std::vector<int> &TrisIn) 
-  {
+                       const ScalarType &radius, std::vector<int> &TrisIn) {
     TrisIn.clear();
     Geo::Box3<ScalarType> sphereBB;
     sphereBB.Set(center);
@@ -276,8 +296,9 @@ public:
             assert(FaceIdx >= 0);
             assert(FaceIdx < face.size());
 
-            if (FaceMark[FaceIdx]>=TMark)continue;
-            FaceMark[FaceIdx]=TMark;
+            if (FaceMark[FaceIdx] >= TMark)
+              continue;
+            FaceMark[FaceIdx] = TMark;
             int IndexV0 = face[FaceIdx][0];
             int IndexV1 = face[FaceIdx][1];
             int IndexV2 = face[FaceIdx][2];

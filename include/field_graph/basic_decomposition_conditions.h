@@ -174,26 +174,26 @@ public:
     return (Gen == 0);
   }
 
-  bool CanMergeReal(const PatchManaging<ScalarType> &PatchM,
-                    const std::vector<int> &MergedPatches) const {
-    std::vector<Geo::Point3<ScalarType>> TestVertPos;
-    std::vector<std::vector<int>> TestFaces;
+  // bool CanMergeReal(const PatchManaging<ScalarType> &PatchM,
+  //                   const std::vector<int> &MergedPatches) const {
+  //   std::vector<Geo::Point3<ScalarType>> TestVertPos;
+  //   std::vector<std::vector<int>> TestFaces;
 
-    PatchM.ComposeMeshFromPatches(MergedPatches, TestVertPos, TestFaces);
-    RemoveDuplicatedVert(TestVertPos, TestFaces);
-    std::vector<std::vector<int>> BorderVIdx;
-    getBorderSequncesVert(TestFaces, BorderVIdx);
-    int NHoles = BorderVIdx.size();
-    if (NHoles != 1)
-      return false;
+  //   PatchM.ComposeMeshFromPatches(MergedPatches, TestVertPos, TestFaces);
+  //   RemoveDuplicatedVert(TestVertPos, TestFaces);
+  //   std::vector<std::vector<int>> BorderVIdx;
+  //   getBorderSequncesVert(TestFaces, BorderVIdx);
+  //   int NHoles = BorderVIdx.size();
+  //   if (NHoles != 1)
+  //     return false;
 
-    int NEdges = NumEdges(TestFaces);
-    int NVert = TestVertPos.size();
-    int NFaces = TestFaces.size();
+  //   int NEdges = NumEdges(TestFaces);
+  //   int NVert = TestVertPos.size();
+  //   int NFaces = TestFaces.size();
 
-    int Gen = PolyMeshGenus(NVert, NEdges, NFaces, NHoles, 1);
-    return (Gen == 0);
-  }
+  //   int Gen = PolyMeshGenus(NVert, NEdges, NFaces, NHoles, 1);
+  //   return (Gen == 0);
+  // }
 
   bool CanMerge(const PatchManaging<ScalarType> &PatchM,
                 const std::vector<int> &MergedPatches) const override {
@@ -254,22 +254,24 @@ public:
 
   bool IsCorrect(const PatchManaging<ScalarType> &PatchM,
                  const int &IndexPatch) const override {
-    bool HasDupl = HasDuplicateVert(PatchM.PData.SubPatchVertPos[IndexPatch]);
-    if (HasDupl) return false;
-    std::vector<std::pair<int, int>> BorderE;
-    getBorderEdges(PatchM.PData.SubPatchFaces[IndexPatch], BorderE);
-    std::vector<int> BorderCount(PatchM.PData.SubPatchVertPos[IndexPatch].size(), 0);
-    for (size_t i = 0; i < BorderE.size(); i++) {
-      int IndexV0 = BorderE[i].first;
-      int IndexV1 = BorderE[i].second;
-      BorderCount[IndexV0]++;
-      BorderCount[IndexV1]++;
-    }
-    for (size_t i = 0; i < BorderCount.size(); i++)
-      if (BorderCount[i] > 2)
-        return false;
+    // bool HasDupl = HasDuplicateVert(PatchM.PData.SubPatchVertPos[IndexPatch]);
+    // if (HasDupl) return false;
+    // std::vector<std::pair<int, int>> BorderE;
+    // getBorderEdges(PatchM.PData.SubPatchFaces[IndexPatch], BorderE);
+    // std::vector<int> BorderCount(PatchM.PData.SubPatchVertPos[IndexPatch].size(), 0);
+    // for (size_t i = 0; i < BorderE.size(); i++) {
+    //   int IndexV0 = BorderE[i].first;
+    //   int IndexV1 = BorderE[i].second;
+    //   BorderCount[IndexV0]++;
+    //   BorderCount[IndexV1]++;
+    // }
+    // for (size_t i = 0; i < BorderCount.size(); i++)
+    //   if (BorderCount[i] > 2)
+    //     return false;
       
-    return (true);
+    // return (true);
+    return (HasSingleBorder(PatchM.PData.SubPatchVertPos[IndexPatch],
+                            PatchM.PData.SubPatchFaces[IndexPatch]));
   }
 
   bool Mandatory() const override { return true; }

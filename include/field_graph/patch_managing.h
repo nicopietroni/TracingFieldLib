@@ -1130,6 +1130,8 @@ private:
       th.join();
   }
 #endif
+
+public:
   void ClearDataForPatch(const int &IndexPatch) {
     assert(IndexPatch >= 0);
     assert(IndexPatch < (int)PData.SideLenghts.size());
@@ -1157,6 +1159,7 @@ private:
     }
   }
 
+private:
   void AllocateNewPatch() {
     PData.SideLenghts.resize(PData.SideLenghts.size() + 1);
     PData.PatchOriginalFaces.resize(PData.PatchOriginalFaces.size() + 1);
@@ -1187,7 +1190,8 @@ private:
     // }
     assert(IndexPatch >= 0);
     assert(IndexPatch < PData.SubPatchVertToOriginal.size());
-    for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();i++) {
+    for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();
+         i++) {
       int IndexVOr = PData.SubPatchVertToOriginal[IndexPatch][i];
       PData.SubPatchVertPos[IndexPatch][i] = VertPos[IndexVOr];
     }
@@ -1848,35 +1852,77 @@ public:
     }
   }
 
+  // void ComposeMeshFromPatches(std::vector<Geo::Point3<ScalarType>> &VertPos,
+  //                             std::vector<std::vector<int>> &Faces) const {
+  //   VertPos.clear();
+  //   Faces.clear();
+
+  //   // append all faces
+  //   std::cout<<"Test 0"<<std::endl;
+  //   std::vector<std::pair<int, int>> PatchF;
+  //   for (size_t i = 0; i < NumPatches(); i++) {
+  //     if (isEmpty(i))
+  //       continue;
+
+  //     AppendMesh(VertPos, Faces, PData.SubPatchVertPos[i],
+  //                PData.SubPatchFaces[i]);
+  //     for (size_t j = 0; j < PData.SubPatchFaces[i].size(); j++)
+  //       PatchF.push_back(std::pair<int, int>(i, j));
+  //   }
+  //   std::cout<<"Test 1"<<std::endl;
+
+  //   assert(PatchF.size() == Faces.size());
+
+  //   // then reorder
+  //   std::vector<std::vector<int>> NewFaces = Faces;
+  //   for (size_t i = 0; i < PatchF.size(); i++) {
+  //     int IndexP = PatchF[i].first;
+  //     int IndexF = PatchF[i].second;
+  //     assert(IndexP < NumPatches());
+  //     assert(IndexP >= 0);
+  //     assert(IndexF < PData.SubPatchFacesToOriginal[IndexP].size());
+  //     int NewFIdx = PData.SubPatchFacesToOriginal[IndexP][IndexF];
+  //     if (NewFIdx < 0 || NewFIdx >= Faces.size()) {
+  //       std::cerr << "Error: Invalid new face index: " << NewFIdx
+  //                 << " Max valid index: " << Faces.size() - 1
+  //                 << std::endl;
+  //       exit(EXIT_FAILURE); // Skip this iteration if the index is invalid
+  //     }
+  //     NewFaces[NewFIdx] = Faces[i];
+  //   }
+  //   Faces = NewFaces;
+  //   std::cout<<"Test 2"<<std::endl;
+
+  // }
+
   void ComposeMeshFromPatches(std::vector<Geo::Point3<ScalarType>> &VertPos,
                               std::vector<std::vector<int>> &Faces) const {
     VertPos.clear();
     Faces.clear();
 
     // append all faces
-    std::vector<std::pair<int, int>> PatchF;
+    std::vector<std::pair<int, int>> OriginalFaceIndexes;
     for (size_t i = 0; i < NumPatches(); i++) {
       if (isEmpty(i))
         continue;
 
+      int IndexF0 = Faces.size();
       AppendMesh(VertPos, Faces, PData.SubPatchVertPos[i],
                  PData.SubPatchFaces[i]);
-      for (size_t j = 0; j < PData.SubPatchFaces[i].size(); j++)
-        PatchF.push_back(std::pair<int, int>(i, j));
+      for (size_t j = 0; j < PData.SubPatchFaces[i].size(); j++) {
+        int IndexOriginalF = PData.SubPatchFacesToOriginal[i][j];
+        int IndexNewF = IndexF0 + j;
+        OriginalFaceIndexes.push_back(
+            std::make_pair(IndexOriginalF, IndexNewF));
+      }
     }
-
-    assert(PatchF.size() == Faces.size());
+    std::sort(OriginalFaceIndexes.begin(), OriginalFaceIndexes.end());
 
     // then reorder
-    std::vector<std::vector<int>> NewFaces = Faces;
-    for (size_t i = 0; i < PatchF.size(); i++) {
-      int IndexP = PatchF[i].first;
-      int IndexF = PatchF[i].second;
-      assert(IndexP < NumPatches());
-      assert(IndexP >= 0);
-      assert(IndexF < PData.SubPatchFacesToOriginal[IndexP].size());
-      int NewFIdx = PData.SubPatchFacesToOriginal[IndexP][IndexF];
-      NewFaces[NewFIdx] = Faces[i];
+    std::vector<std::vector<int>> NewFaces;
+    for (size_t i = 0; i < OriginalFaceIndexes.size(); i++) {
+      int IndexNewF = OriginalFaceIndexes[i].second;
+      NewFaces.push_back(Faces[IndexNewF]);
     }
     Faces = NewFaces;
   }
@@ -2153,6 +2199,11 @@ public:
     UpdateFaceToPatch();
   }
 
+  void CompactEmptyPatches() {
+    std::map<int, int> PatchIdxRemap;
+    CompactEmptyPatches(PatchIdxRemap);
+  }
+
   bool HasMultipleSingularities(int IndexPatch) const {
     int numSing = 0;
     for (size_t i = 0; i < PData.SubPatchVertToOriginal[IndexPatch].size();
@@ -2405,8 +2456,7 @@ public:
   //   }
 
   void UpdateSubPatchPos() {
-    for (size_t i = 0; i < NumPatches(); i++)
-    {
+    for (size_t i = 0; i < NumPatches(); i++) {
       if (isEmpty(i))
         continue;
       UpdateSubPatchPos(i);
@@ -3675,9 +3725,9 @@ public:
       std::vector<std::pair<int, int>> CurrEdges;
       std::vector<int> CurrOrigVertPaths, CurrFieldDir;
 
-      //std::set<int> CurrSplitAlong = SplitAlong;
-      // if (NoSplitPaths.count(i) > 0)
-      //   CurrSplitAlong.clear();
+      // std::set<int> CurrSplitAlong = SplitAlong;
+      //  if (NoSplitPaths.count(i) > 0)
+      //    CurrSplitAlong.clear();
 
       GetPathEdgeMesh(i, CurrEdgeMeshPos, CurrEdges, CurrOrigVertPaths,
                       CurrFieldDir, SplitAngle);

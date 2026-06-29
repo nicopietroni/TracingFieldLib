@@ -2596,31 +2596,63 @@ public:
     // split into patch with Voronoi
     std::vector<std::vector<int>> ClusterFaces;
     Geo::FindVoronoiClusters<ScalarType>(PatchVertPos, PatchFaces,
-                                         ClusterFaces);
+                                         ClusterFaces,2);
 
+    std::cout<<"Num Clusters:"<<ClusterFaces.size()<<std::endl;
     // then convert border into paths
+    //PData.
     // then add the path
+    //PatchMan.Update(ToAdd, ToRemove, UpdatedPatches);
+    exit(0);
     return true;
   }
 
   void ForceSolveTopology() {
     std::cout << "*** DOING FORCE TOPOLOGY PASS ***" << std::endl;
+    std::cout << "*** IMPLEMENTATION NOT COMPLETE ***" << std::endl;
+    exit(0);
+    // bool has_added_path = false;
+    // do {
+    //   has_added_path = false;
+    //   for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
+    //     if (PatchMan.isEmpty(i))
+    //       continue;
+    //     std::vector<int> SpikeCorn, ConcaveCorn;
+    //     int NumB = PatchMan.NumBorders(i);
+    //     int GenusP = PatchMan.Genus(i);
+    //     bool must_spl = (NumB != 1) || ((NumB == 1) && (GenusP != 0));
+    //     if (must_spl)
+    //       has_added_path |= ForceSolveTopology(i);
+    //   }
+    // } while (has_added_path);
+  }
+
+  void RemoveNotTopologicallyOK() {
     bool has_added_path = false;
-    do {
-      has_added_path = false;
+    int num_removed=0;
       for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
         if (PatchMan.isEmpty(i))
           continue;
         std::vector<int> SpikeCorn, ConcaveCorn;
+        bool single_border = (HasSingleBorder(PatchMan.PData.SubPatchVertPos[i],
+                                              PatchMan.PData.SubPatchFaces[i]));
         int NumB = PatchMan.NumBorders(i);
         int GenusP = PatchMan.Genus(i);
-        bool must_spl = (NumB != 1) || ((NumB == 1) && (GenusP != 0));
-        if (must_spl)
-          has_added_path |= ForceSolveTopology(i);
+        
+        bool must_rem =(!single_border) || (NumB != 1) || ((NumB == 1) && (GenusP != 0));
+        if (must_rem)
+        {
+          PatchMan.ClearDataForPatch(i);
+          num_removed++;
+        }
       }
-    } while (has_added_path);
+      if (num_removed>0)
+      {
+        std::cout<<"WARNING: Removed "<<num_removed<<" Non Topologically-Correct Patches"<<std::endl;
+        PatchMan.CompactEmptyPatches();
+      }
   }
-
+  
 private:
   bool first_ite;
 
@@ -3141,7 +3173,10 @@ public:
     TimeRemovePaths += elapsed.count() * 1e-6;
 
     // FIX ARTIFICIALLY THE WRONG PATCHES
+    //ForceSolveTopology();
+    RemoveNotTopologicallyOK();
     PatchMan.FixWrongValencePatches();
+
     // PatchMan.InitVisualCornersEdges();
     int num_traced = Geo::GraphTracing<ScalarType>::TotalTrace();
     int num_loops = Geo::GraphTracing<ScalarType>::NumLoops();

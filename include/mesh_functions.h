@@ -684,9 +684,8 @@ AvgEdgeLen(const std::vector<Geo::Point2<ScalarType>> &VertPos,
 
 template <class ScalarType>
 void AvgEdgeLenPerVert(const std::vector<Geo::Point3<ScalarType>> &VertPos,
-                 const std::vector<std::vector<int>> &Faces,
-                 std::vector<ScalarType> &EdgeLenPerVert) 
-{
+                       const std::vector<std::vector<int>> &Faces,
+                       std::vector<ScalarType> &EdgeLenPerVert) {
   EdgeLenPerVert.resize(VertPos.size(), 0);
   std::vector<int> EdgeCount(VertPos.size(), 0);
   for (size_t i = 0; i < Faces.size(); i++)
@@ -1128,19 +1127,16 @@ AppendMesh(std::vector<Geo::Point3<ScalarType>> &Vert,
 template <class ScalarType>
 inline void
 AppendEdgeMesh(std::vector<Geo::Point3<ScalarType>> &Vert,
-               std::vector<std::pair<int,int>> &Edges,
-           const std::vector<Geo::Point3<ScalarType>> &To_append_Vert,
-           const std::vector<std::pair<int,int>> &To_append_Edges)
-{
+               std::vector<std::pair<int, int>> &Edges,
+               const std::vector<Geo::Point3<ScalarType>> &To_append_Vert,
+               const std::vector<std::pair<int, int>> &To_append_Edges) {
   int NumV0 = Vert.size();
   Vert.insert(Vert.end(), To_append_Vert.begin(), To_append_Vert.end());
 
   int NumE0 = Edges.size();
-  Edges.insert(Edges.end(), To_append_Edges.begin(),
-                  To_append_Edges.end());
+  Edges.insert(Edges.end(), To_append_Edges.begin(), To_append_Edges.end());
 
-  for (size_t i = NumE0; i < Edges.size(); i++)
-  {
+  for (size_t i = NumE0; i < Edges.size(); i++) {
     Edges[i].first += NumV0;
     Edges[i].second += NumV0;
   }
@@ -2145,35 +2141,55 @@ static void SharedEdges(const std::vector<Geo::Point3<ScalarType>> &VertPos0,
     }
 }
 
-static void SharedVert(std::pair<int, int> &Edge0,
-                       std::pair<int, int> &Edge1,
-                       std::vector<int> &SharedV)
-{
-    SharedV.clear();
+static void SharedVert(std::pair<int, int> &Edge0, std::pair<int, int> &Edge1,
+                       std::vector<int> &SharedV) {
+  SharedV.clear();
 
-    if (Edge0.first  == Edge1.first  || Edge0.first  == Edge1.second)
-        SharedV.push_back(Edge0.first);
+  if (Edge0.first == Edge1.first || Edge0.first == Edge1.second)
+    SharedV.push_back(Edge0.first);
 
-    if (Edge0.second == Edge1.first  || Edge0.second == Edge1.second)
-        SharedV.push_back(Edge0.second);
+  if (Edge0.second == Edge1.first || Edge0.second == Edge1.second)
+    SharedV.push_back(Edge0.second);
 }
 
 static void NonSharedVert(std::pair<int, int> &Edge0,
                           std::pair<int, int> &Edge1,
-                          std::vector<int> &NonSharedV)
+                          std::vector<int> &NonSharedV) {
+  NonSharedV.clear();
+
+  if (Edge0.first != Edge1.first && Edge0.first != Edge1.second)
+    NonSharedV.push_back(Edge0.first);
+
+  if (Edge0.second != Edge1.first && Edge0.second != Edge1.second)
+    NonSharedV.push_back(Edge0.second);
+
+  if (Edge1.first != Edge0.first && Edge1.first != Edge0.second)
+    NonSharedV.push_back(Edge1.first);
+
+  if (Edge1.second != Edge0.first && Edge1.second != Edge0.second)
+    NonSharedV.push_back(Edge1.second);
+}
+
+template <class ScalarType>
+static bool HasSingleBorder(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            const std::vector<std::vector<int>> &Faces) 
 {
-    NonSharedV.clear();
+  bool HasDupl = HasDuplicateVert(VertPos);
+  if (HasDupl)
+    return false;
+  std::vector<std::pair<int, int>> BorderE;
+  Geo::getBorderEdges(Faces, BorderE);
+  std::vector<int> BorderCount(VertPos.size(), 0);
+  for (size_t i = 0; i < BorderE.size(); i++) {
+    int IndexV0 = BorderE[i].first;
+    int IndexV1 = BorderE[i].second;
+    BorderCount[IndexV0]++;
+    BorderCount[IndexV1]++;
+  }
+  for (size_t i = 0; i < BorderCount.size(); i++)
+    if (BorderCount[i] > 2)
+      return false;
 
-    if (Edge0.first  != Edge1.first && Edge0.first  != Edge1.second)
-        NonSharedV.push_back(Edge0.first);
-
-    if (Edge0.second != Edge1.first && Edge0.second != Edge1.second)
-        NonSharedV.push_back(Edge0.second);
-
-    if (Edge1.first  != Edge0.first && Edge1.first  != Edge0.second)
-        NonSharedV.push_back(Edge1.first);
-
-    if (Edge1.second != Edge0.first && Edge1.second != Edge0.second)
-        NonSharedV.push_back(Edge1.second);
+  return (true);
 }
 #endif
