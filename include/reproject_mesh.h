@@ -30,6 +30,7 @@
 #include "IO/io_obj.h"
 #include "Space_Query/segment_grid_3D.h"
 #include "Space_Query/triangle_grid_3D.h"
+#include "Space_Query/triangle_spatial_hash.h"
 #include "box3.h"
 #include "edge_mesh_functions.h"
 #include "mesh_features.h"
@@ -51,35 +52,42 @@
 namespace Geo {
 
 template <class ScalarType>
-void AttractProject(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
-                    std::vector<Geo::Point3<ScalarType>> &VertProj,
+void FindAttractDisplacements(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
+                    const std::vector<Geo::Point3<ScalarType>> &VertProj,
                     const std::vector<std::vector<int>> &FacesProj,
-                    const std::set<int> &FixedV = std::set<int>()) {
-  std::vector<Geo::Point3<ScalarType>> AvgDiff(
+                    std::vector<Geo::Point3<ScalarType>> &DisplProj,
+                    std::vector<bool> &ActiveAttractors,
+                    std::vector<ScalarType> &TargetDist)
+{
+  DisplProj = std::vector<Geo::Point3<ScalarType>>(
       VertProj.size(), Geo::Point3<ScalarType>(0, 0, 0));
+
+  TargetDist = std::vector<ScalarType>(TargetVert.size(), 0);
 
   std::vector<int> AvgNum(VertProj.size(), 0);
   
-  Geo::TriangleSpatialIndex<ScalarType> TriGrid;
-  TriGrid.Init(VertProj, FacesProj);
+  Geo::TriangleSpatialIndex<ScalarType> ProjTriGrid;
+  ProjTriGrid.Init(VertProj, FacesProj);
 
+  // ProjTriGrid.PrintGridStats();
+  // exit(0);
 
   int projected = 0;
   for (size_t i = 0; i < TargetVert.size(); i++) {
-
+    if (!ActiveAttractors[i])
+      continue;
     projected++;
     int closestF;
     Geo::Point3<ScalarType> closestPt;
-    TriGrid.GridClosest(VertProj, FacesProj, TargetVert[i], TriGrid.bbox.Diag(),
+    ProjTriGrid.GridClosest(VertProj, FacesProj, TargetVert[i], ProjTriGrid.bbox.Diag(),
                         closestF, closestPt);
 
     Geo::Point3<ScalarType> Diff = TargetVert[i] - closestPt;
-
+    TargetDist[i] = Diff.Norm();
 
     for (size_t j = 0; j < FacesProj[closestF].size(); j++) {
       int IndexV = FacesProj[closestF][j];
-      // Geo::Point3<ScalarType> TargetP=VertProj[IndexV]+Diff;
-      AvgDiff[IndexV] += Diff;
+      DisplProj[IndexV] += Diff;
       AvgNum[IndexV]++;
     }
   }
@@ -89,23 +97,23 @@ void AttractProject(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
   for (size_t i = 0; i < AvgNum.size(); i++) {
     if (AvgNum[i] == 0)
       continue;
-    AvgDiff[i] /= AvgNum[i];
+    DisplProj[i] /= AvgNum[i];
   }
 
   // smooth the difference
   int stepDiff = 3;
   for (size_t i = 0; i < stepDiff; i++) {
     std::vector<Geo::Point3<ScalarType>> SmDiff(
-        AvgDiff.size(), Geo::Point3<ScalarType>(0, 0, 0));
+        DisplProj.size(), Geo::Point3<ScalarType>(0, 0, 0));
 
-    std::vector<int> SmNum(AvgDiff.size(), 0);
+    std::vector<int> SmNum(DisplProj.size(), 0);
 
     // cumulate
     for (size_t i = 0; i < FacesProj.size(); i++)
       for (size_t j = 0; j < FacesProj[i].size(); j++) {
         int IndexV0 = FacesProj[i][j];
         int IndexV1 = FacesProj[i][(j + 1) % FacesProj[i].size()];
-        SmDiff[IndexV0] += AvgDiff[IndexV1];
+        SmDiff[IndexV0] += DisplProj[IndexV1];
         SmNum[IndexV0]++;
       }
 
@@ -113,9 +121,24 @@ void AttractProject(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
     for (size_t i = 0; i < SmDiff.size(); i++) {
       if (SmNum[i] == 0)
         continue;
-      AvgDiff[i] = SmDiff[i] / SmNum[i];
+      DisplProj[i] = SmDiff[i] / SmNum[i];
     }
   }
+}
+
+template <class ScalarType>
+  void AttractProject(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
+                      std::vector<Geo::Point3<ScalarType>> &VertProj,
+                      const std::vector<std::vector<int>> &FacesProj,
+                      const std::set<int> &FixedV = std::set<int>())
+{
+  std::vector<Geo::Point3<ScalarType>> AvgDiff(
+      VertProj.size(), Geo::Point3<ScalarType>(0, 0, 0));
+
+  std::vector<bool> ActiveAttractors(TargetVert.size(), true);
+  std::vector<ScalarType> TargetDist;
+  
+  FindAttractDisplacements(TargetVert,VertProj,FacesProj,AvgDiff,ActiveAttractors,TargetDist);
 
   for (size_t i = 0; i < AvgDiff.size(); i++) {
     if (FixedV.count(i) > 0)
@@ -123,6 +146,16 @@ void AttractProject(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
     VertProj[i] += AvgDiff[i];
   }
 }
+
+// template <class ScalarType>
+// void AttractProject(const std::vector<Geo::Point3<ScalarType>> &TargetVert,
+//                     std::vector<Geo::Point3<ScalarType>> &VertProj,
+//                     const std::vector<std::vector<int>> &FacesProj,
+//                     const std::set<int> &FixedV = std::set<int>())
+// {
+//   Geo::TriangleSpatialHash<ScalarType> ProjTriGrid;
+//   AttractProject(TargetVert, VertProj, FacesProj, ProjTriGrid, FixedV);
+// }
 
 template <class ScalarType>
 void InitProjStructures(const std::vector<Geo::Point3<ScalarType>> &VertPos,

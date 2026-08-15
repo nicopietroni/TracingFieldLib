@@ -286,15 +286,16 @@ template <class ScalarType> class OrientFLowGraph {
   }
 
   ScalarType Energy(int IndexVar, int TestValue) {
-    assert(TestValue >=0); // in realigy should be at lest 1 need to reorganize code
+    assert(TestValue >=
+           0); // in realigy should be at lest 1 need to reorganize code
     assert(IndexVar >= 0);
     assert(IndexVar < VarTargetValue.size());
     ScalarType TargetVal = VarTargetValue[IndexVar];
     ScalarType Diff = pow((TestValue - TargetVal), 2);
-    // ScalarType MaxVal= std::max((ScalarType)TestValue, (ScalarType)TargetVal);
-    // ScalarType MinVal= std::min((ScalarType)TestValue, (ScalarType)TargetVal);
-    // ScalarType Diff = (MaxVal / MinVal); 
-    // Diff = pow(Diff, 2);
+    // ScalarType MaxVal= std::max((ScalarType)TestValue,
+    // (ScalarType)TargetVal); ScalarType MinVal=
+    // std::min((ScalarType)TestValue, (ScalarType)TargetVal); ScalarType Diff =
+    // (MaxVal / MinVal); Diff = pow(Diff, 2);
     return Diff;
   }
 
@@ -1240,10 +1241,15 @@ template <class ScalarType> class OrientFLowGraph {
 
   bool CanDecrease(const std::vector<int> &PathNodes) const {
 
+    int size0 = PathNodes.size();
     std::vector<int> NodeIdx = PathNodes;
     std::sort(NodeIdx.begin(), NodeIdx.end());
     NodeIdx.erase(std::unique(NodeIdx.begin(), NodeIdx.end()), NodeIdx.end());
-
+    int size1 = NodeIdx.size();
+    if (size0 != size1) {
+      std::cout << "ERROR SIZE DONT' MATCH" << std::endl;
+      exit(0);
+    }
     std::vector<int> TempVal = VarValue;
 
     for (size_t j = 0; j < NodeIdx.size(); j++) {
@@ -1602,16 +1608,43 @@ template <class ScalarType> class OrientFLowGraph {
     }
   }
 
+  // bool CanApply(const PathPriority &PPrio) {
+  //   for (size_t i = 0; i < PPrio.pathNodes.size(); i++) {
+  //     int IndexN = PPrio.pathNodes[i];
+  //     int VarNum = VarOfNode(IndexN);
+  //     if ((VarValue[VarNum] + PPrio.modifiers[i]) <= 0)
+  //       return false;
+  //   }
+  //   return true;
+  // }
+
   bool CanApply(const PathPriority &PPrio) {
+    
+    // std::vector<int> NodeIdx = PathNodes;
+    // std::sort(NodeIdx.begin(), NodeIdx.end());
+    // NodeIdx.erase(std::unique(NodeIdx.begin(), NodeIdx.end()), NodeIdx.end());
+
+    std::vector<int> TempVal = VarValue;
+
+    // for (size_t j = 0; j < NodeIdx.size(); j++) {
+    //   int IndexN = NodeIdx[j];
+    //   int IndexVar = VarOfNode(IndexN);
+    //   TempVal[IndexVar]--;
+    //   if (TempVal[IndexVar] < 1)
+    //     return false;
+    // }
+
+    // return true;
     for (size_t i = 0; i < PPrio.pathNodes.size(); i++) {
       int IndexN = PPrio.pathNodes[i];
       int VarNum = VarOfNode(IndexN);
-      if ((VarValue[VarNum] + PPrio.modifiers[i]) <= 0)
+      TempVal[VarNum] += PPrio.modifiers[i];
+      if (TempVal[VarNum] <= 0)
         return false;
     }
     return true;
   }
-
+  
   void FilterApplicable(std::vector<PathPriority> &AllPathModifications) {
     std::vector<PathPriority> NewPathModifications;
     for (size_t i = 0; i < AllPathModifications.size(); i++) {
@@ -1679,24 +1712,100 @@ template <class ScalarType> class OrientFLowGraph {
     }
   }
 
-  bool SolveEqStep(bool allow_pass_all, bool allow_arrive_all) {
-    bool HasToSolve = true;
-    EnableAll();
+  // bool SolveEqStep(bool allow_pass_all, bool allow_arrive_all) {
+  //   bool HasToSolve = true;
+  //   EnableAll();
 
-    // get the one to increase and decrease
-    HasToSolve = SetupSolve(true, false);
+  //   // get the one to increase and decrease
+  //   HasToSolve = SetupSolve(true, false);
+  //   if (!HasToSolve)
+  //     return false;
+
+  //   // remove the source and target that can not increase or decrease too
+  //   much RemoveSourceTargetByRatio();
+
+  //   // add all possible targets
+  //   if (allow_arrive_all)
+  //     SetArriveAll();
+
+  //   // add the sinks if needed
+  //   AddBoundarySinksToTargets();
+
+  //   // all the possible path modifications
+  //   std::vector<PathPriority> AllPathModifications;
+
+  //   std::vector<int> SingleIncr, SingleDecr;
+  //   GetSingleNodeChanges(SingleIncr, SingleDecr);
+
+  //   for (size_t i = 0; i < SingleIncr.size(); i++) {
+  //     std::vector<int> path(1, SingleIncr[i]);
+  //     AllPathModifications.emplace_back(path, 1);
+  //     AllPathModifications.back().priority = Priority(path, 1);
+  //   }
+
+  //   for (size_t i = 0; i < SingleDecr.size(); i++) {
+  //     std::vector<int> path(1, SingleDecr[i]);
+  //     if (!CanDecrease(path))
+  //       continue;
+  //     AllPathModifications.emplace_back(path, -1);
+  //     AllPathModifications.back().priority = Priority(path, -1);
+  //   }
+
+  //   // find the path to increase
+  //   SetupWeightChange(1, true);
+  //   EnableAll();
+  //   if (!allow_pass_all)
+  //     DisableTargetNeigh();
+  //   DisableNodeWithMaxRatio();
+  //   std::vector<ShortestPathResult> IncreasePaths =
+  //       FindBestPaths(SourceIncr, TargetIncr);
+  //   // add in the vector of all increase paths modifications
+  //   for (const auto &path : IncreasePaths) {
+  //     AllPathModifications.emplace_back(path.path, 1);
+  //     AllPathModifications.back().priority = Priority(path.path, 1);
+  //   }
+
+  //   // fine the best path to decrease
+  //   SetupWeightChange(-1, true);
+  //   EnableAll();
+  //   if (!allow_pass_all)
+  //     DisableTargetNeigh();
+  //   DisableNodeWithMinRatio();
+  //   DisableUnitaryNodes();
+  //   std::vector<ShortestPathResult> DecreasePaths =
+  //       FindBestPaths(SourceDecr, TargetDecr);
+  //   // add in the vector of all decrease paths modifications
+  //   for (const auto &path : DecreasePaths) {
+  //     if (!CanDecrease(path.path))
+  //       continue;
+  //     AllPathModifications.emplace_back(path.path, -1);
+  //     AllPathModifications.back().priority = Priority(path.path, -1);
+  //   }
+
+  //   if (AllPathModifications.empty())
+  //     return false;
+
+  //   std::sort(AllPathModifications.begin(), AllPathModifications.end());
+  //   Apply(AllPathModifications[0]);
+
+  //   return true;
+  // }
+
+  bool UpdateEqualitySourceTarget() {
+    bool HasToSolve = SetupSolve(true, false);
     if (!HasToSolve)
       return false;
-
-    // remove the source and target that can not increase or decrease too much
     RemoveSourceTargetByRatio();
-
-    // add all possible targets
-    if (allow_arrive_all)
-      SetArriveAll();
-
-    // add the sinks if needed
     AddBoundarySinksToTargets();
+    return true;
+  }
+
+  bool SolveEqStep(int step_num = 100) {
+    EnableAll();
+
+    bool HasToSolve = UpdateEqualitySourceTarget();
+    if (!HasToSolve)
+      return false;
 
     // all the possible path modifications
     std::vector<PathPriority> AllPathModifications;
@@ -1721,41 +1830,87 @@ template <class ScalarType> class OrientFLowGraph {
     // find the path to increase
     SetupWeightChange(1, true);
     EnableAll();
-    if (!allow_pass_all)
-      DisableTargetNeigh();
+    // if (!allow_pass_all)
+    //   DisableTargetNeigh();
+
     DisableNodeWithMaxRatio();
     std::vector<ShortestPathResult> IncreasePaths =
         FindBestPaths(SourceIncr, TargetIncr);
+
     // add in the vector of all increase paths modifications
     for (const auto &path : IncreasePaths) {
       AllPathModifications.emplace_back(path.path, 1);
-      AllPathModifications.back().priority = Priority(path.path, 1);
     }
 
     // fine the best path to decrease
     SetupWeightChange(-1, true);
     EnableAll();
-    if (!allow_pass_all)
-      DisableTargetNeigh();
+    // if (!allow_pass_all)
+    //   DisableTargetNeigh();
     DisableNodeWithMinRatio();
     DisableUnitaryNodes();
     std::vector<ShortestPathResult> DecreasePaths =
         FindBestPaths(SourceDecr, TargetDecr);
+
     // add in the vector of all decrease paths modifications
     for (const auto &path : DecreasePaths) {
       if (!CanDecrease(path.path))
         continue;
       AllPathModifications.emplace_back(path.path, -1);
-      AllPathModifications.back().priority = Priority(path.path, -1);
     }
 
     if (AllPathModifications.empty())
       return false;
 
-    std::sort(AllPathModifications.begin(), AllPathModifications.end());
-    Apply(AllPathModifications[0]);
+    int steps_done = 0;
+    for (size_t step = 0; step < step_num; ++step) {
 
-    return true;
+      // update the setup for the next step
+
+      bool HasToSolve = UpdateEqualitySourceTarget();
+      if (!HasToSolve)
+        return false;
+
+      // update the priorities of all paths
+      for (auto &path_mod : AllPathModifications)
+        path_mod.priority = Priority(path_mod);
+
+      // sort them
+      std::sort(AllPathModifications.begin(), AllPathModifications.end());
+      // then apply the best one
+
+      std::set<int> SourceIncrSet(SourceIncr.begin(), SourceIncr.end());
+      std::set<int> SourceDecrSet(SourceDecr.begin(), SourceDecr.end());
+      std::set<int> TargetIncrSet(TargetIncr.begin(), TargetIncr.end());
+      std::set<int> TargetDecrSet(TargetDecr.begin(), TargetDecr.end());
+
+      for (size_t i = 0; i < AllPathModifications.size(); ++i) {
+        if (!CanApply(AllPathModifications[i]))
+          continue;
+
+        int VarStart = (AllPathModifications[i].pathNodes[0]);
+        int VarEnd = (AllPathModifications[i].pathNodes.back());
+
+        bool is_incr = AllPathModifications[i].modifiers[0] == 1;
+
+        if (is_incr && SourceIncrSet.count(VarStart) == 0)
+          continue;
+
+        if (!is_incr && SourceDecrSet.count(VarStart) == 0)
+          continue;
+
+        if (is_incr && TargetIncrSet.count(VarEnd) == 0)
+          continue;
+
+        if (!is_incr && TargetDecrSet.count(VarEnd) == 0)
+          continue;
+
+        Apply(AllPathModifications[i]);
+        ++steps_done;
+        break;
+      }
+    }
+    return steps_done > 0;
   }
 
   // bool SolveParityStep() {
@@ -2379,7 +2534,7 @@ template <class ScalarType> class OrientFLowGraph {
 
     /// int size0=NodeSeq.size();
     std::vector<int> NodeIdx = NodeSeq;
-    
+
     ScalarType Prio = 0;
     for (size_t i = 0; i < NodeIdx.size(); i++) {
       assert(NodeIdx[i] >= 0);
@@ -2660,9 +2815,8 @@ template <class ScalarType> class OrientFLowGraph {
       }
     }
 
-    // //then get all the non satisfied equvality and try to find paths between them
-    // SetupSolve(true,false);
-    // std::vector<int> AllTarget=TargetDecr;
+    // //then get all the non satisfied equvality and try to find paths between
+    // them SetupSolve(true,false); std::vector<int> AllTarget=TargetDecr;
     // AllTarget.insert(AllTarget.end(),TargetIncr.begin(),TargetIncr.end());
     // AllTarget.insert(AllTarget.end(),exit_sinks.begin(),exit_sinks.end());
 
@@ -2674,7 +2828,8 @@ template <class ScalarType> class OrientFLowGraph {
     //     continue;
     //   if (IrrDecrPath.path.size() > 0) {
     //     AllPathModifications.emplace_back(IrrDecrPath.path, -1);
-    //     AllPathModifications.back().priority = Priority(IrrDecrPath.path, -1);
+    //     AllPathModifications.back().priority = Priority(IrrDecrPath.path,
+    //     -1);
     //   }
     // }
 
@@ -2762,10 +2917,10 @@ public:
     do {
       // try best configuration
 
-      changed = SolveEqStep(true, false);
+      changed = SolveEqStep(); // true, false);
       steps++;
       // if (WriteDebug)
-      //std::cout << "Performed Equality size step" << std::endl;
+      // std::cout << "Performed Equality size step" << std::endl;
     } while (changed);
     if (WriteDebug)
       std::cout << "Performed " << steps << " Equality size step" << std::endl;
@@ -2853,7 +3008,7 @@ public:
     int steps = 0;
     int CurrSteps = 0;
     do {
-      //std::cout << "Improvement step " << steps << std::endl;
+      // std::cout << "Improvement step " << steps << std::endl;
       CurrSteps = ImproveSizeStep();
       steps += CurrSteps;
 

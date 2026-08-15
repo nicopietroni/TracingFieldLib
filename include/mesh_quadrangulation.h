@@ -430,6 +430,7 @@ template <class ScalarType> class MeshQuadrangulator {
     bool remove_batch = true;
     PDeco.add_only_where_needed = true;
     PDeco.stop_when_solved = true;
+    PDeco.prefer_feature_features = true; //NEW
 
     PDeco.BatchDecompose(remove_batch);
 
@@ -627,7 +628,7 @@ template <class ScalarType> class MeshQuadrangulator {
     SParamQuadSmooth.Damp = 0.5;
 
     // if (reliable_smooth)
-    SParamQuadSmooth.post_project = !(has_problematic_patches);
+    SParamQuadSmooth.post_project = true;//!(has_problematic_patches);
     // else
     //   SParamQuadSmooth.post_project = false;
 
@@ -650,10 +651,8 @@ template <class ScalarType> class MeshQuadrangulator {
     // if (!reliable_smooth)
     //   return;
 
-    // SParamQuadSmooth.SType = Geo::SMCentroid;
-    // SParamQuadSmooth.reproject_voronoi_partition = true;
-    // SParamQuadSmooth.check_multi_pass_fold = false;
-    // SParamQuadSmooth.check_AspectR = true;
+    // SParamQuadSmooth.SType = Geo::SMBestPoly;
+    // SParamQuadSmooth.NumIte = 5;
     // Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
   }
 
@@ -859,7 +858,7 @@ public:
     auto t_dual = Clock::now();
     
     std::cout << std::endl << "=== Find Subdivisions ===" << std::endl<< std::endl;
-    FindSubdivisions  ();
+    FindSubdivisions();
 
     std::cout << std::endl << "=== Tassellate Quadrangulation ===" << std::endl<< std::endl;
     TassellateQuadrangulation();

@@ -1027,37 +1027,92 @@ public:
     return OddPatches;
   }
 
-  void AutomaticGraphOptimize(const bool OptimizeEquality,
-                              const bool OptimizeSize, const bool MakeEven,
-                              bool find_points = true) {
-    if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
-      DivideTargetVal();
+  // void AutomaticGraphOptimize(const bool OptimizeEquality,
+  //                             const bool OptimizeSize, const bool MakeEven,
+  //                             bool find_points = true) {
+  //   if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
+  //     DivideTargetVal();
 
+  //   int stepEq = 0;
+  //   int stepSize = 0;
+  //   int stepParity = 0;
+  //   if (OptimizeEquality)
+  //     stepEq = SolveEqualityViaGraph(false);
+
+  //   if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
+  //     DuplicateSolution();
+
+  //   if (OptimizeSize)
+  //     stepSize = SolveSizeViaGraphCycles(false);
+
+  //   if ((PMode == Geo::SideDiscretization<ScalarType>::SolvePost) && MakeEven)
+  //     stepParity = SolveParityViaGraph(false);
+
+  //   if (find_points) {
+  //     InitMatchingType();
+  //     FindDiscretizationPoint();
+  //     WritePatchStats();
+  //   }
+
+  //   std::cout << "Performed:" << stepEq << " Equality Steps, " << std::endl;
+  //   std::cout << "Performed:" << stepSize << " Size Steps, " << std::endl;
+  //   std::cout << "Performed:" << stepParity << " Parity Steps." << std::endl;
+  // }
+
+  #include <chrono>
+
+void AutomaticGraphOptimize(const bool OptimizeEquality,
+                            const bool OptimizeSize,
+                            const bool MakeEven,
+                            bool find_points = true)
+{
+    using Clock = std::chrono::steady_clock;
+
+    
+    if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
+        DivideTargetVal();
+    
     int stepEq = 0;
     int stepSize = 0;
     int stepParity = 0;
+
+    auto tStart = Clock::now();
     if (OptimizeEquality)
-      stepEq = SolveEqualityViaGraph(false);
+        stepEq = SolveEqualityViaGraph(false);
+    auto tEquality = Clock::now();
 
     if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
-      DuplicateSolution();
+        DuplicateSolution();
 
     if (OptimizeSize)
-      stepSize = SolveSizeViaGraphCycles(false);
+        stepSize = SolveSizeViaGraphCycles(false);
+    auto tSize = Clock::now();
 
     if ((PMode == Geo::SideDiscretization<ScalarType>::SolvePost) && MakeEven)
-      stepParity = SolveParityViaGraph(false);
+        stepParity = SolveParityViaGraph(false);
+    auto tParity = Clock::now();
 
-    if (find_points) {
-      InitMatchingType();
-      FindDiscretizationPoint();
-      WritePatchStats();
+    if (find_points)
+    {
+        InitMatchingType();
+        FindDiscretizationPoint();
+        WritePatchStats();
     }
 
-    std::cout << "Performed:" << stepEq << " Equality Steps, " << std::endl;
-    std::cout << "Performed:" << stepSize << " Size Steps, " << std::endl;
-    std::cout << "Performed:" << stepParity << " Parity Steps." << std::endl;
-  }
+    std::cout << "Performed: " << stepEq << " Equality Steps\n";
+    std::cout << "Performed: " << stepSize << " Size Steps\n";
+    std::cout << "Performed: " << stepParity << " Parity Steps\n\n";
+
+    auto sec = [](const auto &a, const auto &b)
+    {
+        return std::chrono::duration<double>(b - a).count();
+    };
+
+    std::cout << "*** Timing summary: ***" << std::endl;
+    std::cout << "  SolveEqualityViaGraph  : " << sec(tStart,     tEquality)   << " s"<<std::endl;
+    std::cout << "  SolveSizeViaGraph      : " << sec(tEquality,  tSize)      << " s"<<std::endl;
+    std::cout << "  SolveParityViaGraph    : " << sec(tSize,       tParity)    << " s"<<std::endl;
+}
 
   bool LessThanRatio(const int IndexVar) const {
     assert(VarValue.size() == VarTargetValue.size());

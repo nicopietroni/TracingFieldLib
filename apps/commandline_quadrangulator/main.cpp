@@ -228,8 +228,8 @@ int dil_steps = 3;
 bool compute_features = true;
 bool only_border_corners = false;
 bool add_features = false;
-bool save_layout = false;
-bool save_stats =true;
+bool save_layout = true;
+bool save_stats = true;
 int smooth_steps = 50;
 std::string folderProjectName;
 std::string commandLine;
@@ -298,6 +298,23 @@ void SaveMesh(bool save_color_quality = false) {
   }
 }
 
+void SaveLayouts(const MeshQuadrangulator<ScalarType> &MQuad) {
+  std::string PrimalFile = Outfolder;
+  PrimalFile += std::string(GetFilanameNoExtension(PathMesh));
+  PrimalFile.append("_primal_layout.obj");
+  std::string DualFile = Outfolder;
+  DualFile += std::string(GetFilanameNoExtension(PathMesh));
+  DualFile.append("_dual_layout.obj");
+  std::vector<Geo::Point3<ScalarType>> PrimalVertPos, DualVertPos;
+  std::vector<std::vector<int>> PrimalConnectivity, DualConnectivity;
+  std::cout << "GET Layouyt " << std::endl;
+  MQuad.GetPrimalDualMesh(PrimalVertPos, PrimalConnectivity, DualVertPos,
+                          DualConnectivity);
+  std::cout << "Done " << std::endl;
+  WriteOBJ(PrimalFile, PrimalVertPos, PrimalConnectivity);
+  WriteOBJ(DualFile, DualVertPos, DualConnectivity);
+}
+
 void SaveStats(const MeshQuadrangulator<ScalarType> &MQuad) {
   std::string RemFile = "statistics.csv";
   std::string MeshName = GetFilaname(PathMesh);
@@ -311,7 +328,8 @@ void SaveStats(const MeshQuadrangulator<ScalarType> &MQuad) {
 
   if (!FaceAR.empty()) {
     ARMin = *std::min_element(FaceAR.begin(), FaceAR.end());
-    ARAvg = std::accumulate(FaceAR.begin(), FaceAR.end(), ScalarType(0)) / FaceAR.size();
+    ARAvg = std::accumulate(FaceAR.begin(), FaceAR.end(), ScalarType(0)) /
+            FaceAR.size();
   }
 
   // ---- Check if file exists ----
@@ -333,28 +351,19 @@ void SaveStats(const MeshQuadrangulator<ScalarType> &MQuad) {
         << "time_smooth,"
         << "total_time,"
         << "AR_avg,"
-        << "AR_min"
-        << std::endl;
+        << "AR_min" << std::endl;
   }
 
   // ---- Write data row ----
-  out << MeshName << ","
-      << MQuad.time_init << ","
-      << MQuad.time_decompose << ","
-      << MQuad.time_dual << ","
-      << MQuad.time_quad << ","
-      << MQuad.time_clean << ","
-      << MQuad.time_smooth << ","
-      << MQuad.total_time << ","
-      << ARAvg << ","
-      << ARMin
-      << std::endl;
+  out << MeshName << "," << MQuad.time_init << "," << MQuad.time_decompose
+      << "," << MQuad.time_dual << "," << MQuad.time_quad << ","
+      << MQuad.time_clean << "," << MQuad.time_smooth << "," << MQuad.total_time
+      << "," << ARAvg << "," << ARMin << std::endl;
 
   out.close();
 }
 
 Geo::Point3<ScalarType> DirSymm(1, 0, 0);
-
 
 void SplitSymmetry() {
   Geo::Point3<ScalarType> Center(0, 0, 0); // MeshBox.Center();
@@ -474,8 +483,8 @@ int main(int argc, char *argv[]) {
       std::cout << "Splitting mesh with symmetry plane" << std::endl;
       continue;
     }
-    if (std::string(argv[i]) == std::string("-savelayout")) {
-      save_layout = true;
+    if (std::string(argv[i]) == std::string("-no_savelayout")) {
+      save_layout = false;
       continue;
     }
     if (GetFileExtension(std::string(argv[i])) == std::string("features")) {
@@ -593,7 +602,7 @@ int main(int argc, char *argv[]) {
 
     MQuad.QuadSmoothSteps = smooth_steps;
     // MQuad.RegVsIso=0.1;
-    MQuad.CCAbility = 0.25;    // 25;
+    MQuad.CCAbility = 0.25;   // 25;
     MQuad.num_samples = 6000; // 3000;
 
     MQuad.ExtractQuad(TriFeatures);
@@ -611,13 +620,16 @@ int main(int argc, char *argv[]) {
       SaveStats(MQuad);
 
     if (save_layout) {
-      std::vector<Geo::Point3<ScalarType>> PrimalVertPos, DualVertPos;
-      std::vector<std::vector<int>> PrimalConnectivity, DualConnectivity;
-      MQuad.GetPrimalDualMesh(PrimalVertPos, PrimalConnectivity, DualVertPos,
-                              DualConnectivity);
-      WriteOBJ("primal_layout.obj", PrimalVertPos, PrimalConnectivity);
-      WriteOBJ("dual_layout.obj", DualVertPos, DualConnectivity);
+      SaveLayouts(MQuad);
     }
+    // if (save_layout) {
+    //   std::vector<Geo::Point3<ScalarType>> PrimalVertPos, DualVertPos;
+    //   std::vector<std::vector<int>> PrimalConnectivity, DualConnectivity;
+    //   MQuad.GetPrimalDualMesh(PrimalVertPos, PrimalConnectivity, DualVertPos,
+    //                           DualConnectivity);
+    //   WriteOBJ("primal_layout.obj", PrimalVertPos, PrimalConnectivity);
+    //   WriteOBJ("dual_layout.obj", DualVertPos, DualConnectivity);
+    // }
   }
 
   return 0;

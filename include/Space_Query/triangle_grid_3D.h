@@ -216,7 +216,15 @@ public:
                 if (!triBB.Collide(boxtodo))
                   continue;
 
-                //                                std::cout<<"TestA"<<std::endl;
+
+                //check distance wrt bbox
+                Box3<ScalarType> TestBB;
+                TestBB.Set(p0);
+                TestBB.Inflate(_minDist);
+                if (!TestBB.Collide(triBB))
+                  continue;
+
+                //std::cout<<"TestA"<<std::endl;
                 Geo::Traingle3<ScalarType> T(p0, p1, p2);
 
                 CoordType closP = ClosestPoint(T, _p);
@@ -379,6 +387,51 @@ public:
     }
     for (size_t i = 0; i < face.size(); i++)
       Insert(vert, face, i);
+  }
+
+   /*! \brief Print statistics about the grid: total cells, non-empty cells,
+   *  average/min/max faces per non-empty cell. Utile per capire se la
+   *  risoluzione della griglia (BestDim) è ben calibrata rispetto alla
+   *  densità della mesh, prima di guardare altrove. */
+  void PrintGridStats() const {
+    size_t totalCells = (size_t)siz.X * (size_t)siz.Y * (size_t)siz.Z;
+    size_t nonEmptyCells = 0;
+    size_t totalEntries = 0;
+    size_t minEntries = (size_t)-1;
+    size_t maxEntries = 0;
+
+    for (size_t i = 0; i < Grid.size(); i++)
+      for (size_t j = 0; j < Grid[i].size(); j++)
+        for (size_t k = 0; k < Grid[i][j].size(); k++) {
+          size_t n = Grid[i][j][k].entries.size();
+          if (n == 0)
+            continue;
+          nonEmptyCells++;
+          totalEntries += n;
+          if (n < minEntries)
+            minEntries = n;
+          if (n > maxEntries)
+            maxEntries = n;
+        }
+
+    double avgPerNonEmpty =
+        nonEmptyCells > 0 ? (double)totalEntries / (double)nonEmptyCells : 0.0;
+    double occupancy =
+        totalCells > 0 ? (double)nonEmptyCells / (double)totalCells : 0.0;
+
+    std::cout << "===== TriangleSpatialIndex stats =====" << std::endl;
+    std::cout << "Grid dim:            " << siz.X << " x " << siz.Y << " x "
+              << siz.Z << " (" << totalCells << " cells)" << std::endl;
+    std::cout << "Voxel size:          " << voxel.X << ", " << voxel.Y << ", "
+              << voxel.Z << std::endl;
+    std::cout << "Non-empty cells:     " << nonEmptyCells << " ("
+              << (occupancy * 100.0) << " % occupancy)" << std::endl;
+    std::cout << "Total face entries:  " << totalEntries
+              << " (a face can be counted in multiple cells)" << std::endl;
+    std::cout << "Faces per non-empty cell: avg=" << avgPerNonEmpty
+              << " min=" << (nonEmptyCells > 0 ? minEntries : 0)
+              << " max=" << maxEntries << std::endl;
+    std::cout << "=======================================" << std::endl;
   }
 
   /*! \brief Base constructor */

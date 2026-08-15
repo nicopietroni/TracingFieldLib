@@ -808,8 +808,9 @@ private:
 
     bool post_project = (do_reproject && UVP.post_project);
     if (post_project)
+    {
       Geo::AttractProject<ScalarType>(*UVP.ReprojVert, VertPos, Faces);
-
+    }
     if (do_reproject)
       Geo::ProjectOn<ScalarType>(VertPos, Faces, ReprojFeatureV,
                                  *UVP.ReprojVert, *UVP.ReprojFaces, TriGrid,
