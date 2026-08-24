@@ -1241,15 +1241,15 @@ template <class ScalarType> class OrientFLowGraph {
 
   bool CanDecrease(const std::vector<int> &PathNodes) const {
 
-    int size0 = PathNodes.size();
+    //int size0 = PathNodes.size();
     std::vector<int> NodeIdx = PathNodes;
-    std::sort(NodeIdx.begin(), NodeIdx.end());
-    NodeIdx.erase(std::unique(NodeIdx.begin(), NodeIdx.end()), NodeIdx.end());
-    int size1 = NodeIdx.size();
-    if (size0 != size1) {
-      std::cout << "ERROR SIZE DONT' MATCH" << std::endl;
-      exit(0);
-    }
+    // std::sort(NodeIdx.begin(), NodeIdx.end());
+    // NodeIdx.erase(std::unique(NodeIdx.begin(), NodeIdx.end()), NodeIdx.end());
+    // int size1 = NodeIdx.size();
+    // if (size0 != size1) {
+    //   std::cout << "ERROR SIZE DONT' MATCH" << std::endl;
+    //   exit(0);
+    // }
     std::vector<int> TempVal = VarValue;
 
     for (size_t j = 0; j < NodeIdx.size(); j++) {

@@ -603,7 +603,7 @@ int main(int argc, char *argv[]) {
     MQuad.QuadSmoothSteps = smooth_steps;
     // MQuad.RegVsIso=0.1;
     MQuad.CCAbility = 0.25;   // 25;
-    MQuad.num_samples = 6000; // 3000;
+    MQuad.num_samples = 6000;//6000; // 3000;
 
     MQuad.ExtractQuad(TriFeatures);
 

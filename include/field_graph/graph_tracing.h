@@ -34,6 +34,7 @@
 #include <limits>
 #include <list>
 #include <set>
+#include <atomic>
 // #include "graph_frame_field.h"
 
 namespace Geo {
@@ -58,6 +59,16 @@ template <class ScalarType> class GraphQuery {
   };
 
 public:
+  static std::atomic<long long> &VisitedSuccess() {
+    static std::atomic<long long> counter = 0;
+    return counter;
+  }
+
+  static std::atomic<long long> &VisitedFail() {
+    static std::atomic<long long> counter = 0;
+    return counter;
+  }
+
   static bool RetrievePath(const TracingGraph<ScalarType> &TGraph,
                            const size_t endNode, const std::set<int> startN,
                            std::vector<int> &path) {
@@ -124,6 +135,9 @@ public:
     StopNode = -1;
     // initialize the heap
     std::vector<HeapEntry> Heap;
+    // static thread_local std::vector<HeapEntry> Heap;
+    // Heap.clear();
+
     // std::set<int> StartN(SourceNodes.begin(),SourceNodes.end());
     TGraph.UnMarkAll();
     for (size_t i = 0; i < SourceNodes.size(); i++) {
@@ -145,6 +159,7 @@ public:
     for (size_t i = 0; i < SELECTED_GRAPH_FLAG; i++)
       check_select |= SParam.StopAtSel[i];
 
+    long VisitedCount = 0;
     std::make_heap(Heap.begin(), Heap.end());
     do {
       std::pop_heap(Heap.begin(), Heap.end());
@@ -156,9 +171,13 @@ public:
 
       Heap.pop_back();
 
-      if (CurrWeight > SParam.MaxL)
-        return false;
+      VisitedCount++;
 
+      if (CurrWeight > SParam.MaxL)
+      {
+        VisitedFail() += VisitedCount;
+        return false;
+      }
       assert(TGraph.IsMarked(CurrN));
 
       // bool check_select=SParam.stop_at_S0|| SParam.stop_at_S1;
@@ -175,6 +194,7 @@ public:
 
         if (HasCompletedPath) {
           StopNode = CurrN;
+          VisitedSuccess() += VisitedCount;
           return true;
         }
       }
@@ -183,7 +203,7 @@ public:
       // for (size_t i=0;i<TGraph.N[CurrN].size();i++)
       int pushedNeigh = 0;
       for (size_t i = 0; i < TGraph.NeighSize(CurrN); i++) {
-        
+
         // check if the link is enabled
         if (SParam.checkEnabled && (!TGraph.ActiveLink(CurrN, i)))
           continue;
@@ -195,17 +215,17 @@ public:
         // size_t NextN=TGraph.N[CurrN][i];
         size_t NextN = TGraph.NodeLink(CurrN, i);
 
-        //limit the number of neighbour to push only in case the next is not arrival point
-          if (SParam.MaxNeigh > 0)
-          {
-            bool HasCompletedNext = false;
-            for (size_t j = 0; j < SELECTED_GRAPH_FLAG; j++)
-              HasCompletedNext |=
-                  (SParam.StopAtSel[j] && TGraph.IsSelected(NextN, j));
-            if (!HasCompletedNext && (pushedNeigh >= SParam.MaxNeigh))
-              continue;
-          }
-       
+        // limit the number of neighbour to push only in case the next is not
+        // arrival point
+        if (SParam.MaxNeigh > 0) {
+          bool HasCompletedNext = false;
+          for (size_t j = 0; j < SELECTED_GRAPH_FLAG; j++)
+            HasCompletedNext |=
+                (SParam.StopAtSel[j] && TGraph.IsSelected(NextN, j));
+          if (!HasCompletedNext && (pushedNeigh >= SParam.MaxNeigh))
+            continue;
+        }
+
         // if (!TGraph.EnabledN[NextN])
         //   continue;
         if (SParam.checkEnabled && (!TGraph.EnabledN[NextN]))
@@ -260,7 +280,176 @@ public:
       }
 
     } while (!Heap.empty());
+    VisitedFail() += VisitedCount;
     // std::cout<<"Heap Empty!"<<std::endl;
+    return false;
+  }
+
+  // Propagates simultaneously from Src0 and (if useSrc1) Src1 towards the
+  // same selected target set, stopping only once EACH source has reached
+  // its own completion (or, if allow_reconnect, as soon as the two
+  // frontiers touch each other -- see caveat below).
+  // Does NOT replace Dijkstra(): it's a separate function so the existing
+  // single-source callers (ShortestPaths, etc.) are completely unaffected.
+  //
+  // CAVEAT: allow_reconnect treats "the two frontiers meet without either
+  // reaching a border/loop selection" as a valid successful trace (an open
+  // path directly connecting Src0 to Src1). Whether that is a geometrically
+  // valid result depends on domain logic in path_functions.h (IsConnected,
+  // ReversePath, IsLoop) that this function has no visibility into -- keep
+  // it false until that's been checked against real data.
+  static bool DijkstraDual(TracingGraph<ScalarType> &TGraph, int Src0,
+                           int Src1, bool useSrc1,
+                           const ShortestPathParam &SParam, int &StopNode0,
+                           int &StopNode1, bool allow_reconnect,
+                           bool &reconnected, int &reconnectNode) {
+    StopNode0 = -1;
+    StopNode1 = -1;
+    reconnected = false;
+    reconnectNode = -1;
+
+    std::vector<HeapEntry> Heap;
+    TGraph.UnMarkAll();
+
+    auto SeedSource = [&](int Src) {
+      TGraph.Mark(Src);
+      TGraph.Distance(Src) = 0;
+      TGraph.Father(Src) = -1;
+      TGraph.Source(Src) = Src;
+      TGraph.Steps(Src) = 0;
+      if (!(SParam.checkEnabled && !TGraph.EnabledN[Src]))
+        Heap.push_back(HeapEntry(Src, 0, Src));
+    };
+    SeedSource(Src0);
+    if (useSrc1)
+      SeedSource(Src1);
+
+    bool check_select = false;
+    for (size_t i = 0; i < SELECTED_GRAPH_FLAG; i++)
+      check_select |= SParam.StopAtSel[i];
+
+    long VisitedCount = 0;
+    std::make_heap(Heap.begin(), Heap.end());
+    do {
+      std::pop_heap(Heap.begin(), Heap.end());
+      size_t CurrN = (Heap.back()).NodeI;
+      ScalarType CurrWeight = TGraph.Distance(CurrN);
+      size_t CurrSource = TGraph.Source(CurrN);
+      Heap.pop_back();
+      VisitedCount++;
+
+      if (CurrWeight > SParam.MaxL) {
+        VisitedFail() += VisitedCount;
+        return false;
+      }
+      assert(TGraph.IsMarked(CurrN));
+
+      if (check_select) {
+        bool HasCompletedPath = false;
+        for (size_t i = 0; i < SELECTED_GRAPH_FLAG; i++)
+          HasCompletedPath |=
+              (SParam.StopAtSel[i] && TGraph.IsSelected(CurrN, i));
+        if (SParam.avoid_zero_path)
+          HasCompletedPath &= (TGraph.Distance(CurrN) > 0);
+
+        if (HasCompletedPath) {
+          if ((int)CurrSource == Src0 && StopNode0 == -1) {
+            StopNode0 = CurrN;
+            // source0 completing is ALL that's required to return success
+            // here -- exactly like the original single-source fast path
+            // (loop/border found immediately, no need to wait for
+            // source1). Requiring both to finish is what caused every
+            // trace to fail whenever source1 structurally couldn't
+            // complete on its own, even though source0 alone was fine.
+            VisitedSuccess() += VisitedCount;
+            return true;
+          }
+          if (useSrc1 && (int)CurrSource == Src1 && StopNode1 == -1) {
+            // source1 completing on its own is recorded opportunistically
+            // (free info if it happens before source0 does) but never
+            // required for success.
+            StopNode1 = CurrN;
+          }
+          // this node is a dead end (an arrival), don't expand its
+          // neighbours -- matches what plain Dijkstra() does since it
+          // would have returned immediately here.
+          continue;
+        }
+      }
+
+      int pushedNeigh = 0;
+      for (size_t i = 0; i < TGraph.NeighSize(CurrN); i++) {
+        if (SParam.checkEnabled && (!TGraph.ActiveLink(CurrN, i)))
+          continue;
+        if (SParam.onlyDirect && (!TGraph.DirectLink(CurrN, i)))
+          continue;
+        if (SParam.onlyVisible && (!TGraph.VisibleLink(CurrN, i)))
+          continue;
+
+        size_t NextN = TGraph.NodeLink(CurrN, i);
+
+        if (SParam.MaxNeigh > 0) {
+          bool HasCompletedNext = false;
+          for (size_t j = 0; j < SELECTED_GRAPH_FLAG; j++)
+            HasCompletedNext |=
+                (SParam.StopAtSel[j] && TGraph.IsSelected(NextN, j));
+          if (!HasCompletedNext && (pushedNeigh >= SParam.MaxNeigh))
+            continue;
+        }
+
+        if (SParam.checkEnabled && (!TGraph.EnabledN[NextN]))
+          continue;
+
+        // frontier-touch check: NextN already claimed by the OTHER source
+        if (allow_reconnect && useSrc1 && TGraph.IsMarked(NextN)) {
+          size_t OwnerSrc = TGraph.Source(NextN);
+          if (((int)OwnerSrc == Src0 || (int)OwnerSrc == Src1) &&
+              (int)OwnerSrc != (int)CurrSource) {
+            reconnected = true;
+            reconnectNode = NextN;
+            VisitedSuccess() += VisitedCount;
+            return true;
+          }
+        }
+
+        ScalarType NextStep = TGraph.WeightLink(CurrN, i);
+        if (SParam.uniformW) {
+          ScalarType delta = 0.001;
+          NextStep = TGraph.AverageWeigth() + (delta * NextStep);
+        }
+        if (NextStep <= 0) {
+          std::cout << "Negative Weight:" << NextStep << std::endl;
+          exit(0);
+        }
+        ScalarType NextWeight = CurrWeight + NextStep;
+        ScalarType OldWeight = std::numeric_limits<ScalarType>::max();
+
+        bool IsMarked = (TGraph.IsMarked(NextN));
+        if ((IsMarked) || (SParam.stopAtPrevDist)) {
+          ScalarType testDist = TGraph.Distance(NextN);
+          if (testDist > 0)
+            OldWeight = testDist;
+        }
+
+        if (NextWeight < OldWeight) {
+          TGraph.Mark(NextN);
+          TGraph.Distance(NextN) = NextWeight;
+          TGraph.Father(NextN) = CurrN;
+          TGraph.Source(NextN) = CurrSource;
+          TGraph.Steps(NextN) = TGraph.Steps(CurrN) + 1;
+
+          if ((SParam.MaxSteps > 0) &&
+              (TGraph.Steps(NextN) > SParam.MaxSteps)) {
+            continue;
+          }
+          Heap.push_back(HeapEntry(NextN, NextWeight, CurrSource));
+          push_heap(Heap.begin(), Heap.end());
+          pushedNeigh++;
+        }
+      }
+
+    } while (!Heap.empty());
+    VisitedFail() += VisitedCount;
     return false;
   }
 

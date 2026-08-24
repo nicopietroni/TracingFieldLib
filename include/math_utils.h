@@ -84,6 +84,25 @@ inline ScalarType MaxPercentile(const std::vector<ScalarType> &Values,
   return TestVal;
 }
 
+void PrintIntStats(const std::string &label, std::vector<int> V) {
+  if (V.empty()) {
+    std::cout << label << ": (empty)" << std::endl;
+    return;
+  }
+  std::sort(V.begin(), V.end());
+  size_t n = V.size();
+  long sum = 0;
+  for (int x : V)
+    sum += x;
+  double mean = (double)sum / n;
+  int median = V[n / 2];
+  int p10 = V[(size_t)(0.10 * (n - 1))];
+  int p90 = V[(size_t)(0.90 * (n - 1))];
+  std::cout << label << " (n=" << n << "): min=" << V.front()
+            << " p10=" << p10 << " median=" << median << " mean=" << mean
+            << " p90=" << p90 << " max=" << V.back() << std::endl;
+}
+
 template <class ScalarType>
 inline void Trim(std::vector<ScalarType> &Values, const ScalarType &MaxVal) {
   for (size_t i = 0; i < Values.size(); i++)

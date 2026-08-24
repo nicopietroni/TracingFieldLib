@@ -130,8 +130,8 @@ bool DrawTangentExit = false;
 bool DrawConvexExit = false;
 // DartOrthoDomain
 bool DrawDartOrthoDomain = false;
-// JumpNodes
-bool DrawJumpNodes = false;
+// // JumpNodes
+// bool DrawJumpNodes = false;
 
 bool DrawCorners = false;
 bool DrawDualCorners = false;
@@ -766,7 +766,7 @@ void SetRenderBar() {
     ImGui::Checkbox("Draw Tangent Exit", &DrawTangentExit);
     ImGui::Checkbox("Draw Convex Exit", &DrawConvexExit);
     ImGui::Checkbox("Draw Dart Ortho", &DrawDartOrthoDomain);
-    ImGui::Checkbox("Draw Jump Nodes", &DrawJumpNodes);
+    //ImGui::Checkbox("Draw Jump Nodes", &DrawJumpNodes);
   }
   // ImGui::Separator();
   if (ImGui::CollapsingHeader("DRAW SAMPLING")) {
@@ -2217,11 +2217,11 @@ void GLDrawMesh() {
         TGraph, VertCurv, Geo::DartOrthoDomain, MeshBox.Diag() * 0.01, PDParam);
   }
 
-  if (DrawJumpNodes) {
-    PDParam.ColLine = Geo::Point3<ScalarType>(1, 1, 0);
-    GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
-        TGraph, VertCurv, Geo::JumpNodes, MeshBox.Diag() * 0.01, PDParam);
-  }
+  // if (DrawJumpNodes) {
+  //   PDParam.ColLine = Geo::Point3<ScalarType>(1, 1, 0);
+  //   GLGraphDraw::GLCrossFieldGraph<ScalarType>::DrawNodesOfType(
+  //       TGraph, VertCurv, Geo::JumpNodes, MeshBox.Diag() * 0.01, PDParam);
+  // }
 
   if (DrawInternalNode) {
     PDParam.ColLine = Geo::Point3<ScalarType>(1, 0, 1);

@@ -63,9 +63,9 @@ enum NType {
   // nodes that are orthogonal to a dart
   DartOrthoDomain,
   // internal nodes
-  Internal,
+  Internal
   // nodes to jump from one side to another of a feature
-  JumpNodes
+  //JumpNodes
 };
 
 enum GraphType { GT_CrossField, GT_FrameField };
@@ -459,6 +459,18 @@ public:
       if (NodeType(i) != TypeNode)
         continue;
       IdxNode.push_back(i);
+    }
+  }
+
+  void GetNodeTypeFrom(const NType &TypeNode, 
+                      const std::vector<int> &SubsetIdx,
+                      std::vector<int> &IdxNodeFrom) const {
+    IdxNodeFrom.clear();
+    for (size_t i = 0; i < SubsetIdx.size(); i++) {
+      int IndexN = SubsetIdx[i];
+      if (NodeType(IndexN) != TypeNode)
+        continue;
+      IdxNodeFrom.push_back(IndexN);
     }
   }
 

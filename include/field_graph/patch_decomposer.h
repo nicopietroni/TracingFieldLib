@@ -674,10 +674,10 @@ public:
   void GetFeatureElem(std::vector<int> &FeatureElem) {
     std::vector<int> FixedPathsV(FixedPaths.begin(), FixedPaths.end());
     FeatureElem.clear();
-    //std::cout << "Fixed Paths " << FixedPathsV.size() << std::endl;
+    // std::cout << "Fixed Paths " << FixedPathsV.size() << std::endl;
     for (size_t i = 0; i < FixedPathsV.size(); i++) {
       int IndexP = FixedPathsV[i];
-      //std::cout << "Index P " << IndexP << std::endl;
+      // std::cout << "Index P " << IndexP << std::endl;
       assert(IndexP >= 0);
       assert(IndexP < PathSampl.SelectedPaths.size());
       std::vector<int> CurrFeatureEl;
@@ -806,24 +806,12 @@ public:
   //   PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioDist;
   // }
 
-  void RetraceCandidates() {
-
-    // PathSampl.InitializeDistance();
-
-    auto t0 = std::chrono::high_resolution_clock::now();
-
-    CompactData();
-
+  void SetupForTracing() {
     // remove the space around singularities
     PathSampl.InitSingularityNodes(false);
 
     InitArrivalPoint(true);
 
-    // /// this one stops to previously found borders, useful for
-    // /// recursive call
-    // if (end_features) {
-    //   //PathSampl.set
-    // }
     PathSampl.SwapNodeType.clear();
 
     if (end_patch_border && add_only_where_needed) {
@@ -841,6 +829,50 @@ public:
 
       PathSampl.SetBorderCanPassToExit(ArrivalFeatures);
     }
+  }
+
+  void RestoreAfterTracing() {
+    // restore the node type for borders that have been changed to exit
+    // for the recursive call
+    // restore the node type for borders that have been changed to exit
+    // for the recursive call
+    if (end_features ||
+        (end_patch_border && add_only_where_needed)) // || doing_mandatory) {
+      PathSampl.RestoreNodeType();
+  }
+
+  void RetraceCandidates() {
+
+    // PathSampl.InitializeDistance();
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+
+    CompactData();
+
+    // // remove the space around singularities
+    // PathSampl.InitSingularityNodes(false);
+
+    // InitArrivalPoint(true);
+
+    // PathSampl.SwapNodeType.clear();
+
+    // if (end_patch_border && add_only_where_needed) {
+    //   // get the non solved subpatches
+    //   std::vector<int> BorderUnsolved;
+    //   GetBorderUnsolved(BorderUnsolved); //, false);
+    //   // set artificially to exit so it stops to borders
+    //   PathSampl.SetBorderCanPassToExit(BorderUnsolved);
+    // }
+
+    // if (end_features) {
+    //   std::vector<int> ArrivalFeatures;
+    //   // GetFeatureOrtho(ArrivalFeatures); //, false);
+    //   GetFeatureElem(ArrivalFeatures);
+
+    //   PathSampl.SetBorderCanPassToExit(ArrivalFeatures);
+    // }
+
+    SetupForTracing();
 
     auto t3 = std::chrono::high_resolution_clock::now();
     auto elapsed =
@@ -848,7 +880,7 @@ public:
 
     TimeInit += elapsed.count() * 1e-6;
 
-    PathSampl.SampleCandidates(first_ite);
+    PathSampl.SampleCandidates(first_ite,lazy_insert);
 
     auto t4 = std::chrono::high_resolution_clock::now();
     auto elapsed1 =
@@ -858,11 +890,12 @@ public:
     // if not initialized at this point will be
     to_init_distance = false;
 
-    // restore the node type for borders that have been changed to exit
-    // for the recursive call
-    if (end_features ||
-        (end_patch_border && add_only_where_needed)) // || doing_mandatory) {
-      PathSampl.RestoreNodeType();
+    // // restore the node type for borders that have been changed to exit
+    // // for the recursive call
+    // if (end_features || (end_patch_border && add_only_where_needed)) // ||
+    // doing_mandatory) {
+    //   PathSampl.RestoreNodeType();
+    RestoreAfterTracing();
   }
 
   bool GetConditionPerFaceScalar(std::vector<ScalarType> &FaceV,
@@ -1017,7 +1050,7 @@ public:
     PatchMan.InitVisualCornersEdges();
   }
 
-  void AddNext(bool &all_solved, bool &added_sample) {
+  void AddNextCandidate(bool &all_solved, bool &added_sample) {
     all_solved = false;
     added_sample = false;
 
@@ -1897,14 +1930,25 @@ public:
       std::cout << "ADDING PATHS" << std::endl;
 
     bool terminated = false;
+
+    std::vector<int> ToTestDart;
+    PathSampl.Graph().GetNodeType(Geo::DartOrthoDomain, ToTestDart);
+
+    auto t0 = std::chrono::high_resolution_clock::now();
     do {
-      AddNext(all_solved, added_sample);
-      // update dart if needed
+      AddNextCandidate(all_solved, added_sample);
+      
       if (update_dart)
-        UpdateOrthoDartNodeTypeIfNeeded();
+        UpdateOrthoDartNodeTypeIfNeeded(ToTestDart);
+
       added_once |= added_sample;
       terminated = ((!added_sample) || (stop_when_solved && all_solved));
     } while (!terminated); // while ((!all_solved) && (added_sample));
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto elapsed1 =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    TimeTracing += elapsed1.count() * 1e-6;
 
     CompactData();
 
@@ -2256,78 +2300,12 @@ public:
     // PathSampl.MergeCollinearPath();
   }
 
-  // bool SolveAllFeatures() // bool UpdateForce = true) {
-  // {
-  //   // std::cout<<"STEP 0"<<std::endl;
-  //   // PathSampl.Graph().PrintData();
-
-  //   PathSampl.MaxCrossJump = -1;
-  //   bool has_added = false;
-
-  //   // SetSpikeSpikeConfiguration();
-
-  //   // // then trace in the one unsolved
-  //   // RetraceOnUnsolved();
-
-  //   // has_added |=AddAllPaths();
-
-  //   // std::vector<bool> force_sample_swap;
-  //   PathSampl.force_direct = true;
-  //   // first do feature to feature
-  //   SetFeatureFeatureConfiguration();
-  //   PathSampl.PType = CrossPathSampling<ScalarType>::PrioLenW;
-
-  //   assert(IsSolvingFeatures());
-
-  //   InitSampling(add_only_where_needed);
-  //   if (add_only_where_needed)
-  //     InitMustPassEdges();
-
-  //   // if (UpdateForce)
-  //   //  std::cout<<"STEP 0.1"<<std::endl;
-  //   //  PathSampl.Graph().PrintData();
-
-  //   // then trace in the one unsolved, only the first time then use borders
-  //   // if (first_ite)
-  //   std::cout << "**TRACING first feature step **" << std::endl;
-  //   RetraceCandidates();
-
-  //   // std::cout<<"STEP 1"<<std::endl;
-  //   // PathSampl.Graph().PrintData();
-
-  //   has_added |= AddAllPaths();
-
-  //   // std::cout<<"STEP 2"<<std::endl;
-  //   // PathSampl.Graph().PrintData();
-
-  //   // set features to all possible arrival points
-  //   SetFeatureAllConfiguration();
-  //   InitSampling(add_only_where_needed);
-  //   if (add_only_where_needed)
-  //     InitMustPassEdges();
-  //   // if (!end_border)
-  //   // {
-  //   // std::cout<<"STEP 3"<<std::endl;
-  //   // PathSampl.Graph().PrintData();
-
-  //   std::cout << "**TRACING second feature step **" << std::endl;
-  //   RetraceCandidates();
-
-  //   // std::cout<<"STEP 4"<<std::endl;
-  //   // PathSampl.Graph().PrintData();
-  //   has_added |= AddAllPaths();
-
-  //   // std::cout<<"STEP 5"<<std::endl;
-  //   // PathSampl.Graph().PrintData();
-  //   //}
-  //   PathSampl.force_direct = false;
-
-  //   PathSampl.MaxCrossJump = -1;
-  //   return has_added;
-  // }
-
   bool SolveAllFeatures() // bool UpdateForce = true) {
   {
+    //features cannot be lazy because they are needed to be solved in the first iteration
+    //and evaluated by their lenght
+    bool has_lazy = lazy_insert;
+    lazy_insert = false;
 
     PathSampl.MaxCrossJump = -1;
     bool has_added = false;
@@ -2385,6 +2363,10 @@ public:
     PathSampl.force_direct = false;
 
     PathSampl.MaxCrossJump = -1;
+
+    //restore lazy insert to the previous value
+    lazy_insert = has_lazy;
+    
     return has_added;
   }
 
@@ -2421,21 +2403,21 @@ public:
     return (has_added);
   }
 
+  bool lazy_insert = false;
+
   bool SolveAllMesh() {
     // UnsolvedPatches.clear();
     PathSampl.force_direct = false;
     bool has_added = false;
 
-    //   enum PriorityType { PrioLen, PrioLenW, PrioDist };
-    // PriorityType PType;
-
-    // assert (PathSampl.PType==CrossPathSampling<ScalarType>::PrioDist);
-
-    // FIRST ITERATION STOP ON BORDER OR LOOPS
+    // FIRST ITERATION STOP ON BORDER or Close to A LOOP
     if (first_ite) {
       SetBaseContinuumConfiguration();
       assert(!IsSolvingFeatures());
+
       PathSampl.PType = CrossPathSampling<ScalarType>::PrioDist;
+      if (lazy_insert)
+        PathSampl.PType = CrossPathSampling<ScalarType>::PrioDistGenerator;
 
       InitSampling(add_only_where_needed);
       if (add_only_where_needed)
@@ -2443,13 +2425,18 @@ public:
 
       RetraceCandidates();
       has_added |= AddAllPaths();
+
       first_ite = false;
     }
 
-    // // SECOND ITERATION STOP ON BORDER FEATURES OR LOOPS
+    // SECOND ITERATION STOP ON BORDER or FEATURES or Close to A LOOP
     if (FixedPaths.size() > 0) {
       SetBaseFeatureConfiguration();
+
       PathSampl.PType = CrossPathSampling<ScalarType>::PrioDist;
+      if (lazy_insert)
+        PathSampl.PType = CrossPathSampling<ScalarType>::PrioDistGenerator;
+
       InitSampling(add_only_where_needed);
       if (add_only_where_needed)
         InitMustPassEdges();
@@ -2458,10 +2445,14 @@ public:
       has_added |= AddAllPaths();
     }
 
-    // THIRD ITERATION STOP ON BORDER, PATCH BORDERS OR LOOPS
+    // THIRD ITERATION STOP ON BORDERor FEATURES or PATCH BORDERS or Close to A
+    // LOOP
     SetBaseSplitConfiguration();
     assert(!IsSolvingFeatures());
+
     PathSampl.PType = CrossPathSampling<ScalarType>::PrioDist;
+    if (lazy_insert)
+      PathSampl.PType = CrossPathSampling<ScalarType>::PrioDistGenerator;
 
     InitSampling(add_only_where_needed);
     if (add_only_where_needed)
@@ -2595,14 +2586,14 @@ public:
 
     // split into patch with Voronoi
     std::vector<std::vector<int>> ClusterFaces;
-    Geo::FindVoronoiClusters<ScalarType>(PatchVertPos, PatchFaces,
-                                         ClusterFaces,2);
+    Geo::FindVoronoiClusters<ScalarType>(PatchVertPos, PatchFaces, ClusterFaces,
+                                         2);
 
-    std::cout<<"Num Clusters:"<<ClusterFaces.size()<<std::endl;
+    std::cout << "Num Clusters:" << ClusterFaces.size() << std::endl;
     // then convert border into paths
-    //PData.
+    // PData.
     // then add the path
-    //PatchMan.Update(ToAdd, ToRemove, UpdatedPatches);
+    // PatchMan.Update(ToAdd, ToRemove, UpdatedPatches);
     exit(0);
     return true;
   }
@@ -2629,30 +2620,30 @@ public:
 
   void RemoveNotTopologicallyOK() {
     bool has_added_path = false;
-    int num_removed=0;
-      for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
-        if (PatchMan.isEmpty(i))
-          continue;
-        std::vector<int> SpikeCorn, ConcaveCorn;
-        bool single_border = (HasSingleBorder(PatchMan.PData.SubPatchVertPos[i],
-                                              PatchMan.PData.SubPatchFaces[i]));
-        int NumB = PatchMan.NumBorders(i);
-        int GenusP = PatchMan.Genus(i);
-        
-        bool must_rem =(!single_border) || (NumB != 1) || ((NumB == 1) && (GenusP != 0));
-        if (must_rem)
-        {
-          PatchMan.ClearDataForPatch(i);
-          num_removed++;
-        }
+    int num_removed = 0;
+    for (size_t i = 0; i < PatchMan.NumPatches(); i++) {
+      if (PatchMan.isEmpty(i))
+        continue;
+      std::vector<int> SpikeCorn, ConcaveCorn;
+      bool single_border = (HasSingleBorder(PatchMan.PData.SubPatchVertPos[i],
+                                            PatchMan.PData.SubPatchFaces[i]));
+      int NumB = PatchMan.NumBorders(i);
+      int GenusP = PatchMan.Genus(i);
+
+      bool must_rem =
+          (!single_border) || (NumB != 1) || ((NumB == 1) && (GenusP != 0));
+      if (must_rem) {
+        PatchMan.ClearDataForPatch(i);
+        num_removed++;
       }
-      if (num_removed>0)
-      {
-        std::cout<<"WARNING: Removed "<<num_removed<<" Non Topologically-Correct Patches"<<std::endl;
-        PatchMan.CompactEmptyPatches();
-      }
+    }
+    if (num_removed > 0) {
+      std::cout << "WARNING: Removed " << num_removed
+                << " Non Topologically-Correct Patches" << std::endl;
+      PatchMan.CompactEmptyPatches();
+    }
   }
-  
+
 private:
   bool first_ite;
 
@@ -2683,6 +2674,7 @@ private:
       PathSampl.PrioritySampleVert.clear();
       PathSampl.PrioritySampleDir.clear();
       // bool Has_Priority = (PathSampl.PrioritySampleVert.size() > 0);
+
       if (force_all_features) {
         if (print_info)
           std::cout << "FORCING" << std::endl;
@@ -2749,6 +2741,7 @@ private:
 
       // PostEnableInterval();
       //  first_ite = false;
+      
       if (print_info)
         std::cout << "*** STEP " << CurrIte << std::endl;
     } while ((has_added) || (!all_interval));
@@ -2825,9 +2818,32 @@ private:
     }
   }
 
-  void UpdateOrthoDartNodeTypeIfNeeded() {
+  // void UpdateOrthoDartNodeTypeIfNeeded()
+  // {
+  //   std::vector<int> DartIdxNode;
+  //   PathSampl.Graph().GetNodeType(Geo::DartOrthoDomain, DartIdxNode);
+  //   if (DartIdxNode.size() == 0)
+  //     return;
+
+  //   // then get all spike nodes
+  //   std::vector<int> SpikeVert;
+  //   PatchMan.GetAllGlobalVertOfType(CTypeSpike, SpikeVert);
+
+  //   std::set<int> SpikeVertSet(SpikeVert.begin(), SpikeVert.end());
+
+  //   for (size_t i = 0; i < DartIdxNode.size(); i++) {
+  //     int IndexN = DartIdxNode[i];
+  //     int IndexV = Field::CrossFieldGraph::ElemOfNode(IndexN);
+  //     // then no more spike change the type of node
+  //     if (SpikeVertSet.count(IndexV) == 0)
+  //       PathSampl.Graph().NodeType(IndexN) = Geo::Internal;
+  //   }
+  // }
+
+  void UpdateOrthoDartNodeTypeIfNeeded(const std::vector<int> &FromSet) {
     std::vector<int> DartIdxNode;
-    PathSampl.Graph().GetNodeType(Geo::DartOrthoDomain, DartIdxNode);
+    PathSampl.Graph().GetNodeTypeFrom(Geo::DartOrthoDomain, FromSet,
+                                      DartIdxNode);
     if (DartIdxNode.size() == 0)
       return;
 
@@ -2844,6 +2860,28 @@ private:
       if (SpikeVertSet.count(IndexV) == 0)
         PathSampl.Graph().NodeType(IndexN) = Geo::Internal;
     }
+  }
+
+  void UpdateOrthoDartNodeTypeIfNeeded() {
+    std::vector<int> DartIdxNode;
+    PathSampl.Graph().GetNodeType(Geo::DartOrthoDomain, DartIdxNode);
+    if (DartIdxNode.size() == 0)
+      return;
+
+    UpdateOrthoDartNodeTypeIfNeeded(DartIdxNode);
+    // // then get all spike nodes
+    // std::vector<int> SpikeVert;
+    // PatchMan.GetAllGlobalVertOfType(CTypeSpike, SpikeVert);
+
+    // std::set<int> SpikeVertSet(SpikeVert.begin(), SpikeVert.end());
+
+    // for (size_t i = 0; i < DartIdxNode.size(); i++) {
+    //   int IndexN = DartIdxNode[i];
+    //   int IndexV = Field::CrossFieldGraph::ElemOfNode(IndexN);
+    //   // then no more spike change the type of node
+    //   if (SpikeVertSet.count(IndexV) == 0)
+    //     PathSampl.Graph().NodeType(IndexN) = Geo::Internal;
+    // }
   }
 
 public:
@@ -3173,7 +3211,7 @@ public:
     TimeRemovePaths += elapsed.count() * 1e-6;
 
     // FIX ARTIFICIALLY THE WRONG PATCHES
-    //ForceSolveTopology();
+    // ForceSolveTopology();
     RemoveNotTopologicallyOK();
     PatchMan.FixWrongValencePatches();
 
@@ -3185,7 +3223,7 @@ public:
     std::cout << std::endl;
     std::cout << "<<< Decompose TIMINGS (sec) >>> " << std::endl;
     std::cout << "* Init: " << TimeInit << std::endl;
-    std::cout << "* Tracing: " << TimeTracing << std::endl;
+    std::cout << "* Tracing/Adding: " << TimeTracing << std::endl;
     // std::cout << "---- Number of Traced Paths: " << num_traced << std::endl;
     // std::cout << "---- Failed Traces: " << failed_trace << std::endl;
     // std::cout << "---- Number of Loops: " << num_loops << std::endl;
@@ -3233,6 +3271,17 @@ public:
                      TimeUpdateUpdatePatches + TimeUpdateDistances +
                      TimeCheckConflicts + TimeRemovePaths
               << std::endl;
+
+
+    //PathSampl.WriteTraceStats();
+    // PathSampl.WriteCandidateStats();
+    //exit(0);
+    // std::cout << "Visited (success): " << Geo::GraphQuery<ScalarType>::VisitedSuccess()
+    //       << "  Visited (fail): " << Geo::GraphQuery<ScalarType>::VisitedFail() << std::endl;
+    // exit(0);
+    // std::cout << "Need second trace: " << Geo::GraphTracing<ScalarType>::NumNeedSecondTrace()
+    //       << " / " << Geo::GraphTracing<ScalarType>::TotalTrace() << std::endl;
+    //exit(0);
   }
 
   void BatchMaxDecompose(std::vector<int> &RankPaths,

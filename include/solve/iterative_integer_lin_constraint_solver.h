@@ -60,16 +60,35 @@ namespace Geo {
 //
 // OPTIONAL FEATURES (all ON by default):
 //
-//   use_incremental_solve  — Instead of re-factorising A^T A from scratch at
-//       every greedy step, applies a rank-1 Cholesky update when a variable is
-//       fixed.  Cost per fix: O(nnz) instead of O(n^1.5).  Large speedup for
-//       systems with thousands of variables.
+//   use_incremental_solve  — Instead of re-analysing + re-factorising A^T A
+//       from scratch at every greedy step, keeps the symbolic pattern fixed
+//       (analyzePattern() called once) and defers/batches numeric-only
+//       factorize() calls: fixing a variable only touches one diagonal
+//       entry (O(1)); the actual factorize() happens lazily, once per
+//       Solve(), regardless of how many variables were fixed since the
+//       last call.  Combined with use_batch_fixing this means one
+//       factorize() per ~max_batch_size variables instead of one per
+//       variable.  (Note: Eigen's sparse SimplicialCholesky/LDLT has no
+//       public rank-1 update — only the *dense* Eigen::LDLT does — so this
+//       is numeric-only refactorization batching, not a true O(fill) rank
+//       update; getting that would need CHOLMOD/SuiteSparse.)
 //
 //   use_colnorm_branching  — Improves the variable-selection heuristic.
 //       Instead of always picking the variable closest to an integer, uses
 //         score(i) = ||A[:,i]||_2 * |x_i - round(x_i)|
 //       which accounts for how much rounding variable i would disturb the
 //       residual.  Variables whose column has high norm are fixed first.
+//
+//   use_batch_fixing  — On large problems, fixes several variables per
+//       greedy iteration instead of one.  Starting from the SortByRound
+//       ranking, greedily accepts candidates into the batch (up to
+//       max_batch_size) as long as their A0 column is not strongly
+//       correlated (cosine similarity above batch_max_correlation) with any
+//       variable already chosen in that batch — i.e. it avoids jointly
+//       rounding two variables that compete for the same residual rows,
+//       which is the classic failure mode of naive batch rounding.  Cuts
+//       the number of Solve() calls by roughly max_batch_size on large
+//       systems.
 //
 //   use_lns  — After the greedy solution, runs Large Neighbourhood Search:
 //       iteratively frees the lns_neighborhood_size variables with the highest
@@ -109,13 +128,30 @@ public:
   // residual.  Compatible with all FOrdType values.
   bool use_colnorm_branching;
 
-  // --- Optional feature 2: incremental Cholesky updates ------------------
-  // When true, fixing a variable is applied as a rank-1 Cholesky update
-  // (O(nnz)) rather than re-building and re-factorising A^T A (O(n^1.5)).
+  // --- Optional feature 2: incremental / batched factorization -----------
+  // When true, fixing a variable defers the numeric factorize() to the next
+  // Solve() call (symbolic pattern computed once, never touched again),
+  // instead of rebuilding and fully re-analysing+re-factorising A^T A from
+  // scratch every time.  Combined with use_batch_fixing, this means one
+  // factorize() per batch of fixed variables rather than one per variable.
   // Highly recommended for problems with thousands of variables.
   bool use_incremental_solve;
 
-  // --- Optional feature 3: Large Neighbourhood Search ---------------------
+  // --- Optional feature 3: batch fixing (multiple variables per step) -----
+  // When true, each greedy iteration fixes up to max_batch_size variables
+  // at once instead of one, chosen greedily from the SortByRound ranking so
+  // that no two variables fixed together have strongly overlapping A0
+  // columns (see batch_max_correlation).  Reduces the number of Solve()
+  // calls roughly by a factor of max_batch_size on large problems.
+  // Recommended for systems with thousands of variables; for small systems
+  // the effect is negligible and single-variable fixing is just as fast.
+  bool       use_batch_fixing;
+  int        max_batch_size;         // upper bound on variables fixed per iteration
+  ScalarType batch_max_correlation;  // max allowed |cos similarity| between
+                                     // columns of two variables fixed together
+                                     // (0 = only totally disjoint columns, 1 = no check)
+
+  // --- Optional feature 4: Large Neighbourhood Search ---------------------
   // When true, the greedy solution is post-processed by LNS:
   //   for lns_num_iterations iterations:
   //     1. select lns_neighborhood_size variables with highest residual cost
@@ -320,6 +356,52 @@ private:
     }
   }
 
+  // ==========================================================================
+  // SelectFixBatch: given RoundRank (best candidate first, from SortByRound),
+  // greedily builds a batch of up to max_batch_size variables to fix in the
+  // same iteration.  A candidate is added only if its A0 column is not
+  // strongly correlated with any column already in the batch — i.e. the two
+  // variables don't compete for the same residual rows.  This avoids the
+  // usual failure mode of naive batch rounding, where jointly fixing two
+  // tightly-coupled variables in one shot locks in a bad joint decision that
+  // a single-variable greedy step (re-solving in between) would have caught.
+  //
+  // The best candidate (RoundRank[0]) is always taken unconditionally, so
+  // the batch is never empty when RoundRank isn't.
+  // ==========================================================================
+  std::vector<std::pair<int,int>>
+  SelectFixBatch(const std::vector<std::pair<int,int>> &RoundRank) {
+    std::vector<std::pair<int,int>> batch;
+    if (RoundRank.empty()) return batch;
+
+    const auto &A0 = LQSolver.OriginalA();
+    batch.push_back(RoundRank[0]);
+
+    for (size_t i = 1; i < RoundRank.size() &&
+                       (int)batch.size() < max_batch_size; i++) {
+      int cand = RoundRank[i].first;
+      ScalarType nCand = colNormCache.empty() ? ScalarType(1)
+                                              : colNormCache[cand];
+      if (nCand <= 0) continue;  // zero column — nothing to correlate with
+
+      bool correlated = false;
+      for (const auto &chosen : batch) {
+        int cj = chosen.first;
+        ScalarType nChosen = colNormCache.empty() ? ScalarType(1)
+                                                   : colNormCache[cj];
+        if (nChosen <= 0) continue;
+
+        ScalarType dot    = A0.col(cand).dot(A0.col(cj));
+        ScalarType cosSim = fabs(dot) / (nCand * nChosen);
+        if (cosSim > batch_max_correlation) { correlated = true; break; }
+      }
+
+      if (!correlated) batch.push_back(RoundRank[i]);
+    }
+
+    return batch;
+  }
+
   // --------------------------------------------------------------------------
   // Constraint-list helpers (default mode only)
   // --------------------------------------------------------------------------
@@ -440,8 +522,14 @@ private:
     if (!AddedHardLimits && !AddedSoft) {
       std::vector<std::pair<int, int>> RoundRank;
       SortByRound(Solution, RoundRank);
-      if (!RoundRank.empty())
-        FixOneVariable(RoundRank[0].first, RoundRank[0].second);
+      if (!RoundRank.empty()) {
+        if (use_batch_fixing && RoundRank.size() > 1) {
+          std::vector<std::pair<int, int>> batch = SelectFixBatch(RoundRank);
+          for (const auto &bv : batch) FixOneVariable(bv.first, bv.second);
+        } else {
+          FixOneVariable(RoundRank[0].first, RoundRank[0].second);
+        }
+      }
     }
 
     // In default mode, rebuild constraint lists for the next iteration.
@@ -583,7 +671,10 @@ private:
     if (FOrdType == ST_LowError)     std::cout << "Rounding: LOWEST_ERR";
     if (FOrdType == ST_StQRPivoting) std::cout << "Rounding: SQR_PIVOT";
     if (use_colnorm_branching) std::cout << " | colNorm branching";
-    if (use_incremental_solve) std::cout << " | incremental Cholesky";
+    if (use_incremental_solve) std::cout << " | incremental/batched factorize";
+    if (use_batch_fixing)
+      std::cout << " | batch fixing(max=" << max_batch_size
+                << ", corr<=" << batch_max_correlation << ")";
     if (use_lns)
       std::cout << " | LNS(iters=" << lns_num_iterations
                 << ", k=" << lns_neighborhood_size << ")";
@@ -636,8 +727,9 @@ public:
     if (use_incremental_solve)
       LQSolver.InitIncremental(BasicLinConstr);
 
-    // Column norms are needed by branching and LNS neighbourhood selection.
-    if (use_colnorm_branching || use_lns)
+    // Column norms are needed by branching, LNS neighbourhood selection,
+    // and the batch-fixing correlation check.
+    if (use_colnorm_branching || use_lns || use_batch_fixing)
       BuildColNormCache();
   }
 
@@ -667,6 +759,9 @@ public:
     // --- Feature defaults: all ON for best quality on large problems -------
     use_colnorm_branching = true;   // better variable-selection heuristic
     use_incremental_solve = true;   // rank-1 Cholesky updates (fast)
+    use_batch_fixing      = true;   // fix several uncorrelated vars per step
+    max_batch_size        = 8;      // conservative — raise for very large n
+    batch_max_correlation = ScalarType(0.15);
     use_lns               = false;   // post-greedy neighbourhood search
     lns_num_iterations    = 100;
     lns_neighborhood_size = 50;
