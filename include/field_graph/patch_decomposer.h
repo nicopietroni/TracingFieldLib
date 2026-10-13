@@ -2640,8 +2640,12 @@ namespace Geo
         PatchMan.GetAllGlobalVertOfType(CTypeSpike, InitialSpikeVerts);
       
       if ((InitialConcaveVerts.size()==0)&& (InitialSpikeVerts.size()==0))
+      {
+        add_only_where_needed = true;
+        stop_when_solved = true;
+        lazy_insert = has_lazy;
         return false;
-
+      }
       //InitSampling(add_only_where_needed);
       std::fill(PathSampl.sample_on.begin(), PathSampl.sample_on.end(), false);
       std::fill(PathSampl.force_sample.begin(), PathSampl.force_sample.end(),false);
