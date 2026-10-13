@@ -37,6 +37,7 @@
 #include <sstream>
 #include <point3.h>
 #include <IO/file_path_functions.h>
+#include <triangle3.h>
 
 inline void parseFaceLine(const std::string& line, std::vector<int>& vertexIndices) 
 {
@@ -559,6 +560,16 @@ bool WriteOBJ(std::string meshFile,
 }
 
 template <class ScalarType>
+bool WriteOBJ(std::string meshFile,
+              const Geo::Point3<ScalarType> &VertPos)
+{
+    std::vector<std::vector<int> > Connectivity;
+    std::vector<Geo::Point3<ScalarType> > VertPosV(1);
+    VertPosV[0] = VertPos;
+    return (WriteOBJ(meshFile,VertPosV,Connectivity));
+}
+
+template <class ScalarType>
 bool WriteOBJWithFaceColor(const std::string &meshFile,
                            const std::vector<Geo::Point3<ScalarType> > &VertPos,
                            const std::vector<std::vector<int>> &Connectivity,
@@ -623,6 +634,29 @@ bool WriteOBJ(std::string meshFile,
 
 template <class ScalarType>
 bool WriteOBJ(std::string meshFile,
+              const std::vector<Geo::Point3<ScalarType> > &VertPos)
+{
+     std::vector<std::vector<int> > Connectivity;
+    return (WriteOBJ(meshFile,VertPos,Connectivity));
+}
+
+template <class ScalarType>
+bool WriteOBJ(std::string meshFile,
+              const Geo::Traingle3<ScalarType> &T)
+{
+    std::vector<Geo::Point3<ScalarType>> VertPos(3);
+    VertPos[0] = T.P(0);
+    VertPos[1] = T.P(1);
+    VertPos[2] = T.P(2);
+    std::vector<std::vector<int>> Connectivity(1);
+    Connectivity[0].push_back(0);
+    Connectivity[0].push_back(1);
+    Connectivity[0].push_back(2);
+    return (WriteOBJ(meshFile, VertPos, Connectivity));
+}
+
+template <class ScalarType>
+bool WriteOBJ(std::string meshFile,
               const std::vector<Geo::Point3<ScalarType> > &VertPos,
               const std::vector<std::pair<int, int> > &Edges)
 {
@@ -636,4 +670,5 @@ bool WriteOBJ(std::string meshFile,
     }
     return (WriteOBJ(meshFile, VertPos, ConnectivityEdges));
 }
+
 #endif

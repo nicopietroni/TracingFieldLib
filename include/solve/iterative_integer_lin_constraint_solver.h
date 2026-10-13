@@ -180,6 +180,12 @@ private:
   // heuristic and LNS neighbourhood selection.
   std::vector<ScalarType> colNormCache;
 
+  // NEW (LNS on residual): variables of each basic constraint and
+  // constraints of each variable (single component problems only)
+  std::vector<std::vector<int>> ConstrVars;
+  std::vector<std::vector<int>> VarConstrs;
+  std::mt19937 LNSRng;
+
   // Constraint lists used in default (non-incremental) mode
   std::vector<LinearConstraint<ScalarType>> BasicLinConstr;
   std::vector<LinearConstraint<ScalarType>> HardLinConstr;
@@ -214,15 +220,29 @@ private:
   // Uses the first-order approximation:
   //   delta_E = 2 r^T (A[:,i] * delta) + || A[:,i] * delta ||^2
   // ==========================================================================
-  ScalarType computeEnergyChange(const std::vector<ScalarType> &Residual,
+  // OLD (before residual converted once): the whole residual was copied into
+  // an Eigen vector for every variable, at every greedy iteration
+  // ScalarType computeEnergyChange(const std::vector<ScalarType> &Residual,
+  //                                int        indexVar,
+  //                                ScalarType x_i_new,
+  //                                ScalarType x_i_old) {
+  //   Eigen::VectorX<ScalarType> r =
+  //       EigenInterface<ScalarType>::toEigenVector(Residual);
+  //   Eigen::VectorX<ScalarType> delta_r =
+  //       LQSolver.OriginalA().col(indexVar) * (x_i_new - x_i_old);
+  //   return 2 * r.dot(delta_r) + delta_r.squaredNorm();
+  // }
+
+  // NEW (residual converted once): r is converted by the caller, and the
+  // change is computed from the column only (no dense vector of all rows)
+  ScalarType computeEnergyChange(const Eigen::VectorX<ScalarType> &r,
                                  int        indexVar,
                                  ScalarType x_i_new,
                                  ScalarType x_i_old) {
-    Eigen::VectorX<ScalarType> r =
-        EigenInterface<ScalarType>::toEigenVector(Residual);
-    Eigen::VectorX<ScalarType> delta_r =
-        LQSolver.OriginalA().col(indexVar) * (x_i_new - x_i_old);
-    return 2 * r.dot(delta_r) + delta_r.squaredNorm();
+    ScalarType delta = x_i_new - x_i_old;
+    ScalarType ColDotR = LQSolver.OriginalA().col(indexVar).dot(r);
+    ScalarType ColNorm2 = LQSolver.OriginalA().col(indexVar).squaredNorm();
+    return 2 * delta * ColDotR + delta * delta * ColNorm2;
   }
 
   // --------------------------------------------------------------------------
@@ -273,8 +293,11 @@ private:
   }
 
   // First-order energy change when rounding variable IndexVar.
+  // OLD (before residual converted once)
+  //                             const std::vector<ScalarType> &Residual,
+  // NEW (residual converted once): Residual is already an Eigen vector
   ScalarType DiffEnApproximate(const std::vector<ScalarType> &Solution,
-                               const std::vector<ScalarType> &Residual,
+                               const Eigen::VectorX<ScalarType> &Residual,
                                const int                     &IndexVar) {
     ScalarType OldVal = Solution[IndexVar];
     ScalarType NewVal = RoundedValue(IndexVar, OldVal);
@@ -313,8 +336,15 @@ private:
     std::vector<RPriority> RoundPrio;
 
     std::vector<ScalarType> Residual;
-    if (FOrdType == ST_LowError)
+    // OLD (before residual converted once)
+    // if (FOrdType == ST_LowError)
+    //   LQSolver.Residual(Solution, Residual);
+    // NEW (residual converted once)
+    Eigen::VectorX<ScalarType> ResidualE;
+    if (FOrdType == ST_LowError) {
       LQSolver.Residual(Solution, Residual);
+      ResidualE = EigenInterface<ScalarType>::toEigenVector(Residual);
+    }
 
     for (size_t i = 0; i < Solution.size(); i++) {
       if (FixedVar[i]) continue;
@@ -323,8 +353,12 @@ private:
       ScalarType Diff = 0;
       if (FOrdType == ST_ClosestInt)
         Diff = FindErrApproximate(Solution, i);
+      // OLD (before residual converted once)
+      // else if (FOrdType == ST_LowError)
+      //   Diff = DiffEnApproximate(Solution, Residual, i);
+      // NEW (residual converted once)
       else if (FOrdType == ST_LowError)
-        Diff = DiffEnApproximate(Solution, Residual, i);
+        Diff = DiffEnApproximate(Solution, ResidualE, i);
       else if (FOrdType == ST_StQRPivoting) {
         assert(i < (size_t)StQRorder.size());
         Diff = StQRorder[i];
@@ -335,12 +369,24 @@ private:
       if (RoundPriority.size() == Solution.size())
         prio = RoundPriority[i];  // user-supplied priority
 
-      if (use_colnorm_branching && !colNormCache.empty()) {
-        // Negate so that the variable with the highest potential impact on
-        // the residual is sorted to the front (RPriority sorts ascending).
-        ScalarType fracPart = FindErrApproximate(Solution, i);
-        prio = -(colNormCache[i] * fracPart);
-      }
+      // OLD (before colnorm as rounding damage): it replaced the user
+      // priority (e.g. T-junctions) and fixed first the variables farthest
+      // from an integer, the opposite of ST_ClosestInt
+      // if (use_colnorm_branching && !colNormCache.empty()) {
+      //   // Negate so that the variable with the highest potential impact on
+      //   // the residual is sorted to the front (RPriority sorts ascending).
+      //   ScalarType fracPart = FindErrApproximate(Solution, i);
+      //   prio = -(colNormCache[i] * fracPart);
+      // }
+
+      // NEW (colnorm as rounding damage): the user priority stays the primary
+      // key; with ST_ClosestInt the distance from the integer is weighted by
+      // the column norm, i.e. the residual change caused by the rounding,
+      // and the variables that cause the smallest change are fixed first
+      // (ST_LowError already measures the energy change)
+      if (use_colnorm_branching && !colNormCache.empty() &&
+          (FOrdType == ST_ClosestInt))
+        Diff = colNormCache[i] * FindErrApproximate(Solution, i);
 
       RoundPrio.push_back(RPriority(prio, Diff, i));
     }
@@ -569,8 +615,11 @@ private:
   // Variables with a large column norm that are also poorly rounded are freed
   // first, as they have the most potential for energy improvement.
   // ==========================================================================
+  // OLD (before LNS on residual): the integer solution has no fractional
+  // part, so the score was only the column norm and every iteration freed
+  // the same variables, without looking at the residual
   std::vector<int>
-  SelectLNSNeighborhood(const std::vector<int> &currentIntSol) {
+  SelectLNSNeighborhoodOld(const std::vector<int> &currentIntSol) {
     std::vector<std::pair<ScalarType, int>> contrib;
     for (int i = 0; i < (int)currentIntSol.size(); i++) {
       if (!FixedVar[i]) continue;
@@ -588,6 +637,86 @@ private:
     for (int i = 0; i < k; i++)
       freed.push_back(contrib[i].second);
     return freed;
+  }
+
+  // NEW (LNS on residual): starts from one of the constraints with the
+  // highest residual (picked at random among the worst ones, so that the
+  // iterations explore different regions) and frees the variables of the
+  // connected constraints around it, until lns_neighborhood_size variables
+  // are free: a chain of wrong values can then move together
+  std::vector<int>
+  SelectLNSNeighborhood(const std::vector<int> &currentIntSol) {
+    if (ConstrVars.empty())
+      return SelectLNSNeighborhoodOld(currentIntSol);
+
+    // energy of each basic constraint on the integer solution (one row of
+    // the residual per basic constraint, otherwise the old neighbourhood)
+    int n = LQSolver.OriginalA().cols();
+    std::vector<ScalarType> floatSol(n, 0);
+    for (int i = 0; i < std::min((int)currentIntSol.size(), n); i++)
+      floatSol[i] = (ScalarType)currentIntSol[i];
+    std::vector<ScalarType> res;
+    LQSolver.Residual(floatSol, res);
+    if (res.size() != ConstrVars.size())
+      return SelectLNSNeighborhoodOld(currentIntSol);
+
+    std::vector<std::pair<ScalarType, int>> ConstrErr;
+    for (size_t i = 0; i < ConstrVars.size(); i++) {
+      ScalarType Err = res[i] * res[i];
+      if (Err > 0)
+        ConstrErr.push_back({Err, (int)i});
+    }
+    if (ConstrErr.empty())
+      return std::vector<int>();
+    std::sort(ConstrErr.rbegin(), ConstrErr.rend());
+
+    // seed among the 10 worst constraints
+    int NumCand = std::min((int)ConstrErr.size(), 10);
+    int SeedC = ConstrErr[LNSRng() % NumCand].second;
+
+    // breadth-first visit on the constraint / variable graph
+    std::vector<bool> VisitedC(ConstrVars.size(), false);
+    std::vector<bool> FreedV(VarConstrs.size(), false);
+    std::vector<int> freed;
+    std::vector<int> QueueC(1, SeedC);
+    VisitedC[SeedC] = true;
+    for (size_t h = 0; h < QueueC.size(); h++) {
+      int CurrC = QueueC[h];
+      for (int v : ConstrVars[CurrC]) {
+        if (FreedV[v])
+          continue;
+        FreedV[v] = true;
+        freed.push_back(v);
+        if ((int)freed.size() >= lns_neighborhood_size)
+          return freed;
+        for (int c : VarConstrs[v]) {
+          if (VisitedC[c])
+            continue;
+          VisitedC[c] = true;
+          QueueC.push_back(c);
+        }
+      }
+    }
+    return freed;
+  }
+
+  // NEW (LNS on residual): constraint / variable adjacency of the basic
+  // constraints (only for single component variables, otherwise the old
+  // neighbourhood is used)
+  void BuildLNSAdjacency(int NumVar, int MaxComp) {
+    ConstrVars.clear();
+    VarConstrs.clear();
+    if (MaxComp > 0)
+      return;
+    ConstrVars.resize(BasicLinConstr.size());
+    VarConstrs.resize(NumVar);
+    for (size_t i = 0; i < BasicLinConstr.size(); i++)
+      for (size_t j = 0; j < BasicLinConstr[i].LHSide.size(); j++) {
+        int IndexV = BasicLinConstr[i].LHSide[j].IndexVar;
+        ConstrVars[i].push_back(IndexV);
+        VarConstrs[IndexV].push_back((int)i);
+      }
+    LNSRng.seed(0);
   }
 
   // ==========================================================================
@@ -731,6 +860,10 @@ public:
     // and the batch-fixing correlation check.
     if (use_colnorm_branching || use_lns || use_batch_fixing)
       BuildColNormCache();
+
+    // NEW (LNS on residual)
+    if (use_lns)
+      BuildLNSAdjacency(NumVar, MaxComp);
   }
 
   // Computes the integer solution.

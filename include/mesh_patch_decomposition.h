@@ -413,6 +413,7 @@ public:
   bool final_removal;
   bool test_remove_only_once;
 
+  //this in case one wants to prioritize certain sample positions and directions
   std::vector<Geo::Point3<ScalarType> > PrioritySamplePos;
   std::vector<Geo::Point3<ScalarType> > PrioritySampleDir;
 
@@ -806,6 +807,7 @@ public:
     }
   }
 
+  //this one retrive the nodes and directions for priority sampling
   void AddPrioritySampleVert()
   {
     if (PrioritySamplePos.size()==0)return;

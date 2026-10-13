@@ -218,6 +218,7 @@ template <class ScalarType> class MeshQuadrangulator {
     // PDeco.InitBorderVertType();
 
     // initialise the decomposer
+    PDeco.force_all_features = true;
     PDeco.Init();
     PatchM.CheckConsistentData();
 
@@ -274,12 +275,68 @@ template <class ScalarType> class MeshQuadrangulator {
     UpdateAfterRemesh();
   }
 
+    // CHECK: is every arc a->b mirrored by opp(b)->opp(a) with the same
+  // weight and flags? Prints the number of arcs that are not.
+  void CheckArcSymmetry() {
+    long long NumArcs = 0, Missing = 0, DiffFlags = 0, DiffW = 0;
+    ScalarType MaxRelDiff = 0;
+    for (size_t i = 0; i < TGraph.NumNodes(); i++)
+      for (int j = 0; j < TGraph.NeighSize(i); j++) {
+        NumArcs++;
+        int IndexN0 = i;
+        int IndexN1 = TGraph.NodeLink(i, j);
+        int OppN0 =
+            Geo::PathFunctions<ScalarType>::OppositeNode(TGraph, IndexN0);
+        int OppN1 =
+            Geo::PathFunctions<ScalarType>::OppositeNode(TGraph, IndexN1);
+        int OppIdx = TGraph.WhichConnection(OppN1, OppN0);
+        if (OppIdx == -1) {
+          Missing++;
+          continue;
+        }
+        if ((TGraph.ActiveLink(i, j) != TGraph.ActiveLink(OppN1, OppIdx)) ||
+            (TGraph.DirectLink(i, j) != TGraph.DirectLink(OppN1, OppIdx)) ||
+            (TGraph.VisibleLink(i, j) != TGraph.VisibleLink(OppN1, OppIdx)))
+          DiffFlags++;
+        ScalarType W0 = TGraph.WeightLink(i, j);
+        ScalarType W1 = TGraph.WeightLink(OppN1, OppIdx);
+        ScalarType RelDiff = std::fabs(W0 - W1) / std::max(W0, W1);
+        if (RelDiff > 1e-9)
+          DiffW++;
+        MaxRelDiff = std::max(MaxRelDiff, RelDiff);
+      }
+    std::cout << "Arc symmetry: arcs " << NumArcs << " missing " << Missing
+              << " diff flags " << DiffFlags << " diff weights " << DiffW
+              << " max rel diff " << MaxRelDiff << std::endl;
+  }
+
+  void PrintGraphStats() {
+    //some stats
+      long long total = 0, active = 0, visible = 0, direct = 0;
+      for (size_t i = 0; i < TGraph.NumNodes(); i++)
+        for (int j = 0; j < TGraph.NeighSize(i); j++) {
+          total++;
+          if (TGraph.ActiveLink(i, j)) active++;
+          if (TGraph.VisibleLink(i, j)) visible++;
+          if (TGraph.DirectLink(i, j)) direct++;
+        }
+      double n = (double)TGraph.NumNodes();
+      std::cout << "Avg arcs per node: " << total / n
+                << " active: " << active / n
+                << " visible: " << visible / n
+                << " direct: " << direct / n << std::endl;
+  }
+
   void InitGraph() {
     Geo::TragingGraphFunctions<ScalarType>::InitFromVertCrossField(
         TGraph, TriVertPos, TriConnectivity, VertCurv, graph_drift_penalty,
         graph_maxAngle, graph_diffuse_step);
 
     Geo::PathFunctions<ScalarType>::DisableNonDirectableConnections(TGraph);
+
+    PrintGraphStats();
+    CheckArcSymmetry();
+
   }
 
   void SmoothPaths() {
@@ -353,9 +410,10 @@ template <class ScalarType> class MeshQuadrangulator {
     Geo::getFFAdjacency(DualConnectivity, DualNextF, DualNextE);
 
     // INITIALIZE SIDE SUBDIVISION
-
     SideD.InitFromLabels(DualVertPos, DualConnectivity, PerDualPatchFaceIDX,
                          PerDualPatchCornerIDX, DualFeatures);
+    
+    has_problematic_patches |= (SideD.NumDiscardedPatches > 0);
   }
 
   void InitDefaultDualParameters() {
@@ -442,8 +500,21 @@ template <class ScalarType> class MeshQuadrangulator {
 
     PatchM.WriteStats();
     PDeco.WriteStats();
-    // PatchM.WriteMesh("primal_layout.obj");
-    // WriteOBJ("dual_layout.obj", DualVertPos, DualConnectivity);
+
+    typedef Geo::GraphQuery<ScalarType> GQ;
+    long long cs = GQ::CallsSuccess(), cf = GQ::CallsFail();
+    std::cout << "Dijkstra success: " << cs << " calls, avg visited "
+              << (double)GQ::VisitedSuccess() / std::max(1LL, cs) << std::endl;
+    std::cout << "Dijkstra fail:    " << cf << " calls, avg visited "
+              << (double)GQ::VisitedFail() / std::max(1LL, cf) << std::endl;
+    std::cout << "Graph nodes:      " << TGraph.NumNodes() << std::endl;
+    std::cout << "Dijkstra time:    " << GQ::DijkstraNanos() * 1e-9
+              << " s (summed over threads)" << std::endl;
+    // // PatchM.WriteMesh("primal_layout.obj");
+    // // WriteOBJ("dual_layout.obj", DualVertPos, DualConnectivity);
+    //  long long totalCalls = GQ::CallsSuccess() + GQ::CallsFail();
+    // std::cout << "Avg pushes per call: "
+    //           << (double)GQ::PushCount() / std::max(1LL, totalCalls) << std::endl;
   }
 
   void FindSubdivisions() {
@@ -451,7 +522,7 @@ template <class ScalarType> class MeshQuadrangulator {
     ScalarType EdgeS = MeshBox.Diag() * QuadSize;
 
     // std::cout << "Edge Size:" << EdgeS << std::endl;
-    SideD.PrioritizeTJunction = true;
+    SideD.PrioritizeTJunction = false;//true;
 
     SideD.FindDiscretization(EdgeS, RegVsIso, OptimizeEquality, OptimizeSize,
                              true);
@@ -504,7 +575,7 @@ template <class ScalarType> class MeshQuadrangulator {
         Geo::Quadrangulation<ScalarType>::QuadrangulateQuadPatchsWithSubs(
             DualVertPos, DualConnectivity, PatchFaces, PatchCorners,
             SideSamples, Q_LUT, QuadVert, QuadFaces, QuadPatch);
-
+            
     if (print_info)
       std::cout << "INIT SMOOTHING" << std::endl;
 
@@ -778,7 +849,7 @@ public:
 
     QuadSmoothSteps = 10;
     // force_parity = true;
-    RegVsIso = 0.5;//1.0;
+    RegVsIso = 0.67;//0.67;//1.0;
 
     OptimizeEquality = true;
     OptimizeSize = true;
@@ -836,7 +907,7 @@ public:
 
     PathSampl.dynamicUpdates = dynamicUpdates;
     PathSampl.NumSamples = num_samples;
-
+    //PathSampl.SkipRedundantCandidates = true;
     has_problematic_patches = false;
 
     using Clock = std::chrono::high_resolution_clock;

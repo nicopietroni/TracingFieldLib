@@ -1060,6 +1060,42 @@ public:
     auto last = std::unique(FeatureE.begin(), FeatureE.end());
     FeatureE.erase(last, FeatureE.end());
   }
+
+  void AddControlFeatures(const std::vector<Geo::Point3<ScalarType>> &Pos3D,
+                          const std::vector<std::vector<int>> &Faces,
+                          const std::vector<std::pair<int, int>> &FeatureE,
+                          const ScalarType &DistanceThr,
+                          std::vector<std::pair<int, int>> &AddedFeatureE)
+  {
+    //sample uniform the features
+
+    //split the mesh along the features
+    
+    //then extract the submesh of the features for each point
+
+    //then find closest feature point not connected along the submesh of features
+
+    //then check notmals
+
+    //finally find and store paths between pairs
+
+    //report this paths on the original mesh
+
+    // //sample regularly along the features
+    // SampleBordersRegularly(const std::vector<std::vector<int>> &Faces,
+    //                                  const std::vector<std::vector<int>> &NextF,
+    //                                  const std::vector<std::vector<int>> &NextE,
+    //                                  const int StepSize,
+    //                                  const int MinSamplePerBorder,
+    //                                  std::vector<int> &Selected,
+    //                                  const std::vector<int> *SampleFrom = NULL)
+
+    // ExtractEdgeMeshFromSurfaceMesh(
+    //   const std::vector<Geo::Point3<ScalarType>> &VertPos,
+    //   const std::vector<std::vector<int>> &Faces,
+    //   std::vector<Geo::Point3<ScalarType>> &EdgeMeshVertPos,
+    //   std::vector<std::vector<int>> &ConnectivityEdges)
+  }
 };
 } // namespace Geo
 

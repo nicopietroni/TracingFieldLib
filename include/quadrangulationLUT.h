@@ -141,6 +141,7 @@ public:
                           std::vector<Geo::Point2<ScalarType> > &VertPos,
                           std::vector<std::vector<int> > &Connectivity)const
   {
+
     std::vector<int> Code;
     int NumSides=SidePos.size();
     if (NumSides!=4)return false;
@@ -161,6 +162,7 @@ public:
     //                              Code[2]<<" "<<Code[3]<<std::endl;
     if (LUT.count(Code)>0)
     {
+
       //Connectivity=LUT[Code];
       Connectivity=LUT.at(Code);
       //set the boundary nodes
@@ -202,7 +204,9 @@ public:
       //WriteOBJ("Test_LUT_0.obj",VertPos, Connectivity);
 
       getBorderVert(Connectivity,FixedVert);
+     
       Geo::SmoothLaplacianImplicit(VertPos,Connectivity,FixedVert);
+      
       // SmoothParam<ScalarType> SParam;
       // SParam.FixedVert=FixedVert;
       // SParam.NumIte=10;
@@ -213,6 +217,7 @@ public:
 
       //then invert faces orientation (it is like that in the LUT)
       InvertOrientation(Connectivity);
+
       return true;
     }
     else

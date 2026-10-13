@@ -49,6 +49,7 @@
 #include <mesh_quadrangulation.h>
 #include <remesh_size.h>
 #include <triangular_remesh.h>
+#include <reorder_vertices.h>
 
 std::string PathMesh;
 std::string PathField;
@@ -93,6 +94,12 @@ bool LoadMesh(const std::string &path) {
   //    oss<<"Loading "<<path.c_str()<<std::endl;
   loadedMesh = LoadOBJ(path, TriVertPos, TriConnectivity, false);
   if (loadedMesh) {
+
+    // {
+    //   std::vector<std::pair<int, int>> Features = TriFeatures;
+    //   std::vector<int> OldToNew;
+    //   ReorderVertBFS(TriVertPos, TriConnectivity, Features, OldToNew);
+    // }
     std::cout << "Loaded " << TriConnectivity.size() << " faces "
               << TriVertPos.size() << " vertices" << std::endl;
   } else {
@@ -602,7 +609,7 @@ int main(int argc, char *argv[]) {
 
     MQuad.QuadSmoothSteps = smooth_steps;
     // MQuad.RegVsIso=0.1;
-    MQuad.CCAbility = 0.25;   // 25;
+    MQuad.CCAbility = 0.25;//0.25;   // 25;
     MQuad.num_samples = 6000;//6000; // 3000;
 
     MQuad.ExtractQuad(TriFeatures);

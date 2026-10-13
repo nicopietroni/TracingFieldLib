@@ -66,7 +66,8 @@ public:
 
   parityMode PMode;
   bool graph_optimize;
-
+  int NumDiscardedPatches = 0;
+  
 private:
   // energyMode EM;
   ScalarType RegVsIso;
@@ -241,6 +242,13 @@ public:
     assert(IndexP >= 0);
     assert(IndexS >= 0);
     assert(IndexP < NumPatches());
+    //  if (IndexS >= NumSides(IndexP))
+    // {
+    //   std::cerr << " WARNING: Variables: IndexP=" << IndexP
+    //             << " NumPatches=" << NumPatches()
+    //             << " IndexS=" << IndexS
+    //             << " NumSides=" << NumSides(IndexP) << std::endl;
+    // }
     assert(IndexS < NumSides(IndexP));
     return (PatchSides[IndexP].Sides[IndexS].Variables);
   }
@@ -797,7 +805,7 @@ private:
         std::vector<int> VarList;
         PatchVariables(i, VarList);
         for (size_t j = 0; j < VarList.size(); j++)
-          VarMatching[VarList[i]] = NoQuad;
+          VarMatching[VarList[j]] = NoQuad;
         continue;
       }
     }
@@ -850,6 +858,25 @@ private:
     VarTargetValue = OldTarget;
   }
 
+  // MEASURE (integer solve quality): equalities violated by the integer solution
+  void MeasureIntegerSolveQuality() {
+    int NumViolated = 0;
+    int SumGap = 0;
+    for (size_t i = 0; i < OppEquivalences.size(); i++) {
+      int Sum0 = 0, Sum1 = 0;
+      for (size_t j = 0; j < OppEquivalences[i].first.size(); j++)
+        Sum0 += VarValue[OppEquivalences[i].first[j]];
+      for (size_t j = 0; j < OppEquivalences[i].second.size(); j++)
+        Sum1 += VarValue[OppEquivalences[i].second[j]];
+      if (Sum0 != Sum1) {
+        NumViolated++;
+        SumGap += std::abs(Sum0 - Sum1);
+      }
+    }
+    std::cout << "Integer solve: violated equalities " << NumViolated << " / "
+              << OppEquivalences.size() << " total gap " << SumGap << std::endl;
+  }
+
   void SolveGlobal(bool pre_divide, bool post_duplicate) {
     std::vector<LinearConstraint<ScalarType>> LSQCostr;
 
@@ -895,7 +922,8 @@ private:
       EqConstr.RHSide = 0;
       EqConstr.Weight = RegVsIso;
       EqConstr.Weight *= OppEquivalencesW[i];
-      EqConstr.Weight /= (Var0.size() + Var1.size());
+      //EqConstr.Weight /= (Var0.size() + Var1.size());
+      EqConstr.Weight /=2; //this to be normalized w with respect to RegVsIso
       for (size_t j = 0; j < Var0.size(); j++) {
         EqConstr.LHSide.push_back(VarTerm<ScalarType>(Var0[j], 0, 1));
         // MaxVal=std::max(MaxVal,Var0[j]);
@@ -944,6 +972,7 @@ private:
     IntLSQ.Init(LSQCostr, MinVal, MaxVal, SoftLow, SoftHigh, SoftOptimal,
                 RoundPrio);
     IntLSQ.Solve(VarValue);
+    MeasureIntegerSolveQuality();
 
     if (post_duplicate)
       DuplicateSolution();
@@ -1186,9 +1215,61 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
         PatchCornerPos[i].insert(CornPos);
       }
 
-    PatchSides.resize(PatchFacesIdx.size());
+    // PatchSides.resize(PatchFacesIdx.size());
 
-    // then get all boundaries
+    // // then get all boundaries
+    // NumTJunctions = 0;
+    // for (size_t i = 0; i < PatchFacesIdx.size(); i++) {
+    //   std::vector<std::vector<int>> SubMeshFaces;
+    //   std::vector<Geo::Point3<ScalarType>> SubMeshVert;
+    //   std::vector<int> OriginalF;
+    //   std::vector<int> OriginalV;
+
+    //   // make a copy of the mesh
+    //   CopySubMesh<ScalarType>(Vert, Faces, PatchFacesIdx[i], SubMeshVert,
+    //                           SubMeshFaces, OriginalV, OriginalF);
+
+    //   // then get the boundaries
+    //   std::vector<std::vector<int>> BorderVIdxAll;
+    //   getBorderSequncesVert(SubMeshFaces, BorderVIdxAll);
+    //   if (BorderVIdxAll.size() != 1) {
+    //     std::cout << "MULTIPLE BORDERS" << std::endl;
+    //     continue;
+    //   }
+    //   std::vector<int> BorderVIdx = BorderVIdxAll[0];
+
+    //   std::vector<Geo::Point3<ScalarType>> BorderVPos;
+    //   for (size_t j = 0; j < BorderVIdx.size(); j++)
+    //     BorderVPos.push_back(SubMeshVert[BorderVIdx[j]]);
+
+    //   // sort from the first
+    //   SortFromSeparator(BorderVPos, PatchCornerPos[i]);
+
+    //   // split in sequences
+    //   std::vector<std::vector<Geo::Point3<ScalarType>>> SideSeq;
+    //   SplitIntoSubSequences(BorderVPos, PatchCornerPos[i], SideSeq);
+
+    //   if (SideSeq.size() != 4) {
+    //     std::cout << "WARNING Side Size: " << SideSeq.size() << std::endl;
+    //     std::cout << "Corner Size: " << PatchCornerPos[i].size() << std::endl;
+    //   }
+
+    //   // then split subsequences
+    //   PatchSides[i].Sides.resize(SideSeq.size());
+
+    //   for (size_t j = 0; j < SideSeq.size(); j++) {
+    //     std::vector<std::vector<Geo::Point3<ScalarType>>> SubSideSeq;
+    //     SplitIntoSubSequences(SideSeq[j], AllCornerPos, SubSideSeq, false);
+    //     PatchSides[i].Sides[j].SubSides = SubSideSeq;
+    //     if (SubSideSeq.size() != 1)
+    //       NumTJunctions++;
+    //   }
+    //   //   std::cout<<"Seq Size: "<<SideSeq.size()<<std::endl;
+    // }
+     PatchSides.clear();
+    std::vector<std::vector<int>> KeptFaces, KeptCorners;
+    NumDiscardedPatches = 0;
+
     NumTJunctions = 0;
     for (size_t i = 0; i < PatchFacesIdx.size(); i++) {
       std::vector<std::vector<int>> SubMeshFaces;
@@ -1196,15 +1277,15 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
       std::vector<int> OriginalF;
       std::vector<int> OriginalV;
 
-      // make a copy of the mesh
       CopySubMesh<ScalarType>(Vert, Faces, PatchFacesIdx[i], SubMeshVert,
                               SubMeshFaces, OriginalV, OriginalF);
 
-      // then get the boundaries
       std::vector<std::vector<int>> BorderVIdxAll;
       getBorderSequncesVert(SubMeshFaces, BorderVIdxAll);
       if (BorderVIdxAll.size() != 1) {
-        std::cout << "MULTIPLE BORDERS" << std::endl;
+        std::cout << "WARNING: patch " << i << " has multiple borders, discarded"
+                  << std::endl;
+        NumDiscardedPatches++;
         continue;
       }
       std::vector<int> BorderVIdx = BorderVIdxAll[0];
@@ -1213,30 +1294,36 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
       for (size_t j = 0; j < BorderVIdx.size(); j++)
         BorderVPos.push_back(SubMeshVert[BorderVIdx[j]]);
 
-      // sort from the first
       SortFromSeparator(BorderVPos, PatchCornerPos[i]);
 
-      // split in sequences
       std::vector<std::vector<Geo::Point3<ScalarType>>> SideSeq;
       SplitIntoSubSequences(BorderVPos, PatchCornerPos[i], SideSeq);
 
       if (SideSeq.size() != 4) {
-        std::cout << "WARNING Side Size: " << SideSeq.size() << std::endl;
-        std::cout << "Corner Size: " << PatchCornerPos[i].size() << std::endl;
+        std::cout << "WARNING: patch " << i << " has " << SideSeq.size()
+                  << " sides (corners: " << PatchCornerPos[i].size()
+                  << "), discarded" << std::endl;
+        NumDiscardedPatches++;
+        continue;
       }
 
-      // then split subsequences
-      PatchSides[i].Sides.resize(SideSeq.size());
-
+      PatchInfo PInfo;
+      PInfo.Sides.resize(4);
       for (size_t j = 0; j < SideSeq.size(); j++) {
         std::vector<std::vector<Geo::Point3<ScalarType>>> SubSideSeq;
         SplitIntoSubSequences(SideSeq[j], AllCornerPos, SubSideSeq, false);
-        PatchSides[i].Sides[j].SubSides = SubSideSeq;
+        PInfo.Sides[j].SubSides = SubSideSeq;
         if (SubSideSeq.size() != 1)
           NumTJunctions++;
       }
-      //   std::cout<<"Seq Size: "<<SideSeq.size()<<std::endl;
+
+      PatchSides.push_back(PInfo);
+      KeptFaces.push_back(PatchFacesIdx[i]);
+      KeptCorners.push_back(PatchCornersIdx[i]);
     }
+    PatchFacesIdx = std::move(KeptFaces);
+    PatchCornersIdx = std::move(KeptCorners);
+
     InitVariables();
 
     InitPatchAdj();
