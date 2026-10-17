@@ -2643,6 +2643,7 @@ namespace Geo
       {
         add_only_where_needed = true;
         stop_when_solved = true;
+        //PathSampl.dynamicUpdates =false;
         lazy_insert = has_lazy;
         return false;
       }
@@ -2663,6 +2664,8 @@ namespace Geo
 
       RetraceCandidates();
 
+      //std::cout<<"*** FEATURE STEP ***" << std::endl;
+      //std::cout << "** Sampled Feature Paths: " << PathSampl.SampledPaths.size()<< std::endl;
       int NumP0 = PathSampl.SelectedPaths.size();
       has_added |= AddAllPaths();
 
@@ -2672,6 +2675,11 @@ namespace Geo
       for (int i = NumP0; i < NumP1; i++)
         FixedPaths.insert(i);
 
+      // std::cout << "** Addded Feature Paths: " << (NumP1 - NumP0) << std::endl;
+      // std::cout<<"*** END FEATURE STEP ***" << std::endl;
+      // WriteCrossPathAsOBJ<ScalarType>("sampled.obj", PatchMan.VertPos, PathSampl.SampledPaths);
+      // WriteCrossPathAsOBJ<ScalarType>("selected.obj", PatchMan.VertPos, PathSampl.SelectedPaths);
+      // WriteOBJ("domain.obj", PatchMan.VertPos, PatchMan.Faces);
       add_only_where_needed = true;
       stop_when_solved = true;
 

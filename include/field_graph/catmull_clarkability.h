@@ -128,8 +128,7 @@ bool IsCatmullClarkable(const std::vector<ScalarType> &EdgeL,
   if (EdgeL.size() == 3)
     CC = (CatmullClarkability3(EdgeL[0], EdgeL[1], EdgeL[2], SideThr));
   if (EdgeL.size() == 4)
-    CC =
-        (CatmullClarkability4(EdgeL[0], EdgeL[1], EdgeL[2], EdgeL[3], SideThr));
+    CC =(CatmullClarkability4(EdgeL[0], EdgeL[1], EdgeL[2], EdgeL[3], SideThr));
   if (EdgeL.size() == 5)
     CC = (CatmullClarkability5(EdgeL[0], EdgeL[1], EdgeL[2], EdgeL[3], EdgeL[4],
                                SideThr));

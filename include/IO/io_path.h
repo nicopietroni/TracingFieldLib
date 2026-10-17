@@ -46,7 +46,7 @@
 // consecutive nodes of a path becomes an edge between their mesh vertices.
 // Only the vertices used by the paths are saved (renumbered).
 template <class ScalarType>
-inline bool WritePathAsOBJ(const std::string &filename,
+inline bool WriteCrossPathAsOBJ(const std::string &filename,
                            const std::vector<Geo::Point3<ScalarType>> &VertPos,
                            const std::vector<std::vector<int>> &Path,
                            bool writeInfo = true) {

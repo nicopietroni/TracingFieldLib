@@ -301,6 +301,16 @@ template <class ScalarType> class OrientFLowGraph {
     return Diff;
   }
 
+  //   ScalarType Energy(int IndexVar, int TestValue) {
+  //   assert(TestValue >=
+  //          0); // in realigy should be at lest 1 need to reorganize code
+  //   assert(IndexVar >= 0);
+  //   assert(IndexVar < VarTargetValue.size());
+  //   ScalarType TargetVal = VarTargetValue[IndexVar];
+  //    ScalarType Diff = pow(std::fabs(TestValue - TargetVal), 4);
+  //   return Diff;
+  // }
+
   ScalarType Energy(int IndexVar) {
     assert(IndexVar >= 0);
     assert(IndexVar < VarValue.size());
@@ -510,6 +520,15 @@ template <class ScalarType> class OrientFLowGraph {
       GraphNodeWeight[i] -= minValue;
       GraphNodeWeight[i] += 0.00001;
       assert(GraphNodeWeight[i] > 0);
+    }
+
+    // NEW (congestion): crossing a variable already modified costs more
+    // (applied after the shift, so all the weights are positive here)
+    if (use_congestion && (CongestionAlpha > 0)) {
+      if (VarUseCount.size() != VarValue.size())
+        VarUseCount.assign(VarValue.size(), 0);
+      for (size_t i = 0; i < GraphNodeWeight.size(); i++)
+        GraphNodeWeight[i] *= (1 + CongestionAlpha * VarUseCount[VarOfNode(i)]);
     }
   }
 
@@ -1728,6 +1747,12 @@ template <class ScalarType> class OrientFLowGraph {
       if (VarValue[VarNum] <= 0) {
         std::cout << "ERROR SUBD <=0";
         exit(0);
+      }
+      // NEW (congestion): remember that this variable has been used
+      if (use_congestion) {
+        if (VarUseCount.size() != VarValue.size())
+          VarUseCount.assign(VarValue.size(), 0);
+        VarUseCount[VarNum]++;
       }
     }
   }
@@ -3139,6 +3164,15 @@ template <class ScalarType> class OrientFLowGraph {
 
 public:
   ScalarType MinRatio, MaxRatio;
+
+  // NEW (congestion): like negotiated congestion routing (PathFinder), every
+  // time a path modifies a variable its nodes get more expensive to cross, so
+  // the next paths look for another corridor instead of reusing the same one
+  bool use_congestion = false;
+  // cost multiplier per past use: weight * (1 + CongestionAlpha * uses)
+  ScalarType CongestionAlpha = 0.5;
+  // how many times each variable has been modified by a path
+  std::vector<int> VarUseCount;
 
   int SolveEquality() {
 

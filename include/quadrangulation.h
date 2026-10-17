@@ -271,10 +271,17 @@ namespace Geo
         const std::vector<std::vector<Geo::Point2<ScalarType>>> &UVSideSubd)
     {
       assert(UVSideSubd.size() == 4);
-      int size0 = UVSideSubd[0].size();
-      int size1 = UVSideSubd[1].size();
-      int size2 = UVSideSubd[2].size();
-      int size3 = UVSideSubd[3].size();
+      // OLD (before segments not samples): number of samples, one more than
+      // the number of segments used as LUT key and in MaxSubdVal
+      // int size0 = UVSideSubd[0].size();
+      // int size1 = UVSideSubd[1].size();
+      // int size2 = UVSideSubd[2].size();
+      // int size3 = UVSideSubd[3].size();
+      // NEW (segments not samples)
+      int size0 = UVSideSubd[0].size() - 1;
+      int size1 = UVSideSubd[1].size() - 1;
+      int size2 = UVSideSubd[2].size() - 1;
+      int size3 = UVSideSubd[3].size() - 1;
       assert(size0 >= 0);
       assert(size1 >= 0);
       assert(size2 >= 0);
@@ -288,10 +295,16 @@ namespace Geo
         const std::vector<std::vector<Geo::Point3<ScalarType>>> &SideSubd)
     {
       assert(SideSubd.size() == 4);
-      int size0 = SideSubd[0].size();
-      int size1 = SideSubd[1].size();
-      int size2 = SideSubd[2].size();
-      int size3 = SideSubd[3].size();
+      // OLD (before segments not samples)
+      // int size0 = SideSubd[0].size();
+      // int size1 = SideSubd[1].size();
+      // int size2 = SideSubd[2].size();
+      // int size3 = SideSubd[3].size();
+      // NEW (segments not samples)
+      int size0 = SideSubd[0].size() - 1;
+      int size1 = SideSubd[1].size() - 1;
+      int size2 = SideSubd[2].size() - 1;
+      int size3 = SideSubd[3].size() - 1;
       assert(size0 >= 0);
       assert(size1 >= 0);
       assert(size2 >= 0);
@@ -666,10 +679,18 @@ namespace Geo
 
         // otherwise split the patch
         QuadrangulatedData.resize(QuadrangulatedData.size() + 1);
-        int Size0 = (int)CurrData.SideSubd[0].size();
-        int Size1 = (int)CurrData.SideSubd[1].size();
-        int Size2 = (int)CurrData.SideSubd[2].size();
-        int Size3 = (int)CurrData.SideSubd[3].size();
+        // OLD (before segments not samples): DeriveSplitInfo expects the
+        // number of segments, it received the number of samples, so the new
+        // central edge got one segment more than the lateral sides
+        // int Size0 = (int)CurrData.SideSubd[0].size();
+        // int Size1 = (int)CurrData.SideSubd[1].size();
+        // int Size2 = (int)CurrData.SideSubd[2].size();
+        // int Size3 = (int)CurrData.SideSubd[3].size();
+        // NEW (segments not samples)
+        int Size0 = (int)CurrData.SideSubd[0].size() - 1;
+        int Size1 = (int)CurrData.SideSubd[1].size() - 1;
+        int Size2 = (int)CurrData.SideSubd[2].size() - 1;
+        int Size3 = (int)CurrData.SideSubd[3].size() - 1;
 
         // std::cout << "Sizes: " << Size0 << " " << Size1 << " " << Size2 << " "
         //           << Size3 << std::endl;
@@ -1117,6 +1138,371 @@ namespace Geo
       return true;
     }
 
+    //     // NEW (geodesic split path): splits the patch along a shortest edge path
+    // // between the border vertices closest to the two split positions
+    // // (corners excluded); only those two vertices are snapped
+    // static bool GeodesicSplitPath(
+    //     std::vector<Geo::Point3<ScalarType>> &SplitVert,
+    //     const std::vector<std::vector<int>> &VV,
+    //     const std::vector<bool> &IsBorderV,
+    //     const std::vector<Geo::Point3<ScalarType>> &SplitPos3D,
+    //     const std::set<Geo::Point3<ScalarType>> &CornerPos,
+    //     std::vector<std::pair<int, int>> &NewEdges)
+    // {
+    //   assert(SplitPos3D.size() == 2);
+    //   assert(VV.size() == SplitVert.size());
+    //   assert(IsBorderV.size() == SplitVert.size());
+
+    //   // endpoints: closest border vertices, corners excluded
+    //   int EndV[2] = {-1, -1};
+    //   for (int k = 0; k < 2; k++)
+    //   {
+    //     ScalarType BestD = std::numeric_limits<ScalarType>::max();
+    //     for (size_t i = 0; i < SplitVert.size(); i++)
+    //     {
+    //       if (!IsBorderV[i])
+    //         continue;
+    //       if (CornerPos.count(SplitVert[i]) > 0)
+    //         continue;
+    //       if (VV[i].empty()) // unreferenced
+    //         continue;
+    //       ScalarType D = (SplitVert[i] - SplitPos3D[k]).Norm();
+    //       if (D < BestD)
+    //       {
+    //         BestD = D;
+    //         EndV[k] = i;
+    //       }
+    //     }
+    //   }
+    //   if ((EndV[0] == -1) || (EndV[1] == -1) || (EndV[0] == EndV[1]))
+    //     return false;
+
+    //   // shortest path, the whole border is forbidden except the two endpoints
+    //   typename Geo::Geodesic<ScalarType>::GeodesicParam GeoP;
+    //   GeoP.Seeds.push_back(EndV[0]);
+    //   GeoP.Target.insert(EndV[1]);
+    //   for (size_t i = 0; i < IsBorderV.size(); i++)
+    //     if ((IsBorderV[i]) && ((int)i != EndV[0]) && ((int)i != EndV[1]))
+    //       GeoP.Avoid.insert(i);
+
+    //   Geo::TMark TempMark;
+    //   Geo::Geodesic<ScalarType>::NodeDijkstra(SplitVert, VV, TempMark, GeoP);
+
+    //   // arrival not reached
+    //   if (GeoP.Father[EndV[1]] == -1)
+    //     return false;
+
+    //   std::vector<int> PathV;
+    //   Geo::Geodesic<ScalarType>::RetrievePath(GeoP, EndV[1], PathV);
+
+    //   // a direct border-border edge would not split anything
+    //   if (PathV.size() < 3)
+    //     return false;
+
+    //   NewEdges.clear();
+    //   for (size_t i = 0; i < PathV.size() - 1; i++)
+    //     NewEdges.push_back(std::make_pair(PathV[i], PathV[i + 1]));
+
+    //   // exact positions, corners of the sub patches are found by position
+    //   SplitVert[EndV[0]] = SplitPos3D[0];
+    //   SplitVert[EndV[1]] = SplitPos3D[1];
+    //   return true;
+    // }
+
+    // // return the amount of non quadrangulated patches
+    // static bool SplitSideIntoSubPatches(
+    //     const std::vector<Geo::Point3<ScalarType>> &PatchVert,
+    //     const std::vector<std::vector<int>> &Patch_Faces,
+    //     const std::vector<int> &PatchCorners,
+    //     const std::vector<std::vector<Geo::Point3<ScalarType>>> &SideSubd,
+    //     const SplitInfo &SplitInfo,
+    //     std::vector<std::vector<Geo::Point3<ScalarType>>> &SubPatchVert,
+    //     std::vector<std::vector<std::vector<int>>> &SubPatchFaces,
+    //     std::vector<std::vector<int>> &SubPatchCorners,
+    //     std::vector<std::vector<std::vector<Geo::Point3<ScalarType>>>>
+    //         &SubPatchSideSubd)
+    // {
+    //   if (PatchCorners.size() != 4)
+    //     return false;
+    //   if (SideSubd.size() != 4)
+    //     return false;
+
+    //   if (!SplitInfo.IsProper())
+    //     return false;
+
+    //   int OppositeEdge = (SplitInfo.SplitEdge + 2) % 4;
+    //   int TotSegment0 = SideSubd[SplitInfo.SplitEdge].size() - 1;
+    //   int TotSegment1 = SideSubd[OppositeEdge].size() - 1;
+
+    //   if (SplitInfo.SplitNum0 >= TotSegment0)
+    //     return false;
+    //   if (SplitInfo.SplitNum1 >= TotSegment1)
+    //     return false;
+
+    //   // parametrize the patch also considering corners
+    //   std::vector<Geo::Point2<ScalarType>> VertUV;
+    //   // paremetrize the patch also considering corners
+    //   Geo::UVParam<ScalarType>::TutteEmbedding(PatchVert, Patch_Faces,
+    //                                            PatchCorners, VertUV, true);
+    //   // get the polyline to split
+    //   std::vector<Geo::Point3<ScalarType>> SplitPos3D;
+    //   SplitPos3D.push_back(SideSubd[SplitInfo.SplitEdge][SplitInfo.SplitNum0]);
+    //   SplitPos3D.push_back(SideSubd[OppositeEdge][SplitInfo.SplitNum1]);
+
+    //   std::vector<Geo::Point2<ScalarType>> SplitPos_UV;
+    //   // bool found = Geo::UVUtils<ScalarType>::MapToUV(
+    //   //     PatchVert, VertUV, Patch_Faces, SplitPos3D, SplitPos_UV);
+
+    //   Geo::UVUtils<ScalarType>::MapToUVBorder(PatchVert, VertUV, Patch_Faces,
+    //                                           SplitPos3D, SplitPos_UV);
+
+    //   assert(SplitPos_UV.size() == 2);
+
+    //   // inflate a bit
+    //   Geo::Segment2<ScalarType> SplitSeg(SplitPos_UV[0], SplitPos_UV[1]);
+    //   Geo::Segment2<ScalarType> SplitSeg1 = SplitSeg;
+    //   Scale(SplitSeg, 1.01);
+
+    //   std::vector<std::vector<int>> SplitSegVect;
+    //   std::vector<Geo::Point2<ScalarType>> SplitSegPos;
+    //   SplitSegPos.push_back(SplitSeg.P(0));
+    //   SplitSegPos.push_back(SplitSeg.P(1));
+    //   SplitSegVect.push_back({0, 1});
+
+    //   std::vector<std::vector<int>> SplitSegVect1;
+    //   std::vector<Geo::Point2<ScalarType>> SplitSegPos1;
+    //   SplitSegPos1.push_back(SplitSeg1.P(0));
+    //   SplitSegPos1.push_back(SplitSeg1.P(1));
+    //   SplitSegVect1.push_back({0, 1});
+
+    //   // then split the patch with the polyline
+    //   std::vector<std::vector<Geo::Point2<ScalarType>>> PolyL(1);
+    //   PolyL[0].push_back(SplitSeg.P(0));
+    //   PolyL[0].push_back(SplitSeg.P(1));
+
+    //   // then refine it
+    //   std::vector<std::pair<int, int>> NewEdges;
+    //   std::vector<Geo::Point3<ScalarType>> SplitVert = PatchVert;
+    //   std::vector<std::vector<int>> SplitFaces = Patch_Faces;
+    //   RefineMesh<ScalarType>::SplitMeshWithUVPolylines(
+    //       SplitVert, VertUV, SplitFaces, PolyL, NewEdges);
+    //   //Geo::CleanMesh<ScalarType>::RemoveDegenerateFaces(SplitVert, SplitFaces);
+
+    //   // get the border vertices of the split mesh
+    //   std::vector<bool> IsBorderV;
+    //   Geo::getBorderVert(SplitFaces, IsBorderV);
+
+    //   // get the ones that are on the split line and border in the beginning
+    //   for (size_t i = 0; i < NewEdges.size(); i++)
+    //   {
+    //     int IndexV0 = NewEdges[i].first;
+    //     int IndexV1 = NewEdges[i].second;
+    //     if (IsBorderV[IndexV0])
+    //     {
+    //       ScalarType Dist0 = (SplitVert[IndexV0] - SplitPos3D[0]).Norm();
+    //       ScalarType Dist1 = (SplitVert[IndexV0] - SplitPos3D[1]).Norm();
+    //       if (Dist0 < Dist1)
+    //         SplitVert[IndexV0] = SplitPos3D[0];
+    //       else
+    //         SplitVert[IndexV0] = SplitPos3D[1];
+    //     }
+
+    //     if (IsBorderV[IndexV1])
+    //     {
+    //       ScalarType Dist0 = (SplitVert[IndexV1] - SplitPos3D[0]).Norm();
+    //       ScalarType Dist1 = (SplitVert[IndexV1] - SplitPos3D[1]).Norm();
+    //       if (Dist0 < Dist1)
+    //         SplitVert[IndexV1] = SplitPos3D[0];
+    //       else
+    //         SplitVert[IndexV1] = SplitPos3D[1];
+    //     }
+    //   }
+
+    //   // get the polilines
+    //   std::vector<Geo::Polyline3<ScalarType>> PolylineSplit;
+    //   Geo::InitFromEdges(SplitVert, NewEdges, PolylineSplit);
+
+    
+    //   if (PolylineSplit.size() != 1)
+    //   {
+    //     // OLD (before geodesic split path)
+    //     // std::cout << "WARNING: Split resulted in multiple polylines" << std::endl;
+    //     // return false;
+
+    //     // NEW (geodesic split path): rebuild the split as one edge path
+    //     std::vector<std::vector<int>> VV;
+    //     Geo::FindVertexStar(SplitFaces, VV);
+
+    //     // ... fill VV with your VV adjacency function on (SplitVert, SplitFaces)
+    //     if (!GeodesicSplitPath(SplitVert, VV, IsBorderV, NewEdges))
+    //     {
+    //       std::cout << "WARNING: Split resulted in multiple polylines" << std::endl;
+    //       return false;
+    //     }
+    //     PolylineSplit.clear();
+    //     Geo::InitFromEdges(SplitVert, NewEdges, PolylineSplit);
+    //     if (PolylineSplit.size() != 1)
+    //     {
+    //       std::cout << "WARNING: Geodesic split failed" << std::endl;
+    //       return false;
+    //     }
+    //   }
+    //   // get the submeshes from the split one
+    //   SplitMeshFromEdges(SplitVert, SplitFaces, NewEdges);
+
+    //   SplitByFFConnectedComponenent(SplitVert, SplitFaces, SubPatchVert,
+    //                                 SubPatchFaces);
+
+    //   // then retrieve the side subdivisions for the subpatches
+    //   SplitSideSubdivisions(SideSubd, SplitInfo, PolylineSplit[0],
+    //                         SubPatchSideSubd);
+
+    //   std::vector<std::vector<Geo::Point3<ScalarType>>> CornerPos;
+    //   CornerPos.resize(SubPatchSideSubd.size());
+
+    //   // set the first sample of esh edge as this is the corner
+    //   for (size_t i = 0; i < SubPatchSideSubd.size(); i++)
+    //   {
+    //     for (size_t j = 0; j < SubPatchSideSubd[i].size(); j++)
+    //       CornerPos[i].push_back(SubPatchSideSubd[i][j][0]);
+    //   }
+
+    //   std::map<Geo::Point3<ScalarType>, int> PosIndex[2];
+    //   for (size_t i = 0; i < SubPatchVert[0].size(); i++)
+    //     PosIndex[0][SubPatchVert[0][i]] = i;
+
+    //   for (size_t i = 0; i < SubPatchVert[1].size(); i++)
+    //     PosIndex[1][SubPatchVert[1][i]] = i;
+
+    //   int IndexCorner[2] = {-1, -1};
+
+    //   for (size_t i = 0; i < CornerPos.size(); i++)
+    //   {
+    //     bool AsCorner[2] = {true, true};
+
+    //     for (size_t j = 0; j < CornerPos[i].size(); j++)
+    //     {
+    //       if (PosIndex[0].find(CornerPos[i][j]) == PosIndex[0].end())
+    //         AsCorner[0] = false;
+    //       if (PosIndex[1].find(CornerPos[i][j]) == PosIndex[1].end())
+    //         AsCorner[1] = false;
+    //     }
+    //     // can only have one set of corners
+    //     if ((!AsCorner[0]) && (!AsCorner[1]))
+    //       assert(false);
+
+    //     if ((AsCorner[0]) && (AsCorner[1]))
+    //       assert(false);
+
+    //     // swap if necessary
+    //     if ((AsCorner[1]) && (!AsCorner[0]))
+    //       IndexCorner[i] = 1;
+    //     if ((AsCorner[0]) && (!AsCorner[1]))
+    //       IndexCorner[i] = 0;
+    //   }
+
+    //   if ((IndexCorner[0] == -1) || (IndexCorner[1] == -1))
+    //     return false;
+    //   if (IndexCorner[0] == IndexCorner[1])
+    //     return false;
+
+    //   // the index of meshes should match the index of the rest
+    //   if (IndexCorner[0] == 1)
+    //   {
+    //     std::swap(SubPatchVert[0], SubPatchVert[1]);
+    //     std::swap(SubPatchFaces[0], SubPatchFaces[1]);
+    //     std::swap(PosIndex[0], PosIndex[1]);
+    //   }
+
+    //   // then map corners to indexes
+    //   SubPatchCorners.clear();
+    //   SubPatchCorners.resize(SubPatchFaces.size());
+
+    //   for (size_t i = 0; i < CornerPos.size(); i++)
+    //     for (size_t j = 0; j < CornerPos[i].size(); j++)
+    //     {
+    //       Geo::Point3<ScalarType> TestPos = CornerPos[i][j];
+    //       if (PosIndex[i].find(TestPos) == PosIndex[i].end())
+    //         return (false);
+    //       int IndexV = PosIndex[i][CornerPos[i][j]];
+    //       SubPatchCorners[i].push_back(IndexV);
+    //     }
+
+    //   return true;
+    // }
+
+
+        // NEW (geodesic split path): splits the patch along a shortest edge path
+    // between the border vertices closest to the two split positions
+    // (corners excluded); only those two vertices are snapped
+    static bool GeodesicSplitPath(
+        std::vector<Geo::Point3<ScalarType>> &SplitVert,
+        const std::vector<std::vector<int>> &VV,
+        const std::vector<bool> &IsBorderV,
+        const std::vector<Geo::Point3<ScalarType>> &SplitPos3D,
+        const std::set<Geo::Point3<ScalarType>> &CornerPos3D,
+        std::vector<std::pair<int, int>> &NewEdges)
+    {
+      assert(SplitPos3D.size() == 2);
+      assert(VV.size() == SplitVert.size());
+      assert(IsBorderV.size() == SplitVert.size());
+
+      // endpoints: closest border vertices, corners excluded
+      int EndV[2] = {-1, -1};
+      for (int k = 0; k < 2; k++)
+      {
+        ScalarType BestD = std::numeric_limits<ScalarType>::max();
+        for (size_t i = 0; i < SplitVert.size(); i++)
+        {
+          if (!IsBorderV[i])
+            continue;
+          if (CornerPos3D.count(SplitVert[i]) > 0)
+            continue;
+          if (VV[i].empty()) // unreferenced
+            continue;
+          ScalarType D = (SplitVert[i] - SplitPos3D[k]).Norm();
+          if (D < BestD)
+          {
+            BestD = D;
+            EndV[k] = i;
+          }
+        }
+      }
+      if ((EndV[0] == -1) || (EndV[1] == -1) || (EndV[0] == EndV[1]))
+        return false;
+
+      // shortest path, the whole border is forbidden except the two endpoints
+      typename Geo::Geodesic<ScalarType>::GeodesicParam GeoP;
+      GeoP.Seeds.push_back(EndV[0]);
+      GeoP.Target.insert(EndV[1]);
+      for (size_t i = 0; i < IsBorderV.size(); i++)
+        if ((IsBorderV[i]) && ((int)i != EndV[0]) && ((int)i != EndV[1]))
+          GeoP.Avoid.insert(i);
+
+      Geo::TMark TempMark;
+      Geo::Geodesic<ScalarType>::NodeDijkstra(SplitVert, VV, TempMark, GeoP);
+
+      // arrival not reached
+      if (GeoP.Father[EndV[1]] == -1)
+        return false;
+
+      std::vector<int> PathV;
+      Geo::Geodesic<ScalarType>::RetrievePath(GeoP, EndV[1], PathV);
+
+      // a direct border-border edge would not split anything
+      if (PathV.size() < 3)
+        return false;
+
+      NewEdges.clear();
+      for (size_t i = 0; i < PathV.size() - 1; i++)
+        NewEdges.push_back(std::make_pair(PathV[i], PathV[i + 1]));
+
+      // exact positions, corners of the sub patches are found by position
+      SplitVert[EndV[0]] = SplitPos3D[0];
+      SplitVert[EndV[1]] = SplitPos3D[1];
+      return true;
+    }
+
     // return the amount of non quadrangulated patches
     static bool SplitSideIntoSubPatches(
         const std::vector<Geo::Point3<ScalarType>> &PatchVert,
@@ -1194,50 +1580,76 @@ namespace Geo
       std::vector<std::vector<int>> SplitFaces = Patch_Faces;
       RefineMesh<ScalarType>::SplitMeshWithUVPolylines(
           SplitVert, VertUV, SplitFaces, PolyL, NewEdges);
-      Geo::CleanMesh<ScalarType>::RemoveDegenerateFaces(SplitVert, SplitFaces);
+      //Geo::CleanMesh<ScalarType>::RemoveDegenerateFaces(SplitVert, SplitFaces);
 
       // get the border vertices of the split mesh
       std::vector<bool> IsBorderV;
       Geo::getBorderVert(SplitFaces, IsBorderV);
 
-      // get the ones that are on the split line and border in the beginning
-      for (size_t i = 0; i < NewEdges.size(); i++)
-      {
-        int IndexV0 = NewEdges[i].first;
-        int IndexV1 = NewEdges[i].second;
-        if (IsBorderV[IndexV0])
-        {
-          ScalarType Dist0 = (SplitVert[IndexV0] - SplitPos3D[0]).Norm();
-          ScalarType Dist1 = (SplitVert[IndexV0] - SplitPos3D[1]).Norm();
-          if (Dist0 < Dist1)
-            SplitVert[IndexV0] = SplitPos3D[0];
-          else
-            SplitVert[IndexV0] = SplitPos3D[1];
-        }
+      // OLD (before geodesic split path): snapped every border vertex on the
+      // split edges, could put several vertices on the same position
+      // for (size_t i = 0; i < NewEdges.size(); i++)
+      // {
+      //   int IndexV0 = NewEdges[i].first;
+      //   int IndexV1 = NewEdges[i].second;
+      //   if (IsBorderV[IndexV0])
+      //   {
+      //     ScalarType Dist0 = (SplitVert[IndexV0] - SplitPos3D[0]).Norm();
+      //     ScalarType Dist1 = (SplitVert[IndexV0] - SplitPos3D[1]).Norm();
+      //     if (Dist0 < Dist1)
+      //       SplitVert[IndexV0] = SplitPos3D[0];
+      //     else
+      //       SplitVert[IndexV0] = SplitPos3D[1];
+      //   }
+      //
+      //   if (IsBorderV[IndexV1])
+      //   {
+      //     ScalarType Dist0 = (SplitVert[IndexV1] - SplitPos3D[0]).Norm();
+      //     ScalarType Dist1 = (SplitVert[IndexV1] - SplitPos3D[1]).Norm();
+      //     if (Dist0 < Dist1)
+      //       SplitVert[IndexV1] = SplitPos3D[0];
+      //     else
+      //       SplitVert[IndexV1] = SplitPos3D[1];
+      //   }
+      // }
+      //
+      // // get the polilines
+      // std::vector<Geo::Polyline3<ScalarType>> PolylineSplit;
+      // Geo::InitFromEdges(SplitVert, NewEdges, PolylineSplit);
+      //
+      // if (PolylineSplit.size() != 1)
+      // {
+      //   std::cout << "WARNING: Split resulted in multiple polylines" << std::endl;
+      //   return false;
+      // }
 
-        if (IsBorderV[IndexV1])
-        {
-          ScalarType Dist0 = (SplitVert[IndexV1] - SplitPos3D[0]).Norm();
-          ScalarType Dist1 = (SplitVert[IndexV1] - SplitPos3D[1]).Norm();
-          if (Dist0 < Dist1)
-            SplitVert[IndexV1] = SplitPos3D[0];
-          else
-            SplitVert[IndexV1] = SplitPos3D[1];
-        }
+      // NEW (geodesic split path): the UV split is only a refinement,
+      // the actual cut is a geodesic between the closest border vertices
+      std::set<Geo::Point3<ScalarType>> CornerPos3D;
+      for (size_t i = 0; i < SideSubd.size(); i++)
+        CornerPos3D.insert(SideSubd[i][0]);
+
+      std::vector<std::vector<int>> VV;
+      Geo::FindVertexStar(SplitFaces, VV);
+      // NEW (geodesic split path): VV must be indexed as SplitVert
+      VV.resize(SplitVert.size());
+
+      if (!GeodesicSplitPath(SplitVert, VV, IsBorderV, SplitPos3D, CornerPos3D,
+                             NewEdges))
+      {
+        std::cout << "WARNING: Geodesic split failed" << std::endl;
+        return false;
       }
 
       // get the polilines
       std::vector<Geo::Polyline3<ScalarType>> PolylineSplit;
       Geo::InitFromEdges(SplitVert, NewEdges, PolylineSplit);
-
       if (PolylineSplit.size() != 1)
       {
         std::cout << "WARNING: Split resulted in multiple polylines" << std::endl;
-        // std::cout << "Size PolylineSplit: " << PolylineSplit.size() <<
-        // std::endl; WriteOBJ("SplitMesh.obj", SplitVert, SplitFaces);
-        // WriteOBJ("New_EdgeSplit.obj", SplitVert, NewEdges);
         return false;
       }
+
       // get the submeshes from the split one
       SplitMeshFromEdges(SplitVert, SplitFaces, NewEdges);
 

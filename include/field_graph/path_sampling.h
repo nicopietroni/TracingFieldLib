@@ -1786,9 +1786,15 @@ namespace Geo
       }
       SaveCrossNodesOBJ(VertPos, StartNodes, "source_" + FrameS + ".obj");
       SaveCrossNodesOBJ(VertPos, ArrivalNodes, "arrival_" + FrameS + ".obj");
-      WritePathAsOBJ<ScalarType>("sampled_paths_" + FrameS + ".obj", VertPos, SelectedPaths);
+      WriteCrossPathAsOBJ<ScalarType>("sampled_paths_" + FrameS + ".obj", VertPos, SelectedPaths);
       std::cout << "Saved samples frame " << Frame << std::endl;
       Frame++;
+    }
+
+     void SaveCSampledPathDebug(const std::vector<int> &StartNodes,
+                                const std::vector<int> &ArrivalNodes)
+    {
+     
     }
 
     void SamplePaths(bool lazy_sampling = false)
@@ -2378,17 +2384,7 @@ namespace Geo
       To_Disable = NodesPath;
       To_Disable.insert(To_Disable.end(), OppNodesPath.begin(),
                         OppNodesPath.end());
-      // }
-      // else {
-      //   To_Disable.insert(To_Disable.end(),
-      //                     NodesPath.begin()+1,
-      //                     NodesPath.end()-1);
 
-      //   To_Disable.insert(To_Disable.end(),
-      //                     OppNodesPath.begin()+1,
-      //                     OppNodesPath.end()-1);
-      //   //int OppNode=Field::CrossFieldGraph::OppositeNodeCrossField(IndexN);
-      // }
       TGraph.DisableNodes(To_Disable);
     }
 
@@ -3041,9 +3037,6 @@ namespace Geo
         if (SampledPaths_Status[IndexPath] == SP_ToTrace)
         {
 
-          // std::cout<<"DEDE 0"<<std::endl;
-          // exit(0);
-
           // trache if needed
           int StartingNode = StartingNodes[IndexPath];
           if ((ConflictNodes.count(StartingNode) > 0) ||
@@ -3074,6 +3067,8 @@ namespace Geo
         {
           // if (SampledPaths_Status[IndexPath] == SP_Discarded);
           //   std::cout<<"Discarded "<<IndexPath<<std::endl;
+          //std::cout<<"TEST 0"<<std::endl;
+
           continue;
         }
         // CHECK OF PASSING ON REQUIRED PATCHES
@@ -3090,6 +3085,8 @@ namespace Geo
           if ((it == MustStartEnd.end()) && (it1 == MustStartEnd.end()))
           {
             SampledPaths_Status[IndexPath] = SP_Discarded;
+            //std::cout<<"TEST 1"<<std::endl;
+
             continue;
           }
         }
@@ -3104,6 +3101,8 @@ namespace Geo
         if (!pass_edges)
         {
           SampledPaths_Status[IndexPath] = SP_Discarded;
+          //std::cout<<"TEST 2"<<std::endl;
+
           // std::cout<<"Discarded 1"<<std::endl;
           // std::cout<<"Test 2"<<std::endl;
           continue;
@@ -3123,7 +3122,7 @@ namespace Geo
         if (has_conflict)
         {
           SampledPaths_Status[IndexPath] = SP_Discarded;
-          // std::cout<<"Test 2"<<std::endl;
+          //std::cout<<"Test 3"<<std::endl;
           continue;
         }
 
@@ -3131,7 +3130,7 @@ namespace Geo
         if (!cross_properly)
         {
           SampledPaths_Status[IndexPath] = SP_Discarded;
-          // std::cout<<"Test 3"<<std::endl;
+          //std::cout<<"Test 4"<<std::endl;
           continue;
         }
 
@@ -3173,11 +3172,13 @@ namespace Geo
 
         // DisableGraphNodes(SelectedPaths.back());
         // UPDATE CANDIDATES IF NEEDED
+
+        DisableGraphPathNodes(SelectedPaths.back());
+        DisableGraphArches(SelectedPaths.back());
+
         if (dynamicUpdates)
         {
-          DisableGraphPathNodes(SelectedPaths.back());
-          DisableGraphArches(SelectedPaths.back());
-
+        
           TGraph.CurrDistIndex() = 1;
           // std::cout<<"Dynamic Update"<<std::endl;
           RetraceCandidatesConflictWithSelected(true);

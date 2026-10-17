@@ -873,8 +873,52 @@ private:
         SumGap += std::abs(Sum0 - Sum1);
       }
     }
+    
+    // MEASURE (integer solve): fingerprint of the integer solution
+    unsigned long long SolHash = 1469598103934665603ULL;
+    for (size_t i = 0; i < VarValue.size(); i++) {
+      SolHash ^= (unsigned long long)VarValue[i];
+      SolHash *= 1099511628211ULL;
+    }
     std::cout << "Integer solve: violated equalities " << NumViolated << " / "
-              << OppEquivalences.size() << " total gap " << SumGap << std::endl;
+              << OppEquivalences.size() << " total gap " << SumGap
+              << " hash " << SolHash << std::endl;
+
+        // MEASURE (integer solve): size error, absolute and relative to target
+    ScalarType IsoErr = 0, IsoErrRel = 0;
+    for (size_t i = 0; i < VarValue.size(); i++) {
+      ScalarType Diff = (ScalarType)(VarValue[i] - VarTargetValue[i]);
+      IsoErr += Diff * Diff;
+      IsoErrRel += pow(Diff / (ScalarType)VarTargetValue[i], 2);
+    }
+    std::cout << "Integer solve: iso error " << IsoErr
+              << " relative " << IsoErrRel << std::endl;
+  }
+
+    // DEBUG (graph input): saves the input of the graph optimization, to
+  // reproduce it outside the pipeline
+  void SaveGraphInput(const std::string &FileName) {
+    std::vector<std::vector<std::vector<int>>> PatchVar;
+    GetPerPatchVars(PatchVar);
+    std::ofstream File(FileName);
+    File << VarValue.size() << std::endl;
+    for (size_t i = 0; i < VarValue.size(); i++)
+      File << VarValue[i] << " ";
+    File << std::endl;
+    for (size_t i = 0; i < VarTargetValue.size(); i++)
+      File << VarTargetValue[i] << " ";
+    File << std::endl;
+    File << PatchVar.size() << std::endl;
+    for (size_t i = 0; i < PatchVar.size(); i++) {
+      File << PatchVar[i].size();
+      for (size_t j = 0; j < PatchVar[i].size(); j++) {
+        File << " " << PatchVar[i][j].size();
+        for (size_t k = 0; k < PatchVar[i][j].size(); k++)
+          File << " " << PatchVar[i][j][k];
+      }
+      File << std::endl;
+    }
+    std::cout << "Saved graph input in " << FileName << std::endl;
   }
 
   void SolveGlobal(bool pre_divide, bool post_duplicate) {
@@ -973,7 +1017,10 @@ private:
                 RoundPrio);
     IntLSQ.Solve(VarValue);
     MeasureIntegerSolveQuality();
-
+    // MEASURE (integer solve): parameters actually seen by the solver
+    std::cout << "Integer solve: batch " << IntLSQ.max_batch_size
+              << " use_batch " << IntLSQ.use_batch_fixing
+              << " lns " << IntLSQ.use_lns << std::endl;
     if (post_duplicate)
       DuplicateSolution();
   }
@@ -1106,6 +1153,9 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
     int stepParity = 0;
 
     auto tStart = Clock::now();
+
+    //SaveGraphInput("graph_input.txt");
+
     if (OptimizeEquality)
         stepEq = SolveEqualityViaGraph(false);
     auto tEquality = Clock::now();
