@@ -746,7 +746,12 @@ private:
 
   const int avgSub = 6;
   const int minSubd = 2;
-  std::map<Geo::Quad2<ScalarType>, ScalarType> PrecomputedDistortions;
+  // OLD (one cache for all patches: two patches with the same UV quad shared
+  // the distortion of the first one)
+  // std::map<Geo::Quad2<ScalarType>, ScalarType> PrecomputedDistortions;
+  // NEW (per patch cache)
+  std::vector<std::map<Geo::Quad2<ScalarType>, ScalarType>>
+      PrecomputedDistortions;
 
   ScalarType QuadrangulationEnergy(const int IndexPatch,
                                    const std::vector<int> &WhichSides) {
@@ -807,6 +812,11 @@ private:
     const std::vector<std::vector<int>> &Patch_Faces =
         PData.PatchFaces[IndexPatch];
 
+    // NEW (per patch cache): the cache of this patch
+    assert(IndexPatch < (int)PrecomputedDistortions.size());
+    std::map<Geo::Quad2<ScalarType>, ScalarType> &PatchDistortions =
+        PrecomputedDistortions[IndexPatch];
+
     // then compute the quadrangulation for each side and merge them together
     ScalarType WorstAR = 1;
     std::set<int> WhichSideSet(WhichSides.begin(), WhichSides.end());
@@ -821,8 +831,12 @@ private:
       int sizeX = SubdSize[s].first;
       int sizeY = SubdSize[s].second;
 
-      if (PrecomputedDistortions.count(UVQuads[s]) != 0) {
-        ScalarType CurrAR = PrecomputedDistortions[UVQuads[s]];
+      // OLD (shared cache)
+      // if (PrecomputedDistortions.count(UVQuads[s]) != 0) {
+      //   ScalarType CurrAR = PrecomputedDistortions[UVQuads[s]];
+      // NEW (per patch cache)
+      if (PatchDistortions.count(UVQuads[s]) != 0) {
+        ScalarType CurrAR = PatchDistortions[UVQuads[s]];
         WorstAR = std::min(WorstAR, CurrAR);
         continue;
       }
@@ -840,7 +854,10 @@ private:
         AvgAR += FaceAR[i];
 
       AvgAR /= FaceAR.size();
-      PrecomputedDistortions[UVQuads[s]] = AvgAR;
+      // OLD (shared cache)
+      // PrecomputedDistortions[UVQuads[s]] = AvgAR;
+      // NEW (per patch cache)
+      PatchDistortions[UVQuads[s]] = AvgAR;
       WorstAR = std::min(WorstAR, AvgAR);
     }
 
@@ -1238,7 +1255,11 @@ private:
       }
     }
     // std::cout<<"Best Energy: "<<BestEnergy<<std::endl;
-    CentralV[IndexPatch] = BestCentralV;
+    // OLD (could assign -1 when no candidate was valid)
+    // CentralV[IndexPatch] = BestCentralV;
+    // NEW (keep the old central vertex if no candidate is valid)
+    if (BestCentralV >= 0)
+      CentralV[IndexPatch] = BestCentralV;
   }
 
   bool FindBestCentralPos(const EnergyMode &EMode) {
@@ -1540,7 +1561,11 @@ public:
 
       if (!modified) {
         // std::cout << "Dual Step Performed " << i << std::endl;
-        return;
+        // OLD (early return skipped the restore of BorderSnapRatio and the
+        // final snap step below)
+        // return;
+        // NEW (break): go on to the final step
+        break;
       }
     }
     // check only at the end
@@ -1600,6 +1625,11 @@ public:
     PrecomputedDistances.clear();
     PrecomputedDistances.resize(NumPatches);
 
+    // NEW (per patch cache): one distortion cache per patch, emptied at
+    // every Init
+    PrecomputedDistortions.clear();
+    PrecomputedDistortions.resize(NumPatches);
+
     if ((InitMode == IET_CCAbility) || (EMode_Side == EM_CCAbility))
       FindCCSideRatios(PData, EdgeCCRatios);
 
@@ -1631,6 +1661,39 @@ public:
   ScalarType MinAngle = 45;
   int MaxValence = 6;
   int MinValence = 3;
+  // NEW (guarded corner moves): a move must lower the average distortion by
+  // at least this fraction (it was accepted for any decrease, even noise)
+  ScalarType MinRelGain = 0.05;
+  // NEW (guarded corner moves): a 4 sided patch whose opposite sides differ
+  // by more than this ratio (long and thin) is never turned into a 3 sided
+  // one: the Tutte map on a square distorts it a lot even if it is a perfect
+  // n x m quad patch, so the distortion test wrongly prefers a triangle
+  ScalarType KeepQuadAspect = 8;
+  // NEW (guarded corner moves): max moves per patch, avoids add/remove cycles
+  int MaxMovesPerPatch = 10;
+
+  // NEW (guarded corner moves): ratio between the longest and the shortest
+  // pair of opposite sides (average of the two sides of each pair), 4 sided
+  // patches only, 1 otherwise
+  ScalarType QuadAspect(const int IndexPatch) const {
+    const std::vector<std::vector<std::pair<int, int>>> &Sides =
+        PData.EdgePatchSides[IndexPatch][0];
+    if (Sides.size() != 4)
+      return 1;
+    ScalarType L[4];
+    for (size_t s = 0; s < 4; s++) {
+      L[s] = 0;
+      for (size_t e = 0; e < Sides[s].size(); e++)
+        L[s] += (PData.PatchVertPos[IndexPatch][Sides[s][e].first] -
+                 PData.PatchVertPos[IndexPatch][Sides[s][e].second])
+                    .Norm();
+    }
+    ScalarType A = (L[0] + L[2]) / 2;
+    ScalarType B = (L[1] + L[3]) / 2;
+    if ((A <= 0) || (B <= 0))
+      return std::numeric_limits<ScalarType>::max();
+    return std::max(A / B, B / A);
+  }
 
   bool
   TutteParam(const int IndexPatch,
@@ -1682,7 +1745,12 @@ public:
         PData.PatchVertPos[IndexPatch], NextPatchUV,
         PData.PatchFaces[IndexPatch],
         Geo::UVDistortion<ScalarType>::ScaledJacobianDist);
-    return (Dist1 - Dist0);
+    // OLD (absolute change)
+    // return (Dist1 - Dist0);
+    // NEW (guarded corner moves): relative change, so MinRelGain is a
+    // fraction of the current distortion
+    return ((Dist1 - Dist0) /
+            std::max(Dist0, (ScalarType)1e-12));
   }
 
   ScalarType
@@ -1715,7 +1783,12 @@ public:
         PData.PatchVertPos[IndexPatch], NextPatchUV,
         PData.PatchFaces[IndexPatch],
         Geo::UVDistortion<ScalarType>::ScaledJacobianDist);
-    return (Dist1 - Dist0);
+    // OLD (absolute change)
+    // return (Dist1 - Dist0);
+    // NEW (guarded corner moves): relative change, so MinRelGain is a
+    // fraction of the current distortion
+    return ((Dist1 - Dist0) /
+            std::max(Dist0, (ScalarType)1e-12));
   }
 
   void
@@ -1894,8 +1967,13 @@ public:
     addedNum = 0;
     removedNum = 0;
     bool has_changed = false;
+    // NEW (guarded corner moves)
+    int NumMoves = 0;
     
     do {
+      // NEW (guarded corner moves): stop add/remove cycles
+      if (NumMoves >= MaxMovesPerPatch)
+        return;
 
       has_changed = false;
 
@@ -1909,7 +1987,11 @@ public:
 
       if (CandidateMoves.empty())
         return;
-      if (CandidateMoves[0].EnergyChange >= 0)
+      // OLD (any decrease accepted)
+      // if (CandidateMoves[0].EnergyChange >= 0)
+      //   return;
+      // NEW (guarded corner moves)
+      if (CandidateMoves[0].EnergyChange > -MinRelGain)
         return;
 
       for (size_t i = 0; i < CandidateMoves.size(); i++) {
@@ -1921,10 +2003,20 @@ public:
         if ((Move.Type == MT_Remove) && (CurrCornersNum <= MinValence))
           continue;
 
-        if (Move.EnergyChange >= 0)
+        // OLD (any decrease accepted)
+        // if (Move.EnergyChange >= 0)
+        //   continue;
+        // NEW (guarded corner moves)
+        if (Move.EnergyChange > -MinRelGain)
+          continue;
+        // NEW (guarded corner moves): keep long and thin quads as quads
+        if ((Move.Type == MT_Remove) && (CurrCornersNum == 4) &&
+            (QuadAspect(IndexPatch) > KeepQuadAspect))
           continue;
 
         has_changed = true;
+        // NEW (guarded corner moves)
+        NumMoves++;
         // std::cout<<"PERFORMING CANDIDATE MOVE Patch:"<<IndexPatch<<std::endl;
 
         switch (Move.Type) {

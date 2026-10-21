@@ -909,7 +909,87 @@ namespace Geo
       SelectedPathsVertexPairs.erase(std::unique(SelectedPathsVertexPairs.begin(), SelectedPathsVertexPairs.end()), SelectedPathsVertexPairs.end());
     }
 
+    //return tangent nodes including border vertices, selected paths, opposite nodes
+    void GetCurrentTangentNodes(std::vector<int> &TangentNodes)
+    {
+      TangentNodes.clear();
+
+      // add the tangent nodes from border vertices
+      std::vector<int> BorderNodes;
+      TGraph.GetNodeType(Geo::TangentDomain, BorderNodes);
+      TangentNodes.insert(TangentNodes.end(), BorderNodes.begin(), BorderNodes.end());
+
+      // then add all the previously added nodes
+      for (size_t i = 0; i < SelectedPaths.size(); i++)
+      {
+        // add the path and opposite
+        TangentNodes.insert(TangentNodes.end(), SelectedPaths[i].begin(),
+                      SelectedPaths[i].end());
+        std::vector<int> OppNodes;
+        Field::CrossFieldGraph::OppositeNodeCrossField(SelectedPaths[i],
+                                                       OppNodes);
+        TangentNodes.insert(TangentNodes.end(), OppNodes.begin(), OppNodes.end());
+      }
+      std::sort(TangentNodes.begin(), TangentNodes.end());
+      TangentNodes.erase(std::unique(TangentNodes.begin(), TangentNodes.end()), TangentNodes.end());
+    }
+
   public:
+    
+         // NEW (selected paths weight): multiply by Multiplier the weight of every
+    // arc that lies on a path of at most MaxSteps arcs starting from the
+    // current tangent nodes
+    void ModifyGraphWeightWithSelectedPaths(int MaxSteps = 2,
+                                            ScalarType Multiplier = 2)
+    {
+      // the previous distance should be saved in the first index
+      TGraph.CurrDistIndex() = 1;
+
+      std::vector<int> StartN;
+
+      GetCurrentTangentNodes(StartN);
+
+      typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
+      SParam.MaxL = std::numeric_limits<ScalarType>::max();
+      SParam.MaxSteps = MaxSteps;
+      SParam.onlyDirect = false;
+      SParam.onlyVisible = true;
+      SParam.stopAtPrevDist = false;
+      SParam.uniformW = true;
+      SParam.checkEnabled = false;
+
+      int StopNode;
+      Geo::GraphQuery<ScalarType>::Dijkstra(TGraph, StartN, SParam, StopNode);
+
+      // then get all reached arcs: an arc i->j is inside the MaxSteps
+      // neighbourhood if i has been reached with less than MaxSteps arcs
+      // (nodes at Steps==MaxSteps+1 are marked but never expanded, so the
+      // Steps check is needed, not only IsMarked)
+      int NumModified = 0;
+      for (size_t i = 0; i < TGraph.NumNodes(); i++)
+      {
+        if (!TGraph.IsMarked(i))
+          continue;
+        if (TGraph.Steps(i) >= MaxSteps)
+          continue;
+        for (size_t j = 0; j < TGraph.N[i].size(); j++)
+        {
+          // same filters used by the Dijkstra above
+          if (SParam.onlyVisible && (!TGraph.VisibleLink(i, j)))
+            continue;
+          if (SParam.onlyDirect && (!TGraph.DirectLink(i, j)))
+            continue;
+          TGraph.N[i][j].ModW = Multiplier;
+          NumModified++;
+        }
+      }
+      // DEBUG (selected paths weight)
+      std::cout << "Modified weight of " << NumModified << " arcs" << std::endl;
+
+      // restore the previous distance buffer
+      TGraph.CurrDistIndex() = 0;
+    }
+
     // bool single_insertion = false;
     // std::vector<std::pair<ScalarType, int>> NodeDist;
 
@@ -924,26 +1004,28 @@ namespace Geo
 
       std::vector<int> StartN;
 
+      GetCurrentTangentNodes(StartN);
+
       // first add singularities if needed
       if (distanceSingularities)
         StartN.insert(StartN.end(), SingNodes.begin(), SingNodes.end());
 
-      // add the tangent nodes from border vertices
-      std::vector<int> BorderNodes;
-      TGraph.GetNodeType(Geo::TangentDomain, BorderNodes);
-      StartN.insert(StartN.end(), BorderNodes.begin(), BorderNodes.end());
+      // // add the tangent nodes from border vertices
+      // std::vector<int> BorderNodes;
+      // TGraph.GetNodeType(Geo::TangentDomain, BorderNodes);
+      // StartN.insert(StartN.end(), BorderNodes.begin(), BorderNodes.end());
 
-      // then add all the previously added nodes
-      for (size_t i = 0; i < SelectedPaths.size(); i++)
-      {
-        // add the path and opposite
-        StartN.insert(StartN.end(), SelectedPaths[i].begin(),
-                      SelectedPaths[i].end());
-        std::vector<int> OppNodes;
-        Field::CrossFieldGraph::OppositeNodeCrossField(SelectedPaths[i],
-                                                       OppNodes);
-        StartN.insert(StartN.end(), OppNodes.begin(), OppNodes.end());
-      }
+      // // then add all the previously added nodes
+      // for (size_t i = 0; i < SelectedPaths.size(); i++)
+      // {
+      //   // add the path and opposite
+      //   StartN.insert(StartN.end(), SelectedPaths[i].begin(),
+      //                 SelectedPaths[i].end());
+      //   std::vector<int> OppNodes;
+      //   Field::CrossFieldGraph::OppositeNodeCrossField(SelectedPaths[i],
+      //                                                  OppNodes);
+      //   StartN.insert(StartN.end(), OppNodes.begin(), OppNodes.end());
+      // }
 
       if (StartN.size() == 0)
       {
@@ -967,15 +1049,7 @@ namespace Geo
         }
       }
 
-      // int enabled = 0;
-      // for (size_t i = 0; i < StartN.size(); i++) {
-      //   if (TGraph.IsEnabled(StartN[i]))
-      //     enabled++;
-      // }
-
-      // std::cout << "#### ENABLED:" << enabled << std::endl;
-      // std::cout << "out of:" << StartN.size() << std::endl;
-
+      
       // exit(0);
       typename Geo::GraphQuery<ScalarType>::ShortestPathParam SParam;
       SParam.avoid_zero_path = true;
@@ -999,18 +1073,6 @@ namespace Geo
       ScalarType MaxVal = TGraph.MaxDistance();
       TGraph.SetUnMarkedToDistance(MaxVal);
 
-      //  ScalarType AvgVal = TGraph.AvgDistance();
-      //  std::cout<<"AVERAGE DIST:"<<AvgVal<<std::endl;
-
-      // if (single_insertion) {
-      //   //update Node distance
-      //   NodeDist.clear();
-      //   for (size_t i = 0; i < TGraph.NumNodes(); i++)
-      //     NodeDist.push_back(std::pair<ScalarType, int>(TGraph.Distance(i),
-      //     i));
-      //   std::sort(NodeDist.begin(),NodeDist.end());
-      //   std::reverse(NodeDist.begin(),NodeDist.end());
-      // }
     }
 
   private:
@@ -3483,8 +3545,16 @@ namespace Geo
       }
     }
 
-    void SplitPaths(const std::set<int> &FixedPaths = std::set<int>())
+    // OLD (before fixed path remap)
+    // void SplitPaths(const std::set<int> &FixedPaths = std::set<int>())
+    // NEW (fixed path remap): splitting renumbers the paths, NewFixedPaths
+    // (if not NULL) receives the new indices of the fixed paths
+    void SplitPaths(const std::set<int> &FixedPaths = std::set<int>(),
+                    std::set<int> *NewFixedPaths = NULL)
     {
+      // NEW (fixed path remap)
+      if (NewFixedPaths != NULL)
+        NewFixedPaths->clear();
       // for each vertex the path passing by
       std::map<int, std::set<int>> VertexPath;
 
@@ -3511,6 +3581,9 @@ namespace Geo
       {
         if (FixedPaths.count(i) > 0)
         {
+          // NEW (fixed path remap)
+          if (NewFixedPaths != NULL)
+            NewFixedPaths->insert((int)NewPaths.size());
           NewPaths.push_back(SelectedPaths[i]);
           continue;
         }
@@ -3523,19 +3596,27 @@ namespace Geo
           int PathN = SelectedPaths[i][j];
           int PathV = Field::CrossFieldGraph::ElemOfNode(PathN);
 
-          // not loop not check first and last
-          if (!is_loop) // no split begin and end
-          {
-            if ((j == 0) || (j == (sizeP - 1)))
-              continue;
-          }
-
-          // if loop check only one among start/end
-          if (is_loop) // no split begin and end
-          {
-            if (j == (sizeP - 1))
-              continue;
-          }
+          // OLD (off by one: j < sizeP already excludes the last node, so
+          // testing sizeP - 1 skipped the second to last one, which was then
+          // split below without being counted)
+          // // not loop not check first and last
+          // if (!is_loop) // no split begin and end
+          // {
+          //   if ((j == 0) || (j == (sizeP - 1)))
+          //     continue;
+          // }
+          //
+          // // if loop check only one among start/end
+          // if (is_loop) // no split begin and end
+          // {
+          //   if (j == (sizeP - 1))
+          //     continue;
+          // }
+          // NEW (off by one): open path, skip the first node (the last one is
+          // out of the range); loop, the last node repeats the first and is
+          // out of the range, so every node is tested
+          if ((!is_loop) && (j == 0))
+            continue;
 
           if (SplitVert.count(PathV) == 0)
             continue;
@@ -3717,9 +3798,25 @@ namespace Geo
     // }
     int NumCandidates() { return Candidates.size(); }
 
-    void MergeCollinearPath()
+    // OLD (before fixed path remap)
+    // void MergeCollinearPath()
+    // NEW (fixed path remap): paths in NoJoin are never joined (their index
+    // stays valid), NewPathIdxOut (if not NULL) receives the old to new index
+    // map of the compaction
+    void MergeCollinearPath(const std::set<int> &NoJoin = std::set<int>(),
+                            std::map<int, int> *NewPathIdxOut = NULL)
     {
       // find the possible merging vertex
+
+      // NEW (fixed path remap): size() - 1 underflows on an empty vector
+      if (SelectedPaths.size() < 2)
+      {
+        std::map<int, int> NewPathIdx;
+        CleanEmptySelectedPaths(NewPathIdx);
+        if (NewPathIdxOut != NULL)
+          *NewPathIdxOut = NewPathIdx;
+        return;
+      }
 
       // find the splitting vertices
       bool has_joined = false;
@@ -3728,13 +3825,21 @@ namespace Geo
         has_joined = false;
         for (size_t i = 0; i < SelectedPaths.size() - 1; i++)
           for (size_t j = (i + 1); j < SelectedPaths.size(); j++)
+          {
+            // NEW (fixed path remap)
+            if ((NoJoin.count((int)i) > 0) || (NoJoin.count((int)j) > 0))
+              continue;
             has_joined |= Geo::PathFunctions<ScalarType>::JoinIfPossible(
                 SelectedPaths[i], SelectedPaths[j]);
+          }
 
       } while (has_joined);
       // SelectedPaths=NewPaths;
       std::map<int, int> NewPathIdx;
       CleanEmptySelectedPaths(NewPathIdx);
+      // NEW (fixed path remap)
+      if (NewPathIdxOut != NULL)
+        *NewPathIdxOut = NewPathIdx;
     }
 
     std::vector<std::vector<int>> &Faces() { return Connectivity; }

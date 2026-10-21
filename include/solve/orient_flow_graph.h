@@ -1785,10 +1785,33 @@ template <class ScalarType> class OrientFLowGraph {
   // on each variable by the path under test, always left at zero on exit
   std::vector<int> ApplyDelta;
 
-  // NEW (CanApply without copy): same test as before (the changes of a path
-  // passing more than once on a variable are accumulated), but only the
-  // variables touched by the path are visited
-  bool CanApply(const PathPriority &PPrio) {
+  // // NEW (CanApply without copy): same test as before (the changes of a path
+  // // passing more than once on a variable are accumulated), but only the
+  // // variables touched by the path are visited
+  // bool CanApply(const PathPriority &PPrio) {
+  //   if (ApplyDelta.size() != VarValue.size())
+  //     ApplyDelta.assign(VarValue.size(), 0);
+
+  //   bool CanDo = true;
+  //   size_t NumDone = 0;
+  //   for (size_t i = 0; i < PPrio.pathNodes.size(); i++) {
+  //     int IndexN = PPrio.pathNodes[i];
+  //     int VarNum = VarOfNode(IndexN);
+  //     ApplyDelta[VarNum] += PPrio.modifiers[i];
+  //     NumDone++;
+  //     if ((VarValue[VarNum] + ApplyDelta[VarNum]) <= 0) {
+  //       CanDo = false;
+  //       break;
+  //     }
+  //   }
+  //   // put the scratch back to zero
+  //   for (size_t i = 0; i < NumDone; i++)
+  //     ApplyDelta[VarOfNode(PPrio.pathNodes[i])] = 0;
+
+  //   return CanDo;
+  // }
+  
+    bool CanApply(const PathPriority &PPrio) {
     if (ApplyDelta.size() != VarValue.size())
       ApplyDelta.assign(VarValue.size(), 0);
 
@@ -1799,9 +1822,29 @@ template <class ScalarType> class OrientFLowGraph {
       int VarNum = VarOfNode(IndexN);
       ApplyDelta[VarNum] += PPrio.modifiers[i];
       NumDone++;
-      if ((VarValue[VarNum] + ApplyDelta[VarNum]) <= 0) {
+      int NewVal = VarValue[VarNum] + ApplyDelta[VarNum];
+      if (NewVal <= 0) {
         CanDo = false;
         break;
+      }
+      // NEW (ratio limits at apply time): the paths are searched once with
+      // the nodes over the limits disabled, then applied up to step_num
+      // times; without this test the same path could push a variable far
+      // beyond MaxRatio (or below MinRatio). Only moves that go further out
+      // of the limits are refused, moving back towards them is allowed.
+      if ((MaxRatio > 0) && (ApplyDelta[VarNum] > 0)) {
+        ScalarType UpLimit = VarTargetValue[VarNum] * MaxRatio;
+        if (NewVal > UpLimit) {
+          CanDo = false;
+          break;
+        }
+      }
+      if ((MinRatio > 0) && (ApplyDelta[VarNum] < 0)) {
+        ScalarType LowLimit = VarTargetValue[VarNum] * MinRatio;
+        if (NewVal < LowLimit) {
+          CanDo = false;
+          break;
+        }
       }
     }
     // put the scratch back to zero
@@ -1810,7 +1853,7 @@ template <class ScalarType> class OrientFLowGraph {
 
     return CanDo;
   }
-  
+
   void FilterApplicable(std::vector<PathPriority> &AllPathModifications) {
     std::vector<PathPriority> NewPathModifications;
     for (size_t i = 0; i < AllPathModifications.size(); i++) {
@@ -3305,8 +3348,10 @@ public:
       : VarTargetValue(_VarTargetValue), VarValue(_VarValue),
         PatchSideVariables(_PatchSideVariables) {
     WriteDebug = false;
-    MinRatio = -1;
-    MaxRatio = -1;
+    // MinRatio = -1;
+    // MaxRatio = -1;
+    MinRatio = 1.0/4.0;
+    MaxRatio = 4.0;
   }
 };
 

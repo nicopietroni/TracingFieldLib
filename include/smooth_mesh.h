@@ -37,6 +37,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
+#include <limits> // NEW (smart angle based)
 #include <set>
 #include <solve/least_squares_lin_constraint_solver.h>
 #include <stack>
@@ -262,9 +263,18 @@ void SmoothLaplacianStep(
 }
 
 template <class ScalarType>
+// OLD (before smart angle based)
+// void SmoothAngleBasedStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
+//                           const std::vector<std::vector<int>> &Faces,
+//                           const std::set<int> &FixedV, ScalarType Damp = 0.5) {
+// NEW (smart angle based): with smart, a vertex moves only if the worst
+// scaled jacobian of its faces does not get worse, or stays above
+// SmartJacThr (smart smoothing, Zhou and Shimada 2000)
 void SmoothAngleBasedStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
                           const std::vector<std::vector<int>> &Faces,
-                          const std::set<int> &FixedV, ScalarType Damp = 0.5) {
+                          const std::set<int> &FixedV, ScalarType Damp = 0.5,
+                          bool smart = true,
+                          ScalarType SmartJacThr = (ScalarType)0.5) {
   std::vector<std::vector<int>> VertFan;
   std::vector<bool> HasBorder;
   GetSortedVertStar(Faces, VertFan, HasBorder);
@@ -330,10 +340,50 @@ void SmoothAngleBasedStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
                                                    : VertPos[i];
   }
 
+  // OLD (before smart angle based)
+  // for (size_t i = 0; i < AngleVal.size(); i++) {
+  //   if (FixedV.count(i) > 0)
+  //     continue;
+  //   VertPos[i] = VertPos[i] * Damp + AngleVal[i] * (1 - Damp);
+  // }
+
+  // NEW (smart angle based)
+  std::vector<std::vector<int>> VF;
+  if (smart) {
+    VF.resize(VertPos.size());
+    for (size_t f = 0; f < Faces.size(); f++)
+      for (size_t j = 0; j < Faces[f].size(); j++)
+        VF[Faces[f][j]].push_back((int)f);
+  }
+  // worst scaled jacobian of the faces around vertex i, with i at PosI and
+  // the other vertices at their positions before the step
+  const std::vector<Geo::Point3<ScalarType>> PrevPos = VertPos;
+  auto WorstJac = [&](size_t i, const Geo::Point3<ScalarType> &PosI) {
+    ScalarType Worst = std::numeric_limits<ScalarType>::max();
+    for (size_t k = 0; k < VF[i].size(); k++) {
+      const std::vector<int> &F = Faces[VF[i][k]];
+      std::vector<Geo::Point3<ScalarType>> Poly;
+      for (size_t j = 0; j < F.size(); j++)
+        Poly.push_back(((size_t)F[j] == i) ? PosI : PrevPos[F[j]]);
+      Worst = std::min(Worst, Geo::ScaledJacobianPolygon<ScalarType>(Poly));
+    }
+    return Worst;
+  };
+
   for (size_t i = 0; i < AngleVal.size(); i++) {
     if (FixedV.count(i) > 0)
       continue;
-    VertPos[i] = VertPos[i] * Damp + AngleVal[i] * (1 - Damp);
+    Geo::Point3<ScalarType> NewP =
+        PrevPos[i] * Damp + AngleVal[i] * (1 - Damp);
+    if (smart && (!VF[i].empty())) {
+      ScalarType Q1 = WorstJac(i, NewP);
+      if (Q1 < SmartJacThr) {
+        ScalarType Q0 = WorstJac(i, PrevPos[i]);
+        if (Q1 < Q0)
+          continue; // the move makes its faces worse: keep the old position
+      }
+    }
+    VertPos[i] = NewP;
   }
 }
 
@@ -576,7 +626,12 @@ void GetTargetPoly(
     const std::vector<std::vector<int>> &Faces,
     const std::set<int> &LineSmoothV,
     std::vector<std::vector<Geo::Point3<ScalarType>>> &TargetPoly,
-    std::vector<ScalarType> &Weights, bool weight_by_Aspect = true) {
+    // OLD (before fixed corners in poly align)
+    // std::vector<ScalarType> &Weights, bool weight_by_Aspect = true) {
+    std::vector<ScalarType> &Weights, bool weight_by_Aspect = true,
+    // NEW (fixed corners in poly align): fixed vertices, the target is
+    // translated so it passes through them
+    const std::set<int> *FixedV = NULL) {
   const ScalarType WDefault = ScalarType(1);
 
   const size_t nF = Faces.size();
@@ -614,20 +669,51 @@ void GetTargetPoly(
       (void)BestAlignedPolyProcrustes(FacePos,
                                       CurrPoly); // returns W but unused here
 
-      // Translate if on a line-smooth "border"
+      // OLD (before fixed corners in poly align): fixed vertices were not
+      // considered, so the target square did not close on a fixed corner
+      // // Translate if on a line-smooth "border"
+      // Geo::Point3<ScalarType> TranslateV(0, 0, 0);
+      // int TranslateNum = 0;
+      // for (size_t j = 0; j < F.size(); ++j) {
+      //   const int IndexV = F[j];
+      //   const bool IsLineSmooth = (LineSmoothV.count(IndexV) > 0);
+      //   if (IsLineSmooth) {
+      //     // CurrPoly is expected to have same size/order as FacePos
+      //     TranslateV += VertPos[IndexV] - CurrPoly[j];
+      //     ++TranslateNum;
+      //   }
+      // }
+      //
+      // if (TranslateNum > 0) {
+      //   TranslateV /= ScalarType(TranslateNum);
+      //   for (size_t j = 0; j < CurrPoly.size(); ++j)
+      //     CurrPoly[j] +=
+      //         (TranslateV * ScalarType(0.5)); // half to avoid overcompensation
+      // }
+
+      // NEW (fixed corners in poly align): fixed vertices cannot move, so the
+      // target is translated fully onto them; otherwise line vertices pull it
+      // half way as before
+      Geo::Point3<ScalarType> TranslateFix(0, 0, 0);
+      int NumFix = 0;
       Geo::Point3<ScalarType> TranslateV(0, 0, 0);
       int TranslateNum = 0;
       for (size_t j = 0; j < F.size(); ++j) {
         const int IndexV = F[j];
-        const bool IsLineSmooth = (LineSmoothV.count(IndexV) > 0);
-        if (IsLineSmooth) {
-          // CurrPoly is expected to have same size/order as FacePos
+        // CurrPoly is expected to have same size/order as FacePos
+        if ((FixedV != NULL) && (FixedV->count(IndexV) > 0)) {
+          TranslateFix += VertPos[IndexV] - CurrPoly[j];
+          ++NumFix;
+        } else if (LineSmoothV.count(IndexV) > 0) {
           TranslateV += VertPos[IndexV] - CurrPoly[j];
           ++TranslateNum;
         }
       }
-
-      if (TranslateNum > 0) {
+      if (NumFix > 0) {
+        TranslateFix /= ScalarType(NumFix);
+        for (size_t j = 0; j < CurrPoly.size(); ++j)
+          CurrPoly[j] += TranslateFix;
+      } else if (TranslateNum > 0) {
         TranslateV /= ScalarType(TranslateNum);
         for (size_t j = 0; j < CurrPoly.size(); ++j)
           CurrPoly[j] +=
@@ -803,8 +889,12 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
   std::vector<ScalarType> Weights;
   std::vector<std::vector<Geo::Point3<ScalarType>>> TargetPoly;
 
+  // OLD (before fixed corners in poly align)
+  // GetTargetPoly<ScalarType>(VertPos, Faces, SParam.LineSmoothVSet, TargetPoly,
+  //                           Weights); //,TargetN );
+  // NEW (fixed corners in poly align)
   GetTargetPoly<ScalarType>(VertPos, Faces, SParam.LineSmoothVSet, TargetPoly,
-                            Weights); //,TargetN );
+                            Weights, true, &FixedV);
 
   // smooth the polygonal size to avoid too much distortion
   // std::vector<std::vector<int>> NextF, NextI;
@@ -878,7 +968,7 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
     AvgPos[i] /= AvgW[i];
 
     if (!SParam.LaplW.empty())// && (SParam.LaplW[i] > 0))
-      AvgPos[i] = AvgPos[i] * 0.5 + LaplVal[i] *0.5;
+      AvgPos[i] = (AvgPos[i] * 0.5 + LaplVal[i] *0.5);
       // AvgPos[i] =
       //     AvgPos[i] * (1 - SParam.LaplW[i]) + LaplVal[i] * SParam.LaplW[i];
   }

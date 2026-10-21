@@ -132,6 +132,8 @@ template <class ScalarType> class TracingGraph {
     bool Direct;
     // Visible or not
     bool Visible;
+    //the modifier of the weight used only when enabled
+    ScalarType ModW;
 
     NeighInfo() {
       N = -1;
@@ -139,6 +141,7 @@ template <class ScalarType> class TracingGraph {
       Enabled = false;
       Direct = false;
       Visible = false;
+      ModW = 1;
     }
 
     inline bool operator==(const NeighInfo &N1) const {
@@ -164,6 +167,7 @@ template <class ScalarType> class TracingGraph {
       Enabled = _Enabled;
       Direct = _Direct;
       Visible = _Visible;
+      ModW = 1;
     }
   };
 
@@ -183,6 +187,8 @@ template <class ScalarType> class TracingGraph {
 
 
 public:
+
+  bool useModifiedWeight=false;
   //std::vector<Geo::Point3<ScalarType> > NodePos;
 
   std::vector<std::vector<NeighInfo> > N;
@@ -374,7 +380,10 @@ public:
     assert(IndexN0 < (int)N.size());
     assert(LocalIdx >= 0);
     assert(LocalIdx < (int)N[IndexN0].size());
-    return (N[IndexN0][LocalIdx].W);
+    if (!useModifiedWeight)
+      return (N[IndexN0][LocalIdx].W);
+
+    return (N[IndexN0][LocalIdx].W * N[IndexN0][LocalIdx].ModW);
   }
 
   int NodeLink(const int &IndexN0, const int &LocalIdx) const {

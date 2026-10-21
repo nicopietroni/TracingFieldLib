@@ -43,6 +43,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <set>
 // #include <sys/_types/_size_t.h>
 #include <cstddef> // C++
@@ -266,6 +267,13 @@ namespace Geo
     // no reprojection positions
     std::set<Geo::Point3<ScalarType>> NoProjTargetPos;
 
+    // NEW (sharp node reprojection): nodes where the sequences are split at
+    // sharp turns; they are valid targets (they were in NoProjTargetPos, so
+    // the vertices projecting there were skipped and stayed off the line)
+    std::set<Geo::Point3<ScalarType>> SharpNodePos;
+    // the vertex lying on a sharp node at Init (typically a fixed corner)
+    std::map<Geo::Point3<ScalarType>, int> SharpNodeVert;
+
     // the set of branch indexes no need to reproject
     std::set<int> branchIDX;
 
@@ -365,7 +373,10 @@ namespace Geo
 
     // NEW (split at sharp turns): splits each target sequence at the nodes where
     // the polyline turns sharply, so a vertex is reprojected only on the piece
-    // between two corners; the corners are never used as projection targets
+    // between two corners
+    // OLD (comment): the corners are never used as projection targets
+    // NEW (sharp node reprojection): the split nodes are still projection
+    // targets, see Reproject()
     void SplitSequencesAtSharpTurns(std::vector<std::vector<int>> &subsequences)
     {
       if (SplitAngleDeg <= 0)
@@ -410,7 +421,11 @@ namespace Geo
           if (AngleAt(Prev, Seq[j], Next) < SplitAngleDeg)
           {
             Sharp[j] = true;
-            NoProjTargetPos.insert(TargetVertPos[Seq[j]]);
+            // OLD (sharp nodes not reprojected): vertices whose closest point
+            // was a sharp node stayed off the line (open seam after mirroring)
+            // NoProjTargetPos.insert(TargetVertPos[Seq[j]]);
+            // NEW (sharp node reprojection)
+            SharpNodePos.insert(TargetVertPos[Seq[j]]);
           }
         }
 
@@ -447,6 +462,28 @@ namespace Geo
       subsequences = NewSeq;
     }
 
+    // NEW (sharp node reprojection): for each sharp node, the feature vertex
+    // lying on it at Init, if any (a corner); vertices that later project on
+    // that node must not jump past it on the other branch
+    void InitSharpNodeVert()
+    {
+      SharpNodeVert.clear();
+      if (SharpNodePos.empty())
+        return;
+      const ScalarType Thr = 0.000001;
+      for (size_t i = 0; i < Features.size(); i++)
+      {
+        int IdxV[2] = {Features[i].first, Features[i].second};
+        for (int k = 0; k < 2; k++)
+        {
+          typename std::set<Geo::Point3<ScalarType>>::const_iterator It;
+          for (It = SharpNodePos.begin(); It != SharpNodePos.end(); It++)
+            if (((*It) - VertPos[IdxV[k]]).Norm() < Thr)
+              SharpNodeVert[*It] = IdxV[k];
+        }
+      }
+    }
+
   public:
     bool print_info = false;
     // NEW (split at sharp turns): target sequences are split where the
@@ -475,6 +512,39 @@ namespace Geo
           continue;
         if (closestS == -1)
           continue;
+
+        // NEW (sharp node reprojection): the closest point is a split node
+        if (SharpNodePos.count(closestPt) > 0)
+        {
+          typename std::map<Geo::Point3<ScalarType>, int>::const_iterator ItV =
+              SharpNodeVert.find(closestPt);
+          // another vertex (a corner) sits on the node: going on the other
+          // branch would pass it and fold the line, so keep the old behaviour
+          if ((ItV != SharpNodeVert.end()) && (ItV->second != IndexVert))
+            continue;
+          // free node: take the closest point over all the sequences (the
+          // one continuing after the turn), within the distance to the node
+          if (ItV == SharpNodeVert.end())
+          {
+            ScalarType BestD = (closestPt - VertPos[IndexVert]).Norm();
+            for (size_t j = 0; j < SequenceSegIndex.size(); j++)
+            {
+              Geo::Point3<ScalarType> Pj;
+              int Sj = -1;
+              SequenceSegIndex[j].GridClosest(SequenceSegs[j], VertPos[IndexVert],
+                                              BestD, Sj, Pj);
+              if (Sj == -1)
+                continue;
+              ScalarType Dj = (Pj - VertPos[IndexVert]).Norm();
+              if (Dj < BestD)
+              {
+                BestD = Dj;
+                closestPt = Pj;
+              }
+            }
+          }
+          // (the vertex lying on the node itself is projected on it)
+        }
         VertPos[IndexVert] = closestPt;
       }
     }
@@ -496,7 +566,13 @@ namespace Geo
       Geo::EdgeMeshFunctions<ScalarType>::ExtractSortedNodesSequencesMap(
           TargetVertPos, TargetFeatures, subsequences);
 
+      // OLD (split disabled because of the open seam)
+      // //SplitSequencesAtSharpTurns(subsequences);
+      // NEW (sharp node reprojection): split again, the split nodes are now
+      // valid targets
+      SharpNodePos.clear();
       SplitSequencesAtSharpTurns(subsequences);
+
       // int numE=0;
       // for (size_t i=0;i<subsequences.size();i++)
       // numE+=subsequences[i].size()-1;
@@ -514,6 +590,9 @@ namespace Geo
 
       // then initialize for each vertex the reproject domain
       InitFeatureConnections();
+
+      // NEW (sharp node reprojection)
+      InitSharpNodeVert();
     }
 
     FeatureReprojector(std::vector<Geo::Point3<ScalarType>> &_VertPos,

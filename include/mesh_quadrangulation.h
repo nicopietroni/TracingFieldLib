@@ -235,6 +235,8 @@ class MeshQuadrangulator
     PDeco.UpdateAllUnsolvedPatches();
 
     PDeco.AddFeaturesAsPaths(TGraph, VertCurv, RemainingF, NewBorder);
+
+    PathSampl.ModifyGraphWeightWithSelectedPaths();
   }
 
   void UpdateAfterRemesh()
@@ -518,6 +520,7 @@ class MeshQuadrangulator
     PDeco.add_only_where_needed = true;
     PDeco.stop_when_solved = true;
     PDeco.prefer_feature_features = true; // NEW
+    PDeco.split_removal = true;
 
     PDeco.BatchDecompose(remove_batch);
 
@@ -704,6 +707,79 @@ class MeshQuadrangulator
     }
   }
 
+  // void SmoothWithInversionControl()
+  // {
+  //   Geo::SmoothParam<ScalarType> SParamQuadSmooth;
+
+  //   SParamQuadSmooth.Clear();
+
+  //   for (size_t i = 0; i < QuadFeatures.size(); i++)
+  //   {
+  //     assert(QuadFeatures[i].first >= 0);
+  //     assert(QuadFeatures[i].second >= 0);
+  //   }
+
+  //   SParamQuadSmooth.Features = QuadFeatures;
+
+  //   // add border edges as features
+  //   // std::cout<<"DE 0"<<std::endl;
+
+  //   std::vector<std::pair<int, int>> BorderEQuad;
+  //   Geo::getBorderEdges(QuadFaces, BorderEQuad);
+  //   for (size_t i = 0; i < BorderEQuad.size(); i++)
+  //   {
+  //     SParamQuadSmooth.Features.push_back(BorderEQuad[i]);
+  //   }
+
+  //   SParamQuadSmooth.ReprojFeatures = TriFeatures0;
+    
+  //   std::vector<std::pair<int, int>> BorderETris;
+  //   Geo::getBorderEdges(TriConnectivity0, BorderETris);
+  //   for (size_t i = 0; i < BorderETris.size(); i++)
+  //   {
+  //     SParamQuadSmooth.ReprojFeatures.push_back(BorderETris[i]);
+  //   }
+
+  //   // add the subdivided border as features
+  //   SParamQuadSmooth.ReprojVert = &TriVertPos0;
+  //   SParamQuadSmooth.ReprojFaces = &TriConnectivity0;
+  //   SParamQuadSmooth.Damp = 0.5;
+
+  //   // if (reliable_smooth)
+  //   SParamQuadSmooth.post_project = true; //!(has_problematic_patches);
+  //   // else
+  //   //   SParamQuadSmooth.post_project = false;
+
+  //   SParamQuadSmooth.NumIte = QuadSmoothSteps / 2;
+  //   if (reliable_smooth)
+  //     SParamQuadSmooth.SType = Geo::SMBestPoly; // Geo::SMAngleBased;//Geo::SMJacobianGrad; ///// //Geo::SMBestPoly;
+  //   else
+  //     SParamQuadSmooth.SType = Geo::SMLaplacian;
+  //   // Geo::SMCentroid;//Geo::SMBestPoly;//Geo::SMLaplacian;//Geo::SMTaubin;/
+
+  //   SParamQuadSmooth.line_border = true;
+  //   SParamQuadSmooth.check_AspectR = false;
+  //   SParamQuadSmooth.line_neight_features = false;
+  //   SParamQuadSmooth.reproject_voronoi_partition = reliable_smooth;
+  //   SParamQuadSmooth.check_multi_pass_fold = false;
+
+  //   SetFixQuadVertices(SParamQuadSmooth);
+    
+  //   Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
+
+  //   SParamQuadSmooth.NumIte = QuadSmoothSteps / 2;
+  //   SParamQuadSmooth.SType = Geo::SMAngleBased;
+  //   Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
+
+  //   // untangle the quadrangulation to improve mesh quality
+  //   Geo::PolyMeshUntangler<ScalarType> Untangler(QuadVert, QuadFaces,
+  //                                                SParamQuadSmooth.Features,
+  //                                                SParamQuadSmooth.FixedVert);
+  //   Untangler.UParam.print_info = true;
+
+  //   Untangler.Untangle();
+  // }
+
   void SmoothWithInversionControl()
   {
     Geo::SmoothParam<ScalarType> SParamQuadSmooth;
@@ -729,7 +805,7 @@ class MeshQuadrangulator
     }
 
     SParamQuadSmooth.ReprojFeatures = TriFeatures0;
-
+    
     std::vector<std::pair<int, int>> BorderETris;
     Geo::getBorderEdges(TriConnectivity0, BorderETris);
     for (size_t i = 0; i < BorderETris.size(); i++)
@@ -761,21 +837,25 @@ class MeshQuadrangulator
     SParamQuadSmooth.check_multi_pass_fold = false;
 
     SetFixQuadVertices(SParamQuadSmooth);
+    std::cout << "Starting quad mesh smoothing Best Poly." << std::endl;
     Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
 
     SParamQuadSmooth.NumIte = QuadSmoothSteps / 2;
     SParamQuadSmooth.SType = Geo::SMAngleBased;
+
+    std::cout << "Starting quad mesh smoothing Angle Based." << std::endl;
     Geo::SmoothLaplacian<ScalarType>(QuadVert, QuadFaces, SParamQuadSmooth);
 
     // untangle the quadrangulation to improve mesh quality
     Geo::PolyMeshUntangler<ScalarType> Untangler(QuadVert, QuadFaces,
                                                  SParamQuadSmooth.Features,
                                                  SParamQuadSmooth.FixedVert);
+                                                
     Untangler.UParam.print_info = true;
-
+    std::cout << "Untangling quad mesh." << std::endl;
     Untangler.Untangle();
   }
-
+  
   void SmoothQuadMeshSeparatrix()
   {
 
@@ -848,7 +928,8 @@ class MeshQuadrangulator
     auto t1 = Clock::now();
     // then to improve the alignment with the field and the quality of the
     // quads, smooth the separatrix SmoothQuadMeshSeparatrix();
-    // SmoothQuadrUV();
+    //SmoothQuadrUV();
+    //SmoothQuadMeshSeparatrix();
     auto t2 = Clock::now();
 
     ScalarType SmoothWithControl = (ScalarType)Seconds(t1 - t0).count();

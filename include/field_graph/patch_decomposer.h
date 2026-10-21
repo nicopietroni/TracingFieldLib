@@ -1637,15 +1637,15 @@ namespace Geo
       return false;
     }
 
-    // return the current score of the paches involved in the path,
-    //  and the number of unsolved patches,
+       // return the current score of the paches involved in the path,
+    //  and the number of faces of the unsolved patches,
     // useful for the remove if possible with unsolved
     // return false if some mandatory condition is not satisfied and then can't be
     // removed
-    bool GetScore(std::vector<int> &PatchIndex, int &UnsolvedPatchesNum,
+    bool GetScore(std::vector<int> &PatchIndex, int &UnsolvedFacesNum,
                   int &ScorePatches)
     {
-      UnsolvedPatchesNum = 0;
+      UnsolvedFacesNum = 0;
       ScorePatches = 0;
       for (size_t i = 0; i < PatchIndex.size(); i++)
       {
@@ -1655,8 +1655,16 @@ namespace Geo
         if (!SatisfyMandatoryConditions(PatchIndex[i]))
           return false;
 
+        // OLD (before unsolved faces): counted the unsolved patches, but
+        // removing a path merges patches, so the count changed even when
+        // nothing was solved
+        // if (!SatisfyConditions(PatchIndex[i]))
+        //   UnsolvedPatchesNum++;
+        // NEW (unsolved faces): faces of the unsolved patches, the same
+        // region before and after a removal
         if (!SatisfyConditions(PatchIndex[i]))
-          UnsolvedPatchesNum++;
+          UnsolvedFacesNum +=
+              (int)PatchMan.PData.PatchOriginalFaces[PatchIndex[i]].size();
 
         ScorePatches += ScoreConditions(PatchIndex[i]);
       }
@@ -1677,6 +1685,179 @@ namespace Geo
       return true;
     }
 
+    // bool RemoveIfPossible(const int &Path_To_remove, bool remove_unsolved = false,
+    //                       int minGain = 0, bool debug_msg = false)
+    // {
+    //   if (debug_msg)
+    //     std::cout << "Checking Path:" << Path_To_remove << std::endl;
+
+    //   assert(Path_To_remove >= 0);
+    //   assert(Path_To_remove < PathSampl.SelectedPaths.size());
+
+    //   // check if already removed
+    //   if (PathSampl.SelectedPaths[Path_To_remove].size() == 0)
+    //     return false;
+
+    //   std::vector<int> InvolvedPatches;
+    //   PatchMan.GetTouchedPatches(PathSampl.SelectedPaths[Path_To_remove],
+    //                              InvolvedPatches);
+
+    //   if ((!remove_unsolved) && (UnsolvedPatches.size() > 0))
+    //   {
+    //     // check if passing from unsolved patch then can't do it
+    //     if (HasUnsolvedPatch(InvolvedPatches))
+    //       return false;
+    //   }
+
+    //   if (!CanRemoveIfConcaveSpikePath(Path_To_remove))
+    //   {
+    //     pre_remove_test_spike_concave++;
+    //     return false;
+    //   }
+    //   int UnsolvedBefore = 0;
+    //   int ScoreBefore = 0;
+    //   if (remove_unsolved)
+    //   {
+    //     // compute the initial score and unsolved patches before removing, if some
+    //     // mandatory condition is not satisfied then can't remove
+    //     bool SatisfyMandatory =
+    //         GetScore(InvolvedPatches, UnsolvedBefore, ScoreBefore);
+    //     if (!SatisfyMandatory)
+    //       return false;
+    //   }
+
+    //   bool can_pre_remove = true;
+
+    //   if (!CanRemoveConditionTest(Path_To_remove, remove_unsolved))
+    //   {
+    //     pre_remove_test++;
+    //     can_pre_remove = false;
+    //     return false;
+    //   }
+
+    //   bool need_to_save_status = false;
+    //   for (size_t i = 0; i < PConditions.size(); i++)
+    //   {
+    //     need_to_save_status |= PConditions[i]->NeedSaveStatus();
+    //   }
+    //   // SAVING STATUS
+    //   // #ifdef SAVE_STATUS_REMOVE
+    //   if (need_to_save_status)
+    //   {
+    //     for (size_t i = 0; i < PConditions.size(); i++)
+    //       PConditions[i]->SaveStatus();
+    //     PatchMan.SaveStatus();
+    //     // END SAVING STATUS
+    //     // #endif
+    //   }
+    //   std::vector<int> SwapPath = PathSampl.SelectedPaths[Path_To_remove];
+
+    //   PathSampl.SelectedPaths[Path_To_remove].clear();
+
+    //   // then get the patches that are updated by the change
+    //   std::vector<int> UpdatedPatches;
+    //   std::vector<int> ToAdd0, ToRemove0;
+    //   ToRemove0.push_back(Path_To_remove);
+    //   PatchMan.Update(ToAdd0, ToRemove0, UpdatedPatches);
+
+    //   bool is_removable = true;
+
+    //   // LOCAL UPDATE
+    //   UpdateCondition(UpdatedPatches);
+
+    //   // check correctness locally
+    //   bool IsOkLocally = true;
+    //   if (!remove_unsolved)
+    //     IsOkLocally = SatisfyConditions(UpdatedPatches);
+
+    //   int UnsolvedAfter = 0;
+    //   int ScoreAfter = 0;
+    //   // int MandatoryUnsolvedAfter = 0;
+
+    //   if (remove_unsolved)
+    //   {
+    //     // must satisfy mandatory conditions for all updated patches
+    //     if (!SatisfyMandatoryConditions(UpdatedPatches))
+    //       IsOkLocally = false;
+    //     else
+    //       GetScore(UpdatedPatches, UnsolvedAfter, ScoreAfter);
+    //   }
+
+    //   if (remove_unsolved)
+    //   {
+    //     IsOkLocally &= ((UnsolvedBefore - UnsolvedAfter) >= minGain);
+    //     IsOkLocally &= (ScoreAfter >= ScoreBefore);
+    //   }
+
+    //   // GLOBAL UPDATE
+    //   if (IsOkLocally)
+    //   {
+    //     // CompactData();
+    //     for (size_t i = 0; i < PConditions.size(); i++)
+    //       PConditions[i]->UpdateGlobalData(PatchMan);
+    //   }
+
+    //   // CHECK GLOBAL CONDITIONS
+    //   if (!IsOkLocally)
+    //   {
+    //     is_removable = false;
+    //   }
+    //   else
+    //   {
+    //     is_removable = SatisfyConditionsAfterGlobalUpdate(UpdatedPatches);
+    //   }
+
+    //   if (!is_removable)
+    //   {
+    //     // restore the path
+    //     PathSampl.SelectedPaths[Path_To_remove] = SwapPath;
+
+    //     // // RESTORING STATUS
+    //     // #ifdef SAVE_STATUS_REMOVE
+    //     if (need_to_save_status)
+    //     {
+    //       // auto timesave_0 = std::chrono::high_resolution_clock::now();
+    //       for (size_t i = 0; i < PConditions.size(); i++)
+    //         PConditions[i]->RestoreStatus();
+    //       PatchMan.RestoreStatus();
+    //     }
+    //     // END RESTORING STATUS
+    //     // #else
+    //     else
+    //     {
+
+    //       rollback_remove_test++;
+    //       std::vector<int> UpdatedPatches;
+    //       // PatchMan.Update(UpdatedPatches);
+    //       std::vector<int> ToAdd1, ToRemove1;
+    //       ToAdd1.push_back(Path_To_remove);
+    //       PatchMan.Update(ToAdd1, ToRemove1, UpdatedPatches);
+
+    //       UpdateCondition(UpdatedPatches);
+    //     }
+    //     // #endif
+    //   }
+
+    //   if (is_removable)
+    //   {
+    //     // enable the nodes
+    //     PathSampl.EnableGraphPathNodes(SwapPath);
+    //     PathSampl.EnableGraphArches(SwapPath);
+    //     PathSampl.RemoveToConflictNodes(SwapPath);
+    //     PathSampl.RemoveToConflictEdges(SwapPath);
+    //     RemovePathCountConcaveSpike(SwapPath);
+    //     if (!can_pre_remove)
+    //     {
+    //       std::cout << "Removed with pre remove test failed " << pre_remove_test
+    //                 << std::endl;
+    //       exit(0);
+    //     }
+    //   }
+    //   return is_removable;
+    // }
+
+        // NEW (unsolved faces): with remove_unsolved, minGain is the minimum
+    // number of unsolved faces removed (0 = must not get worse)
     bool RemoveIfPossible(const int &Path_To_remove, bool remove_unsolved = false,
                           int minGain = 0, bool debug_msg = false)
     {
@@ -1706,14 +1887,17 @@ namespace Geo
         pre_remove_test_spike_concave++;
         return false;
       }
-      int UnsolvedBefore = 0;
+      // OLD (before unsolved faces)
+      // int UnsolvedBefore = 0;
+      // NEW (unsolved faces): number of faces of the unsolved patches
+      int UnsolvedFacesBefore = 0;
       int ScoreBefore = 0;
       if (remove_unsolved)
       {
-        // compute the initial score and unsolved patches before removing, if some
-        // mandatory condition is not satisfied then can't remove
+        // compute the initial score and unsolved faces before removing, if
+        // some mandatory condition is not satisfied then can't remove
         bool SatisfyMandatory =
-            GetScore(InvolvedPatches, UnsolvedBefore, ScoreBefore);
+            GetScore(InvolvedPatches, UnsolvedFacesBefore, ScoreBefore);
         if (!SatisfyMandatory)
           return false;
       }
@@ -1762,23 +1946,40 @@ namespace Geo
       if (!remove_unsolved)
         IsOkLocally = SatisfyConditions(UpdatedPatches);
 
-      int UnsolvedAfter = 0;
+      // OLD (before unsolved faces)
+      // int UnsolvedAfter = 0;
+      // NEW (unsolved faces)
+      int UnsolvedFacesAfter = 0;
       int ScoreAfter = 0;
-      // int MandatoryUnsolvedAfter = 0;
 
+      // OLD (two separate blocks)
+      // if (remove_unsolved)
+      // {
+      //   // must satisfy mandatory conditions for all updated patches
+      //   if (!SatisfyMandatoryConditions(UpdatedPatches))
+      //     IsOkLocally = false;
+      //   else
+      //     GetScore(UpdatedPatches, UnsolvedAfter, ScoreAfter);
+      // }
+      //
+      // if (remove_unsolved)
+      // {
+      //   IsOkLocally &= ((UnsolvedBefore - UnsolvedAfter) >= minGain);
+      //   IsOkLocally &= (ScoreAfter >= ScoreBefore);
+      // }
+      // NEW (unsolved faces): mandatory conditions first, then the gain on
+      // the unsolved faces (same region before and after, unlike the number
+      // of patches, which changes when patches merge)
       if (remove_unsolved)
       {
-        // must satisfy mandatory conditions for all updated patches
         if (!SatisfyMandatoryConditions(UpdatedPatches))
           IsOkLocally = false;
         else
-          GetScore(UpdatedPatches, UnsolvedAfter, ScoreAfter);
-      }
-
-      if (remove_unsolved)
-      {
-        IsOkLocally &= ((UnsolvedBefore - UnsolvedAfter) >= minGain);
-        IsOkLocally &= (ScoreAfter >= ScoreBefore);
+        {
+          GetScore(UpdatedPatches, UnsolvedFacesAfter, ScoreAfter);
+          IsOkLocally &= ((UnsolvedFacesBefore - UnsolvedFacesAfter) >= minGain);
+          IsOkLocally &= (ScoreAfter >= ScoreBefore);
+        }
       }
 
       // GLOBAL UPDATE
@@ -1826,6 +2027,12 @@ namespace Geo
           PatchMan.Update(ToAdd1, ToRemove1, UpdatedPatches);
 
           UpdateCondition(UpdatedPatches);
+
+          // NEW (rollback global data): the global data were updated with
+          // the path removed, bring them back as well
+          if (IsOkLocally)
+            for (size_t i = 0; i < PConditions.size(); i++)
+              PConditions[i]->UpdateGlobalData(PatchMan);
         }
         // #endif
       }
@@ -1847,7 +2054,7 @@ namespace Geo
       }
       return is_removable;
     }
-
+    
     void GetColorBySolvedPatches(std::vector<Geo::Point3<ScalarType>> &FaceCol)
     {
       FaceCol.clear();
@@ -1873,7 +2080,13 @@ namespace Geo
     {
       if (PathSampl.SelectedPaths.size() == 0)
         return false;
-      if (current_rem_cand > PathSampl.SelectedPaths.size())
+      // OLD (worked only through the int to size_t conversion: -1 became a
+      // huge value and restarted from the last path)
+      // if (current_rem_cand > PathSampl.SelectedPaths.size())
+      // NEW (explicit): restart from the last path when the index is out of
+      // range on either side
+      if ((current_rem_cand < 0) ||
+          (current_rem_cand >= (int)PathSampl.SelectedPaths.size()))
         current_rem_cand = PathSampl.SelectedPaths.size() - 1;
 
       // //get the tJunctions to see if some has some T-Junctions on it
@@ -2495,14 +2708,23 @@ namespace Geo
 
     void RemoveSplitted(bool mergeCollinear = true)
     {
-      PathSampl.SplitPaths(FixedPaths);
+      // OLD (fixed paths not remapped: splitting renumbers the paths, so
+      // FixedPaths pointed to other paths)
+      // PathSampl.SplitPaths(FixedPaths);
+      // NEW (fixed path remap)
+      std::set<int> NewFixedPaths;
+      PathSampl.SplitPaths(FixedPaths, &NewFixedPaths);
+      FixedPaths = NewFixedPaths;
 
       // TestedRemovedPath.clear();
 
       PatchMan.PData.OLDPathNodes = PathSampl.SelectedPaths;
+      
+      if (print_info)
       std::cout << "After Split: " << PathSampl.SelectedPaths.size() << " paths"
                 << std::endl;
 
+      if (print_info)
       std::cout << "REMOVING SPlitted PATHS" << std::endl;
 
       bool has_removed = false;
@@ -2510,7 +2732,8 @@ namespace Geo
 
       do
       {
-        std::cout << "REMOVING cycle" << std::endl;
+        if (print_info)
+          std::cout << "REMOVING cycle" << std::endl;
         current_rem_cand = PathSampl.SelectedPaths.size() - 1;
         has_removed = false;
 
@@ -2518,10 +2741,31 @@ namespace Geo
         {
           has_removed = true;
         }
-        std::cout << "Merging Collinear" << std::endl;
+        if (print_info)
+          std::cout << "Merging Collinear" << std::endl;
+        // OLD (merge renumbered the paths, but FixedPaths, the patch manager
+        // OLDPathNodes and the concave spike counters kept the old indices,
+        // so the next removals removed the wrong paths from the patches)
+        // if (mergeCollinear && has_removed)
+        //   PathSampl.MergeCollinearPath();
+        // NEW (fixed path remap): fixed paths are not joined, then all the
+        // data indexed by path are brought up to date
         if (mergeCollinear && has_removed)
-          PathSampl.MergeCollinearPath();
-        std::cout << "Merged" << std::endl;
+        {
+          std::map<int, int> NewPathIdx;
+          PathSampl.MergeCollinearPath(FixedPaths, &NewPathIdx);
+          std::set<int> RemapFixed;
+          for (int IndexP : FixedPaths)
+          {
+            assert(NewPathIdx.count(IndexP) > 0);
+            RemapFixed.insert(NewPathIdx[IndexP]);
+          }
+          FixedPaths = RemapFixed;
+          PatchMan.PData.OLDPathNodes = PathSampl.SelectedPaths;
+          InitConcaveSpikeNumPath();
+        }
+        if (print_info)
+          std::cout << "Merged" << std::endl;
       } while (has_removed);
 
       CompactData();
@@ -2779,7 +3023,15 @@ namespace Geo
           InitMustPassEdges();
 
         int OldNumSamples = PathSampl.NumSamples;
+
+        //use modifier weight to keep distance to features
+        PathSampl.Graph().useModifiedWeight = true;
+      
         RetraceCandidates();
+
+         //use modifier weight to keep distance to features
+        PathSampl.Graph().useModifiedWeight = false;
+
         has_added |= AddAllPaths();
 
          // restore the old number of samples after retracing
@@ -2801,7 +3053,11 @@ namespace Geo
         if (add_only_where_needed)
           InitMustPassEdges();
 
+        //use modifier weight to keep distance to features
+        PathSampl.Graph().useModifiedWeight = true;
         RetraceCandidates();
+        PathSampl.Graph().useModifiedWeight = false;
+
         has_added |= AddAllPaths();
       }
 
@@ -2818,7 +3074,10 @@ namespace Geo
       if (add_only_where_needed)
         InitMustPassEdges();
 
+        //use modifier weight to keep distance to features
+        PathSampl.Graph().useModifiedWeight = true;
       RetraceCandidates();
+      PathSampl.Graph().useModifiedWeight = false;
       has_added |= AddAllPaths();
       return has_added;
     }
@@ -3315,12 +3574,6 @@ namespace Geo
 
       // transform into sequences
       int Index0 = PathSampl.SelectedPaths.size();
-      // std::cout<<"SEQ NUM:"<<Sequences.size()<<std::endl;
-      // std::cout<<"FEAT NUM:"<<Features.size()<<std::endl;
-
-      // // for (size_t i = 0; i < Sequences[0].size(); i++)
-      // //   std::cout<<"V"<<Sequences[0][i]<<std::endl;
-      // exit(0);
 
       PathSampl.AddFeaturePathsFromVert(Sequences);
       int Index1 = PathSampl.SelectedPaths.size();
@@ -3398,6 +3651,11 @@ namespace Geo
       //   MarkUnsolvedPatches(true, false);
 
       UpdateGraphSingleLineSpike(TGraph, VertCurv, Features);
+
+
+      //then change the weight if needed
+      //PSampl.InitializeDistance();
+      
       // if (stop_when_solved)
       //   all_solved = (UnsolvedPatches.size() == 0);
     }

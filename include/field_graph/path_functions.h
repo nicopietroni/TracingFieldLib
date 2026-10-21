@@ -1156,7 +1156,11 @@ public:
       std::reverse(OppN1.begin(), OppN1.end());
       PathN0.pop_back();
       PathN0.insert(PathN0.end(), OppN1.begin(), OppN1.end());
-      OppN1.clear();
+      // OLD (cleared the local copy, so PathN1 stayed and its edges were in
+      // two paths)
+      // OppN1.clear();
+      // NEW
+      PathN1.clear();
       return true;
     }
 
@@ -1195,7 +1199,12 @@ public:
       OppositeNodesCross(PathN1, OppN1);
       std::reverse(OppN1.begin(), OppN1.end());
       PathN0.pop_back();
-      PathN0.insert(PathN0.end(), PathN1.begin(), PathN1.end());
+      // OLD (appended PathN1 in its original order: after the last node of
+      // PathN0 came the far end of PathN1, two nodes that are not a mesh edge,
+      // so EdgesToFace.at threw later)
+      // PathN0.insert(PathN0.end(), PathN1.begin(), PathN1.end());
+      // NEW (the reversed one, computed just above)
+      PathN0.insert(PathN0.end(), OppN1.begin(), OppN1.end());
       PathN1.clear();
       return true;
     }

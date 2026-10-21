@@ -696,7 +696,11 @@ namespace Geo
         //           << Size3 << std::endl;
         std::array<int, 4> SideSubdNum = {Size0, Size1, Size2, Size3};
 
-        SplitInfo Sinfo = DeriveSplitInfo(SideSubdNum);
+        // OLD (before alternative splits): a single split position
+        // SplitInfo Sinfo = DeriveSplitInfo(SideSubdNum);
+        // NEW (alternative splits): preferred position first, then nearby ones
+        std::vector<SplitInfo> SinfoCandidates =
+            DeriveSplitInfoAlternatives(SideSubdNum);
 
         // std::cout << "Split Edge: " << Sinfo.SplitEdge << std::endl;
         // std::cout << "Split Num0: " << Sinfo.SplitNum0 << std::endl;
@@ -713,10 +717,27 @@ namespace Geo
         // SaveQuadrData(CurrData, "BeforeSplit");
         // std::cout << "Splitting Patch " << std::endl;
 
-        bool OkSplit = Geo::Quadrangulation<ScalarType>::SplitSideIntoSubPatches(
-            CurrData.PatchVert, CurrData.Patch_Faces, CurrData.PatchCorners,
-            CurrData.SideSubd, Sinfo, SubPatchVert, SubPatchFaces,
-            SubPatchCorners, SubPatchSideSubd);
+        // OLD (before alternative splits)
+        // bool OkSplit = Geo::Quadrangulation<ScalarType>::SplitSideIntoSubPatches(
+        //     CurrData.PatchVert, CurrData.Patch_Faces, CurrData.PatchCorners,
+        //     CurrData.SideSubd, Sinfo, SubPatchVert, SubPatchFaces,
+        //     SubPatchCorners, SubPatchSideSubd);
+        // NEW (alternative splits): try the candidates until one can be cut
+        bool OkSplit = false;
+        for (size_t c = 0; (c < SinfoCandidates.size()) && (!OkSplit); c++)
+        {
+          SubPatchVert.clear();
+          SubPatchFaces.clear();
+          SubPatchCorners.clear();
+          SubPatchSideSubd.clear();
+          OkSplit = Geo::Quadrangulation<ScalarType>::SplitSideIntoSubPatches(
+              CurrData.PatchVert, CurrData.Patch_Faces, CurrData.PatchCorners,
+              CurrData.SideSubd, SinfoCandidates[c], SubPatchVert,
+              SubPatchFaces, SubPatchCorners, SubPatchSideSubd);
+          // DEBUG (alternative splits)
+          if (OkSplit && (c > 0))
+            std::cout << "Split ok at alternative " << c << std::endl;
+        }
 
         if (!OkSplit)
         {
@@ -1020,6 +1041,59 @@ namespace Geo
       SI.SplitNum1 = SplitNum1;
       SI.NewSplitNum = NewSplitNum;
       return SI;
+    }
+
+    // NEW (alternative splits): the split from DeriveSplitInfo first, then the
+    // same split moved by +-1, +-2, ... samples (both sides together, so the
+    // cut stays roughly straight), keeping the parity of the sub patches;
+    // used when the cut at the preferred position cannot be traced
+    static std::vector<SplitInfo>
+    DeriveSplitInfoAlternatives(const std::array<int, 4> &SideSubdNum,
+                                int MaxShift = 3)
+    {
+      std::vector<SplitInfo> Res;
+      SplitInfo Base = DeriveSplitInfo(SideSubdNum);
+      Res.push_back(Base);
+
+      int S0 = Base.SplitEdge;
+      int S2 = (S0 + 2) % 4;
+      int SL0 = (S0 + 3) % 4;
+      int n0 = SideSubdNum[S0];
+      int n2 = SideSubdNum[S2];
+      int nL0 = SideSubdNum[SL0];
+      int nL1 = SideSubdNum[(S0 + 1) % 4];
+
+      for (int d = 1; d <= MaxShift; d++)
+        for (int sign = -1; sign <= 1; sign += 2)
+        {
+          SplitInfo SI = Base;
+          // OLD (same sign on both sides): the opposite side runs in the
+          // reverse direction, so the same sign tilted the cut
+          // SI.SplitNum0 = Base.SplitNum0 + sign * d;
+          // SI.SplitNum1 = Base.SplitNum1 + sign * d;
+          // NEW (opposite sign): the cut is translated, not tilted
+          SI.SplitNum0 = Base.SplitNum0 + sign * d;
+          SI.SplitNum1 = Base.SplitNum1 - sign * d;
+          // both split points strictly inside their sides
+          if ((SI.SplitNum0 < 1) || (SI.SplitNum0 > n0 - 1))
+            continue;
+          if ((SI.SplitNum1 < 1) || (SI.SplitNum1 > n2 - 1))
+            continue;
+          // same parity rule as DeriveSplitInfo
+          SI.NewSplitNum = std::max((nL0 + nL1) / 2, 1);
+          int sum0 = SI.SplitNum0 + SI.NewSplitNum + (n2 - SI.SplitNum1) + nL0;
+          if (sum0 % 2 != 0)
+          {
+            if (SI.NewSplitNum - 1 >= 1)
+              SI.NewSplitNum -= 1;
+            else
+              SI.NewSplitNum += 1;
+          }
+          if (!SI.IsProper())
+            continue;
+          Res.push_back(SI);
+        }
+      return Res;
     }
 
     static bool SplitSideSubdivisions(
@@ -1489,8 +1563,13 @@ namespace Geo
       std::vector<int> PathV;
       Geo::Geodesic<ScalarType>::RetrievePath(GeoP, EndV[1], PathV);
 
-      // a direct border-border edge would not split anything
-      if (PathV.size() < 3)
+      // OLD (before chord split): a single edge was always rejected
+      // if (PathV.size() < 3)
+      //   return false;
+      // NEW (chord split): a single edge is accepted, the endpoints lie on
+      // opposite sides (corners in between are forbidden), so it is always an
+      // interior chord that splits the patch
+      if (PathV.size() < 2)
         return false;
 
       NewEdges.clear();
