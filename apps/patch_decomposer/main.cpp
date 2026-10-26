@@ -481,7 +481,7 @@ void SampleTracing() {
   // PDeco.SampleInitialCandidates();
   PathSampl.PType = Geo::CrossPathSampling<ScalarType>::PrioDist;
   PDeco.InitSampling(false); // PDeco.add_only_where_needed);
-  PathSampl.force_direct = true;
+  //PathSampl.force_direct = true;
   // if (PDeco.add_only_where_needed)
   //   PDeco.InitMustPassEdges();
 
@@ -1242,8 +1242,13 @@ void SetDecomposeBar() {
 
   if (ImGui::Button("FEATURES")) {
     PathSampl.dynamicUpdates = PDeco.dynamic_updates;
+
     // PDeco.ForceAllFeatures();
-    PDeco.SolveAllFeatures();
+    if (PDeco.force_all_features)
+        PDeco.ForceAllFeatures();
+     else
+        PDeco.SolveAllFeatures();
+
     //  PDeco.SolveSpikeSpike();
     PathColors.resize(PathSampl.SelectedPaths.size());
     Geo::ScatterColor<ScalarType>(PathColors);
@@ -1278,12 +1283,14 @@ void SetDecomposeBar() {
     ComputeNormals(VertPos, Connectivity, FaceNormals, VertNormals);
   }
   if (ImGui::CollapsingHeader("Sample Step")) {
-    ImGui::BeginTable("Involved Nodes", 5);
+    ImGui::BeginTable("Involved Nodes", 7);
     ImGui::TableSetupColumn("");
+    ImGui::TableSetupColumn("Intr");
+    ImGui::TableSetupColumn("Bord");
+    ImGui::TableSetupColumn("Feat");
+    ImGui::TableSetupColumn("PBor");
     ImGui::TableSetupColumn("Dart");
-    ImGui::TableSetupColumn("Concave");
-    ImGui::TableSetupColumn("Border");
-    ImGui::TableSetupColumn("Internal");
+    ImGui::TableSetupColumn("Conc");
     ImGui::TableHeadersRow();
 
     ImGui::TableNextRow();
@@ -1291,27 +1298,44 @@ void SetDecomposeBar() {
     ImGui::Text("Start");
 
     ImGui::TableSetColumnIndex(1);
-    ImGui::Checkbox("##foo1", &PDeco.start_spike);
+    ImGui::Checkbox("##foo1", &PDeco.start_internal);
     ImGui::TableSetColumnIndex(2);
-    ImGui::Checkbox("##foo2", &PDeco.start_concave);
+    ImGui::Checkbox("##foo2", &PDeco.start_orginal_border);
     ImGui::TableSetColumnIndex(3);
-    ImGui::Checkbox("##foo3", &PDeco.start_orginal_border);
+    //ImGui::Checkbox("##foo3", &PDeco.start_features);
     ImGui::TableSetColumnIndex(4);
-    ImGui::Checkbox("##foo4", &PDeco.start_internal);
+    //ImGui::Checkbox("##foo4", &PDeco.start_patch_border);
+    ImGui::TableSetColumnIndex(5);
+    ImGui::Checkbox("##foo5", &PDeco.start_spike);
+    ImGui::TableSetColumnIndex(6);
+    ImGui::Checkbox("##foo6", &PDeco.start_concave);
 
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
     ImGui::Text("End");
 
-    ImGui::TableSetColumnIndex(1);
-    ImGui::Checkbox("##foo5", &PDeco.end_spike);
-    ImGui::TableSetColumnIndex(2);
-    ImGui::Checkbox("##foo6", &PDeco.end_concave);
-    ImGui::TableSetColumnIndex(3);
-    ImGui::Checkbox("##foo7", &PDeco.end_patch_border);
-    ImGui::TableSetColumnIndex(4);
+    // ImGui::TableSetColumnIndex(1);
+    // ImGui::Checkbox("##foo5", &PDeco.end_spike);
+    // ImGui::TableSetColumnIndex(2);
+    // ImGui::Checkbox("##foo6", &PDeco.end_concave);
+    // ImGui::TableSetColumnIndex(3);
+    // ImGui::Checkbox("##foo7", &PDeco.end_patch_border);
+    // ImGui::TableSetColumnIndex(4);
     // ImGui::Checkbox("##foo8", &PDeco.end_internal);
 
+    ImGui::TableSetColumnIndex(1);
+    //ImGui::Checkbox("##foo1", &PDeco.end_internal);
+    ImGui::TableSetColumnIndex(2);
+    ImGui::Checkbox("##boo2", &PDeco.end_original_border);
+    ImGui::TableSetColumnIndex(3);
+    ImGui::Checkbox("##boo3", &PDeco.end_features);
+    ImGui::TableSetColumnIndex(4);
+    ImGui::Checkbox("##boo4", &PDeco.end_patch_border);
+    ImGui::TableSetColumnIndex(5);
+    ImGui::Checkbox("##boo5", &PDeco.end_spike);
+    ImGui::TableSetColumnIndex(6);
+    ImGui::Checkbox("##boo6", &PDeco.end_concave);
+    
     ImGui::EndTable();
 
     // ImGui::Begin("Priority Type");
@@ -1347,7 +1371,7 @@ void SetDecomposeBar() {
       // PathSampl.InitCandidates();
       // PathSampl.UpdateCandidatePriority();
 
-      PDeco.AddNext(solved, terminated);
+      PDeco.AddNextCandidate(solved, terminated);
 
       PathColors.resize(PathSampl.SelectedPaths.size());
       Geo::ScatterColor<ScalarType>(PathColors);

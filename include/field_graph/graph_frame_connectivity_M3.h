@@ -37,20 +37,28 @@
 #include "smooth_mesh.h"
 #include "smooth_sheet_surfaces.h"
 #include <algorithm>
+#include <array>
 #include <atomic>
+#include <bitset>
 #include <cassert>
 #include <chrono>
 #include <cstddef>
 #include <cstdlib>
+#include <deque>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <ostream>
 #include <queue>
 #include <set>
 #include <thread>
+#include <tuple>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -97,6 +105,28 @@ private:
     std::vector<bool> IsExit;
     std::vector<bool> IsDoubleExit;
     ScalarType time_to_solve = 0.1;
+    // limit of the exhaustive search in FindLocalDisk (deterministic,
+    // replaces the time limit): beyond it the node is left undetermined
+    size_t MaxExpandedStates = 200000;
+
+    // true if the vertex of the subgraph is on the surface: a sheet through
+    // it must be a half disk (exit to exit), otherwise a full disk (cycle)
+    bool BoundaryV = false;
+    // for each node the two edges of its face incident to the vertex
+    // (as sorted pairs of vertices) and if each of them is an exit edge
+    std::vector<std::array<std::pair<int, int>, 2>> SideGeom;
+    std::vector<std::array<bool, 2>> SideExit;
+
+    // which of the two sides of the node is the edge g (-1 if none)
+    int SideOf(const int LocN, const std::pair<int, int> &g) const {
+      assert(LocN >= 0);
+      assert(LocN < (int)SideGeom.size());
+      if (SideGeom[LocN][0] == g)
+        return 0;
+      if (SideGeom[LocN][1] == g)
+        return 1;
+      return -1;
+    }
 
     bool IsNeighbour(const int &IndexN, const int &IndexN1) {
       int LocIdx = LocalIndex(IndexN);
@@ -168,6 +198,8 @@ private:
     struct Result {
       bool exists;
       std::vector<int> nodes; // path o ciclo se trovato
+      // true if the search stopped for the time limit (result unknown)
+      bool timed_out = false;
       // std::vector<MissingLink> missing; // solo edge inactive di peso minimo
     };
 
@@ -262,7 +294,10 @@ private:
 
     bool ConsistentExit() { return (NumExit() != 1); }
 
-    bool MustCheckCycle() const { return (NumExit() == 0); }
+    // the exits are counted over all the directions of the star, the right
+    // criterion is if the vertex is on the surface
+    // bool MustCheckCycle() const { return (NumExit() == 0); }
+    bool MustCheckCycle() const { return (!BoundaryV); }
 
     Result FindExitToExitPath_Exhaustive(int seed) {
       using Geo = std::pair<int, int>;
@@ -395,7 +430,9 @@ private:
         double elapsed =
             std::chrono::duration<double>(Clock::now() - t0).count();
         if (elapsed > time_to_solve) {
-          break; // usciamo e andiamo ai missing
+          // break; // usciamo e andiamo ai missing
+          // stopped for the time limit: the result is unknown, not "no cycle"
+          return {false, {}, true};
         }
 
         State cur = q.front();
@@ -458,7 +495,11 @@ private:
     };
     using EV = std::pair<int, int>;
 
-    inline EV NormEV(int a, int b) { return {std::min(a, b), std::max(a, b)}; }
+    // static: also used by the const search functions
+    // inline EV NormEV(int a, int b) { return {std::min(a, b), std::max(a, b)}; }
+    static inline EV NormEV(int a, int b) {
+      return {std::min(a, b), std::max(a, b)};
+    }
 
     std::vector<MissingEdge>
     FindMissingEdgesForCycle(int seed, int MaxDepth = -1, int MaxMissing = -1) {
@@ -965,35 +1006,445 @@ private:
       return {}; // nessuna soluzione entro timeout/bounds
     }
 
+    // Search of the local disk of a sheet around the vertex of the subgraph,
+    // passing THROUGH the seed:
+    // - surface vertex (half disk): the sheet leaves the seed through each of
+    //   its two edges incident to the vertex (only the non-exit ones) and
+    //   reaches a different exit node on each side (two branches, the second
+    //   one restarts from the seed keeping the used edges). The old
+    //   exit-to-exit searches started from the seed and stopped at the first
+    //   exit, so only one side of the seed was verified.
+    // - internal vertex (Cycle = true): one branch leaving the seed through
+    //   its first edge and coming back through the second one.
+    // An exit node is a node entered from one side whose other side is an
+    // exit edge; surface edges are never crossed; each edge is used once.
+    // OnlyActive = true : uses only active arcs (manifold check)
+    // OnlyActive = false: uses all arcs, the cost is the weight of the
+    //                     inactive ones, returns them in Missing
+    // For speed: an exact negative test (reachability ignoring the edge
+    // constraint) and an exact positive test (greedy shortest branches) are
+    // tried before the exhaustive search; the used edges are a bitset.
+    struct BranchResult {
+      bool exists = false;
+      bool timed_out = false;
+      std::vector<int> nodes;           // nodes of the disk (local)
+      std::vector<MissingEdge> Missing; // inactive arcs used
+    };
+
+    static const int MaxStarEdges = 256;
+    typedef std::bitset<MaxStarEdges> EdgeSet;
+
+    struct SearchKey {
+      int node;
+      int k;
+      EdgeSet used;
+      bool operator==(const SearchKey &o) const {
+        return ((node == o.node) && (k == o.k) && (used == o.used));
+      }
+    };
+    struct SearchKeyHash {
+      size_t operator()(const SearchKey &s) const {
+        size_t h = std::hash<EdgeSet>()(s.used);
+        h ^= std::hash<int>()(s.node) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<int>()(s.k) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        return h;
+      }
+    };
+
+    // per search context: edge ids of the star and the branches to do
+    struct DiskContext {
+      int seed;
+      bool Cycle;
+      bool OnlyActive;
+      std::vector<std::vector<int>> ArcEdge; // edge id of each arc
+      std::vector<std::array<int, 2>> SideId; // edge id of each side
+      std::vector<int> Needed;                // sides starting a branch
+    };
+
+    bool InitDiskContext(int seed, bool OnlyActive, bool Cycle,
+                         DiskContext &C) const {
+      C.seed = seed;
+      C.Cycle = Cycle;
+      C.OnlyActive = OnlyActive;
+      std::map<EV, int> EdgeId;
+      C.SideId.resize(Neigh.size());
+      for (size_t n = 0; n < Neigh.size(); n++)
+        for (int s = 0; s < 2; s++) {
+          auto it = EdgeId.find(SideGeom[n][s]);
+          if (it == EdgeId.end()) {
+            int NewId = (int)EdgeId.size();
+            EdgeId[SideGeom[n][s]] = NewId;
+            C.SideId[n][s] = NewId;
+          } else
+            C.SideId[n][s] = it->second;
+        }
+      if ((int)EdgeId.size() > MaxStarEdges)
+        return false;
+      C.ArcEdge.resize(Neigh.size());
+      for (size_t u = 0; u < Neigh.size(); u++) {
+        C.ArcEdge[u].resize(Neigh[u].size());
+        for (size_t a = 0; a < Neigh[u].size(); a++) {
+          EV g = NormEV(EdgeVertices[u][a].first, EdgeVertices[u][a].second);
+          auto it = EdgeId.find(g);
+          assert(it != EdgeId.end());
+          C.ArcEdge[u][a] = it->second;
+        }
+      }
+      C.Needed.clear();
+      if (Cycle)
+        C.Needed.push_back(0);
+      else
+        for (int s = 0; s < 2; s++)
+          if (!SideExit[seed][s])
+            C.Needed.push_back(s);
+      return true;
+    }
+
+    // side of node n with edge id e (-1 if none)
+    static int SideOfId(const DiskContext &C, int n, int e) {
+      if (C.SideId[n][0] == e)
+        return 0;
+      if (C.SideId[n][1] == e)
+        return 1;
+      return -1;
+    }
+
+    // result of moving from u through arc a, in branch k:
+    // -1 not allowed, 0 continue in v, 1 the branch is closed in v
+    int Move(const DiskContext &C, int u, int a, int k) const {
+      if (C.OnlyActive && !Active[u][a])
+        return -1;
+      int v = Neigh[u][a];
+      int e = C.ArcEdge[u][a];
+      if (u == C.seed) {
+        // leave the seed only through the side of the current branch
+        if (e != C.SideId[C.seed][C.Needed[k]])
+          return -1;
+      } else {
+        // never leave through a surface edge
+        int su = SideOfId(C, u, e);
+        assert(su != -1);
+        if (SideExit[u][su])
+          return -1;
+      }
+      if (v == C.seed) {
+        // the seed is re-entered only to close the cycle
+        if (C.Cycle && (e == C.SideId[C.seed][1]))
+          return 1;
+        return -1;
+      }
+      int sv = SideOfId(C, v, e);
+      assert(sv != -1);
+      // never enter through a surface edge
+      if (SideExit[v][sv])
+        return -1;
+      if (C.Cycle)
+        return 0;
+      // closed if the other side of v is an exit edge
+      return (SideExit[v][1 - sv] ? 1 : 0);
+    }
+
+    // exact negative test: each branch must at least be reachable when the
+    // constraint on the used edges is ignored
+    bool BranchesReachable(const DiskContext &C) const {
+      for (size_t k = 0; k < C.Needed.size(); k++) {
+        std::vector<bool> Visited(Neigh.size(), false);
+        std::queue<int> Q;
+        Q.push(C.seed);
+        Visited[C.seed] = true;
+        bool Reached = false;
+        while (!Q.empty() && !Reached) {
+          int u = Q.front();
+          Q.pop();
+          for (size_t a = 0; a < Neigh[u].size(); a++) {
+            int m = Move(C, u, (int)a, (int)k);
+            if (m == -1)
+              continue;
+            if (m == 1) {
+              Reached = true;
+              break;
+            }
+            int v = Neigh[u][a];
+            if (!Visited[v]) {
+              Visited[v] = true;
+              Q.push(v);
+            }
+          }
+        }
+        if (!Reached)
+          return false;
+      }
+      return true;
+    }
+
+    // exact positive test: shortest branches one after the other, each one
+    // avoiding the edges and nodes already used; valid only if no edge is
+    // used twice
+    bool GreedyBranches(const DiskContext &C, BranchResult &R) const {
+      EdgeSet Used;
+      std::vector<bool> UsedNode(Neigh.size(), false);
+      std::vector<int> Nodes(1, C.seed);
+      for (size_t k = 0; k < C.Needed.size(); k++) {
+        std::vector<int> ParentN(Neigh.size(), -1), ParentA(Neigh.size(), -1);
+        std::vector<bool> Visited(Neigh.size(), false);
+        std::queue<int> Q;
+        Q.push(C.seed);
+        Visited[C.seed] = true;
+        int LastU = -1, LastA = -1;
+        while (!Q.empty() && (LastU == -1)) {
+          int u = Q.front();
+          Q.pop();
+          for (size_t a = 0; a < Neigh[u].size(); a++) {
+            int m = Move(C, u, (int)a, (int)k);
+            if (m == -1)
+              continue;
+            if (Used[C.ArcEdge[u][a]])
+              continue;
+            int v = Neigh[u][a];
+            if ((v != C.seed) && UsedNode[v])
+              continue;
+            if (m == 1) {
+              LastU = u;
+              LastA = (int)a;
+              break;
+            }
+            if (!Visited[v]) {
+              Visited[v] = true;
+              ParentN[v] = u;
+              ParentA[v] = (int)a;
+              Q.push(v);
+            }
+          }
+        }
+        if (LastU == -1)
+          return false;
+        // collect the branch and check that its edges are distinct
+        std::vector<std::pair<int, int>> Arcs; // (node, arc)
+        Arcs.push_back(std::make_pair(LastU, LastA));
+        for (int x = LastU; x != C.seed; x = ParentN[x])
+          Arcs.push_back(std::make_pair(ParentN[x], ParentA[x]));
+        for (size_t i = 0; i < Arcs.size(); i++) {
+          int e = C.ArcEdge[Arcs[i].first][Arcs[i].second];
+          if (Used[e])
+            return false;
+          Used[e] = true;
+          int v = Neigh[Arcs[i].first][Arcs[i].second];
+          if (v != C.seed) {
+            UsedNode[v] = true;
+            Nodes.push_back(v);
+          }
+        }
+      }
+      R.exists = true;
+      R.nodes = Nodes;
+      return true;
+    }
+
+    BranchResult FindLocalDisk(int seed, bool OnlyActive, bool Cycle) const {
+      // auto t0 = std::chrono::steady_clock::now();
+      BranchResult R;
+      assert(seed >= 0);
+      assert(seed < (int)Neigh.size());
+
+      DiskContext C;
+      if (!InitDiskContext(seed, OnlyActive, Cycle, C)) {
+        R.timed_out = true; // too many edges: undetermined
+        return R;
+      }
+      if (C.Needed.empty()) {
+        // double exit: already a half disk
+        R.exists = true;
+        R.nodes.push_back(seed);
+        return R;
+      }
+
+      // fast exact tests
+      if (!BranchesReachable(C))
+        return R;
+      if (OnlyActive && GreedyBranches(C, R))
+        return R;
+
+      // exhaustive search on (node, branch, used edges)
+      // (Dijkstra on the cost of the inactive arcs; with OnlyActive all the
+      // costs are zero)
+      std::vector<SearchKey> States;
+      std::vector<int> Parent;
+      std::vector<MissingEdge> ByArc;
+      std::vector<int> EndNode;
+      std::unordered_map<SearchKey, double, SearchKeyHash> Best;
+
+      typedef std::pair<double, int> QItem;
+      std::priority_queue<QItem, std::vector<QItem>, std::greater<QItem>> Q;
+
+      SearchKey S0;
+      S0.node = seed;
+      S0.k = 0;
+      States.push_back(S0);
+      Parent.push_back(-1);
+      ByArc.push_back({-1, -1, -1});
+      EndNode.push_back(-1);
+      Best[S0] = 0;
+      Q.push(QItem(0, 0));
+
+      int FinalState = -1;
+      MissingEdge FinalArc = {-1, -1, -1};
+      int FinalEnd = -1;
+      size_t Iter = 0;
+
+      while (!Q.empty() && (FinalState == -1)) {
+        // if (((Iter++) % 64) == 0) {
+        //   double elapsed = std::chrono::duration<double>(
+        //                        std::chrono::steady_clock::now() - t0)
+        //                        .count();
+        //   if (elapsed > time_to_solve) {
+        //     R.timed_out = true;
+        //     return R;
+        //   }
+        // }
+        // a time limit makes the result depend on the load of the machine
+        // (and on the other threads): two runs on the same graph could give
+        // different results. A limit on the expanded states is reproducible.
+        if ((Iter++) > MaxExpandedStates) {
+          R.timed_out = true;
+          return R;
+        }
+
+        QItem top = Q.top();
+        Q.pop();
+        int CurrIdx = top.second;
+        double CurrCost = top.first;
+        SearchKey cur = States[CurrIdx];
+        if (CurrCost > Best[cur])
+          continue; // stale entry
+
+        int u = cur.node;
+        for (size_t a = 0; a < Neigh[u].size(); a++) {
+          int m = Move(C, u, (int)a, cur.k);
+          if (m == -1)
+            continue;
+          int e = C.ArcEdge[u][a];
+          if (cur.used[e])
+            continue;
+          int v = Neigh[u][a];
+
+          double NextCost = CurrCost + (Active[u][a] ? 0.0 : Weight[u][a]);
+          MissingEdge Arc = {u, v, (int)a};
+
+          SearchKey nxt = cur;
+          nxt.node = v;
+          nxt.used[e] = true;
+          int End = -1;
+
+          if (m == 1) {
+            if (cur.k + 1 == (int)C.Needed.size()) {
+              FinalState = CurrIdx;
+              FinalArc = Arc;
+              FinalEnd = v;
+              break;
+            }
+            // restart from the seed for the next branch
+            End = v;
+            nxt.node = seed;
+            nxt.k = cur.k + 1;
+          }
+
+          auto it = Best.find(nxt);
+          if ((it != Best.end()) && (it->second <= NextCost))
+            continue;
+          Best[nxt] = NextCost;
+          States.push_back(nxt);
+          Parent.push_back(CurrIdx);
+          ByArc.push_back(Arc);
+          EndNode.push_back(End);
+          Q.push(QItem(NextCost, (int)States.size() - 1));
+        }
+      }
+
+      if (FinalState == -1)
+        return R; // no disk
+
+      // reconstruct nodes and inactive arcs
+      R.exists = true;
+      std::vector<int> NodesRev;
+      std::vector<MissingEdge> ArcsRev;
+      NodesRev.push_back(FinalEnd);
+      ArcsRev.push_back(FinalArc);
+      int Idx = FinalState;
+      while (Idx != -1) {
+        NodesRev.push_back(States[Idx].node);
+        if (EndNode[Idx] != -1)
+          NodesRev.push_back(EndNode[Idx]);
+        if (Parent[Idx] != -1)
+          ArcsRev.push_back(ByArc[Idx]);
+        Idx = Parent[Idx];
+      }
+      std::set<int> Seen;
+      for (int i = (int)NodesRev.size() - 1; i >= 0; i--)
+        if (Seen.insert(NodesRev[i]).second)
+          R.nodes.push_back(NodesRev[i]);
+      for (int i = (int)ArcsRev.size() - 1; i >= 0; i--) {
+        const MissingEdge &me = ArcsRev[i];
+        if (!Active[me.u][me.k])
+          R.Missing.push_back(me);
+      }
+      return R;
+    }
+
+    // surface vertex: half disk through the seed
+    BranchResult FindExitToExitThroughSeed(int seed, bool OnlyActive) const {
+      return FindLocalDisk(seed, OnlyActive, false);
+    }
+
+    // internal vertex: cycle through the seed
+    BranchResult FindCycleThroughSeed(int seed, bool OnlyActive) const {
+      return FindLocalDisk(seed, OnlyActive, true);
+    }
+
     void EnableEdges(const std::vector<MissingEdge> &edges) {
       for (const auto &me : edges) {
         int u = me.u;
         int k = me.k;
         Active[u][k] = true;
-        Active[k][u] = true;
+        // k is the position in Neigh[u], not a node: the reverse arc must be
+        // searched in the neighbours of v
+        // Active[k][u] = true;
+        int v = me.v;
+        for (size_t i = 0; i < Neigh[v].size(); i++)
+          if (Neigh[v][i] == u)
+            Active[v][i] = true;
       }
     }
 
     bool HasStructuralCycleFromSeed(int seed) {
-      // save the current active state
-      std::vector<std::vector<bool>> ActiveState = Active;
-      SetAllActive();
-      // check if solvable now
-      Result res = FindCycle_Exhaustive(seed);
-      // restore the active state
-      Active = ActiveState;
-      return res.exists;
+      // // save the current active state
+      // std::vector<std::vector<bool>> ActiveState = Active;
+      // SetAllActive();
+      // // check if solvable now
+      // Result res = FindCycle_Exhaustive(seed);
+      // // restore the active state
+      // Active = ActiveState;
+      // return res.exists;
+      // all the arcs (active or not); if the search limit is reached the
+      // node is not declared non structural (it could be solvable)
+      BranchResult res = FindCycleThroughSeed(seed, false);
+      // return res.exists;
+      return (res.exists || res.timed_out);
     }
 
     bool HasStructuralExitToExitFromSeed(int seed) {
       // save the current active state
-      std::vector<std::vector<bool>> ActiveState = Active;
-      SetAllActive();
-      // check if solvable now
-      Result res = FindExitToExitPath_Exhaustive(seed);
-      // restore the active state
-      Active = ActiveState;
-      return res.exists;
+      // std::vector<std::vector<bool>> ActiveState = Active;
+      // SetAllActive();
+      // // check if solvable now
+      // Result res = FindExitToExitPath_Exhaustive(seed);
+      // // restore the active state
+      // Active = ActiveState;
+      // return res.exists;
+      // all the arcs (active or not) through both sides of the seed; if the
+      // search limit is reached the node is not declared non structural
+      BranchResult res = FindExitToExitThroughSeed(seed, false);
+      // return res.exists;
+      return (res.exists || res.timed_out);
     }
 
     bool HasStructuralSolution(int seed) {
@@ -1070,28 +1521,53 @@ private:
     if (!SubGraphs[IndexGraph].MustCheckCycle()) {
       // else check if can reach two different exit nodes
       // std::cout << "2 EXITS" << std::endl;
-      Res = SubGraphs[IndexGraph].FindExitToExitPath_Exhaustive(LocalIdx);
-      // std::cout << "done" << std::endl;
+      // Res = SubGraphs[IndexGraph].FindExitToExitPath_Exhaustive(LocalIdx);
+      // // std::cout << "done" << std::endl;
+      //
+      // if (Res.exists)
+      //   TypeResult = MANIFOLD;
+      // else
+      //   TypeResult = NON_MANIFOLD;
+      //
+      // PathNodes = Res.nodes;
 
-      if (Res.exists)
+      // the half disk must pass through the seed (both its sides)
+      typename SubGraph::BranchResult BRes =
+          SubGraphs[IndexGraph].FindExitToExitThroughSeed(LocalIdx, true);
+      if (BRes.exists)
         TypeResult = MANIFOLD;
+      else if (BRes.timed_out)
+        TypeResult = UNDETERMINED;
       else
         TypeResult = NON_MANIFOLD;
 
-      PathNodes = Res.nodes;
+      PathNodes = BRes.nodes;
     } else {
       // std::cout << "INTERNAL CYCLE" << std::endl;
 
       // SubGraphs[IndexGraph].PrintGraph();
 
-      Res = SubGraphs[IndexGraph].FindCycle_Exhaustive(LocalIdx);
+      // Res = SubGraphs[IndexGraph].FindCycle_Exhaustive(LocalIdx);
+      //
+      // if (Res.exists)
+      //   TypeResult = MANIFOLD;
+      // else
+      //   TypeResult = NON_MANIFOLD;
+      //
+      // PathNodes = Res.nodes;
 
-      if (Res.exists)
+      // faster version (filters + bitset), a timeout leaves the node
+      // undetermined
+      typename SubGraph::BranchResult CRes =
+          SubGraphs[IndexGraph].FindCycleThroughSeed(LocalIdx, true);
+      if (CRes.exists)
         TypeResult = MANIFOLD;
+      else if (CRes.timed_out)
+        TypeResult = UNDETERMINED;
       else
         TypeResult = NON_MANIFOLD;
 
-      PathNodes = Res.nodes;
+      PathNodes = CRes.nodes;
     }
     // map the local path nodes to global nodes
     for (size_t i = 0; i < PathNodes.size(); i++) {
@@ -1253,7 +1729,8 @@ private:
     int NumUndetermined = 0;
     int NumIncorrectExit = 0;
     for (size_t i = 0; i < ManifoldNodevType.size(); i++) {
-      if (!M3Graph.IsEnabled(i))
+      // if (!M3Graph.IsEnabled(i))
+      if (!IsCheckable(i))
         continue;
       for (size_t j = 0; j < 3; j++) {
         // rewrite is as switch case
@@ -1293,7 +1770,8 @@ private:
     // get the time here with chrono
     for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
 
-      if (!M3Graph.IsEnabled(i))
+      // if (!M3Graph.IsEnabled(i))
+      if (!IsCheckable(i))
         continue;
 
       for (size_t j = 0; j < 3; j++) {
@@ -1395,7 +1873,8 @@ private:
         if (i >= M3Graph.NumNodes())
           return;
 
-        if (!M3Graph.IsEnabled(i)) {
+        // if (!M3Graph.IsEnabled(i)) {
+        if (!IsCheckable(i)) {
           non_enabled++;
           continue;
         }
@@ -1423,7 +1902,11 @@ private:
           {
             std::lock_guard<std::mutex> lock(manifoldMutex);
 
-            ManifoldNodevType[i][j] = type;
+            // ManifoldNodevType[i][j] = type;
+            // another thread may have set it as MANIFOLD (by propagation)
+            // while this one was computing: do not overwrite it
+            if (ManifoldNodevType[i][j] == UNDETERMINED)
+              ManifoldNodevType[i][j] = type;
 
             if (type == MANIFOLD) {
 
@@ -1447,7 +1930,7 @@ private:
                   ManifoldNodesIndex[PN][PV] = ManifoldNodes.size() - 1;
                 }
               }
-            } else {
+            } else if (type == NON_MANIFOLD) {
               non_manifold_found++;
               // NonManifoldNodes.push_back(std::make_pair(i, j));
               //  MissingLinks.push_back(missing_links);
@@ -1519,6 +2002,9 @@ private:
   //   PrintManifoldStats();
   // }
   void InitManifoldDataStructures() {
+    // cleared here and not in UpdateManifoldNodes: the incremental update
+    // (SolveNonManifolds) keeps the indices of the already manifold nodes
+    ManifoldNodes.clear();
     ManifoldNodesIndex =
         std::vector<std::array<int, 3>>(M3Graph.NumNodes(), {-1, -1, -1});
 
@@ -1573,12 +2059,13 @@ private:
   }
 
   void UpdateManifoldNodes(bool UseSAT = false, bool Multithreaded = true) {
+    ApplySearchLimit();
     TimeSolvingSat = 0;
     TimeSettingConstraints = 0;
     TimeCollectingResults = 0;
     TimeDeactivatingNodes = 0;
 
-    ManifoldNodes.clear();
+    // ManifoldNodes.clear();
     // NonManifoldNodes.clear();
     // MissingLinks.clear();
 
@@ -1670,14 +2157,41 @@ private:
       }
     }
 
-    // check connections
-    for (size_t i = 0; i < SubGraphs.size(); i++)
+    // check connections (only the updated ones if a subset is given)
+    for (size_t i = 0; i < SubGraphs.size(); i++) {
+      if (!UpdateOnly.empty() && UpdateOnly.count(i) == 0)
+        continue;
       SubGraphs[i].CheckConsitency(M3Graph);
+    }
   }
 
   void InitSubGraphExitNodes() {
 
-    for (size_t i = 0; i < SubGraphs.size(); i++) {
+    for (size_t i = 0; i < SubGraphs.size(); i++)
+      InitSubGraphExitNodesOf(i);
+
+    // count total number of graph with at least one exit node
+    int num_graph_with_exit = 0;
+    for (size_t i = 0; i < SubGraphIndex.size(); i++) {
+      for (size_t j = 0; j < 3; j++) {
+        int IndexGraph = SubGraphIndex[i][j];
+        if (IndexGraph == -1)
+          continue;
+        assert(IndexGraph >= 0);
+        assert(IndexGraph < SubGraphs.size());
+        if (SubGraphs[IndexGraph].HasExit()) {
+          num_graph_with_exit++;
+        }
+      }
+    }
+
+    std::cout << "Num Exit: " << num_graph_with_exit << std::endl;
+    std::cout << "Total: " << SubGraphIndex.size() << std::endl;
+  }
+
+  // exit information of one subgraph (body of the old loop)
+  void InitSubGraphExitNodesOf(size_t i) {
+    {
       int IndexV = SubGraphs[i].IndexV;
       int NumNodes = SubGraphs[i].NodesIdx.size();
 
@@ -1703,35 +2217,44 @@ private:
           SubGraphs[i].IsDoubleExit[j] = true;
         }
       }
-    }
 
-    // count total number of graph with at least one exit node
-    int num_graph_with_exit = 0;
-    for (size_t i = 0; i < SubGraphIndex.size(); i++) {
-      for (size_t j = 0; j < 3; j++) {
-        int IndexGraph = SubGraphIndex[i][j];
-        if (IndexGraph == -1)
-          continue;
-        assert(IndexGraph >= 0);
-        assert(IndexGraph < SubGraphs.size());
-        if (SubGraphs[IndexGraph].HasExit()) {
-          num_graph_with_exit++;
+      // the two sides of each node around the vertex
+      SubGraphs[i].SideGeom.resize(NumNodes);
+      SubGraphs[i].SideExit.resize(NumNodes);
+      for (size_t j = 0; j < SubGraphs[i].NodesIdx.size(); j++) {
+        int IndexN = SubGraphs[i].NodesIdx[j];
+        int IndexF = Field::FrameFieldM3Graph::ElemOfNode(IndexN);
+        int IndexLocV = SubGraphs[i].WhichVertex[j];
+        int Lab[2] = {(IndexLocV + 2) % 3, IndexLocV};
+        for (int s = 0; s < 2; s++) {
+          int V0 = InternalFaces[IndexF][Lab[s]];
+          int V1 = InternalFaces[IndexF][(Lab[s] + 1) % 3];
+          assert((V0 == IndexV) || (V1 == IndexV));
+          SubGraphs[i].SideGeom[j][s] =
+              std::make_pair(std::min(V0, V1), std::max(V0, V1));
+          SubGraphs[i].SideExit[j][s] = M3Graph.IsExitLabel(IndexN, Lab[s]);
         }
       }
+      // all the nodes share the vertex
+      SubGraphs[i].BoundaryV = false;
+      if (SubGraphs[i].NodesIdx.size() > 0)
+        SubGraphs[i].BoundaryV =
+            M3Graph.NodeBorderV[SubGraphs[i].NodesIdx[0]]
+                               [SubGraphs[i].WhichVertex[0]];
     }
-
-    std::cout << "Num Exit: " << num_graph_with_exit << std::endl;
-    std::cout << "Total: " << SubGraphIndex.size() << std::endl;
   }
 
   void InitSubGraphNodes() {
     SubGraphIndex.clear();
+    // the subgraphs were appended at every Init (check pressed again)
+    SubGraphs.clear();
     SubGraphIndex.resize(M3Graph.NumNodes(), std::array<int, 3>{-1, -1, -1});
 
     int all_combinations = 0;
     int computed = 0;
     for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
-      if (!M3Graph.IsEnabled(i))
+      // if (!M3Graph.IsEnabled(i))
+      if (!IsCheckable(i))
         continue;
       for (size_t j = 0; j < 3; j++) {
         int IndexF0 = Field::FrameFieldM3Graph::ElemOfNode(i);
@@ -1787,6 +2310,31 @@ private:
   }
 
 public:
+  // nodes that can be part of a sheet: enabled, not tangent and not on a
+  // surface face (the surface itself can never be used to trace a sheet)
+  bool IsCheckable(const int IndexN) const {
+    if (!M3Graph.IsEnabled(IndexN))
+      return false;
+    if (M3Graph.NodeType(IndexN) == Geo::TangentDomain)
+      return false;
+    if (M3Graph.NodeBorderF[IndexN])
+      return false;
+    return true;
+  }
+
+  // limit of the exhaustive local search (states), copied to all the
+  // subgraphs before each check/solve so it can be changed from the GUI
+  size_t MaxExpandedStates = 200000;
+
+  // the repair, the reintroduction and the cascade check again only the
+  // stars of the changed vertices (false: full check each time, as before)
+  bool UseIncrementalCheck = true;
+
+  void ApplySearchLimit() {
+    for (size_t i = 0; i < SubGraphs.size(); i++)
+      SubGraphs[i].MaxExpandedStates = MaxExpandedStates;
+  }
+
   Geo::LabelNeighOrientedGraph<ScalarType> &M3Graph;
   std::vector<std::vector<std::pair<int, int>>> PolyLSingV;
   std::vector<std::vector<int>> &InternalFaces;
@@ -1890,7 +2438,8 @@ public:
     Field::FrameFieldM3Graph::NodesOfElems(AllNeighF, AllNeighN);
     std::vector<int> ActiveNeighN;
     for (size_t i = 0; i < AllNeighN.size(); i++) {
-      if (M3Graph.IsEnabled(AllNeighN[i]))
+      // if (M3Graph.IsEnabled(AllNeighN[i]))
+      if (IsCheckable(AllNeighN[i]))
         ActiveNeighN.push_back(AllNeighN[i]);
     }
     // filter the non active one
@@ -1904,7 +2453,8 @@ public:
   void GetNonManfoldNodes(std::vector<std::pair<int, int>> &NonManifoldNodev) {
     NonManifoldNodev.clear();
     for (size_t i = 0; i < ManifoldNodevType.size(); i++) {
-      if (!M3Graph.IsEnabled(i))
+      // if (!M3Graph.IsEnabled(i))
+      if (!IsCheckable(i))
         continue;
       for (size_t j = 0; j < 3; j++) {
         if (ManifoldNodevType[i][j] == NON_MANIFOLD) {
@@ -2053,23 +2603,31 @@ public:
     int IndexLocal = SubGraphs[IndexGraph].LocalIndex(IndeN);
 
     if (!SubGraphs[IndexGraph].MustCheckCycle()) {
+      // these searches verified only one side of the seed
+      // MissingEdges =
+      //     SubGraphs[IndexGraph].FindMissingEdgesForTwoExits(IndexLocal);
+      //
+      // if (MissingEdges.size() == 0) {
+      //   MissingEdges =
+      //       SubGraphs[IndexGraph].FindAnyMissingForTwoExitsFast(IndexLocal);
+      //   // std::cout << "Using FAST Two Exits METHOD, found " << std::endl;
+      // }
+      // cheapest half disk through both sides of the seed
       MissingEdges =
-          SubGraphs[IndexGraph].FindMissingEdgesForTwoExits(IndexLocal);
-
-      if (MissingEdges.size() == 0) {
-        MissingEdges =
-            SubGraphs[IndexGraph].FindAnyMissingForTwoExitsFast(IndexLocal);
-        // std::cout << "Using FAST Two Exits METHOD, found " << std::endl;
-      }
+          SubGraphs[IndexGraph].FindExitToExitThroughSeed(IndexLocal, false)
+              .Missing;
     } else {
       // std::cout << "Using exhaustive CYCLE METHOD, found " << std::endl;
-      MissingEdges = SubGraphs[IndexGraph].FindMissingEdgesForCycle(IndexLocal);
-
-      if (MissingEdges.size() == 0) {
-        MissingEdges =
-            SubGraphs[IndexGraph].FindAnyMissingCycleFast(IndexLocal);
-        // std::cout << "Using FAST CYCLE METHOD, found " << std::endl;
-      }
+      // MissingEdges = SubGraphs[IndexGraph].FindMissingEdgesForCycle(IndexLocal);
+      //
+      // if (MissingEdges.size() == 0) {
+      //   MissingEdges =
+      //       SubGraphs[IndexGraph].FindAnyMissingCycleFast(IndexLocal);
+      //   // std::cout << "Using FAST CYCLE METHOD, found " << std::endl;
+      // }
+      // cheapest cycle through the seed
+      MissingEdges =
+          SubGraphs[IndexGraph].FindCycleThroughSeed(IndexLocal, false).Missing;
     }
     if (MissingEdges.size() == 0) {
       return MissingEdges;
@@ -2094,7 +2652,8 @@ public:
     MissingEdges = FilteredMissingEdges;
     assert(MissingEdges.size() > 0);
 
-    std::cout << "Checking Missing Edges" << std::endl;
+    // called for every non manifold node (also from several threads)
+    // std::cout << "Checking Missing Edges" << std::endl;
     // check they are currently disabled
     for (size_t me = 0; me < MissingEdges.size(); me++) {
       int IndexlocalU = MissingEdges[me].u;
@@ -2114,55 +2673,170 @@ public:
     return MissingEdges;
   }
 
-  void SolveNonManifolds() {
+  // void SolveNonManifolds() {
+  //
+  //   std::set<int> UpdateOnly;
+  //   int non_structural_count = 0;
+  //   int print_interval = 10;
+  //   int next_print = print_interval;
+  //   std::vector<std::pair<int, int>> TotalMissingEdges;
+  //
+  //   for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
+  //     // if (!M3Graph.IsEnabled(i))
+  //     if (!IsCheckable(i))
+  //       continue;
+  //     for (size_t j = 0; j < 3; j++) {
+  //       if (ManifoldNodevType[i][j] != NON_MANIFOLD)
+  //         continue;
+  //
+  //       if ((int)UpdateOnly.size() >= next_print) {
+  //         std::cout << "Solved Non-Manifold so far: " << UpdateOnly.size()
+  //                   << std::endl;
+  //         next_print += print_interval;
+  //       }
+  //       
+  //       int IndexLocal = SubGraphs[SubGraphIndex[i][j]].LocalIndex(i);
+  //       int IndexGraph = SubGraphIndex[i][j];
+  //       assert(IndexGraph >= 0);
+  //       assert(IndexGraph < SubGraphs.size());
+  //       if (!SubGraphs[IndexGraph].HasStructuralSolution(IndexLocal)) {
+  //         // std::cout << "NON STRUCTURAL SOLVE" << std::endl;
+  //         non_structural_count++;
+  //         continue;
+  //       }
+  //
+  //       std::vector<typename SubGraph::MissingEdge> MissingEdges =
+  //           FindMissingEdges(i, j);
+  //
+  //       for (size_t me = 0; me < MissingEdges.size(); me++) {
+  //         int UGlobal = SubGraphs[IndexGraph].NodesIdx[MissingEdges[me].u];
+  //         int VGlobal = SubGraphs[IndexGraph].NodesIdx[MissingEdges[me].v];
+  //         // std::cout << "Enabling link between " << UGlobal << " and "
+  //         //           << VGlobal << std::endl;
+  //         assert(!M3Graph.IsActiveNeighbour(UGlobal, VGlobal));
+  //         assert(!M3Graph.IsActiveNeighbour(VGlobal, UGlobal));
+  //         std::pair<int, int> edge = std::make_pair(std::min(UGlobal, VGlobal),
+  //                                                   std::max(UGlobal, VGlobal));
+  //         TotalMissingEdges.push_back(edge);
+  //       }
+  //       ManifoldNodevType[i][j] = UNDETERMINED;
+  //       UpdateOnly.insert(IndexGraph);
+  //     }
+  //   }
 
+  // Old serial version of the search part above. The search for each non
+  // manifold node only reads the subgraphs and the graph (the links are
+  // enabled at the end, after all the searches), so the nodes are split
+  // among threads: each thread collects its own missing edges and counters,
+  // merged at the end.
+  // One round: returns the number of links enabled.
+  // void SolveNonManifolds() {
+  int SolveNonManifoldsOnce() {
+
+    ApplySearchLimit();
     std::set<int> UpdateOnly;
-    int non_structural_count = 0;
-    int print_interval = 10;
-    int next_print = print_interval;
     std::vector<std::pair<int, int>> TotalMissingEdges;
 
+    // the node/vertex pairs to solve
+    std::vector<std::pair<int, int>> ToSolve;
     for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
-      if (!M3Graph.IsEnabled(i))
+      if (!IsCheckable(i))
         continue;
-      for (size_t j = 0; j < 3; j++) {
-        if (ManifoldNodevType[i][j] != NON_MANIFOLD)
-          continue;
+      for (size_t j = 0; j < 3; j++)
+        if (ManifoldNodevType[i][j] == NON_MANIFOLD)
+          ToSolve.push_back(std::make_pair((int)i, (int)j));
+    }
+    std::cout << "Non manifold to solve: " << ToSolve.size() << std::endl;
 
-        if ((int)UpdateOnly.size() >= next_print) {
-          std::cout << "Solved Non-Manifold so far: " << UpdateOnly.size()
-                    << std::endl;
-          next_print += print_interval;
-        }
-        
-        int IndexLocal = SubGraphs[SubGraphIndex[i][j]].LocalIndex(i);
+    struct ThreadData {
+      std::vector<std::pair<int, int>> Missing;
+      std::vector<std::pair<int, int>> Solved; // node, vertex
+      std::vector<int> Graphs;
+      int NonStructural = 0;
+      int NoMissingFound = 0;
+    };
+
+    const size_t NumThreads =
+        std::max(1u, std::thread::hardware_concurrency());
+    std::vector<ThreadData> TData(NumThreads);
+    std::atomic<size_t> NextIdx(0);
+    std::atomic<size_t> Done(0);
+    std::mutex PrintMutex;
+    const size_t PrintStep = std::max((size_t)1, ToSolve.size() / 10);
+
+    auto Worker = [&](size_t t) {
+      ThreadData &TD = TData[t];
+      while (true) {
+        size_t idx = NextIdx.fetch_add(1);
+        if (idx >= ToSolve.size())
+          return;
+        int i = ToSolve[idx].first;
+        int j = ToSolve[idx].second;
+
         int IndexGraph = SubGraphIndex[i][j];
         assert(IndexGraph >= 0);
-        assert(IndexGraph < SubGraphs.size());
+        assert(IndexGraph < (int)SubGraphs.size());
+        int IndexLocal = SubGraphs[IndexGraph].LocalIndex(i);
+
         if (!SubGraphs[IndexGraph].HasStructuralSolution(IndexLocal)) {
-          // std::cout << "NON STRUCTURAL SOLVE" << std::endl;
-          non_structural_count++;
-          continue;
+          TD.NonStructural++;
+        } else {
+          std::vector<typename SubGraph::MissingEdge> MissingEdges =
+              FindMissingEdges(i, j);
+          if (MissingEdges.empty())
+            TD.NoMissingFound++;
+          for (size_t me = 0; me < MissingEdges.size(); me++) {
+            int UGlobal = SubGraphs[IndexGraph].NodesIdx[MissingEdges[me].u];
+            int VGlobal = SubGraphs[IndexGraph].NodesIdx[MissingEdges[me].v];
+            assert(!M3Graph.IsActiveNeighbour(UGlobal, VGlobal));
+            assert(!M3Graph.IsActiveNeighbour(VGlobal, UGlobal));
+            TD.Missing.push_back(std::make_pair(std::min(UGlobal, VGlobal),
+                                                std::max(UGlobal, VGlobal)));
+          }
+          TD.Solved.push_back(std::make_pair(i, j));
+          TD.Graphs.push_back(IndexGraph);
         }
 
-        std::vector<typename SubGraph::MissingEdge> MissingEdges =
-            FindMissingEdges(i, j);
-
-        for (size_t me = 0; me < MissingEdges.size(); me++) {
-          int UGlobal = SubGraphs[IndexGraph].NodesIdx[MissingEdges[me].u];
-          int VGlobal = SubGraphs[IndexGraph].NodesIdx[MissingEdges[me].v];
-          // std::cout << "Enabling link between " << UGlobal << " and "
-          //           << VGlobal << std::endl;
-          assert(!M3Graph.IsActiveNeighbour(UGlobal, VGlobal));
-          assert(!M3Graph.IsActiveNeighbour(VGlobal, UGlobal));
-          std::pair<int, int> edge = std::make_pair(std::min(UGlobal, VGlobal),
-                                                    std::max(UGlobal, VGlobal));
-          TotalMissingEdges.push_back(edge);
+        size_t d = ++Done;
+        if ((d % PrintStep) == 0) {
+          std::lock_guard<std::mutex> lock(PrintMutex);
+          std::cout << "Solve non manifold: " << d << " / " << ToSolve.size()
+                    << std::endl;
         }
-        ManifoldNodevType[i][j] = UNDETERMINED;
-        UpdateOnly.insert(IndexGraph);
       }
+    };
+
+    auto t0 = std::chrono::steady_clock::now();
+    std::vector<std::thread> Threads;
+    for (size_t t = 0; t < NumThreads; t++)
+      Threads.emplace_back(Worker, t);
+    for (auto &th : Threads)
+      th.join();
+    double Secs =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
+            .count();
+
+    // merge the results of the threads
+    int non_structural_count = 0;
+    int no_missing_count = 0;
+    for (size_t t = 0; t < NumThreads; t++) {
+      non_structural_count += TData[t].NonStructural;
+      no_missing_count += TData[t].NoMissingFound;
+      TotalMissingEdges.insert(TotalMissingEdges.end(),
+                               TData[t].Missing.begin(),
+                               TData[t].Missing.end());
+      for (size_t k = 0; k < TData[t].Solved.size(); k++)
+        ManifoldNodevType[TData[t].Solved[k].first]
+                         [TData[t].Solved[k].second] = UNDETERMINED;
+      UpdateOnly.insert(TData[t].Graphs.begin(), TData[t].Graphs.end());
     }
+    std::cout << "Missing edges search: " << Secs << " s with " << NumThreads
+              << " threads" << std::endl;
+    if (no_missing_count > 0)
+      std::cout << "WARNING: " << no_missing_count
+                << " non manifold nodes without missing edges (search limit)"
+                << std::endl;
+
     std::cout << "Non Structural Count: " << non_structural_count << std::endl;
     std::sort(TotalMissingEdges.begin(), TotalMissingEdges.end());
     TotalMissingEdges.erase(
@@ -2171,8 +2845,10 @@ public:
 
     std::cout << "Total Missing Edges to add: " << TotalMissingEdges.size()
               << std::endl;
-    //for (size_t e = 0; e < TotalMissingEdges.size(); e++) {
-    for (size_t e = 0; e < 119; e++) {
+    // the limit 119 was a debug leftover (out of bounds if fewer edges)
+    // for (size_t e = 0; e < 119; e++) {
+    std::set<int> AffectedV;
+    for (size_t e = 0; e < TotalMissingEdges.size(); e++) {
       int U = TotalMissingEdges[e].first;
       int V = TotalMissingEdges[e].second;
       assert(M3Graph.IsNeighbour(U, V));
@@ -2185,17 +2861,338 @@ public:
       assert(LabelV!=-1);
       assert(!M3Graph.IsExitLabel(U, LabelU));
       assert(!M3Graph.IsExitLabel(V, LabelV));
-      assert(M3Graph.NumActiveNeigh(U, LabelU) > 0);
-      assert(M3Graph.NumActiveNeigh(V, LabelV) > 0);
-      std::cout << "Enabling link between " << U << " and " << V
-                << std::endl;
+      // a label can now be empty (nodes disabled along the singularities
+      // without propagation): the missing edge is what makes it continue
+      // assert(M3Graph.NumActiveNeigh(U, LabelU) > 0);
+      // assert(M3Graph.NumActiveNeigh(V, LabelV) > 0);
+      // std::cout << "Enabling link between " << U << " and " << V
+      //           << std::endl;
       M3Graph.SetEnableLink(U, V, true);
+      // vertices of the edge of the link (their stars changed)
+      int IndexFU = Field::FrameFieldM3Graph::ElemOfNode(U);
+      AffectedV.insert(InternalFaces[IndexFU][LabelU]);
+      AffectedV.insert(InternalFaces[IndexFU][(LabelU + 1) % 3]);
+    }
+    std::cout << "Enabled " << TotalMissingEdges.size() << " links"
+              << std::endl;
+
+    // INCREMENTAL: only the stars of the vertices of the new links and of
+    // the solved pairs are checked again (a pair depends only on the star of
+    // its vertex, so this gives the same result of a full check)
+    for (int g : UpdateOnly)
+      if ((g >= 0) && (g < (int)SubGraphs.size()))
+        AffectedV.insert(SubGraphs[g].IndexV);
+    if (UseIncrementalCheck) {
+      RecheckAroundVerts(AffectedV);
+      PrintManifoldStats();
+      M3Graph.CheckConsistency();
+      return (int)TotalMissingEdges.size();
     }
 
     InitSubGraphConnections();
-    UpdateManifoldNodes(false, false);
+    // UpdateManifoldNodes(false, false);
+    // The incremental update kept the old state of the nodes not solved here
+    // (e.g. the ones wrongly declared non structural for the search limit),
+    // while the enabled links can change them too: the result differed from
+    // a new check. A full recheck gives exactly the result of the check.
+    InitManifoldDataStructures();
+    // the check of the nodes is read only: multithreaded
+    UpdateManifoldNodes(false, true);
     PrintManifoldStats();
     M3Graph.CheckConsistency();
+    return (int)TotalMissingEdges.size();
+  }
+
+  // If RepeatUntilStable the solve is repeated while it improves: the
+  // links enabled in a round make the searches of the next one cheaper
+  // (within the search limit) and can help nearby nodes. Enabling links
+  // never makes a node non manifold, so each round can only improve; it
+  // stops when no link is added or the non manifold nodes do not decrease
+  // (it always ends: each round enables at least one of the finite links).
+  void SolveNonManifolds(bool RepeatUntilStable = false) {
+    std::vector<std::pair<int, int>> NonManifold;
+    GetNonManfoldNodes(NonManifold);
+    size_t NumBefore = NonManifold.size();
+    int Round = 0;
+    while (true) {
+      Round++;
+      std::cout << "** Solve non manifold, round " << Round << " **"
+                << std::endl;
+      auto tR0 = std::chrono::steady_clock::now();
+      int Added = SolveNonManifoldsOnce();
+      std::cout << "Round time "
+                << std::chrono::duration<double>(
+                       std::chrono::steady_clock::now() - tR0)
+                       .count()
+                << " s" << std::endl;
+      GetNonManfoldNodes(NonManifold);
+      size_t NumAfter = NonManifold.size();
+      std::cout << "Round " << Round << ": " << Added << " links added, "
+                << "non manifold " << NumBefore << " -> " << NumAfter
+                << std::endl;
+      if (!RepeatUntilStable)
+        break;
+      if ((Added == 0) || (NumAfter >= NumBefore)) {
+        std::cout << "No more improvement, stop" << std::endl;
+        break;
+      }
+      // each round is a full search: stop when it improves less than 5%
+      if ((NumBefore - NumAfter) < 0.05 * (double)NumBefore) {
+        std::cout << "Improvement below 5%, stop" << std::endl;
+        break;
+      }
+      NumBefore = NumAfter;
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // INCREMENTAL CHECK
+  // The result of a node/vertex pair depends only on the star of the vertex
+  // (its subgraph): when some nodes are enabled/disabled or some arcs change,
+  // only the subgraphs of the vertices of the changed faces are rebuilt and
+  // only their pairs checked again (instead of the full check of Init).
+  // ---------------------------------------------------------------------
+
+  // rebuilds the subgraphs of the given vertices (creating the missing ones)
+  // and returns their indices
+  std::set<int> RebuildSubGraphsAt(const std::set<int> &Verts) {
+    std::map<int, int> VertToGraph;
+    for (size_t i = 0; i < SubGraphs.size(); i++)
+      VertToGraph[SubGraphs[i].IndexV] = (int)i;
+    std::set<int> Updated;
+    for (int V : Verts) {
+      // checkable nodes of the star
+      std::vector<int> AllNeighN, KernN;
+      Field::FrameFieldM3Graph::NodesOfElems(VF[V], AllNeighN);
+      for (int n : AllNeighN)
+        if (IsCheckable(n))
+          KernN.push_back(n);
+      int Idx;
+      auto it = VertToGraph.find(V);
+      if (it != VertToGraph.end()) {
+        Idx = it->second;
+        // the old members do not refer to it any more
+        for (size_t j = 0; j < SubGraphs[Idx].NodesIdx.size(); j++) {
+          int n = SubGraphs[Idx].NodesIdx[j];
+          int lv = SubGraphs[Idx].WhichVertex[j];
+          if (SubGraphIndex[n][lv] == Idx)
+            SubGraphIndex[n][lv] = -1;
+        }
+        SubGraphs[Idx] = SubGraph(V, KernN);
+      } else {
+        if (KernN.empty())
+          continue;
+        SubGraphs.push_back(SubGraph(V, KernN));
+        Idx = (int)SubGraphs.size() - 1;
+        VertToGraph[V] = Idx;
+      }
+      SubGraphs[Idx].WhichVertex.resize(KernN.size(), -1);
+      for (size_t j = 0; j < KernN.size(); j++) {
+        int n = KernN[j];
+        int IndexF = Field::FrameFieldM3Graph::ElemOfNode(n);
+        int lv = Geo::WhichVert(InternalFaces[IndexF], V);
+        assert(lv >= 0);
+        SubGraphs[Idx].WhichVertex[j] = lv;
+        SubGraphIndex[n][lv] = Idx;
+      }
+      SubGraphs[Idx].MaxExpandedStates = MaxExpandedStates;
+      Updated.insert(Idx);
+    }
+    // (an empty set would mean all the subgraphs)
+    if (Updated.empty())
+      return Updated;
+    InitSubGraphConnections(Updated);
+    for (int Idx : Updated)
+      InitSubGraphExitNodesOf(Idx);
+    return Updated;
+  }
+
+  // checks again only the pairs around the vertices of the faces of the
+  // changed nodes (the other UNDETERMINED pairs, e.g. search limit, are not
+  // searched again)
+  void RecheckAroundNodes(const std::vector<int> &ChangedNodes) {
+    std::set<int> Verts;
+    for (int n : ChangedNodes) {
+      int IndexF = Field::FrameFieldM3Graph::ElemOfNode(n);
+      for (int v : InternalFaces[IndexF])
+        Verts.insert(v);
+    }
+    RecheckAroundVerts(Verts);
+  }
+
+  void RecheckAroundVerts(const std::set<int> &Verts) {
+    if (Verts.empty())
+      return;
+    auto t0 = std::chrono::steady_clock::now();
+    std::set<int> Updated = RebuildSubGraphsAt(Verts);
+    // the other UNDETERMINED pairs are hidden during the update
+    std::vector<std::pair<int, int>> Hidden;
+    for (size_t i = 0; i < ManifoldNodevType.size(); i++)
+      for (int v = 0; v < 3; v++)
+        if (ManifoldNodevType[i][v] == UNDETERMINED) {
+          ManifoldNodevType[i][v] = NON_MANIFOLD;
+          Hidden.push_back(std::make_pair((int)i, v));
+        }
+    int NumPairs = 0;
+    for (int Idx : Updated)
+      for (size_t j = 0; j < SubGraphs[Idx].NodesIdx.size(); j++) {
+        int n = SubGraphs[Idx].NodesIdx[j];
+        int lv = SubGraphs[Idx].WhichVertex[j];
+        ManifoldNodevType[n][lv] = UNDETERMINED;
+        ManifoldNodesIndex[n][lv] = -1;
+        NumPairs++;
+      }
+    // pairs of the hidden list that are now to be checked are not restored
+    UpdateManifoldNodes(false, true);
+    for (const auto &P : Hidden) {
+      bool InUpdated = false;
+      int g = SubGraphIndex[P.first][P.second];
+      if ((g >= 0) && (Updated.count(g) > 0))
+        InUpdated = true;
+      if (!InUpdated && (ManifoldNodevType[P.first][P.second] == NON_MANIFOLD))
+        ManifoldNodevType[P.first][P.second] = UNDETERMINED;
+    }
+    std::cout << "Incremental check: " << Verts.size() << " vertices, "
+              << NumPairs << " node/vertex pairs in "
+              << std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                               t0)
+                     .count()
+              << " s" << std::endl;
+  }
+
+  // Repair with nodes that were disabled (e.g. along the singularities,
+  // Candidates): around the vertices still not manifold after the repair,
+  // the candidate nodes are enabled, the graph checked and repaired again,
+  // and only the candidates used by the new local disks of the nodes that
+  // were not manifold are kept; the others are disabled again. Repeated
+  // while it helps (MaxRounds). The arcs of the candidates must not have
+  // been disabled (only the node flag). Returns the number of nodes kept.
+  int ReintroduceNodes(
+      const std::vector<int> &Candidates,
+      const std::vector<typename Geo::LabelGraphFuctions<ScalarType>::ArcRef>
+          &SavedArcs,
+      int MaxRounds = 2, bool RepairEachRound = false) {
+    // RepairEachRound = false: after enabling the candidates only the check
+    // is done (no search of missing edges, the expensive part): used before
+    // the repair, which then works only on what is still failing
+    int TotKept = 0;
+    for (int Round = 1; Round <= MaxRounds; Round++) {
+      // node/vertex pairs failing the check and their vertices
+      std::set<std::pair<int, int>> Bad;
+      std::set<int> BadVerts;
+      for (size_t i = 0; i < ManifoldNodevType.size(); i++) {
+        if (!IsCheckable(i))
+          continue;
+        for (int v = 0; v < 3; v++) {
+          if ((ManifoldNodevType[i][v] != NON_MANIFOLD) &&
+              (ManifoldNodevType[i][v] != INCORRECT_EXIT))
+            continue;
+          Bad.insert(std::make_pair((int)i, v));
+          int IndexF = Field::FrameFieldM3Graph::ElemOfNode(i);
+          BadVerts.insert(InternalFaces[IndexF][v]);
+        }
+      }
+      // disabled candidates on a face touching one of those vertices
+      std::vector<int> R;
+      for (int n : Candidates) {
+        if (M3Graph.IsEnabled(n))
+          continue;
+        int IndexF = Field::FrameFieldM3Graph::ElemOfNode(n);
+        bool Close = false;
+        for (int v : InternalFaces[IndexF])
+          if (BadVerts.count(v) > 0)
+            Close = true;
+        if (Close)
+          R.push_back(n);
+      }
+      std::cout << "** Reintroduce, round " << Round << ": " << Bad.size()
+                << " failing node/vertex pairs, " << R.size()
+                << " candidate nodes around them **" << std::endl;
+      if (R.empty())
+        break;
+
+      for (int n : R)
+        M3Graph.EnableNode(n);
+      // their arcs as they were before they were disabled
+      std::set<int> RS(R.begin(), R.end());
+      Geo::LabelGraphFuctions<ScalarType>::RestoreArcs(M3Graph, SavedArcs, RS);
+      // Init(PolyLSingV);
+      RecheckAroundNodes(R);
+      if (RepairEachRound)
+        SolveNonManifolds(false);
+
+      // candidates used by the new disks of the pairs that were failing
+      std::set<int> RSet(R.begin(), R.end()), Needed;
+      for (const auto &P : Bad) {
+        int n = P.first, v = P.second;
+        if (!IsCheckable(n))
+          continue;
+        if (ManifoldNodevType[n][v] != MANIFOLD)
+          continue;
+        int Idx = ManifoldNodesIndex[n][v];
+        if ((Idx < 0) || (Idx >= (int)ManifoldNodes.size()))
+          continue;
+        for (int m : ManifoldNodes[Idx])
+          if (RSet.count(m) > 0)
+            Needed.insert(m);
+      }
+      int NumBack = 0;
+      std::vector<int> Back;
+      for (int n : R)
+        if (Needed.count(n) == 0)
+          Back.push_back(n);
+      NumBack = (int)Back.size();
+      // disabled again with their arcs (consistent graph)
+      Geo::LabelGraphFuctions<ScalarType>::DisableNodesAndArcs(M3Graph, Back);
+      if (NumBack > 0)
+        RecheckAroundNodes(Back);
+      // Init(PolyLSingV);
+      std::cout << "   kept " << Needed.size() << " nodes, " << NumBack
+                << " disabled again" << std::endl;
+      TotKept += (int)Needed.size();
+      if (Needed.empty())
+        break;
+    }
+    return TotKept;
+  }
+
+  // Disables the nodes failing the check (NON_MANIFOLD and INCORRECT_EXIT,
+  // UNDETERMINED kept) in cascade: disabling nodes (and the nodes left with
+  // an empty label, see LabelGraphFuctions::DisableNonManifoldNodes) can make
+  // other nodes non manifold, so the graph is checked again and the new
+  // failing nodes are disabled, until none is left or MaxRounds.
+  // The first check is always done: the graph may have changed after the
+  // last check (e.g. nodes disabled along the singularities).
+  // At the end the check data (ManifoldNodevType) refers to the final graph.
+  // Returns the total number of nodes disabled.
+  int DisableNonManifoldCascade(int MaxRounds = 20,
+                                bool CurrentDataValid = false) {
+    int TotDisabled = 0;
+    // first check: full, unless the current data refers to this graph
+    if (!CurrentDataValid || !UseIncrementalCheck)
+      Init(PolyLSingV);
+    for (int Round = 1; Round <= MaxRounds; Round++) {
+      std::vector<bool> EnabledPre = M3Graph.EnabledN;
+      int Disabled = Geo::LabelGraphFuctions<ScalarType>::DisableNonManifoldNodes(
+          M3Graph, ManifoldNodevType, NON_MANIFOLD, INCORRECT_EXIT);
+      std::cout << "** Non manifold cascade, round " << Round << ": "
+                << Disabled << " nodes disabled **" << std::endl;
+      TotDisabled += Disabled;
+      if (Disabled == 0)
+        return TotDisabled;
+      if (UseIncrementalCheck) {
+        // check again only around the disabled nodes
+        std::vector<int> Changed;
+        for (size_t n = 0; n < EnabledPre.size(); n++)
+          if (EnabledPre[n] && !M3Graph.EnabledN[n])
+            Changed.push_back((int)n);
+        RecheckAroundNodes(Changed);
+      } else
+        Init(PolyLSingV);
+    }
+    std::cout << "WARNING: non manifold cascade stopped after " << MaxRounds
+              << " rounds" << std::endl;
+    return TotDisabled;
   }
 
   // void SolveNonManifolds() {

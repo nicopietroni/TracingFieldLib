@@ -1868,11 +1868,15 @@ void SmoothLaplacianNonManif(std::vector<Geo::Point3<ScalarType>> &VertPos,
   //   if ((*IteMapV).second > 2)
   //     FixedV.insert((*IteMapV).first);
 
+  std::vector<std::vector<int>> LapNeighbors;
+  GetLaplacianNeighbours<ScalarType>(VertPos, Faces, LapNeighbors);
+  
+
   // then smooth
   std::vector<std::pair<int, int>> LineSmooth = NotManifE;
   LineSmooth.insert(LineSmooth.end(), BorderE.begin(), BorderE.end());
   for (size_t s = 0; s < NumIte; s++) {
-    SmoothLaplacianStep(VertPos, Faces, FixedV, LineSmooth, Damp);
+    SmoothLaplacianStep(VertPos, Faces, FixedV, LapNeighbors, Damp);
 
     // //reproject
     // for (size_t i=0;i<BorderV.size();i++)

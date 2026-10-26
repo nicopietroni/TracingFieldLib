@@ -56,6 +56,13 @@ public:
     bool addInternalTangent_Constraints = true;
     bool addEdgeContinuation_Constraints = true;
     bool addAvoidedConnections_Constraints = true;
+    // on a surface edge, for each direction, at most one face of a sheet
+    // (the sheet ends there); built in the constraints but not used before
+    bool addBorderTangent_Constraints = true;
+    // nodes with an empty (non exit) label are forced to false
+    bool addForbidden_Constraints = true;
+    // time limit of kissat in seconds (0 = none)
+    int TimeLimit = 0;
   public:
     typename SheetSolve_ConstraintsM3<ScalarType>::ContinuityType CType;
     SAT_ExtractParam() {
@@ -78,17 +85,48 @@ private:
 
     std::vector<int> SatSeedTrue, SatSeedFalse;
     // map hard nodes to variables
+    // (a seed that is not a variable or shares its face with a previous seed
+    // is skipped with a warning: it would make the problem unsolvable)
+    std::set<int> SeedFaces;
     for (size_t i = 0; i < ExtrP.HardNodes.size(); i++) {
       int IndexN = ExtrP.HardNodes[i];
-      if (!M3Constraints.IsVariableM3(IndexN))
+      if (!M3Constraints.IsVariableM3(IndexN)) {
+        std::cout << "WARNING: seed node " << IndexN
+                  << " is not a variable (disabled or tangent), skipped"
+                  << std::endl;
         continue;
+      }
+      int IndexF = Field::FrameFieldM3Graph::ElemOfNode(IndexN);
+      if (!SeedFaces.insert(IndexF).second) {
+        std::cout << "WARNING: seed node " << IndexN
+                  << " on the same face of another seed, skipped" << std::endl;
+        continue;
+      }
       int IndexVar = M3Constraints.M3NodeToVar[IndexN];
       SatSeedTrue.push_back(IndexVar);
+    }
+
+    // nodes that can never be selected
+    if (ExtrP.addForbidden_Constraints) {
+      std::set<int> SeedSet(SatSeedTrue.begin(), SatSeedTrue.end());
+      for (size_t i = 0; i < M3Constraints.Forbidden_Vars.size(); i++) {
+        int IndexVar = M3Constraints.Forbidden_Vars[i];
+        if (SeedSet.count(IndexVar) > 0)
+          std::cout << "WARNING: seed variable " << IndexVar
+                    << " has an empty label: no solution" << std::endl;
+        SatSeedFalse.push_back(IndexVar);
+      }
     }
     
     // first add the at-most-one constraints
     std::vector<std::vector<int>> AtMostOne;
     if (ExtrP.addSingleF_Constraints) AtMostOne = M3Constraints.SingleF_ConstrM3;
+
+    // at most one face of a sheet on each surface edge and direction
+    if (ExtrP.addBorderTangent_Constraints)
+      AtMostOne.insert(AtMostOne.end(),
+                       M3Constraints.Border_TangentNodes_Constr.begin(),
+                       M3Constraints.Border_TangentNodes_Constr.end());
 
     // then add all the pairs of avoided connections as at-most-one
     if ((ExtrP.CType == SheetSolve_ConstraintsM3<ScalarType>::EdgeBased)&&
@@ -115,8 +153,15 @@ private:
         (ExtrP.addInternalTangent_Constraints)) 
       ZeroOrTwo = M3Constraints.Internal_TangentNodes_Constr;
    
+    // res = KissatExternal::solve(SatSeedTrue, SatSeedFalse, AtMostOne, AtMostTwo,
+    //                             ZeroOrTwo, ImplyOne, Seed, print_msg);
+    // the "at most one continuation" of ImplyOne is redundant when the
+    // at-most-two on the edge groups is used (the node is in the group)
+    bool ImplyAtMostOne = AtMostTwo.empty();
     res = KissatExternal::solve(SatSeedTrue, SatSeedFalse, AtMostOne, AtMostTwo,
-                                ZeroOrTwo, ImplyOne, Seed, print_msg);
+                                ZeroOrTwo, ImplyOne, Seed, print_msg,
+                                KissatExternal::DefaultKissatPath(),
+                                ImplyAtMostOne, ExtrP.TimeLimit);
                                 
     bool solved = (res.sat);
     if (print_msg) {
@@ -128,7 +173,12 @@ private:
     if (solved) {
       Solution = std::vector<bool>(M3Constraints.M3VarToNode.size(), false);
       for (size_t i = 0; i < M3Constraints.M3VarToNode.size(); i++) {
-        int VarValue = res.assignment[i]; // + 1];
+        // the assignment covers only the variables appearing in some
+        // constraint: the others were read out of bounds
+        // int VarValue = res.assignment[i]; // + 1];
+        int VarValue = 0;
+        if (i < res.assignment.size())
+          VarValue = res.assignment[i];
         if (VarValue == 1) {
           Solution[i] = true;
         } else {
@@ -187,10 +237,7 @@ public:
 
     std::vector<bool> VarSolution;
     bool solved = SolveSAT(ExtrP, VarSolution, 1234);
-    if (solved)
-      MatchedSeed = std::vector<bool>(ExtrP.HardNodes.size(), true);
-    else
-      MatchedSeed = std::vector<bool>(ExtrP.HardNodes.size(), false);
+    // (MatchedSeed is set below, from the final solution)
 
     M3Constraints.M3Solution = std::vector<bool>(M3Graph.NumNodes(), false);
     //std::cout << " Var Solution Size:" << VarSolution.size() << std::endl;
@@ -205,6 +252,26 @@ public:
 
     Geo::LabelGraphFuctions<ScalarType>::FilterSelectedFromSeed(
         M3Graph, ExtrP.HardNodes, M3Constraints.M3Solution);
+
+    // a seed is matched if it is part of the final solution (the skipped
+    // seeds are not)
+    // if (solved)
+    //   MatchedSeed = std::vector<bool>(ExtrP.HardNodes.size(), true);
+    // else
+    //   MatchedSeed = std::vector<bool>(ExtrP.HardNodes.size(), false);
+    MatchedSeed = std::vector<bool>(ExtrP.HardNodes.size(), false);
+    int NumMatched = 0;
+    for (size_t i = 0; i < ExtrP.HardNodes.size(); i++) {
+      int IndexN = ExtrP.HardNodes[i];
+      if ((IndexN >= 0) && (IndexN < (int)M3Constraints.M3Solution.size()) &&
+          M3Constraints.M3Solution[IndexN]) {
+        MatchedSeed[i] = true;
+        NumMatched++;
+      }
+    }
+    if (print_msg)
+      std::cout << "Matched seeds: " << NumMatched << " / "
+                << ExtrP.HardNodes.size() << std::endl;
 
     if (solved) {
       ScalarType CurrW = M3Constraints.SolutionW(M3Constraints.M3Solution);

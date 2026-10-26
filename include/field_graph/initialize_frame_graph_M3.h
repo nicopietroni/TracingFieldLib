@@ -42,9 +42,11 @@
 #include "patch_basic.h"
 #include "polyhedra_mesh_functions.h"
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -161,6 +163,10 @@ private:
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
       std::vector<EdgeNodesInfo> &EdgeInfo) {
     EdgeInfo.clear();
+    // face/edge pairs where the old per-direction assignment was not a
+    // permutation (two face directions on the same edge direction)
+    int NumNonBijective = 0;
+    int NumPairs = 0;
 
     // get one frame for each edge and the set of faces that
     // share those edges
@@ -187,32 +193,72 @@ private:
         // the edge with respect to that face (which is the label)
         int Label = EdgeFrames[i].FacesEdge[j].second;
 
-        // for each direction
-        for (size_t d = 0; d < 3; d++) {
-          int IndexDir = d;
-          // get the index of the node given face and direction
+        // // for each direction
+        // for (size_t d = 0; d < 3; d++) {
+        //   int IndexDir = d;
+        //   // get the index of the node given face and direction
+        //   int IndexNode =
+        //       Field::FrameFieldM3Graph::NodeOfElemDir(IndexF, IndexDir);
+        //
+        //   // get the direction of such a face
+        //   Geo::Point3<ScalarType> TargetD =
+        //       FacesFrameField[IndexF].GetDirection(IndexDir);
+        //
+        //   // get the best aligned with respect
+        //   // to the frame on the shared edge
+        //   int IndexTargetD = EdgeF.BestM3DirectionI(TargetD);
+        //   assert(IndexTargetD >= 0);
+        //   assert(IndexTargetD < 3);
+        //
+        //   // then set that for that edge for that
+        //   // direction of the edge that node is tangent
+        //   EdgeInfo.back().TangentN[IndexTargetD].push_back(IndexNode);
+        //   // also that for that node, the corresponding
+        //   //  face has the edge number is label (0..2)
+        //   EdgeInfo.back().NodeLabel[IndexTargetD].push_back(Label);
+        // }
+
+        // The per-direction assignment above chooses each face direction
+        // independently, so two directions of the same face could end on the
+        // same edge direction (when the face frame is ~45 deg from the edge
+        // frame). Here the whole frame is matched at once: the result is
+        // always a permutation, each edge direction gets one node per face.
+
+        // debug: check if the old assignment was a permutation
+        int OldT[3];
+        for (size_t d = 0; d < 3; d++)
+          OldT[d] = EdgeF.BestM3DirectionI(
+              FacesFrameField[IndexF].GetDirection(d));
+        if ((OldT[0] == OldT[1]) || (OldT[1] == OldT[2]) ||
+            (OldT[0] == OldT[2]))
+          NumNonBijective++;
+        NumPairs++;
+
+        // Axis[k] is the direction (0..5) of the face frame
+        // matched with the direction k of the edge frame
+        int Axis[3];
+        EdgeF.GetBestPairing(FacesFrameField[IndexF], Axis[0], Axis[1],
+                             Axis[2]);
+        assert((Axis[0] % 3) != (Axis[1] % 3));
+        assert((Axis[1] % 3) != (Axis[2] % 3));
+        assert((Axis[0] % 3) != (Axis[2] % 3));
+
+        for (size_t k = 0; k < 3; k++) {
+          // the direction of the face (sign does not matter for the node)
+          int IndexDir = Axis[k] % 3;
           int IndexNode =
               Field::FrameFieldM3Graph::NodeOfElemDir(IndexF, IndexDir);
-
-          // get the direction of such a face
-          Geo::Point3<ScalarType> TargetD =
-              FacesFrameField[IndexF].GetDirection(IndexDir);
-
-          // get the best aligned with respect
-          // to the frame on the shared edge
-          int IndexTargetD = EdgeF.BestM3DirectionI(TargetD);
-          assert(IndexTargetD >= 0);
-          assert(IndexTargetD < 3);
-
-          // then set that for that edge for that
-          // direction of the edge that node is tangent
-          EdgeInfo.back().TangentN[IndexTargetD].push_back(IndexNode);
-          // also that for that node, the corresponding
-          //  face has the edge number is label (0..2)
-          EdgeInfo.back().NodeLabel[IndexTargetD].push_back(Label);
+          // the node is tangent to the direction k of the edge
+          EdgeInfo.back().TangentN[k].push_back(IndexNode);
+          // the label is the edge index with respect to the face
+          EdgeInfo.back().NodeLabel[k].push_back(Label);
         }
       }
     }
+    if (NumNonBijective > 0)
+      std::cout << "WARNING: " << NumNonBijective << " out of " << NumPairs
+                << " face/edge pairs with ambiguous direction assignment"
+                << " (resolved by matching the whole frame)" << std::endl;
   }
 
   static void
@@ -240,7 +286,10 @@ private:
       for (size_t j = 0; j < 3; j++) {
         int IndexV0 = TetraInternalFaces[IndexF][j];
 
-        if (VertMap[IndexV0] == -1)
+        // VertMap is -1 for internal vertices: the test was inverted
+        // if (VertMap[IndexV0] == -1)
+        //   Facegraph.NodeBorderV[IndexN][j] = true;
+        if (VertMap[IndexV0] != -1)
           Facegraph.NodeBorderV[IndexN][j] = true;
 
         int IndexV1 = TetraInternalFaces[IndexF][(j + 1) % 3];
@@ -255,9 +304,84 @@ private:
     }
   }
 
+  // static void GetTangentNodesM3(
+  //     const std::vector<int> &VertMap,
+  //     const std::vector<Geo::Point3<ScalarType>> &VertNorm,
+  //     const std::vector<int> &FaceMap,
+  //     const std::vector<std::vector<int>> &TetraInternalFaces,
+  //     const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+  //     const std::vector<std::pair<int, int>> &SurfConvexE,
+  //     const std::vector<std::pair<int, int>> &SurfConcaveE,
+  //     std::vector<int> &TangentNodes) {
+  //   TangentNodes.clear();
+  //
+  //   std::set<int> FeaturesN;
+  //   for (size_t i = 0; i < SurfConvexE.size(); i++) {
+  //     FeaturesN.insert(SurfConvexE[i].first);
+  //     FeaturesN.insert(SurfConvexE[i].second);
+  //   }
+  //   for (size_t i = 0; i < SurfConcaveE.size(); i++) {
+  //     FeaturesN.insert(SurfConcaveE[i].first);
+  //     FeaturesN.insert(SurfConcaveE[i].second);
+  //   }
+  //   // first get the nodes encoding external faces
+  //   for (size_t i = 0; i < FaceMap.size(); i++) {
+  //
+  //     if (FaceMap[i] == -1)
+  //       continue;
+  //     if (FeaturesN.count(FaceMap[i]) > 0)
+  //       continue;
+  //
+  //     std::vector<int> IndexN;
+  //     Field::FrameFieldM3Graph::NodesOfElem(i, IndexN);
+  //     TangentNodes.insert(TangentNodes.end(), IndexN.begin(), IndexN.end());
+  //   }
+  //
+  //   // then get all nodes having one vertex on surface
+  //   for (size_t i = 0; i < TetraInternalFaces.size(); i++) {
+  //     int IndexF = i;
+  //     int sizeF = TetraInternalFaces[IndexF].size();
+  //     assert(sizeF == 3);
+  //     for (size_t j = 0; j < sizeF; j++) {
+  //       int IndexV = TetraInternalFaces[IndexF][j];
+  //
+  //       if (VertMap[IndexV] == -1)
+  //         continue; // not an external vert
+  //
+  //       // get the normal on the surface
+  //       int IndexVSurf = VertMap[IndexV];
+  //       assert(IndexVSurf >= 0);
+  //       assert(IndexVSurf < VertNorm.size());
+  //       Geo::Point3<ScalarType> ExitDir = VertNorm[IndexVSurf];
+  //
+  //       // get the most aligned direction
+  //       int IndexDir = FacesFrameField[IndexF].BestM3DirectionI(ExitDir);
+  //
+  //       // then find the node
+  //       int IndexNode =
+  //           Field::FrameFieldM3Graph::NodeOfElemDir(IndexF, IndexDir);
+  //       TangentNodes.push_back(IndexNode);
+  //     }
+  //   }
+  //   std::sort(TangentNodes.begin(), TangentNodes.end());
+  //   TangentNodes.erase(std::unique(TangentNodes.begin(), TangentNodes.end()),
+  //                      TangentNodes.end());
+  // }
+
+  // Old version above:
+  // 1) compared a face index (FaceMap[i]) with the set of feature vertices
+  // 2) used the vertex normal, that on feature edges is the average of the
+  //    normals of the two sides (~45 deg from both), so the chosen node was
+  //    decided by noise, face by face
+  // New version: the normals of the surface faces around each surface
+  // vertex are clustered, and for each cluster the aligned node is set as
+  // tangent (one on flat regions, two on feature edges, three on corners).
+  // Clusters bounded by a concave feature edge on that vertex are skipped:
+  // the sheet parallel to that side continues into the volume.
   static void GetTangentNodesM3(
       const std::vector<int> &VertMap,
-      const std::vector<Geo::Point3<ScalarType>> &VertNorm,
+      const std::vector<std::vector<int>> &SurfFaces,
+      const std::vector<Geo::Point3<ScalarType>> &SurfFaceNormals,
       const std::vector<int> &FaceMap,
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
@@ -265,6 +389,9 @@ private:
       const std::vector<std::pair<int, int>> &SurfConcaveE,
       std::vector<int> &TangentNodes) {
     TangentNodes.clear();
+    // normals closer than this angle are merged in the same cluster,
+    // a cluster farther than this from all frame directions is ambiguous
+    const ScalarType CosClusterAngle = cos(30.0 * M_PI / 180.0);
 
     std::set<int> FeaturesN;
     for (size_t i = 0; i < SurfConvexE.size(); i++) {
@@ -275,20 +402,110 @@ private:
       FeaturesN.insert(SurfConcaveE[i].first);
       FeaturesN.insert(SurfConcaveE[i].second);
     }
+    std::set<std::pair<int, int>> ConcaveSet;
+    for (size_t i = 0; i < SurfConcaveE.size(); i++) {
+      int V0 = SurfConcaveE[i].first;
+      int V1 = SurfConcaveE[i].second;
+      ConcaveSet.insert(std::pair<int, int>(std::min(V0, V1), std::max(V0, V1)));
+    }
+
     // first get the nodes encoding external faces
     for (size_t i = 0; i < FaceMap.size(); i++) {
 
       if (FaceMap[i] == -1)
         continue;
-      if (FeaturesN.count(FaceMap[i]) > 0)
-        continue;
+      // FaceMap[i] is a face, FeaturesN contains vertices
+      // if (FeaturesN.count(FaceMap[i]) > 0)
+      //   continue;
+      // // skip the external faces touching a feature vertex
+      // int IndexSurfF = FaceMap[i];
+      // assert(IndexSurfF >= 0);
+      // assert(IndexSurfF < (int)SurfFaces.size());
+      // bool OnFeature = false;
+      // for (size_t j = 0; j < SurfFaces[IndexSurfF].size(); j++)
+      //   if (FeaturesN.count(SurfFaces[IndexSurfF][j]) > 0)
+      //     OnFeature = true;
+      // if (OnFeature)
+      //   continue;
+      // the surface faces can never be part of a sheet: all their nodes
+      // are tangent, also near the features
 
       std::vector<int> IndexN;
       Field::FrameFieldM3Graph::NodesOfElem(i, IndexN);
       TangentNodes.insert(TangentNodes.end(), IndexN.begin(), IndexN.end());
     }
 
+    // per surface vertex the incident surface faces
+    std::vector<std::vector<int>> VertSurfF;
+    for (size_t i = 0; i < SurfFaces.size(); i++)
+      for (size_t j = 0; j < SurfFaces[i].size(); j++) {
+        int IndexV = SurfFaces[i][j];
+        if (IndexV >= (int)VertSurfF.size())
+          VertSurfF.resize(IndexV + 1);
+        VertSurfF[IndexV].push_back(i);
+      }
+
+    // per surface vertex the clustered normals that define a tangent node
+    int NumMultiClusterV = 0;
+    int NumConcaveSkipped = 0;
+    std::vector<std::vector<Geo::Point3<ScalarType>>> VertTangentN(
+        VertSurfF.size());
+    for (size_t v = 0; v < VertSurfF.size(); v++) {
+      std::vector<Geo::Point3<ScalarType>> SumN;
+      std::vector<bool> OnConcave;
+      for (size_t k = 0; k < VertSurfF[v].size(); k++) {
+        int IndexSF = VertSurfF[v][k];
+        Geo::Point3<ScalarType> CurrN = SurfFaceNormals[IndexSF];
+        CurrN.Normalize();
+
+        // check if the face has a concave edge incident to this vertex
+        bool ConcaveF = false;
+        int sizeF = SurfFaces[IndexSF].size();
+        for (int j = 0; j < sizeF; j++) {
+          int V0 = SurfFaces[IndexSF][j];
+          int V1 = SurfFaces[IndexSF][(j + 1) % sizeF];
+          if ((V0 != (int)v) && (V1 != (int)v))
+            continue;
+          std::pair<int, int> KeyE(std::min(V0, V1), std::max(V0, V1));
+          if (ConcaveSet.count(KeyE) > 0)
+            ConcaveF = true;
+        }
+
+        // add to the closest cluster or create a new one
+        int BestC = -1;
+        for (size_t c = 0; c < SumN.size(); c++) {
+          Geo::Point3<ScalarType> AvgN = SumN[c];
+          AvgN.Normalize();
+          if (fabs(Geo::Dot(AvgN, CurrN)) > CosClusterAngle) {
+            BestC = c;
+            break;
+          }
+        }
+        if (BestC == -1) {
+          SumN.push_back(CurrN);
+          OnConcave.push_back(ConcaveF);
+        } else {
+          if (Geo::Dot(SumN[BestC], CurrN) < 0)
+            CurrN = -CurrN;
+          SumN[BestC] += CurrN;
+          OnConcave[BestC] = OnConcave[BestC] || ConcaveF;
+        }
+      }
+      if (SumN.size() > 1)
+        NumMultiClusterV++;
+      for (size_t c = 0; c < SumN.size(); c++) {
+        if (OnConcave[c]) {
+          NumConcaveSkipped++;
+          continue;
+        }
+        Geo::Point3<ScalarType> AvgN = SumN[c];
+        AvgN.Normalize();
+        VertTangentN[v].push_back(AvgN);
+      }
+    }
+
     // then get all nodes having one vertex on surface
+    int NumAmbiguous = 0;
     for (size_t i = 0; i < TetraInternalFaces.size(); i++) {
       int IndexF = i;
       int sizeF = TetraInternalFaces[IndexF].size();
@@ -299,24 +516,48 @@ private:
         if (VertMap[IndexV] == -1)
           continue; // not an external vert
 
-        // get the normal on the surface
         int IndexVSurf = VertMap[IndexV];
         assert(IndexVSurf >= 0);
-        assert(IndexVSurf < VertNorm.size());
-        Geo::Point3<ScalarType> ExitDir = VertNorm[IndexVSurf];
+        if (IndexVSurf >= (int)VertTangentN.size())
+          continue;
 
-        // get the most aligned direction
-        int IndexDir = FacesFrameField[IndexF].BestM3DirectionI(ExitDir);
+        for (size_t c = 0; c < VertTangentN[IndexVSurf].size(); c++) {
+          Geo::Point3<ScalarType> ExitDir = VertTangentN[IndexVSurf][c];
 
-        // then find the node
-        int IndexNode =
-            Field::FrameFieldM3Graph::NodeOfElemDir(IndexF, IndexDir);
-        TangentNodes.push_back(IndexNode);
+          // get the most aligned direction
+          int IndexDir = FacesFrameField[IndexF].BestM3DirectionI(ExitDir);
+
+          // too far from all frame directions: no sheet can be tangent
+          ScalarType DotV = fabs(
+              Geo::Dot(FacesFrameField[IndexF].GetDirection(IndexDir), ExitDir));
+          if (DotV < CosClusterAngle) {
+            NumAmbiguous++;
+            continue;
+          }
+
+          // then find the node
+          int IndexNode =
+              Field::FrameFieldM3Graph::NodeOfElemDir(IndexF, IndexDir);
+          TangentNodes.push_back(IndexNode);
+        }
       }
     }
     std::sort(TangentNodes.begin(), TangentNodes.end());
     TangentNodes.erase(std::unique(TangentNodes.begin(), TangentNodes.end()),
                        TangentNodes.end());
+
+    if (NumMultiClusterV > 0)
+      std::cout << "WARNING: " << NumMultiClusterV
+                << " surface vertices with more than one normal cluster"
+                << " (feature edges/corners)" << std::endl;
+    if (NumConcaveSkipped > 0)
+      std::cout << "WARNING: " << NumConcaveSkipped
+                << " normal clusters on concave features not set as tangent"
+                << std::endl;
+    if (NumAmbiguous > 0)
+      std::cout << "WARNING: " << NumAmbiguous
+                << " face/vertex cases with a surface normal far from all"
+                << " frame directions (no tangent node set)" << std::endl;
   }
 
   static void
@@ -466,9 +707,11 @@ private:
 
     IsOpposite=(!coherentDir);
     
-    Weight = Facegraph.NodeW[Node0];
-    Weight += Facegraph.NodeW[Node1];
-    Weight /=2;
+    // Weight = Facegraph.NodeW[Node0];
+    // Weight += Facegraph.NodeW[Node1];
+    // Weight /=2;
+    // average of the node costs, scaled by the relative face area
+    Weight = LabelGraphFuctions<ScalarType>::ArcWeight(Facegraph, Node0, Node1);
     // if ((LType == DisableOppDir) || (LType == WeightOppDir)) {
     //   Geo::Point3<ScalarType> avgNorm = (NormFace0 + NormFace1);
     //   avgNorm.Normalize();
@@ -506,6 +749,28 @@ private:
       assert(Facegraph.NodeW[i] >= 0);
       //assert(Facegraph.NodeW[i] <= 1);
     }
+
+    // area factor: face area / average face area, so that the cost of a
+    // sheet depends on its area and not on the number of faces
+    std::vector<ScalarType> FaceArea(TetraInternalFaces.size(), 0);
+    ScalarType AvgArea = 0;
+    for (size_t f = 0; f < TetraInternalFaces.size(); f++) {
+      assert(TetraInternalFaces[f].size() == 3);
+      Geo::Point3<ScalarType> P0 = VertPos[TetraInternalFaces[f][0]];
+      Geo::Point3<ScalarType> P1 = VertPos[TetraInternalFaces[f][1]];
+      Geo::Point3<ScalarType> P2 = VertPos[TetraInternalFaces[f][2]];
+      FaceArea[f] = Cross(P1 - P0, P2 - P0).Norm() / 2;
+      AvgArea += FaceArea[f];
+    }
+    if (TetraInternalFaces.size() > 0)
+      AvgArea /= (ScalarType)TetraInternalFaces.size();
+    Facegraph.NodeAreaW.clear();
+    Facegraph.NodeAreaW.resize(Facegraph.NumNodes(), 1);
+    if (AvgArea > 0)
+      for (size_t i = 0; i < Facegraph.NumNodes(); i++) {
+        int IndexF = Field::FrameFieldM3Graph::ElemOfNode(i);
+        Facegraph.NodeAreaW[i] = FaceArea[IndexF] / AvgArea;
+      }
   }
 
   // std::vector<std::pair<int, int>> ConvexNodeLabelOnEdge;
@@ -1100,13 +1365,189 @@ private:
   //   }
   // }
 
+  // SINGULAR EDGES (rotation of the frames around the edge, monodromy).
+  // On a normal edge the faces around it are matched to one interpolated
+  // frame of the edge. Around a singular edge the frames of the faces rotate
+  // (after a full turn the two directions orthogonal to the line are
+  // swapped): an average frame does not represent any face and the matching
+  // becomes arbitrary (wrong links, and the links of a sheet passing around
+  // the line are missing). Here the faces around the edge are sorted by
+  // angle, each face is matched only with the next one (always reliable),
+  // and two faces are linked composing the matchings along the two ways
+  // around the edge: on a normal edge the two ways give the same links (the
+  // edge is not handled here), on a singular edge they differ and both are
+  // kept (the sheet can pass on both sides of the line). The groups of the
+  // edge constraints are the connected groups of the nodes linked here.
+  // Returns the singular edges handled (to skip them in the usual loop).
+  static std::set<std::pair<int, int>> InitSingularEdgeConnections(
+      Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &TetraInternalFaces,
+      const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+      const std::set<std::pair<int, int>> &ExtEdges, const bool DisableOpp) {
+
+    std::set<std::pair<int, int>> Handled;
+    std::vector<EdgeFrameInfo> EdgeFrames;
+    InitEdgeFrameInfo(TetraInternalFaces, FacesFrameField, EdgeFrames);
+
+    int NumArcs = 0, NumGroups = 0;
+    for (size_t i = 0; i < EdgeFrames.size(); i++) {
+      int V0 = EdgeFrames[i].V0;
+      int V1 = EdgeFrames[i].V1;
+      std::pair<int, int> KeyE(std::min(V0, V1), std::max(V0, V1));
+      // on the surface the faces do not go all around the edge
+      if (ExtEdges.count(KeyE) > 0)
+        continue;
+      const std::vector<std::pair<int, int>> &FE = EdgeFrames[i].FacesEdge;
+      const int NF = (int)FE.size();
+      if (NF < 3)
+        continue;
+
+      // faces sorted by angle around the edge
+      Geo::Point3<ScalarType> Axis = VertPos[V1] - VertPos[V0];
+      ScalarType LA = Axis.Norm();
+      if (LA <= 0)
+        continue;
+      Axis = Axis / LA;
+      std::vector<std::pair<ScalarType, int>> AngF;
+      Geo::Point3<ScalarType> RefU, RefS;
+      for (int j = 0; j < NF; j++) {
+        int IndexF = FE[j].first;
+        int W = -1;
+        for (int v : TetraInternalFaces[IndexF])
+          if ((v != V0) && (v != V1))
+            W = v;
+        assert(W >= 0);
+        Geo::Point3<ScalarType> U = VertPos[W] - VertPos[V0];
+        U = U - Axis * Geo::Dot(U, Axis);
+        if (j == 0) {
+          RefU = U / U.Norm();
+          RefS = Geo::Cross(Axis, RefU);
+        }
+        AngF.push_back(std::make_pair(
+            std::atan2(Geo::Dot(U, RefS), Geo::Dot(U, RefU)), j));
+      }
+      std::sort(AngF.begin(), AngF.end());
+
+      // matching of each face with the next one: Next[k][d] is the direction
+      // of face k+1 matched with the direction d of face k
+      std::vector<std::array<int, 3>> Next(NF), Prev(NF);
+      for (int k = 0; k < NF; k++) {
+        int FA = FE[AngF[k].second].first;
+        int FB = FE[AngF[(k + 1) % NF].second].first;
+        Field::FrameField<ScalarType> FrameA = FacesFrameField[FA];
+        int Ax[3];
+        FrameA.GetBestPairing(FacesFrameField[FB], Ax[0], Ax[1], Ax[2]);
+        for (int d = 0; d < 3; d++)
+          Next[k][d] = Ax[d] % 3;
+      }
+      // inverse: Prev[k+1][Next[k][d]] = d
+      for (int k = 0; k < NF; k++)
+        for (int d = 0; d < 3; d++)
+          Prev[(k + 1) % NF][Next[k][d]] = d;
+
+      // full turn: identity on a normal edge
+      bool Singular = false;
+      for (int d = 0; d < 3; d++) {
+        int Curr = d;
+        for (int k = 0; k < NF; k++)
+          Curr = Next[k][Curr];
+        if (Curr != d)
+          Singular = true;
+      }
+      if (!Singular)
+        continue;
+      Handled.insert(KeyE);
+
+      // the usable nodes (as in the usual loop)
+      auto NodeOf = [&](int k, int d) {
+        return Field::FrameFieldM3Graph::NodeOfElemDir(FE[AngF[k].second].first,
+                                                       d);
+      };
+      auto LabelOf = [&](int k) { return FE[AngF[k].second].second; };
+      auto Usable = [&](int IndexN) {
+        return Facegraph.IsEnabled(IndexN) &&
+               (Facegraph.NodeType(IndexN) != TangentDomain);
+      };
+
+      // links along the two ways, union find for the groups
+      std::map<int, int> Parent;
+      std::function<int(int)> Find = [&](int x) {
+        if (Parent[x] == x)
+          return x;
+        return Parent[x] = Find(Parent[x]);
+      };
+      std::set<std::pair<int, int>> Linked;
+      for (int a = 0; a < NF; a++)
+        for (int d = 0; d < 3; d++) {
+          int NA = NodeOf(a, d);
+          if (!Usable(NA))
+            continue;
+          if (Parent.count(NA) == 0)
+            Parent[NA] = NA;
+          // forward and backward around the edge
+          int DF = d, DB = d;
+          for (int step = 1; step < NF; step++) {
+            int kF = (a + step) % NF;
+            int kB = (a - step + NF) % NF;
+            DF = Next[(kF - 1 + NF) % NF][DF];
+            DB = Prev[(kB + 1) % NF][DB];
+            int Targets[2][2] = {{kF, DF}, {kB, DB}};
+            for (int w = 0; w < 2; w++) {
+              int NB = NodeOf(Targets[w][0], Targets[w][1]);
+              if (NB == NA || !Usable(NB))
+                continue;
+              std::pair<int, int> KeyL(std::min(NA, NB), std::max(NA, NB));
+              if (Linked.count(KeyL) > 0)
+                continue;
+              Linked.insert(KeyL);
+              if (Parent.count(NB) == 0)
+                Parent[NB] = NB;
+              Parent[Find(NA)] = Find(NB);
+              bool areOpposite;
+              ScalarType Weight = 1;
+              ConnectM3Weight(VertPos, Facegraph, TetraInternalFaces,
+                              FacesFrameField, NA, NB, areOpposite, Weight);
+              bool IsEnabledN = true;
+              if (DisableOpp && areOpposite)
+                IsEnabledN = false;
+              int LabA = LabelOf(a);
+              int LabB = LabelOf(Targets[w][0]);
+              Facegraph.AddNeighbour(NA, NB, LabA, Weight, IsEnabledN,
+                                     areOpposite);
+              Facegraph.AddNeighbour(NB, NA, LabB, Weight, IsEnabledN,
+                                     areOpposite);
+              NumArcs++;
+            }
+          }
+        }
+      // groups of the edge constraints
+      std::map<int, std::vector<int>> Groups;
+      for (std::map<int, int>::iterator it = Parent.begin(); it != Parent.end();
+           it++)
+        Groups[Find(it->first)].push_back(it->first);
+      for (std::map<int, std::vector<int>>::iterator it = Groups.begin();
+           it != Groups.end(); it++) {
+        if (it->second.size() < 2)
+          continue;
+        Facegraph.InternalTangentConstr.push_back(it->second);
+        Facegraph.InternalTangentConstrEdges.push_back(KeyE);
+        NumGroups++;
+      }
+    }
+    std::cout << "Singular edges (frames rotating around the edge): "
+              << Handled.size() << ", linked along the two ways around: "
+              << NumArcs << " links, " << NumGroups << " groups" << std::endl;
+    return Handled;
+  }
+
   static void InitConnections(
       Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
       const std::set<std::pair<int, int>> &ExtEdges,
-      const bool DisableOpp){
+      const bool DisableOpp, const bool ChainSingularEdges = true){
       //, const LinkType LType) {
 
     // this data structure has for each edge
@@ -1123,6 +1564,13 @@ private:
     Facegraph.BorderTangentConstr.clear();
     Facegraph.BorderTangentConstrEdges.clear();
 
+    // the singular edges are linked along the two ways around the edge
+    std::set<std::pair<int, int>> SingularEdges;
+    if (ChainSingularEdges)
+      SingularEdges = InitSingularEdgeConnections(
+          Facegraph, VertPos, TetraInternalFaces, FacesFrameField, ExtEdges,
+          DisableOpp);
+
     // then cycle all the possible edges
     for (size_t i = 0; i < EdgeInfo.size(); i++) {
       int IndexV0 = EdgeInfo[i].V0;
@@ -1136,6 +1584,9 @@ private:
       std::pair<int, int> KeyE(std::min(IndexV0, IndexV1),
                                std::max(IndexV0, IndexV1));
       bool IsExit = (ExtEdges.count(KeyE) > 0);
+      // already linked (singular edge)
+      if (SingularEdges.count(KeyE) > 0)
+        continue;
 
       // then explore the three direction of the face
       for (size_t d = 0; d < 3; d++) {
@@ -1229,7 +1680,8 @@ public:
          const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
          const bool DisableOpp=false,
          const std::vector<std::pair<int, int>> &SurfConvexE = std::vector<std::pair<int, int>>(),
-         const std::vector<std::pair<int, int>> &SurfConcaveE = std::vector<std::pair<int, int>>()) 
+         const std::vector<std::pair<int, int>> &SurfConcaveE = std::vector<std::pair<int, int>>(),
+         const bool ChainSingularEdges = true) 
   {
 
     Facegraph.Clear();
@@ -1264,8 +1716,11 @@ public:
     std::vector<Geo::Point3<ScalarType>> FaceNormals, VertNorm;
     ComputeNormals<ScalarType>(SurfVertPos, SurfFaces, FaceNormals, VertNorm);
     std::vector<int> TangentNodes;
-    GetTangentNodesM3(VertMap, VertNorm, FaceMap, TetraInternalFaces,
-                      FacesFrameField, SurfConvexE, SurfConcaveE, TangentNodes);
+    // GetTangentNodesM3(VertMap, VertNorm, FaceMap, TetraInternalFaces,
+    //                   FacesFrameField, SurfConvexE, SurfConcaveE, TangentNodes);
+    GetTangentNodesM3(VertMap, SurfFaces, FaceNormals, FaceMap,
+                      TetraInternalFaces, FacesFrameField, SurfConvexE,
+                      SurfConcaveE, TangentNodes);
 
     // set as tangent nodes
     for (size_t i = 0; i < TangentNodes.size(); i++) {
@@ -1298,7 +1753,7 @@ public:
     std::cout << "Initializing Connections " << std::endl;
 
     InitConnections(Facegraph, VertPos, TetraInternalFaces, FacesFrameField,
-                    ExtEdges, DisableOpp);
+                    ExtEdges, DisableOpp, ChainSingularEdges);
 
     std::cout << "Sorting and make them unique " << std::endl;
 
@@ -1321,8 +1776,10 @@ public:
         Facegraph, SelectedNodes);
 
     ScalarType Ratio = (ScalarType)SelectedNodes.size() / (ScalarType)NumBefore;
-    std::cout << "WARNING " << Ratio * 100 << " perc of nodes with empty label"
-              << std::endl;
+    // std::cout << "WARNING " << Ratio * 100 << " perc of nodes with empty label"
+    //           << std::endl;
+    std::cout << "INFO: " << SelectedNodes.size() << " active internal nodes ("
+              << Ratio * 100 << "%) with an empty label" << std::endl;
 
     // // init Node Weight for the already established connections
     // InitAlignW(Facegraph, VertPos, TetraInternalFaces, FacesFrameField);

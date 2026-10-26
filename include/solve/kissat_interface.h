@@ -35,8 +35,12 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
+#include <atomic>
+#include <set>
 #include <string>
 #include <sys/wait.h> // for WEXITSTATUS
+#include <unistd.h>   // for getpid
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -989,9 +993,13 @@ public:
         addAtMostTwo(g,C);
     }
 
+    // AddAtMostOne = false skips the (x0 -> AMO(group)) part: it is
+    // redundant when an at-most-two constraint on the whole edge group
+    // (which contains x0) is already present
     static void addConditionalOneOf(
         const std::vector<std::pair<int,std::vector<int>>>& groups,
-        std::vector<std::vector<int>>& C)
+        std::vector<std::vector<int>>& C,
+        bool AddAtMostOne = true)
     {
         for (auto& p: groups){
             int x0 = p.first;
@@ -1002,15 +1010,35 @@ public:
             for (int v: g) cl.push_back(v);
             C.push_back(cl);
 
+            // The at-most-one on the group was unconditional: it held also
+            // when x0 is false, so two linked nodes of an edge were forbidden
+            // as soon as a third node was linked to both of them (no sheet
+            // could cross an edge with three linked nodes in a direction).
+            // It must hold only if x0 is true: (x0 -> AMO(group)).
             int n = g.size();
+            // for (int i=0;i<n;i++)
+            //     for (int j=i+1;j<n;j++)
+            //         C.push_back({-g[i], -g[j]});
+            if (!AddAtMostOne)
+                continue;
             for (int i=0;i<n;i++)
                 for (int j=i+1;j<n;j++)
-                    C.push_back({-g[i], -g[j]});
+                    C.push_back({-x0, -g[i], -g[j]});
         }
+    }
+
+    // default path of the kissat executable
+    static const std::string &DefaultKissatPath() {
+        static const std::string Path =
+            "/Users/134750/Desktop/00_GeoProjects/"
+            "TracingFieldLib/external_lib/kissat/build/kissat";
+        return Path;
     }
 
     // --- SOLVE CON REMAP COMPATTO + SHIFT -------------------------------------
 
+    // implyAtMostOne: see addConditionalOneOf (last parameter, so the
+    // existing calls are unchanged)
     static Result solve(
         const std::vector<int>& seedTrue,
         const std::vector<int>& seedFalse,
@@ -1019,11 +1047,20 @@ public:
         const std::vector<std::vector<int>>& zeroOrTwo,
         const std::vector<std::pair<int,std::vector<int>>>& ImplyOne,
         uint32_t seed = 1234, bool print_info = true,
-       const std::string &kissatPath =
-    "/Users/134750/Desktop/00_GeoProjects/"
-    "TracingFieldLib/external_lib/kissat/build/kissat")
+       // const std::string &kissatPath =
+       //  "/Users/134750/Desktop/00_GeoProjects/"
+       //  "TracingFieldLib/external_lib/kissat/build/kissat")
+       const std::string &kissatPath = DefaultKissatPath(),
+       bool implyAtMostOne = true,
+       int timeLimitSec = 0)
     {
-        const std::string cnfFile = "/tmp/tmp_kissat.cnf";
+        // const std::string cnfFile = "/tmp/tmp_kissat.cnf";
+        // unique name: two solves at the same time (other threads or other
+        // processes) would overwrite the same file
+        static std::atomic<int> FileCounter(0);
+        const std::string cnfFile = "/tmp/tmp_kissat_" +
+                                    std::to_string((int)getpid()) + "_" +
+                                    std::to_string(FileCounter++) + ".cnf";
 
         // ----------------------------------------------------------------------
         // 1) RACCOGLI TUTTE LE VARIABILI REALI (0-based)
@@ -1110,7 +1147,8 @@ public:
                 for (int v: p.second) sg.push_back(r2s[v]);
                 tmp.push_back({x0, sg});
             }
-            addConditionalOneOf(tmp, C);
+            // addConditionalOneOf(tmp, C);
+            addConditionalOneOf(tmp, C, implyAtMostOne);
         }
 
         int finalSatVars = aux.next - 1;
@@ -1136,7 +1174,11 @@ public:
         std::string cmd =
             "cd " + dir + " && ./" + exe +
             " --seed=" + std::to_string(seed) +
-            " --relaxed " + cnfFile;
+            " --relaxed ";
+        // time limit (kissat stops with exit code 0 = unknown)
+        if (timeLimitSec > 0)
+            cmd += " --time=" + std::to_string(timeLimitSec) + " ";
+        cmd += cnfFile;
 
         if (!print_info)
             cmd += " 2>/dev/null";
@@ -1154,7 +1196,13 @@ public:
 
         int status = pclose(pipe);
         int rc = WEXITSTATUS(status);
+        std::remove(cnfFile.c_str());
 
+        if ((rc == 0) && (timeLimitSec > 0)) {
+            std::cerr << "Kissat: time limit (" << timeLimitSec
+                      << " s) reached, no answer" << std::endl;
+            return {false,{}};
+        }
         if (rc != 10 && rc != 20) {
             if (print_info){
                 std::cerr << "Kissat error (exit " << rc << ")\nOUT:\n" << out;

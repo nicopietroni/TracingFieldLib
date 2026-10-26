@@ -82,6 +82,12 @@ public:
   // extract the surface
   std::vector<std::pair<int, std::vector<int>>> EdgeLabel_Continuation_Constr;
 
+  // variables that can never be selected: nodes with a non exit label without
+  // any active neighbour (the sheet could not continue across that edge, it
+  // would have a hole); before they were simply left without the
+  // continuation constraint
+  std::vector<int> Forbidden_Vars;
+
   // LINK VARIABLES IF USED IN THE OBJECTIVE FUNCTION
   //  for each connection Var the list of nodes
   std::vector<std::pair<int, int>> M3LinkVarToNodes;
@@ -97,6 +103,11 @@ public:
 
   //true if the current solution is valid
   bool BeenSolved;
+
+  // true if InitConstraints kept the previous solution (computed for the
+  // same seeds): M3Solution is a complete solution usable as warm start,
+  // otherwise it contains only the seeds
+  bool HasStartSolution = false;
 
   bool IsVariableM3(int IndexN) const {
     // return false;
@@ -207,7 +218,13 @@ private:
           if (!IsVariableM3(IndexN1))
             continue;
           assert(IndexN0 != IndexN1);
-          if (M3Graph.IsActiveNeighbour(IndexN0, IndexN1))
+          // IsActiveNeighbour looks only at the arcs leaving the first node:
+          // check both directions (an arc active only from N1 to N0 is a
+          // valid connection too)
+          // if (M3Graph.IsActiveNeighbour(IndexN0, IndexN1))
+          //   continue;
+          if (M3Graph.IsActiveNeighbour(IndexN0, IndexN1) ||
+              M3Graph.IsActiveNeighbour(IndexN1, IndexN0))
             continue;
           int IndexVar0 = M3NodeToVar[IndexN0];
           int IndexVar1 = M3NodeToVar[IndexN1];
@@ -301,6 +318,7 @@ private:
   void InitLabelContinuation_Constr() {
 
     EdgeLabel_Continuation_Constr.clear();
+    Forbidden_Vars.clear();
 
     for (size_t i = 0; i < M3Graph.NumNodes(); i++) {
 
@@ -326,9 +344,11 @@ private:
           int IndexN1 = IndexNeigh[j];
           assert(IndexLab >= 0);
           assert(IndexLab < 3);
-          // if (!IsVariableM3(IndexN1))
-          //   continue;
-          assert(IsVariableM3(IndexN1));
+          // an enabled neighbour can be a tangent node (not a variable)
+          // when the tangent nodes are not deactivated: skip it
+          // assert(IsVariableM3(IndexN1));
+          if (!IsVariableM3(IndexN1))
+            continue;
 
           int IndexVar1 = M3NodeToVar[IndexN1];
           assert(IndexVar1 >= 0);
@@ -351,6 +371,9 @@ private:
           EdgeLabel_Continuation_Constr.back().first = IndexVar0;
           EdgeLabel_Continuation_Constr.back().second = LabelVars[j];
         }
+        // no way to continue across this edge: never selectable
+        if ((!IsExitNodeLab) && (LabelVars[j].size() == 0))
+          Forbidden_Vars.push_back(IndexVar0);
       }
     }
   }
@@ -472,44 +495,136 @@ public:
     Border_TangentNodes_Constr.clear();
     Avoid_Connections.clear();
     EdgeLabel_Continuation_Constr.clear();
+    Forbidden_Vars.clear();
     M3LinkVarToNodes.clear();
     M3LinkVarWeight.clear();
     M3NodesToLinkVar.clear();
-    M3Solution.clear();
+    // M3Solution.clear();
+    // BeenSolved = false;
+    // The current solution was cleared here, so the test below
+    // (!reset_curr_solution && size == NumNodes) was never true: the previous
+    // solution (e.g. the SAT one passed to the ILP) was always replaced by
+    // the seeds. Now it is kept unless reset_curr_solution, and used only if
+    // it is a valid solution with at least one node.
+    bool KeepSolution = (!reset_curr_solution) && BeenSolved &&
+                        (M3Solution.size() == M3Graph.NumNodes());
+    std::vector<int> CurrSurfNodes;
+    if (KeepSolution) {
+      for (size_t i = 0; i < M3Solution.size(); i++)
+        if (M3Solution[i])
+          CurrSurfNodes.push_back(i);
+      KeepSolution = (CurrSurfNodes.size() > 0);
+    }
+    if (!KeepSolution) {
+      M3Solution.clear();
+      CurrSurfNodes.clear();
+    }
     BeenSolved = false;
+
+    // the seeds can have been disabled (e.g. by the disabling of the non
+    // manifold nodes or along the singularities before the solve): a
+    // disabled seed would be skipped silently and, if all the seeds are
+    // disabled, DisableNotUsefulFromSeed would disable the whole graph
+    std::vector<int> ValidSeeds;
+    for (size_t i = 0; i < Seeds.size(); i++) {
+      if (IsVariableM3(Seeds[i]))
+        ValidSeeds.push_back(Seeds[i]);
+      else
+        std::cout << "WARNING: seed node " << Seeds[i]
+                  << " is disabled, skipped" << std::endl;
+    }
+    if ((Seeds.size() > 0) && ValidSeeds.empty())
+      std::cout << "WARNING: all the seeds are disabled" << std::endl;
+
+    // the previous solution is used only if it was computed for these seeds
+    // (all of them in it): with new seeds the restriction around the old
+    // solution (DisableDistantLinksFromSeed) cut away the new seeds and the
+    // solve failed until a new SAT solve
+    if (KeepSolution) {
+      std::set<int> CurrSurfSet(CurrSurfNodes.begin(), CurrSurfNodes.end());
+      for (size_t i = 0; i < ValidSeeds.size(); i++)
+        if (CurrSurfSet.count(ValidSeeds[i]) == 0) {
+          KeepSolution = false;
+          break;
+        }
+      if (!KeepSolution) {
+        if (print_info)
+          std::cout << "Seeds not in the previous solution: starting from "
+                       "the seeds"
+                    << std::endl;
+        M3Solution.clear();
+        CurrSurfNodes.clear();
+      }
+    }
+
+    // the nodes are disabled only temporarily here (to restrict the
+    // variables): the enabled state is saved and restored exactly at the end
+    std::vector<bool> EnabledBefore = M3Graph.EnabledN;
 
     std::vector<int> DisabledN;
     int NumEnabled = M3Graph.NumEnabledNodes();
 
-    if (Seeds.size() > 0) {
+    // if (Seeds.size() > 0) {
+    if (ValidSeeds.size() > 0) {
       Geo::LabelGraphFuctions<ScalarType>::DisableNotUsefulFromSeed(
-          M3Graph, Seeds, DisabledN);
+          M3Graph, ValidSeeds, DisabledN);
       if (print_info)
         std::cout << " Disabled " << DisabledN.size() << " out of " << NumEnabled
                   << std::endl;
     }
 
-    if ((!reset_curr_solution) && (M3Solution.size() == M3Graph.NumNodes()) &&
-        (max_dist_steps > 0)) {
-      std::vector<int> CurrSurfNodes;
-      for (size_t i = 0; i < M3Solution.size(); i++) {
-        if (!M3Solution[i])
-          continue;
-        CurrSurfNodes.push_back(i);
-      }
+    // if ((!reset_curr_solution) && (M3Solution.size() == M3Graph.NumNodes()) &&
+    //     (max_dist_steps > 0)) {
+    // max_dist_steps < 0: no restriction (0: only the solution nodes)
+    if (KeepSolution && (max_dist_steps >= 0)) {
+      // std::vector<int> CurrSurfNodes;
+      // for (size_t i = 0; i < M3Solution.size(); i++) {
+      //   if (!M3Solution[i])
+      //     continue;
+      //   CurrSurfNodes.push_back(i);
+      // }
       std::vector<int> Disabled1;
-      Geo::LabelGraphFuctions<ScalarType>::DisableDistantLinksFromSeed(M3Graph, CurrSurfNodes, 
-                                  Disabled1,max_dist_steps);
+      // Geo::LabelGraphFuctions<ScalarType>::DisableDistantLinksFromSeed(M3Graph, CurrSurfNodes, 
+      //                             Disabled1,max_dist_steps);
+      // distance from the previous solution and the seeds (the seeds are in
+      // the solution, added for safety)
+      std::vector<int> DistSources = CurrSurfNodes;
+      DistSources.insert(DistSources.end(), ValidSeeds.begin(),
+                         ValidSeeds.end());
+      // unique: the seeds are also in the solution (Dijkstra asserts on
+      // duplicated seeds)
+      std::sort(DistSources.begin(), DistSources.end());
+      DistSources.erase(std::unique(DistSources.begin(), DistSources.end()),
+                        DistSources.end());
+      Geo::LabelGraphFuctions<ScalarType>::DisableDistantLinksFromSeed(
+          M3Graph, DistSources, Disabled1, max_dist_steps);
+      if (print_info)
+        std::cout << "Band of " << max_dist_steps
+                  << " steps around the previous solution: " << Disabled1.size()
+                  << " nodes excluded" << std::endl;
       
       DisabledN.insert(DisabledN.end(),Disabled1.begin(),Disabled1.end());
     }
 
-    if ((reset_curr_solution) || (M3Solution.size() != M3Graph.NumNodes()))
+    // if ((reset_curr_solution) || (M3Solution.size() != M3Graph.NumNodes()))
+    if (!KeepSolution)
       InitBaseVariableValues(Seeds);
+    HasStartSolution = KeepSolution;
 
     InitVariableMap();
     if (print_info)
       std::cout << "Num M3 Nodes Variables: " << M3VarToNode.size() << std::endl;
+
+    if (KeepSolution && print_info) {
+      // nodes of the previous solution disabled in the meanwhile cannot be
+      // part of the starting solution
+      int NumVar = 0;
+      for (size_t i = 0; i < CurrSurfNodes.size(); i++)
+        if (M3NodeToVar[CurrSurfNodes[i]] >= 0)
+          NumVar++;
+      std::cout << "Kept previous solution: " << NumVar << " out of "
+                << CurrSurfNodes.size() << " nodes are variables" << std::endl;
+    }
 
     InitSingleF_ConstrM3();
     if (print_info)
@@ -530,13 +645,22 @@ public:
       std::cout << "Initialized " << Border_TangentNodes_Constr.size()
                 << " border tangent constraint" << std::endl;
     InitLabelContinuation_Constr();
+    // unique: a node can have more than one empty label
+    std::sort(Forbidden_Vars.begin(), Forbidden_Vars.end());
+    Forbidden_Vars.erase(std::unique(Forbidden_Vars.begin(), Forbidden_Vars.end()),
+                         Forbidden_Vars.end());
     if (print_info)
       std::cout << "Initialized " << EdgeLabel_Continuation_Constr.size()
                 << " edge label constraint" << std::endl;
+    if (print_info && (Forbidden_Vars.size() > 0))
+      std::cout << "WARNING: " << Forbidden_Vars.size()
+                << " nodes with an empty label (forbidden)" << std::endl;
 
     /// re-enable the disabled node that are not attached to the seed
-    for (size_t i = 0; i < DisabledN.size(); i++)
-      M3Graph.EnableNode(DisabledN[i]);
+    // for (size_t i = 0; i < DisabledN.size(); i++)
+    //   M3Graph.EnableNode(DisabledN[i]);
+    // restore exactly the state before (safer than re-enabling the list)
+    M3Graph.EnabledN = EnabledBefore;
   }
   
   SheetSolve_ConstraintsM3(Geo::LabelNeighOrientedGraph<ScalarType> &_M3Graph,

@@ -120,6 +120,11 @@ public:
   // is orthogonal to the M3 plane of that nod
   std::vector<ScalarType> NodeW;
 
+  // per node area factor: area of the face of the node divided by the
+  // average face area (empty means 1 for all nodes). The cost of a node
+  // in the arcs is NodeW * NodeAreaW (see LabelGraphFuctions::NodeCost)
+  std::vector<ScalarType> NodeAreaW;
+
   // tells if a node falls in the border
   std::vector<bool> NodeBorderF;
 
@@ -1137,6 +1142,7 @@ public:
     N.clear();
     IsExit.clear();
     NodeW.clear();
+    NodeAreaW.clear();
     NT.clear();
     EnabledN.clear();
   }

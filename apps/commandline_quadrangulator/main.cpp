@@ -145,6 +145,105 @@ void SaveField() {
   // ReadField(VertPos, Connectivity, PathField, VertCurv, FaceCurv);
 }
 
+// NEW (bad quality region): finds the faces with scaled jacobian below
+// JacThr or opposite side ratio above MaxRatio and saves a single OBJ with
+// the bad faces plus Rings rings of neighbours around them. Nothing is saved
+// if there are no bad faces. Returns the number of bad faces.
+int SaveBadQualityRegion(const ScalarType JacThr = 0.1,
+                         const ScalarType MaxRatio = 100,
+                         const int Rings = 2) {
+  std::string FileName = Outfolder;
+  FileName += std::string(GetFilanameNoExtension(PathMesh));
+  // OLD (same name as the quad mesh output, would overwrite it)
+  // FileName.append("_quad.obj");
+  // NEW (own name)
+  FileName.append("_bad.obj");
+
+  // find the bad faces
+  std::vector<bool> Bad(QuadFaces.size(), false);
+  int NumBad = 0;
+  ScalarType MinJac = std::numeric_limits<ScalarType>::max();
+  ScalarType MaxR = 0;
+  for (size_t i = 0; i < QuadFaces.size(); i++) {
+    std::vector<Geo::Point3<ScalarType>> Poly;
+    for (size_t j = 0; j < QuadFaces[i].size(); j++)
+      Poly.push_back(QuadVert[QuadFaces[i][j]]);
+    ScalarType Jac = Geo::ScaledJacobianPolygon<ScalarType>(Poly);
+    MinJac = std::min(MinJac, Jac);
+    // opposite side ratio (quads only): squeezed quads have a good jacobian
+    ScalarType Ratio = 1;
+    if (Poly.size() == 4) {
+      ScalarType E[4];
+      for (int k = 0; k < 4; k++)
+        E[k] = (Poly[(k + 1) % 4] - Poly[k]).Norm();
+      ScalarType A = E[0] + E[2], B = E[1] + E[3];
+      if ((A > 0) && (B > 0))
+        Ratio = std::max(A / B, B / A);
+      else
+        Ratio = std::numeric_limits<ScalarType>::max();
+      MaxR = std::max(MaxR, Ratio);
+    }
+    if ((Jac < JacThr) || (Ratio > MaxRatio)) {
+      Bad[i] = true;
+      NumBad++;
+    }
+  }
+  std::cout << "Bad quality: " << NumBad << " faces (jac < " << JacThr
+            << " or ratio > " << MaxRatio << "), min jac " << MinJac
+            << ", max ratio " << MaxR << std::endl;
+
+  // nothing to save
+  if (NumBad == 0)
+    return 0;
+
+  // grow Rings rings around the bad faces through shared vertices
+  std::vector<std::vector<int>> VF(QuadVert.size());
+  for (size_t i = 0; i < QuadFaces.size(); i++)
+    for (size_t j = 0; j < QuadFaces[i].size(); j++)
+      VF[QuadFaces[i][j]].push_back((int)i);
+  std::vector<bool> Selected = Bad;
+  std::vector<int> Front;
+  for (size_t i = 0; i < QuadFaces.size(); i++)
+    if (Bad[i])
+      Front.push_back((int)i);
+  for (int r = 0; r < Rings; r++) {
+    std::vector<int> NewFront;
+    for (size_t k = 0; k < Front.size(); k++)
+      for (size_t j = 0; j < QuadFaces[Front[k]].size(); j++) {
+        int V = QuadFaces[Front[k]][j];
+        for (size_t l = 0; l < VF[V].size(); l++) {
+          int F = VF[V][l];
+          if (Selected[F])
+            continue;
+          Selected[F] = true;
+          NewFront.push_back(F);
+        }
+      }
+    Front = NewFront;
+  }
+
+  // copy the selected faces, re-indexing the used vertices
+  std::vector<int> NewIdx(QuadVert.size(), -1);
+  std::vector<Geo::Point3<ScalarType>> SubVert;
+  std::vector<std::vector<int>> SubFaces;
+  for (size_t i = 0; i < QuadFaces.size(); i++) {
+    if (!Selected[i])
+      continue;
+    std::vector<int> NewF;
+    for (size_t j = 0; j < QuadFaces[i].size(); j++) {
+      int V = QuadFaces[i][j];
+      if (NewIdx[V] == -1) {
+        NewIdx[V] = (int)SubVert.size();
+        SubVert.push_back(QuadVert[V]);
+      }
+      NewF.push_back(NewIdx[V]);
+    }
+    SubFaces.push_back(NewF);
+  }
+  WriteOBJ(FileName.c_str(), SubVert, SubFaces);
+  return NumBad;
+}
+
 void SaveFeatures() {
   if (TriFeatures.size() == 0)
     return;
@@ -205,6 +304,24 @@ void RefineForTracingConnectivity() {
   ComputeNormals(TriVertPos, TriConnectivity, TriFaceNormal, TriVertNormal);
 }
 
+void SaveSingularitiesOBJ() {
+  std::vector<std::vector<int>> NextF, NextE;
+  Geo::getFFAdjacency(TriConnectivity, NextF, NextE);
+  // update singularities
+  std::vector<int> SingIndex,SingValue;
+  GetFaceSingularities(FaceCurv, TriVertPos, TriConnectivity, NextF, NextE, SingIndex,
+                       SingValue);
+  
+  std::string FileName = Outfolder;
+  FileName += std::string(GetFilanameNoExtension(PathMesh));
+  FileName.append("_sing.obj");
+  std::vector<Geo::Point3<ScalarType>> SingVertPos;
+  for (size_t i = 0; i < SingIndex.size(); i++) {
+    SingVertPos.push_back(TriVertPos[SingIndex[i]]);
+  }
+  WriteOBJ(FileName.c_str(), SingVertPos);
+ }
+
 void BatchProcessField() {
 
   RefineForTracing();
@@ -222,6 +339,9 @@ void BatchProcessField() {
   std::sort(TriFeatures.begin(), TriFeatures.end());
   auto last = std::unique(TriFeatures.begin(), TriFeatures.end());
   TriFeatures.erase(last, TriFeatures.end());
+
+  //save the singularities
+  //SaveSingularitiesOBJ();
 }
 
 ScalarType MinSize = 0.005;
@@ -608,7 +728,7 @@ int main(int argc, char *argv[]) {
     MQuad.QuadSize = QuadSize; /// TriMeshBox.Diag();
 
     MQuad.QuadSmoothSteps = smooth_steps;
-    // MQuad.RegVsIso=0.1;
+    //MQuad.RegVsIso=0.1;
     MQuad.CCAbility = 0.25;//0.25;   // 25;
     MQuad.num_samples = 6000;//6000; // 3000;
 
@@ -622,6 +742,8 @@ int main(int argc, char *argv[]) {
     }
 
     SaveMesh();
+
+    //SaveBadQualityRegion();
 
     if (save_stats)
       SaveStats(MQuad);
