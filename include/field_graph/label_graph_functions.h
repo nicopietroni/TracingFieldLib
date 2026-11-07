@@ -1010,6 +1010,186 @@ public:
       Graph.EnableNode(Graph.NodesOnConcaveEByV[i]);
   }
 
+  // DEVIATION ARCS USED BY A SOLUTION (Solution: per node): two selected
+  // DEBUG: the step of the preparation that disabled each node. Stage is
+  // written for the nodes disabled now and not marked yet; the nodes
+  // enabled now are reset to 0 (re-enabled after a previous mark)
+  static void MarkDisabledStage(const LabelNeighOrientedGraph<ScalarType> &Graph,
+                                const char Stage, std::vector<char> &S) {
+    if (S.size() != Graph.NumNodes())
+      S.assign(Graph.NumNodes(), 0);
+    for (size_t n = 0; n < Graph.NumNodes(); n++) {
+      if (Graph.IsEnabled((int)n))
+        S[n] = 0;
+      else if (S[n] == 0)
+        S[n] = Stage;
+    }
+  }
+
+  // DEBUG: the disabled nodes (not tangent, not on the surface) on the faces
+  // touching the given vertices, with their stage (see MarkDisabledStage)
+  static void DisabledNearVerts(const LabelNeighOrientedGraph<ScalarType> &Graph,
+                                const std::vector<std::vector<int>> &Faces,
+                                const std::set<int> &Verts,
+                                const std::vector<char> &S,
+                                std::vector<int> &Nodes) {
+    Nodes.clear();
+    for (size_t f = 0; f < Faces.size(); f++) {
+      bool In = false;
+      for (int v : Faces[f])
+        In |= (Verts.count(v) > 0);
+      if (!In)
+        continue;
+      for (int d = 0; d < 3; d++) {
+        int n = Field::FrameFieldM3Graph::NodeOfElemDir((int)f, d);
+        if (Graph.IsEnabled(n) || (Graph.NodeType(n) == TangentDomain) ||
+            Graph.NodeBorderF[n])
+          continue;
+        if ((n < (int)S.size()) && (S[n] > 0))
+          Nodes.push_back(n);
+      }
+    }
+  }
+
+  // nodes linked by a deviation arc (M3 direction change across their
+  // shared edge). Edges: the mesh edges where it happens (to be drawn).
+  // Returns their number.
+  // UsedPairs (optional): the switches really used by the solver (pairs of
+  // nodes, min first, e.g. the arc variables of the ILP at 1): without it
+  // every pair of selected nodes linked by a switch counts, also two sheets
+  // crossing at an edge (not a switch)
+  static int UsedDeviationArcs(const LabelNeighOrientedGraph<ScalarType> &Graph,
+                               const std::vector<bool> &Solution,
+                               const std::vector<std::vector<int>> &Faces,
+                               std::vector<std::pair<int, int>> *Edges = nullptr,
+                               const std::set<std::pair<int, int>> *UsedPairs =
+                                   nullptr) {
+    if (Edges != nullptr)
+      Edges->clear();
+    if (Solution.size() != Graph.NumNodes())
+      return 0;
+    int Num = 0;
+    for (size_t n = 0; n < Graph.NumNodes(); n++) {
+      if (!Solution[n])
+        continue;
+      for (size_t l = 0; l < Graph.N[n].size(); l++)
+        for (const auto &A : Graph.N[n][l]) {
+          if (!A.Deviation || !Graph.ArcActive(A) || (A.N <= (int)n) ||
+              !Solution[A.N])
+            continue;
+          if ((UsedPairs != nullptr) &&
+              (UsedPairs->count(std::make_pair((int)n, A.N)) == 0))
+            continue;
+          Num++;
+          if (Edges == nullptr)
+            continue;
+          // the edge of label l of the face of n
+          const std::vector<int> &F =
+              Faces[Field::FrameFieldM3Graph::ElemOfNode((int)n)];
+          Edges->push_back(std::make_pair(F[l], F[(l + 1) % F.size()]));
+        }
+    }
+    return Num;
+  }
+
+  // ZONE AROUND VERTICES (e.g. the vertices of the concave features):
+  // all the nodes of the faces touching Verts (not tangent, not on a
+  // surface face) are enabled, with all their arcs (both ways, not the
+  // opposite ones, see DisableOpp) towards enabled nodes. What the
+  // construction disabled there (empty labels, dead ends, ...) is given
+  // back: the check, the repair and the cascade then disable only what
+  // really fails (the cascade never the protected nodes).
+  // Returns the nodes enabled (NumArcs: the arcs enabled).
+  static int EnableAllAroundVerts(LabelNeighOrientedGraph<ScalarType> &Graph,
+                                  const std::vector<std::vector<int>> &Faces,
+                                  const std::set<int> &Verts,
+                                  int *NumArcs = nullptr,
+                                  std::vector<int> *NewlyEnabled = nullptr) {
+    if (NewlyEnabled != nullptr)
+      NewlyEnabled->clear();
+    std::vector<int> Zone;
+    int NumNodes = 0;
+    for (size_t f = 0; f < Faces.size(); f++) {
+      bool In = false;
+      for (int v : Faces[f])
+        if (Verts.count(v) > 0) {
+          In = true;
+          break;
+        }
+      if (!In)
+        continue;
+      for (int d = 0; d < 3; d++) {
+        int n = Field::FrameFieldM3Graph::NodeOfElemDir(f, d);
+        if (Graph.NodeType(n) == TangentDomain)
+          continue;
+        if (Graph.NodeBorderF[n])
+          continue;
+        // a node with an internal edge without any possible continuation
+        // (no arc, active or not, towards a usable node) can never be part
+        // of a sheet: not enabled (it would stay a dead end)
+        bool Structural = true;
+        for (int l = 0; (l < 3) && Structural; l++) {
+          if (Graph.IsExitLabel(n, l))
+            continue;
+          bool Any = false;
+          for (size_t j = 0; j < Graph.N[n][l].size(); j++) {
+            const auto &A = Graph.N[n][l][j];
+            if (A.Reverse)
+              continue;
+            if (A.Deviation && !Graph.DeviationActive)
+              continue;
+            if (Graph.NodeType(A.N) == TangentDomain)
+              continue;
+            if (Graph.NodeBorderF[A.N])
+              continue;
+            Any = true;
+            break;
+          }
+          Structural = Any;
+        }
+        if (!Structural)
+          continue;
+        if (!Graph.IsEnabled(n)) {
+          Graph.EnableNode(n);
+          NumNodes++;
+          if (NewlyEnabled != nullptr)
+            NewlyEnabled->push_back(n);
+        }
+        Zone.push_back(n);
+      }
+    }
+    int Arcs = 0;
+    for (int n : Zone)
+      for (size_t l = 0; l < Graph.N[n].size(); l++)
+        for (size_t j = 0; j < Graph.N[n][l].size(); j++) {
+          auto &A = Graph.N[n][l][j];
+          if (A.Reverse)
+            continue;
+          int m = A.N;
+          if (!Graph.IsEnabled(m))
+            continue;
+          if (!A.Enabled) {
+            A.Enabled = true;
+            Arcs++;
+          }
+          // the same arc from the other side
+          for (size_t l2 = 0; l2 < Graph.N[m].size(); l2++)
+            for (size_t j2 = 0; j2 < Graph.N[m][l2].size(); j2++) {
+              auto &B = Graph.N[m][l2][j2];
+              if ((B.N == n) && !B.Reverse && !B.Enabled) {
+                B.Enabled = true;
+                Arcs++;
+              }
+            }
+        }
+    if (NumArcs != nullptr)
+      *NumArcs = Arcs;
+    std::cout << "** Zone around " << Verts.size() << " vertices: "
+              << Zone.size() << " nodes, " << NumNodes << " enabled, " << Arcs
+              << " arcs enabled **" << std::endl;
+    return NumNodes;
+  }
+
   static void
   GetM3ExitDrawPosition(const LabelNeighOrientedGraph<ScalarType> &Graph,
                         const std::vector<int> &IndexN,

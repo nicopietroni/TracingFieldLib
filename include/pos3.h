@@ -242,6 +242,22 @@ inline void GetSortedVertStar(const Pos3 &StartPos,
 
     std::vector<Pos3> PosFan;
     GetSortedFacesFaceFun(StartPos,Faces,NextF,NextE,PosFan,HasBorder);
+
+    // FIX: on a border fan GetSortedFacesFaceFun restarts from the border
+    // edge it reached, after FlipE, so that border edge is not in PosFan:
+    // the faces are all there but the vertex across that edge was missing
+    // from the star (3 neighbours instead of 4 on a border vertex of a grid).
+    // LinkConditions then worked with an incomplete link on border vertices
+    // and accepted collapses gluing two borders (edges with 3 faces).
+    // The missing vertex is added first, so the star stays sorted.
+    if ((HasBorder)&&(PosFan.size()>0))
+    {
+        Pos3 FirstB=PosFan[0];
+        FirstB.FlipE(Faces);   // back on the border edge of the first face
+        FirstB.FlipV(Faces);
+        VertFan.push_back(FirstB.V);
+    }
+
     for (size_t i=0;i<PosFan.size();i++)
     {
         assert(PosFan[i].V==StartPos.V);

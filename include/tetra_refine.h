@@ -276,7 +276,7 @@ int MarkEdgesBetweenSingularities(
     const std::vector<std::vector<int>> &Tetra,
     const std::vector<std::vector<std::pair<int, int>>> &SingEdges,
     const int MinSteps, std::set<EdgeKey> &Marked,
-    const bool OnlyPathEdges = false) {
+    const bool OnlyPathEdges = false, const bool DetectFolds = true) {
 
   // vertex graph of the tet mesh
   std::vector<std::set<int>> VVSet(VertPos.size());
@@ -314,7 +314,13 @@ int MarkEdgesBetweenSingularities(
 
   // true if S1 is within MaxDist edges from S0 along the singular lines
   const int MaxAlongDist = 3 * MinSteps;
-  auto CloseAlongLines = [&SingAdj, MaxAlongDist](int S0, int S1) {
+  // DetectFolds: the limit is the gap + 2 for each pair. With the fixed
+  // limit (3 * MinSteps) a line folding back on itself (tight U turn: the
+  // two branches close in space AND close along the line) was taken as the
+  // same piece of line and never refined, but a sheet must pass between the
+  // two branches crossing the line. Two points are the same piece only if
+  // along the line they are about as far as in space.
+  auto CloseAlongLines = [&SingAdj](int S0, int S1, int MaxAlongDist) {
     std::map<int, int> Dist;
     std::queue<int> Q;
     Dist[S0] = 0;
@@ -356,7 +362,8 @@ int MarkEdgesBetweenSingularities(
       if (CheckedPairs.count(SKey) > 0)
         continue;
       CheckedPairs.insert(SKey);
-      SameLine = CloseAlongLines(S0, S1);
+      // SameLine = CloseAlongLines(S0, S1);
+      SameLine = CloseAlongLines(S0, S1, DetectFolds ? (Gap + 2) : MaxAlongDist);
       if (SameLine)
         continue;
       NumNarrow++;

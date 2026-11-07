@@ -88,6 +88,15 @@ public:
   // continuation constraint
   std::vector<int> Forbidden_Vars;
 
+  // COVER (input, nodes): groups of nodes, at least one of each group in
+  // the solution (e.g. the sides of the concave edges, see
+  // LabelNeighOrientedGraph::ConcaveCover). Set before InitConstraints.
+  std::vector<std::vector<int>> CoverNodes;
+  // the same as variables (groups without any variable are skipped:
+  // Cover_Group gives the index in CoverNodes of each constraint)
+  std::vector<std::vector<int>> Cover_Constr;
+  std::vector<int> Cover_Group;
+
   // LINK VARIABLES IF USED IN THE OBJECTIVE FUNCTION
   //  for each connection Var the list of nodes
   std::vector<std::pair<int, int>> M3LinkVarToNodes;
@@ -239,6 +248,36 @@ private:
     Avoid_Connections.erase(
         std::unique(Avoid_Connections.begin(), Avoid_Connections.end()),
         Avoid_Connections.end());
+  }
+
+  void InitCover_Constr(bool print_info = true) {
+    Cover_Constr.clear();
+    Cover_Group.clear();
+    int NumEmpty = 0, NumNodes = 0, NumNoVar = 0;
+    for (size_t g = 0; g < CoverNodes.size(); g++) {
+      std::vector<int> Vars;
+      for (int n : CoverNodes[g]) {
+        NumNodes++;
+        if ((n >= 0) && (n < (int)M3NodeToVar.size()) && (M3NodeToVar[n] >= 0))
+          Vars.push_back(M3NodeToVar[n]);
+        else
+          NumNoVar++;
+      }
+      std::sort(Vars.begin(), Vars.end());
+      Vars.erase(std::unique(Vars.begin(), Vars.end()), Vars.end());
+      if (Vars.empty()) {
+        NumEmpty++;
+        continue;
+      }
+      Cover_Constr.push_back(Vars);
+      Cover_Group.push_back((int)g);
+    }
+    if (print_info && !CoverNodes.empty())
+      std::cout << "Cover constraints: " << Cover_Constr.size() << " of "
+                << CoverNodes.size() << " groups (" << NumEmpty
+                << " without any variable: cannot be covered), " << NumNoVar
+                << " of " << NumNodes << " nodes disabled (not usable)"
+                << std::endl;
   }
 
   void InitSingleF_ConstrM3() {
@@ -484,7 +523,8 @@ public:
   void InitConstraints(const std::vector<int> &Seeds,
                        bool reset_curr_solution = false,
                        int max_dist_steps = 5,
-                       bool print_info=true) 
+                       bool print_info=true,
+                       const std::vector<int> *MustBeInSolution = nullptr) 
   {
 
     M3NodeToVar.clear();
@@ -540,10 +580,20 @@ public:
     // (all of them in it): with new seeds the restriction around the old
     // solution (DisableDistantLinksFromSeed) cut away the new seeds and the
     // solve failed until a new SAT solve
+    // MustBeInSolution (optional): only these seeds must be in it (e.g. the
+    // hard ones: the soft seeds of the concave features are not in the SAT
+    // solution and the start was always rejected)
     if (KeepSolution) {
       std::set<int> CurrSurfSet(CurrSurfNodes.begin(), CurrSurfNodes.end());
-      for (size_t i = 0; i < ValidSeeds.size(); i++)
-        if (CurrSurfSet.count(ValidSeeds[i]) == 0) {
+      std::vector<int> Required = ValidSeeds;
+      if (MustBeInSolution != nullptr) {
+        Required.clear();
+        for (int n : *MustBeInSolution)
+          if (IsVariableM3(n))
+            Required.push_back(n);
+      }
+      for (size_t i = 0; i < Required.size(); i++)
+        if (CurrSurfSet.count(Required[i]) == 0) {
           KeepSolution = false;
           break;
         }
@@ -627,6 +677,7 @@ public:
     }
 
     InitSingleF_ConstrM3();
+    InitCover_Constr(print_info);
     if (print_info)
       std::cout << "Initialized " << SingleF_ConstrM3.size()
                 << " single face constraint" << std::endl;
@@ -655,6 +706,32 @@ public:
     if (print_info && (Forbidden_Vars.size() > 0))
       std::cout << "WARNING: " << Forbidden_Vars.size()
                 << " nodes with an empty label (forbidden)" << std::endl;
+    // a forbidden seed makes the solve impossible (hard) or never taken
+    // (soft): its empty label is after the restriction of the variables
+    // (the neighbours on that edge are not variables)
+    {
+      std::set<int> Forb(Forbidden_Vars.begin(), Forbidden_Vars.end());
+      for (int Seed : ValidSeeds) {
+        int Var = M3NodeToVar[Seed];
+        if ((Var < 0) || (Forb.count(Var) == 0))
+          continue;
+        std::cout << "WARNING: seed node " << Seed
+                  << " forbidden (a label without neighbours among the "
+                     "variables):";
+        for (size_t l = 0; l < M3Graph.N[Seed].size(); l++) {
+          int NumAll = 0, NumVar = 0;
+          for (size_t k = 0; k < M3Graph.N[Seed][l].size(); k++) {
+            int m = M3Graph.N[Seed][l][k].N;
+            NumAll++;
+            if (M3Graph.N[Seed][l][k].Enabled && (M3NodeToVar[m] >= 0))
+              NumVar++;
+          }
+          std::cout << " label " << l << ": " << NumVar << "/" << NumAll
+                    << (M3Graph.IsExitLabel(Seed, (int)l) ? " (exit)" : "");
+        }
+        std::cout << std::endl;
+      }
+    }
 
     /// re-enable the disabled node that are not attached to the seed
     // for (size_t i = 0; i < DisabledN.size(); i++)

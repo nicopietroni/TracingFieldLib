@@ -1617,8 +1617,16 @@ void SmoothLaplacian(
   //   ComputeAdaptiveFeatureW(VertPos, Faces, SParam.Features, NeighWeights);
 
   std::vector<Geo::Point3<ScalarType>> OldPos = VertPos;
-  Geo::MeshVoronoiPartition<ScalarType> MeshVoro(OldPos, Faces);
-  MeshVoro.Init();
+  // FIX (speed): the Voronoi partition was built and initialized at every
+  // call, even though it is used only with reproject_voronoi_partition.
+  // Callers doing one iteration per call paid it at every smoothing step.
+  // Geo::MeshVoronoiPartition<ScalarType> MeshVoro(OldPos, Faces);
+  // MeshVoro.Init();
+  Geo::MeshVoronoiPartition<ScalarType> *MeshVoro = NULL;
+  if (SParam.reproject_voronoi_partition) {
+    MeshVoro = new Geo::MeshVoronoiPartition<ScalarType>(OldPos, Faces);
+    (*MeshVoro).Init();
+  }
 
   std::vector<Geo::Point3<ScalarType>> FaceNorm0;
   if (SParam.check_multi_pass_fold)
@@ -1674,7 +1682,8 @@ void SmoothLaplacian(
       OldPos = VertPos;
 
     if (SParam.reproject_voronoi_partition)
-      MeshVoro.Update();
+      // MeshVoro.Update();
+      (*MeshVoro).Update();
 
     std::vector<Geo::Point3<ScalarType>> VertNormals, FaceNormals;
     if (SParam.reproj_tangent)
@@ -1716,7 +1725,8 @@ void SmoothLaplacian(
       ReprojectOnTangent(OldPos, VertPos, VertNormals, FixedVertSet);
 
     if (SParam.reproject_voronoi_partition) {
-      MeshVoro.Reproject(VertPos);
+      // MeshVoro.Reproject(VertPos);
+      (*MeshVoro).Reproject(VertPos);
       // ReprojectVoronoiPartition(VertPos, OldPos, Faces);
     }
 
@@ -1778,6 +1788,8 @@ void SmoothLaplacian(
 
   if (FeatureReproj != NULL)
     delete (FeatureReproj);
+  if (MeshVoro != NULL) // FIX
+    delete (MeshVoro);
 }
 
 template <class ScalarType>

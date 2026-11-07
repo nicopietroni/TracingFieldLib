@@ -46,6 +46,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <deque>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -964,6 +965,117 @@ private:
     }
   }
 
+  // GROUPS OF CONCAVE NODES BY M3 DIRECTION. The labels of the concave
+  // nodes come from the chains of concave edges (split where more concave
+  // edges meet or the chain turns): two concave nodes whose faces share a
+  // vertex and whose nodes have the same M3 direction of the field (the
+  // same sheet direction) get the same label, so that all the concave
+  // nodes continuing the same sheet are one group, also through a vertex
+  // where other concave edges meet (e.g. the floor of a pocket, all the
+  // edges around a face). The two sides of a concave edge have different
+  // M3 directions and are never joined. Labels are compacted (0 ..).
+  static void MergeConcaveLabelsByM3(
+      Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
+      const std::vector<std::vector<int>> &TetraInternalFaces,
+      const std::vector<Field::FrameField<ScalarType>> &FacesFrameField) {
+    std::vector<int> &NE = Facegraph.NodesOnConcaveE;
+    std::vector<int> &LE = Facegraph.NodesOnConcaveELabel;
+    std::vector<int> &NV = Facegraph.NodesOnConcaveEByV;
+    std::vector<int> &LV = Facegraph.NodesOnConcaveEByVLabel;
+    if (NE.empty() || (LE.size() != NE.size()) || (LV.size() != NV.size()))
+      return;
+    // all the concave nodes with their label
+    std::vector<int> Nodes(NE), Labels(LE);
+    Nodes.insert(Nodes.end(), NV.begin(), NV.end());
+    Labels.insert(Labels.end(), LV.begin(), LV.end());
+    // the M3 direction of a node (direction of its face frame)
+    auto DirOf = [&](int n) {
+      int f = Field::FrameFieldM3Graph::ElemOfNode(n);
+      for (int d = 0; d < 3; d++)
+        if (Field::FrameFieldM3Graph::NodeOfElemDir(f, d) == n) {
+          Geo::Point3<ScalarType> D = FacesFrameField[f].GetDirection(d);
+          D.Normalize();
+          return D;
+        }
+      return Geo::Point3<ScalarType>(0, 0, 0);
+    };
+    // union find on the labels
+    int MaxL = 0;
+    for (int L : Labels)
+      MaxL = std::max(MaxL, L + 1);
+    std::vector<int> Par(MaxL);
+    for (int i = 0; i < MaxL; i++)
+      Par[i] = i;
+    std::function<int(int)> Find = [&](int x) {
+      while (Par[x] != x) {
+        Par[x] = Par[Par[x]];
+        x = Par[x];
+      }
+      return x;
+    };
+    // nodes by vertex
+    std::map<int, std::vector<int>> ByVert; // vertex -> index in Nodes
+    for (size_t i = 0; i < Nodes.size(); i++) {
+      int f = Field::FrameFieldM3Graph::ElemOfNode(Nodes[i]);
+      for (int v : TetraInternalFaces[f])
+        ByVert[v].push_back((int)i);
+    }
+    // same M3 direction: the frame directions of the two faces closer than
+    // the other two (they are 90 deg apart, 45 deg separates them)
+    const ScalarType CosSame = std::cos((ScalarType)M_PI / 4);
+    int NumJoins = 0;
+    for (auto &BV : ByVert)
+      for (size_t a = 0; a < BV.second.size(); a++)
+        for (size_t b = a + 1; b < BV.second.size(); b++) {
+          int i = BV.second[a], j = BV.second[b];
+          if (Labels[i] < 0 || Labels[j] < 0)
+            continue;
+          int Ri = Find(Labels[i]), Rj = Find(Labels[j]);
+          if (Ri == Rj)
+            continue;
+          if (std::fabs(Geo::Dot(DirOf(Nodes[i]), DirOf(Nodes[j]))) < CosSame)
+            continue;
+          Par[Ri] = Rj;
+          NumJoins++;
+        }
+    // compact labels
+    std::map<int, int> NewId;
+    int NumBefore = 0;
+    {
+      std::set<int> Used(Labels.begin(), Labels.end());
+      NumBefore = (int)Used.size();
+    }
+    auto Remap = [&](int L) {
+      if (L < 0)
+        return L;
+      int R = Find(L);
+      auto it = NewId.find(R);
+      if (it != NewId.end())
+        return it->second;
+      int Id = (int)NewId.size();
+      NewId[R] = Id;
+      return Id;
+    };
+    for (auto &L : LE)
+      L = Remap(L);
+    for (auto &L : LV)
+      L = Remap(L);
+    // the cover groups follow the same labels (a label without nodes keeps
+    // its own group)
+    for (auto &L : Facegraph.ConcaveCoverLabel) {
+      if ((L >= 0) && (L < MaxL))
+        L = Remap(L);
+      else {
+        int Id = (int)NewId.size();
+        NewId[-1000 - L] = Id;
+        L = Id;
+      }
+    }
+    std::cout << "Concave groups by M3 direction: " << NumBefore
+              << " chain sides -> " << NewId.size() << " groups (" << NumJoins
+              << " joins)" << std::endl;
+  }
+
   static void AddFeatureEdges(
       Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
       const std::vector<Geo::Point3<ScalarType>> &SurfVertPos,
@@ -976,6 +1088,450 @@ private:
       const bool DisableOpp)
       //const LinkType &LType) {
     {
+    // CONCAVE FEATURES: the nodes that continue one of the two surface faces
+    // of a concave edge into the volume, ONLY on the faces lying on that
+    // plane (created by "Refine At Concave", see
+    // M3GraphNonManifoldRefiner::ComputeConcaveSplits): for each face through
+    // the edge (not on the surface) whose normal is about the normal of a
+    // surface face of the edge, the node aligned with it, if it has the exit
+    // on that edge. Each node is labelled with its concave feature (connected
+    // chain of concave edges) and side: NodesOnConcaveELabel. They are the
+    // soft seeds of the "Concave Soft Seeds" mode.
+    {
+      std::vector<std::vector<std::pair<int, int>>> ConcExtF, ConcEdgeF;
+      std::vector<std::vector<int>> ConcVertF;
+      GetFeaturesFaces(SurfVertPos, SurfFaces, SurfConcaveE, VertPos,
+                       TetraInternalFaces, ConcExtF, ConcEdgeF, ConcVertF);
+      Facegraph.NodesOnConcaveE.clear();
+      Facegraph.NodesOnConcaveELabel.clear();
+      // a face is on the plane if its normal is within this angle (the
+      // splits too close to a vertex are skipped by the refinement: the face
+      // through that vertex is then slightly off the plane)
+      const ScalarType CosPlanar = cos(15.0 * M_PI / 180.0);
+      auto FaceNorm = [&](int IndexF) {
+        const std::vector<int> &F = TetraInternalFaces[IndexF];
+        Geo::Point3<ScalarType> N =
+            Geo::Cross(VertPos[F[1]] - VertPos[F[0]],
+                       VertPos[F[2]] - VertPos[F[0]]);
+        ScalarType L = N.Norm();
+        if (L > 0)
+          N = N / L;
+        return N;
+      };
+
+      // CONCAVE CHAINS: sequences of concave edges between two ends; a
+      // chain stops at a vertex where the concave edges are not exactly two
+      // (end or branching) or where it turns sharply (more than 45 deg, a
+      // corner). Union find on the edges.
+      std::vector<int> EParent(SurfConcaveE.size());
+      for (size_t i = 0; i < EParent.size(); i++)
+        EParent[i] = (int)i;
+      std::function<int(int)> FindE = [&](int x) {
+        return (EParent[x] == x) ? x : (EParent[x] = FindE(EParent[x]));
+      };
+      {
+        std::map<int, std::vector<int>> VE;
+        for (size_t i = 0; i < SurfConcaveE.size(); i++) {
+          VE[SurfConcaveE[i].first].push_back((int)i);
+          VE[SurfConcaveE[i].second].push_back((int)i);
+        }
+        const ScalarType CosTurn = cos(45.0 * M_PI / 180.0);
+        for (auto &VEi : VE) {
+          if (VEi.second.size() != 2)
+            continue;
+          int v = VEi.first;
+          int e0 = VEi.second[0], e1 = VEi.second[1];
+          int o0 = (SurfConcaveE[e0].first == v) ? SurfConcaveE[e0].second
+                                                 : SurfConcaveE[e0].first;
+          int o1 = (SurfConcaveE[e1].first == v) ? SurfConcaveE[e1].second
+                                                 : SurfConcaveE[e1].first;
+          Geo::Point3<ScalarType> D0 = SurfVertPos[v] - SurfVertPos[o0];
+          Geo::Point3<ScalarType> D1 = SurfVertPos[o1] - SurfVertPos[v];
+          D0.Normalize();
+          D1.Normalize();
+          if (Geo::Dot(D0, D1) < CosTurn)
+            continue;
+          EParent[FindE(e0)] = FindE(e1);
+        }
+      }
+      std::map<int, int> FeatureId;
+      std::vector<int> ChainOf(SurfConcaveE.size());
+      for (size_t i = 0; i < SurfConcaveE.size(); i++) {
+        int R = FindE((int)i);
+        if (FeatureId.count(R) == 0) {
+          int Id = (int)FeatureId.size();
+          FeatureId[R] = Id;
+        }
+        ChainOf[i] = FeatureId[R];
+      }
+
+      // PREVIOUS (whole connected features, through corners)
+//       // concave features: connected chains of concave edges (union find on
+//       // the surface vertices)
+//       std::vector<int> Parent(SurfVertPos.size());
+//       for (size_t i = 0; i < Parent.size(); i++)
+//         Parent[i] = (int)i;
+//       std::function<int(int)> Find = [&](int x) {
+//         return (Parent[x] == x) ? x : (Parent[x] = Find(Parent[x]));
+//       };
+//       for (size_t i = 0; i < SurfConcaveE.size(); i++)
+//         Parent[Find(SurfConcaveE[i].first)] = Find(SurfConcaveE[i].second);
+//       std::map<int, int> FeatureId;
+//       for (size_t i = 0; i < SurfConcaveE.size(); i++) {
+//         int R = Find(SurfConcaveE[i].first);
+//         if (FeatureId.count(R) == 0) {
+//           int Id = (int)FeatureId.size();
+//           FeatureId[R] = Id;
+//         }
+//       }
+
+      // CONSISTENT SIDES along each feature: the order of the two surface
+      // faces of a concave edge is arbitrary, so "side 0" of an edge could
+      // be "side 1" of the next one (the strips of consecutive nodes of the
+      // "same side" were in fact on different sides: no path). Swap[i] is
+      // propagated along the chain of edges sharing a vertex, matching the
+      // two pairs of normals (absolute dot: the face orientation is
+      // arbitrary too).
+      std::vector<int> Swap(SurfConcaveE.size(), -1);
+      {
+        std::map<int, std::vector<int>> VertEdges;
+        for (size_t i = 0; i < SurfConcaveE.size(); i++)
+          if (ConcExtF[i].size() == 2) {
+            VertEdges[SurfConcaveE[i].first].push_back((int)i);
+            VertEdges[SurfConcaveE[i].second].push_back((int)i);
+          }
+        auto SideNormal = [&](int e, int side) {
+          int s = Swap[e] ? (1 - side) : side;
+          return FaceNorm(ConcExtF[e][s].first);
+        };
+        for (size_t start = 0; start < SurfConcaveE.size(); start++) {
+          if ((ConcExtF[start].size() != 2) || (Swap[start] >= 0))
+            continue;
+          Swap[start] = 0;
+          std::vector<int> Queue = {(int)start};
+          for (size_t q = 0; q < Queue.size(); q++) {
+            int e = Queue[q];
+            for (int v : {SurfConcaveE[e].first, SurfConcaveE[e].second})
+              for (int f : VertEdges[v]) {
+                if (Swap[f] >= 0)
+                  continue;
+                Swap[f] = 0;
+                ScalarType Same =
+                    fabs(Geo::Dot(SideNormal(e, 0), SideNormal(f, 0))) +
+                    fabs(Geo::Dot(SideNormal(e, 1), SideNormal(f, 1)));
+                ScalarType Cross =
+                    fabs(Geo::Dot(SideNormal(e, 0), SideNormal(f, 1))) +
+                    fabs(Geo::Dot(SideNormal(e, 1), SideNormal(f, 0)));
+                Swap[f] = (Cross > Same) ? 1 : 0;
+                Queue.push_back(f);
+              }
+          }
+        }
+      }
+
+      std::set<int> Taken;
+      int NumSides = 0, NumMissing = 0;
+      // reasons of the missing sides (debug)
+      int MissNoFace = 0, MissTangent = 0, MissNoExit = 0;
+      ScalarType WorstAngle = 0;
+      for (size_t i = 0; i < ConcEdgeF.size(); i++) {
+        if (ConcExtF[i].size() != 2)
+          continue;
+        int Feature = ChainOf[i];
+        int ExtF[2] = {ConcExtF[i][0].first, ConcExtF[i][1].first};
+        for (int side = 0; side < 2; side++) {
+          NumSides++;
+          // the sides of a chain are made consistent with the first edge
+          // only roughly: the side is the one of the surface face
+          Geo::Point3<ScalarType> SideN = FaceNorm(ExtF[side]);
+          bool Found = false;
+          // the face through the edge closest to the plane (only one per
+          // side), if close enough
+          int BestF = -1, BestL = -1;
+          ScalarType BestPlanar = CosPlanar;
+          // the faces must be on the VOLUME side of the edge (continuing the
+          // surface face beyond the edge), not on the side of the surface
+          // face: a thin internal face lying on the surface plane, next to
+          // the surface face, was taken as a seed; its other edges have only
+          // tangent nodes around (empty labels, no sheet can contain it)
+          int EV0 = -1, EV1 = -1;
+          {
+            const std::vector<int> &FS = TetraInternalFaces[ExtF[side]];
+            // the concave edge: the two vertices shared by the two surface
+            // faces
+            const std::vector<int> &FO = TetraInternalFaces[ExtF[1 - side]];
+            for (int a : FS)
+              for (int b : FO)
+                if (a == b) {
+                  if (EV0 < 0)
+                    EV0 = a;
+                  else if (a != EV0)
+                    EV1 = a;
+                }
+          }
+          // direction from the edge to the third vertex of the surface face
+          auto OffEdge = [&](int IndexF) {
+            int W = -1;
+            for (int v : TetraInternalFaces[IndexF])
+              if ((v != EV0) && (v != EV1))
+                W = v;
+            Geo::Point3<ScalarType> Ax = VertPos[EV1] - VertPos[EV0];
+            Ax.Normalize();
+            Geo::Point3<ScalarType> U = VertPos[W] - VertPos[EV0];
+            return U - Ax * Geo::Dot(U, Ax);
+          };
+          bool HasEdge = (EV0 >= 0) && (EV1 >= 0);
+          Geo::Point3<ScalarType> SurfDir;
+          if (HasEdge)
+            SurfDir = OffEdge(ExtF[side]);
+          // COVER: all the faces through the edge on the volume side, the
+          // node with the M3 direction of this side (closest to the normal of
+          // the surface face, same M3 class: within 45 deg), not tangent,
+          // exit on the edge: at least one in the solution
+          {
+            std::vector<int> Cover;
+            const ScalarType CosM3 = std::cos((ScalarType)M_PI / 4);
+            for (size_t j = 0; j < ConcEdgeF[i].size(); j++) {
+              int IndexF = ConcEdgeF[i][j].first;
+              int IndexL = ConcEdgeF[i][j].second;
+              if ((IndexF == ExtF[0]) || (IndexF == ExtF[1]))
+                continue;
+              if (HasEdge && (Geo::Dot(OffEdge(IndexF), SurfDir) >= 0))
+                continue;
+              int BD = -1;
+              ScalarType BDot = CosM3;
+              for (int d = 0; d < 3; d++) {
+                ScalarType Dt = fabs(
+                    Geo::Dot(FacesFrameField[IndexF].GetDirection(d), SideN));
+                if (Dt > BDot) {
+                  BDot = Dt;
+                  BD = d;
+                }
+              }
+              if (BD < 0)
+                continue;
+              int IndexN = Field::FrameFieldM3Graph::NodeOfElemDir(IndexF, BD);
+              if (Facegraph.NodeType(IndexN) == TangentDomain)
+                continue;
+              if (!Facegraph.IsExitLabel(IndexN, IndexL))
+                continue;
+              Cover.push_back(IndexN);
+            }
+            if (!Cover.empty()) {
+              Facegraph.ConcaveCover.push_back(Cover);
+              Facegraph.ConcaveCoverLabel.push_back(
+                  Feature * 2 + ((Swap[i] > 0) ? (1 - side) : side));
+            }
+          }
+          for (size_t j = 0; j < ConcEdgeF[i].size(); j++) {
+            int IndexF = ConcEdgeF[i][j].first;
+            if ((IndexF == ExtF[0]) || (IndexF == ExtF[1]))
+              continue;
+            if (HasEdge && (Geo::Dot(OffEdge(IndexF), SurfDir) >= 0))
+              continue;
+            ScalarType Pl = fabs(Geo::Dot(FaceNorm(IndexF), SideN));
+            if (Pl < BestPlanar)
+              continue;
+            BestPlanar = Pl;
+            BestF = IndexF;
+            BestL = ConcEdgeF[i][j].second;
+          }
+          if (BestF >= 0) {
+            int IndexF = BestF;
+            int IndexL = BestL;
+            int BestD = -1;
+            ScalarType BestDot = 0;
+            for (int d = 0; d < 3; d++) {
+              ScalarType Dt = fabs(
+                  Geo::Dot(FacesFrameField[IndexF].GetDirection(d), SideN));
+              if (Dt > BestDot) {
+                BestDot = Dt;
+                BestD = d;
+              }
+            }
+            int IndexN = (BestD >= 0)
+                             ? Field::FrameFieldM3Graph::NodeOfElemDir(IndexF,
+                                                                       BestD)
+                             : -1;
+            if ((IndexN >= 0) &&
+                (Facegraph.NodeType(IndexN) == TangentDomain))
+              MissTangent++;
+            else if ((IndexN >= 0) && !Facegraph.IsExitLabel(IndexN, IndexL))
+              MissNoExit++;
+            if ((IndexN >= 0) &&
+                (Facegraph.NodeType(IndexN) != TangentDomain) &&
+                Facegraph.IsExitLabel(IndexN, IndexL)) {
+              Found = true;
+              if (Taken.count(IndexN) == 0) {
+                Taken.insert(IndexN);
+                Facegraph.NodesOnConcaveE.push_back(IndexN);
+                Facegraph.NodesOnConcaveELabel.push_back(
+                    Feature * 2 + ((Swap[i] > 0) ? (1 - side) : side));
+              }
+            }
+          }
+          // for (size_t j = 0; j < ConcEdgeF[i].size(); j++) {
+          //   ... (all the faces on the plane, see the previous version)
+          // }
+          if (BestF < 0) {
+            MissNoFace++;
+            // closest face to the plane among the ones through the edge
+            ScalarType BestAll = 0;
+            for (size_t j = 0; j < ConcEdgeF[i].size(); j++) {
+              int IndexF = ConcEdgeF[i][j].first;
+              if ((IndexF == ExtF[0]) || (IndexF == ExtF[1]))
+                continue;
+              BestAll = std::max(BestAll,
+                                 (ScalarType)fabs(Geo::Dot(FaceNorm(IndexF), SideN)));
+            }
+            ScalarType Ang = acos(std::min((ScalarType)1, BestAll)) * 180 / M_PI;
+            WorstAngle = std::max(WorstAngle, Ang);
+          }
+          if (!Found)
+            NumMissing++;
+        }
+      }
+      // FACES AROUND THE VERTICES OF THE FEATURE (not through a concave
+      // edge) lying on the plane of a side: they connect the faces of two
+      // consecutive edges around their common vertex (the planes inserted
+      // at the vertices by "Refine At Concave"). In NodesOnConcaveEByV, also
+      // soft seeds (to check that they are there).
+      Facegraph.NodesOnConcaveEByV.clear();
+      Facegraph.NodesOnConcaveEByVLabel.clear();
+      for (size_t i = 0; i < ConcVertF.size(); i++) {
+        if (ConcExtF[i].size() != 2)
+          continue;
+        int Feature = ChainOf[i];
+        int ExtF[2] = {ConcExtF[i][0].first, ConcExtF[i][1].first};
+        for (int side = 0; side < 2; side++) {
+          Geo::Point3<ScalarType> SideN = FaceNorm(ExtF[side]);
+          for (int IndexF : ConcVertF[i]) {
+            if (fabs(Geo::Dot(FaceNorm(IndexF), SideN)) < CosPlanar)
+              continue;
+            int BestD = -1;
+            ScalarType BestDot = 0;
+            for (int d = 0; d < 3; d++) {
+              ScalarType Dt = fabs(
+                  Geo::Dot(FacesFrameField[IndexF].GetDirection(d), SideN));
+              if (Dt > BestDot) {
+                BestDot = Dt;
+                BestD = d;
+              }
+            }
+            if (BestD < 0)
+              continue;
+            int IndexN = Field::FrameFieldM3Graph::NodeOfElemDir(IndexF, BestD);
+            if (Facegraph.NodeType(IndexN) == TangentDomain)
+              continue;
+            if (Taken.count(IndexN) > 0)
+              continue;
+            Taken.insert(IndexN);
+            Facegraph.NodesOnConcaveEByV.push_back(IndexN);
+            Facegraph.NodesOnConcaveEByVLabel.push_back(
+                Feature * 2 + ((Swap[i] > 0) ? (1 - side) : side));
+          }
+        }
+      }
+
+      // the chains of the same M3 direction joined (also where more
+      // concave edges meet): one label per group
+      MergeConcaveLabelsByM3(Facegraph, TetraInternalFaces, FacesFrameField);
+
+      std::cout << "Concave cover: " << Facegraph.ConcaveCover.size()
+                << " concave edge sides with candidates" << std::endl;
+      std::cout << "Concave features: " << FeatureId.size() << " chains, "
+                << SurfConcaveE.size() << " edges, "
+                << Facegraph.NodesOnConcaveE.size()
+                << " nodes on the planes of the surface faces (through the "
+                   "edges), "
+                << Facegraph.NodesOnConcaveEByV.size()
+                << " around the vertices" << std::endl;
+      if (NumMissing > 0)
+        std::cout << "WARNING: " << NumMissing << " out of " << NumSides
+                  << " sides of concave edges without a face on the plane "
+                     "(use Refine At Concave): "
+                  << MissNoFace << " no face within 15 deg (worst "
+                  << WorstAngle << " deg), " << MissTangent
+                  << " node set as tangent, " << MissNoExit
+                  << " node without the exit on the edge" << std::endl;
+    }
+
+    // PREVIOUS VERSION (best aligned node on any face through the edge)
+//     // CONCAVE FEATURES (restored, simpler than the old code below): the exit
+//     // labels are already set by the general rule (on a concave vertex the
+//     // normal clusters are not set as tangent, see GetTangentNodesM3), here
+//     // only the nodes that continue one of the two surface faces of a concave
+//     // edge into the volume are collected in NodesOnConcaveE: for each face
+//     // through the edge (not on the surface), the node aligned with the normal
+//     // of each of the two surface faces, if it has the exit on that edge. They
+//     // are used as soft seeds (ILP) so that the sheets cut the concave edges
+//     // in the two directions, connecting concave edges with each other.
+//     {
+//       std::vector<std::vector<std::pair<int, int>>> ConcExtF, ConcEdgeF;
+//       std::vector<std::vector<int>> ConcVertF;
+//       GetFeaturesFaces(SurfVertPos, SurfFaces, SurfConcaveE, VertPos,
+//                        TetraInternalFaces, ConcExtF, ConcEdgeF, ConcVertF);
+//       Facegraph.NodesOnConcaveE.clear();
+//       // a node is taken if its direction is close to the surface normal
+//       const ScalarType CosAlign = cos(30.0 * M_PI / 180.0);
+//       auto FaceNorm = [&](int IndexF) {
+//         const std::vector<int> &F = TetraInternalFaces[IndexF];
+//         Geo::Point3<ScalarType> N =
+//             Geo::Cross(VertPos[F[1]] - VertPos[F[0]],
+//                        VertPos[F[2]] - VertPos[F[0]]);
+//         ScalarType L = N.Norm();
+//         if (L > 0)
+//           N = N / L;
+//         return N;
+//       };
+//       int NumEdges = 0;
+//       for (size_t i = 0; i < ConcEdgeF.size(); i++) {
+//         if (ConcExtF[i].size() != 2)
+//           continue;
+//         NumEdges++;
+//         int ExtF0 = ConcExtF[i][0].first;
+//         int ExtF1 = ConcExtF[i][1].first;
+//         Geo::Point3<ScalarType> SideN[2] = {FaceNorm(ExtF0), FaceNorm(ExtF1)};
+//         for (size_t j = 0; j < ConcEdgeF[i].size(); j++) {
+//           int IndexF = ConcEdgeF[i][j].first;
+//           int IndexL = ConcEdgeF[i][j].second;
+//           if ((IndexF == ExtF0) || (IndexF == ExtF1))
+//             continue;
+//           for (int side = 0; side < 2; side++) {
+//             int BestD = -1;
+//             ScalarType BestDot = 0;
+//             for (int d = 0; d < 3; d++) {
+//               ScalarType Dt = fabs(Geo::Dot(
+//                   FacesFrameField[IndexF].GetDirection(d), SideN[side]));
+//               if (Dt > BestDot) {
+//                 BestDot = Dt;
+//                 BestD = d;
+//               }
+//             }
+//             if ((BestD < 0) || (BestDot < CosAlign))
+//               continue;
+//             int IndexN =
+//                 Field::FrameFieldM3Graph::NodeOfElemDir(IndexF, BestD);
+//             if (Facegraph.NodeType(IndexN) == TangentDomain)
+//               continue;
+//             if (!Facegraph.IsExitLabel(IndexN, IndexL))
+//               continue;
+//             Facegraph.NodesOnConcaveE.push_back(IndexN);
+//           }
+//         }
+//       }
+//       std::sort(Facegraph.NodesOnConcaveE.begin(),
+//                 Facegraph.NodesOnConcaveE.end());
+//       Facegraph.NodesOnConcaveE.erase(
+//           std::unique(Facegraph.NodesOnConcaveE.begin(),
+//                       Facegraph.NodesOnConcaveE.end()),
+//           Facegraph.NodesOnConcaveE.end());
+//       std::cout << "Concave features: " << NumEdges << " edges, "
+//                 << Facegraph.NodesOnConcaveE.size()
+//                 << " nodes continuing the surface into the volume"
+//                 << std::endl;
+//     }
+
     // std::vector<std::vector<std::pair<int, int>>> ConvexFeatureEdgeFaces,
     //     ConvexFeatureEdgExtFaces;
     // std::vector<std::vector<int>> ConvexFeatureEdgeVertFaces;
@@ -1384,7 +1940,15 @@ private:
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
-      const std::set<std::pair<int, int>> &ExtEdges, const bool DisableOpp) {
+      const std::set<std::pair<int, int>> &ExtEdges, const bool DisableOpp,
+      const bool AllEdges = false) {
+    // AllEdges: every internal edge is linked by transport between
+    // consecutive faces, not only the singular ones. Near a singular line
+    // the frames of the faces around an edge also vary a lot (the field
+    // turns quickly around the line): the average frame of the edge is not
+    // reliable there either, links of a sheet crossing the line can be
+    // missing. On a normal edge the transport gives the same groups as a
+    // good average frame.
 
     std::set<std::pair<int, int>> Handled;
     std::vector<EdgeFrameInfo> EdgeFrames;
@@ -1455,7 +2019,7 @@ private:
         if (Curr != d)
           Singular = true;
       }
-      if (!Singular)
+      if (!Singular && !AllEdges)
         continue;
       Handled.insert(KeyE);
 
@@ -1535,7 +2099,8 @@ private:
         NumGroups++;
       }
     }
-    std::cout << "Singular edges (frames rotating around the edge): "
+    std::cout << (AllEdges ? "Edges linked by transport (all internal): "
+                           : "Singular edges (frames rotating around the edge): ")
               << Handled.size() << ", linked along the two ways around: "
               << NumArcs << " links, " << NumGroups << " groups" << std::endl;
     return Handled;
@@ -1547,7 +2112,8 @@ private:
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
       const std::set<std::pair<int, int>> &ExtEdges,
-      const bool DisableOpp, const bool ChainSingularEdges = true){
+      const bool DisableOpp, const bool ChainSingularEdges = true,
+      const bool ChainAllEdges = false){
       //, const LinkType LType) {
 
     // this data structure has for each edge
@@ -1566,10 +2132,10 @@ private:
 
     // the singular edges are linked along the two ways around the edge
     std::set<std::pair<int, int>> SingularEdges;
-    if (ChainSingularEdges)
+    if (ChainSingularEdges || ChainAllEdges)
       SingularEdges = InitSingularEdgeConnections(
           Facegraph, VertPos, TetraInternalFaces, FacesFrameField, ExtEdges,
-          DisableOpp);
+          DisableOpp, ChainAllEdges);
 
     // then cycle all the possible edges
     for (size_t i = 0; i < EdgeInfo.size(); i++) {
@@ -1671,6 +2237,574 @@ private:
   }
 
 public:
+  // ZONE OF THE DEVIATION ARCS: the vertices of Seeds (e.g. the singular
+  // lines and the concave features) and Rings rings of tetras around them
+  static void DeviationZone(const std::vector<std::vector<int>> &Tetra,
+                            const std::set<int> &Seeds, const int Rings,
+                            std::set<int> &Zone) {
+    Zone = Seeds;
+    if (Rings <= 0)
+      return;
+    std::map<int, std::vector<int>> VT;
+    for (size_t t = 0; t < Tetra.size(); t++)
+      for (int v : Tetra[t])
+        VT[v].push_back((int)t);
+    std::vector<int> Front(Seeds.begin(), Seeds.end());
+    for (int r = 0; r < Rings; r++) {
+      std::vector<int> Next;
+      for (int v : Front)
+        for (int t : VT[v])
+          for (int w : Tetra[t])
+            if (Zone.insert(w).second)
+              Next.push_back(w);
+      Front.swap(Next);
+    }
+    std::cout << "Deviation zone: " << Seeds.size() << " vertices, " << Rings
+              << " rings -> " << Zone.size() << " vertices" << std::endl;
+  }
+
+  // SEED OR PERPENDICULAR: for each concave seed (a node on a face through
+  // a concave edge) the group {seed, the node of the same face with the
+  // perpendicular M3 direction}: of the two other directions of the face
+  // frame, the one most orthogonal to the concave edge (the other one runs
+  // along the edge). A solution must contain one of the two: the two sides
+  // of the feature can exchange their M3 direction along it (where the
+  // field turns, e.g. near a singularity). The concave edge is the first
+  // exit label of the seed. Groups: one per seed (the seed alone if the
+  // perpendicular node is tangent or on the surface).
+  // the node of the same face in the other M3 direction for a node with an
+  // exit on a concave edge (the direction most perpendicular to the exit
+  // edge, not the node's one): -1 if none (tangent, on the surface)
+  static int PerpendicularNodeOnExit(
+      const Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &TetraInternalFaces,
+      const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+      const int n) {
+    int f = Field::FrameFieldM3Graph::ElemOfNode(n);
+    int dn = -1;
+    for (int d = 0; d < 3; d++)
+      if (Field::FrameFieldM3Graph::NodeOfElemDir(f, d) == n)
+        dn = d;
+    int l = -1;
+    for (int k = 0; k < 3; k++)
+      if ((l < 0) && Facegraph.IsExitLabel(n, k))
+        l = k;
+    if ((dn < 0) || (l < 0))
+      return -1;
+    const std::vector<int> &F = TetraInternalFaces[f];
+    Geo::Point3<ScalarType> Ed = VertPos[F[(l + 1) % 3]] - VertPos[F[l]];
+    Ed.Normalize();
+    int Best = -1;
+    ScalarType BestDot = 2;
+    for (int d = 0; d < 3; d++) {
+      if (d == dn)
+        continue;
+      Geo::Point3<ScalarType> D = FacesFrameField[f].GetDirection(d);
+      D.Normalize();
+      ScalarType Dt = std::fabs(Geo::Dot(D, Ed));
+      if (Dt < BestDot) {
+        BestDot = Dt;
+        Best = d;
+      }
+    }
+    if (Best < 0)
+      return -1;
+    int np = Field::FrameFieldM3Graph::NodeOfElemDir(f, Best);
+    if ((Facegraph.NodeType(np) == TangentDomain) || Facegraph.NodeBorderF[np])
+      return -1;
+    return np;
+  }
+
+  // the nodes of the same face in the other two M3 directions of a node
+  // with an exit on a concave edge (usable: not tangent, not on the surface,
+  // exit on the same edge)
+  static void OtherDirectionsOnExit(
+      const Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph, const int n,
+      std::vector<int> &Others) {
+    Others.clear();
+    int f = Field::FrameFieldM3Graph::ElemOfNode(n);
+    int l = -1;
+    for (int k = 0; k < 3; k++)
+      if ((l < 0) && Facegraph.IsExitLabel(n, k))
+        l = k;
+    if (l < 0)
+      return;
+    for (int d = 0; d < 3; d++) {
+      int m = Field::FrameFieldM3Graph::NodeOfElemDir(f, d);
+      if (m == n)
+        continue;
+      if ((Facegraph.NodeType(m) == TangentDomain) || Facegraph.NodeBorderF[m])
+        continue;
+      if (!Facegraph.IsExitLabel(m, l))
+        continue;
+      Others.push_back(m);
+    }
+  }
+
+  // groups of concave nodes (one per concave edge side, or one per seed):
+  // each node with also the nodes of its face in the other two M3
+  // directions, so the side is covered by a sheet in any direction (at
+  // least one of the three, the switches along the chain do the rest).
+  // Returns the number of nodes added
+  static int AddOtherDirectionsToGroups(
+      const Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
+      std::vector<std::vector<int>> &Groups) {
+    int NumAdded = 0;
+    std::vector<int> Others;
+    for (auto &G : Groups) {
+      std::set<int> In(G.begin(), G.end());
+      size_t Num = G.size();
+      for (size_t i = 0; i < Num; i++) {
+        OtherDirectionsOnExit(Facegraph, G[i], Others);
+        for (int m : Others)
+          if (In.insert(m).second) {
+            G.push_back(m);
+            NumAdded++;
+          }
+      }
+    }
+    std::cout << "Concave groups: " << NumAdded
+              << " nodes in the other M3 directions added" << std::endl;
+    return NumAdded;
+  }
+
+  // (only the perpendicular node, replaced by AddOtherDirectionsToGroups)
+  // cover groups (one per concave edge side): each node with also its
+  // perpendicular node (same face, other M3 direction), so the side can be
+  // covered by a sheet in either direction (e.g. a switch line ending on
+  // the concave edge, where a singular line crosses near it)
+  static int AddPerpendicularToGroups(
+      const Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &TetraInternalFaces,
+      const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+      std::vector<std::vector<int>> &Groups) {
+    int NumAdded = 0;
+    for (auto &G : Groups) {
+      std::set<int> In(G.begin(), G.end());
+      size_t Num = G.size();
+      for (size_t i = 0; i < Num; i++) {
+        int np = PerpendicularNodeOnExit(Facegraph, VertPos, TetraInternalFaces,
+                                         FacesFrameField, G[i]);
+        if ((np >= 0) && In.insert(np).second) {
+          G.push_back(np);
+          NumAdded++;
+        }
+      }
+    }
+    std::cout << "Cover groups: " << NumAdded
+              << " perpendicular nodes added" << std::endl;
+    return NumAdded;
+  }
+
+  static void ConcaveSeedOrPerpendicularGroups(
+      const Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &TetraInternalFaces,
+      const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+      const std::vector<int> &Seeds,
+      std::vector<std::vector<int>> &Groups) {
+    Groups.clear();
+    int NumPairs = 0;
+    for (int n : Seeds) {
+      std::vector<int> G(1, n);
+      // (only the perpendicular node)
+      // int np = PerpendicularNodeOnExit(Facegraph, VertPos,
+      //                                  TetraInternalFaces, FacesFrameField, n);
+      // if (np >= 0) {
+      //   G.push_back(np);
+      //   NumPairs++;
+      // }
+      // the seed or its face in any of the other two M3 directions
+      std::vector<int> Others;
+      OtherDirectionsOnExit(Facegraph, n, Others);
+      G.insert(G.end(), Others.begin(), Others.end());
+      NumPairs += (int)Others.size();
+      Groups.push_back(G);
+    }
+    std::cout << "Concave seed or perpendicular: " << Groups.size()
+              << " groups, " << NumPairs << " nodes in the other M3 directions"
+              << std::endl;
+  }
+
+private:
+  // DEVIATION ARCS (emergency): around each internal edge the faces are
+  // sorted by angle (the fan); each active node of a face is linked to the
+  // active nodes of the two faces next to it in the fan where there is no
+  // regular arc already (the regular arc keeps the M3 direction of the
+  // field). DeviationVerts (optional): only the edges touching these
+  // vertices (a zone, e.g. around the singularities and the concave
+  // features: the graph does not grow everywhere). The sheet can then turn by 90 deg in the field
+  // across that edge: never coherent with the field, only when nothing else
+  // is possible (heavy penalty on the arc in the ILP, bounded number in the
+  // SAT). Not across the surface edges. Returns the number of arcs added
+  // (both directions).
+  static int AddDeviationConnections(
+      Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &TetraInternalFaces,
+      const std::set<std::pair<int, int>> &ExtEdges,
+      const std::set<int> *DeviationVerts = nullptr) {
+    // faces by edge, with the label of the edge in the face
+    std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> EF;
+    for (size_t f = 0; f < TetraInternalFaces.size(); f++)
+      for (int k = 0; k < 3; k++) {
+        int a = TetraInternalFaces[f][k];
+        int b = TetraInternalFaces[f][(k + 1) % 3];
+        EF[std::make_pair(std::min(a, b), std::max(a, b))].push_back(
+            std::make_pair((int)f, k));
+      }
+    auto Usable = [&](int n) {
+      return Facegraph.IsEnabled(n) &&
+             (Facegraph.NodeType(n) != TangentDomain) &&
+             !Facegraph.NodeBorderF[n];
+    };
+    auto HasArc = [&](int n0, int l0, int n1) {
+      for (auto &A : Facegraph.N[n0][l0])
+        if (A.N == n1)
+          return true;
+      return false;
+    };
+    int NumArcs = 0;
+    // average length of the internal edges (the cost of a switch is per
+    // unit of length, independent of the resolution)
+    ScalarType AvgLen = 0;
+    int NumLen = 0;
+    for (auto &E : EF) {
+      if (ExtEdges.count(E.first) > 0)
+        continue;
+      AvgLen += (VertPos[E.first.second] - VertPos[E.first.first]).Norm();
+      NumLen++;
+    }
+    if (NumLen > 0)
+      AvgLen /= NumLen;
+    if (AvgLen <= 0)
+      AvgLen = 1;
+    for (auto &E : EF) {
+      if (ExtEdges.count(E.first) > 0)
+        continue;
+      // only in the zone (an endpoint in DeviationVerts), if given
+      if ((DeviationVerts != nullptr) &&
+          (DeviationVerts->count(E.first.first) == 0) &&
+          (DeviationVerts->count(E.first.second) == 0))
+        continue;
+      const std::vector<std::pair<int, int>> &Fs = E.second;
+      if (Fs.size() < 2)
+        continue;
+      // fan order: angle of the third vertex around the edge
+      Geo::Point3<ScalarType> P0 = VertPos[E.first.first];
+      Geo::Point3<ScalarType> Ax = VertPos[E.first.second] - P0;
+      Ax.Normalize();
+      Geo::Point3<ScalarType> U(0, 0, 0);
+      std::vector<std::pair<ScalarType, int>> Ang;
+      for (size_t i = 0; i < Fs.size(); i++) {
+        int Th = -1;
+        for (int v : TetraInternalFaces[Fs[i].first])
+          if ((v != E.first.first) && (v != E.first.second))
+            Th = v;
+        Geo::Point3<ScalarType> D = VertPos[Th] - P0;
+        D = D - Ax * Geo::Dot(D, Ax);
+        D.Normalize();
+        if (i == 0)
+          U = D;
+        Geo::Point3<ScalarType> W = Geo::Cross(Ax, U);
+        Ang.push_back(std::make_pair(
+            std::atan2(Geo::Dot(D, W), Geo::Dot(D, U)), (int)i));
+      }
+      std::sort(Ang.begin(), Ang.end());
+      // (only the face and the next one in the fan: a switch made the sheet
+      // fold onto the face next to it, the face where the sheet continues in
+      // the new direction is usually not the adjacent one)
+      // for (size_t k = 0; k < Ang.size(); k++) {
+      //   int i0 = Ang[k].second, i1 = Ang[(k + 1) % Ang.size()].second;
+      // every pair of faces of the fan, as the regular arcs (which link each
+      // face to all the others of the fan with the transported direction):
+      // the switch links them with the other directions
+      for (size_t k0 = 0; k0 < Ang.size(); k0++)
+        for (size_t k1 = k0 + 1; k1 < Ang.size(); k1++) {
+        int i0 = Ang[k0].second, i1 = Ang[k1].second;
+        if (i0 == i1)
+          continue;
+        int F0 = Fs[i0].first, L0 = Fs[i0].second;
+        int F1 = Fs[i1].first, L1 = Fs[i1].second;
+        // fold of the sheet going from F0 to F1: 180 - angle between the
+        // two half planes around the edge (0: flat)
+        ScalarType DA = std::fabs(Ang[k1].first - Ang[k0].first);
+        if (DA > (ScalarType)M_PI)
+          DA = 2 * (ScalarType)M_PI - DA;
+        float Fold = (float)(180.0 - DA * 180.0 / M_PI);
+        float LenRatio = (float)((VertPos[E.first.second] -
+                                  VertPos[E.first.first]).Norm() /
+                                 AvgLen);
+        for (int d0 = 0; d0 < 3; d0++) {
+          int N0 = Field::FrameFieldM3Graph::NodeOfElemDir(F0, d0);
+          if (!Usable(N0))
+            continue;
+          for (int d1 = 0; d1 < 3; d1++) {
+            int N1 = Field::FrameFieldM3Graph::NodeOfElemDir(F1, d1);
+            if (!Usable(N1))
+              continue;
+            // a regular arc (field coherent) already there
+            if (HasArc(N0, L0, N1) || HasArc(N1, L1, N0))
+              continue;
+            // all the other pairs of active nodes of the two faces (also
+            // where the regular arcs are missing, e.g. near the
+            // singularities: there the switch is needed most)
+            Facegraph.AddDeviationNeighbour(N0, N1, L0, 1, Fold, LenRatio);
+            Facegraph.AddDeviationNeighbour(N1, N0, L1, 1, Fold, LenRatio);
+            NumArcs += 2;
+          }
+        }
+      }
+    }
+    std::cout << "Deviation arcs (M3 direction change, emergency): " << NumArcs
+              << std::endl;
+    return NumArcs;
+  }
+
+public:
+  // CONCAVE STRIPS: two concave nodes (NodesOnConcaveE) of the same feature
+  // and side whose faces share a vertex (consecutive concave edges) must be
+  // connected by a strip of faces around that vertex. Shortest path in the
+  // graph between them, only through nodes whose face contains the shared
+  // vertex; active arcs between enabled nodes cost 0, the others 1. Cost 0
+  // = already connected; cost > 0 = the disabled nodes and arcs on the path
+  // are enabled (forced, e.g. after the cascade of the repair); no path =
+  // the faces around the vertex do not allow it (NoPathFaces: the faces of
+  // the two nodes). Returns the number of pairs forced.
+  static int ConnectConcaveStrips(
+      Geo::LabelNeighOrientedGraph<ScalarType> &G,
+      const std::vector<std::vector<int>> &Faces,
+      std::vector<int> *NoPathFaces = nullptr) {
+    const std::vector<int> &Nodes = G.NodesOnConcaveE;
+    const std::vector<int> &Labels = G.NodesOnConcaveELabel;
+    if (NoPathFaces != nullptr)
+      NoPathFaces->clear();
+    if (Nodes.empty() || (Labels.size() != Nodes.size()))
+      return 0;
+    auto FaceOf = [&](int n) -> const std::vector<int> & {
+      return Faces[Field::FrameFieldM3Graph::ElemOfNode(n)];
+    };
+    int NumPairs = 0, NumConnected = 0, NumForced = 0, NumNoPath = 0;
+    int NumNodesEnabled = 0, NumArcsEnabled = 0;
+    for (size_t i = 0; i < Nodes.size(); i++)
+      for (size_t j = i + 1; j < Nodes.size(); j++) {
+        if (Labels[i] != Labels[j])
+          continue;
+        int Shared = -1;
+        for (int a : FaceOf(Nodes[i]))
+          for (int b : FaceOf(Nodes[j]))
+            if (a == b)
+              Shared = a;
+        if (Shared < 0)
+          continue;
+        NumPairs++;
+        std::map<int, int> Cost, From;
+        std::deque<int> DQ;
+        Cost[Nodes[i]] = 0;
+        From[Nodes[i]] = -1;
+        DQ.push_back(Nodes[i]);
+        while (!DQ.empty()) {
+          int n = DQ.front();
+          DQ.pop_front();
+          if (n == Nodes[j])
+            break;
+          for (size_t l = 0; l < G.N[n].size(); l++)
+            for (size_t k = 0; k < G.N[n][l].size(); k++) {
+              // the strip keeps the M3 direction: no switch
+              if (G.N[n][l][k].Deviation)
+                continue;
+              int m = G.N[n][l][k].N;
+              const std::vector<int> &Fm = FaceOf(m);
+              if (std::find(Fm.begin(), Fm.end(), Shared) == Fm.end())
+                continue;
+              int c = (G.N[n][l][k].Enabled && G.IsEnabled(m)) ? 0 : 1;
+              int NewC = Cost[n] + c;
+              if ((Cost.count(m) == 0) || (NewC < Cost[m])) {
+                Cost[m] = NewC;
+                From[m] = n;
+                if (c == 0)
+                  DQ.push_front(m);
+                else
+                  DQ.push_back(m);
+              }
+            }
+        }
+        if (Cost.count(Nodes[j]) == 0) {
+          NumNoPath++;
+          if (NoPathFaces != nullptr) {
+            NoPathFaces->push_back(Field::FrameFieldM3Graph::ElemOfNode(Nodes[i]));
+            NoPathFaces->push_back(Field::FrameFieldM3Graph::ElemOfNode(Nodes[j]));
+          }
+          continue;
+        }
+        if (Cost[Nodes[j]] == 0) {
+          NumConnected++;
+          continue;
+        }
+        NumForced++;
+        for (int m = Nodes[j]; From[m] != -1; m = From[m]) {
+          int n = From[m];
+          if (!G.IsEnabled(m)) {
+            G.EnableNode(m);
+            NumNodesEnabled++;
+          }
+          if (!G.IsEnabled(n)) {
+            G.EnableNode(n);
+            NumNodesEnabled++;
+          }
+          for (size_t l = 0; l < G.N[n].size(); l++)
+            for (size_t k = 0; k < G.N[n][l].size(); k++)
+              if ((G.N[n][l][k].N == m) && !G.N[n][l][k].Enabled) {
+                G.N[n][l][k].Enabled = true;
+                NumArcsEnabled++;
+              }
+          for (size_t l = 0; l < G.N[m].size(); l++)
+            for (size_t k = 0; k < G.N[m][l].size(); k++)
+              if ((G.N[m][l][k].N == n) && !G.N[m][l][k].Enabled) {
+                G.N[m][l][k].Enabled = true;
+                NumArcsEnabled++;
+              }
+        }
+      }
+    std::cout << "** Concave strips: " << NumPairs
+              << " pairs of consecutive concave nodes, " << NumConnected
+              << " already connected, " << NumForced << " forced ("
+              << NumNodesEnabled << " nodes and " << NumArcsEnabled
+              << " arcs enabled), " << NumNoPath
+              << " with no path around the shared vertex **" << std::endl;
+    if (NoPathFaces != nullptr) {
+      std::sort(NoPathFaces->begin(), NoPathFaces->end());
+      NoPathFaces->erase(std::unique(NoPathFaces->begin(), NoPathFaces->end()),
+                         NoPathFaces->end());
+    }
+    return NumForced;
+  }
+
+  // CONCAVE NODES THAT NO SHEET CAN CONTAIN: disabled (by the construction
+  // or the repair) or with a non exit label without active arcs (the sheet
+  // cannot continue across that edge: e.g. a long face on the plane whose
+  // far edges have only tangent or disabled nodes around). They are removed
+  // from NodesOnConcaveE (and the labels): as seeds they made the solve
+  // infeasible (hard) or were never taken (soft). Returns the number
+  // removed.
+  static int RemoveUnusableConcaveNodes(
+      Geo::LabelNeighOrientedGraph<ScalarType> &G) {
+    int NumRemoved = 0;
+    auto Clean = [&](std::vector<int> &Nodes, std::vector<int> &Labels) {
+      std::vector<int> NewNodes, NewLabels;
+      for (size_t i = 0; i < Nodes.size(); i++) {
+        int n = Nodes[i];
+        bool Ok = G.IsEnabled(n);
+        for (int l = 0; Ok && (l < 3); l++) {
+          if (G.IsExitLabel(n, l))
+            continue;
+          std::vector<int> Neigh;
+          std::vector<ScalarType> W;
+          G.ActiveNeigh(n, l, Neigh, W);
+          if (Neigh.empty())
+            Ok = false;
+        }
+        if (!Ok) {
+          NumRemoved++;
+          continue;
+        }
+        NewNodes.push_back(n);
+        if (i < Labels.size())
+          NewLabels.push_back(Labels[i]);
+      }
+      Nodes = NewNodes;
+      Labels = NewLabels;
+    };
+    Clean(G.NodesOnConcaveE, G.NodesOnConcaveELabel);
+    Clean(G.NodesOnConcaveEByV, G.NodesOnConcaveEByVLabel);
+    if (NumRemoved > 0)
+      std::cout << "** Concave nodes: " << NumRemoved
+                << " removed (disabled or a non exit label without arcs) **"
+                << std::endl;
+    return NumRemoved;
+  }
+
+  // DEBUG: groups of concave nodes of the same feature and side reachable
+  // from each other through at most MaxSteps active arcs (faces of each
+  // group in FaceGroups). A side split in several groups: links missing
+  // along the feature there.
+  static void ConcaveLinkGroups(
+      const Geo::LabelNeighOrientedGraph<ScalarType> &G, const int MaxSteps,
+      std::vector<std::vector<int>> &FaceGroups,
+      std::vector<std::vector<int>> *NodeGroups = nullptr,
+      const bool Print = true) {
+    FaceGroups.clear();
+    if (NodeGroups != nullptr)
+      NodeGroups->clear();
+    const std::vector<int> &Nodes = G.NodesOnConcaveE;
+    const std::vector<int> &Labels = G.NodesOnConcaveELabel;
+    if (Nodes.empty() || (Labels.size() != Nodes.size()))
+      return;
+    std::map<int, int> IndexOf;
+    for (size_t i = 0; i < Nodes.size(); i++)
+      IndexOf[Nodes[i]] = (int)i;
+    std::vector<int> Parent(Nodes.size());
+    for (size_t i = 0; i < Parent.size(); i++)
+      Parent[i] = (int)i;
+    std::function<int(int)> Find = [&](int x) {
+      return (Parent[x] == x) ? x : (Parent[x] = Find(Parent[x]));
+    };
+    for (size_t i = 0; i < Nodes.size(); i++) {
+      if (!G.IsEnabled(Nodes[i]))
+        continue;
+      std::map<int, int> Depth;
+      std::vector<int> Queue = {Nodes[i]};
+      Depth[Nodes[i]] = 0;
+      for (size_t q = 0; q < Queue.size(); q++) {
+        int n = Queue[q];
+        if ((n != Nodes[i]) && (IndexOf.count(n) > 0) &&
+            (Labels[IndexOf[n]] == Labels[i]))
+          Parent[Find((int)i)] = Find(IndexOf[n]);
+        if (Depth[n] >= MaxSteps)
+          continue;
+        std::vector<int> Neigh;
+        G.ActiveNeigh(n, Neigh);
+        for (int m : Neigh)
+          if (Depth.count(m) == 0) {
+            Depth[m] = Depth[n] + 1;
+            Queue.push_back(m);
+          }
+      }
+    }
+    std::map<int, std::vector<int>> Groups, GroupNodes;
+    int NumDisabled = 0;
+    for (size_t i = 0; i < Nodes.size(); i++) {
+      if (!G.IsEnabled(Nodes[i])) {
+        NumDisabled++;
+        continue;
+      }
+      Groups[Find((int)i)].push_back(
+          Field::FrameFieldM3Graph::ElemOfNode(Nodes[i]));
+      GroupNodes[Find((int)i)].push_back(Nodes[i]);
+    }
+    if (NodeGroups != nullptr)
+      for (auto &Gr : GroupNodes)
+        NodeGroups->push_back(Gr.second);
+    std::map<int, int> GroupsPerLabel;
+    for (auto &Gr : Groups)
+      GroupsPerLabel[Labels[Gr.first]]++;
+    if (Print) {
+      std::cout << "** Concave links (" << MaxSteps << " steps): "
+                << Groups.size() << " groups for " << GroupsPerLabel.size()
+                << " sides, " << NumDisabled << " nodes disabled **"
+                << std::endl;
+      for (auto &L : GroupsPerLabel)
+        if (L.second > 1)
+          std::cout << "   chain " << L.first / 2 << " side " << L.first % 2
+                    << ": split in " << L.second << " groups" << std::endl;
+    }
+    for (auto &Gr : Groups)
+      FaceGroups.push_back(Gr.second);
+  }
+
+public:
   static void
   InitM3(Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
          const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -1681,7 +2815,10 @@ public:
          const bool DisableOpp=false,
          const std::vector<std::pair<int, int>> &SurfConvexE = std::vector<std::pair<int, int>>(),
          const std::vector<std::pair<int, int>> &SurfConcaveE = std::vector<std::pair<int, int>>(),
-         const bool ChainSingularEdges = true) 
+         const bool ChainSingularEdges = true,
+         const bool ChainAllEdges = false,
+         const bool DeviationArcs = false,
+         const std::set<int> *DeviationVerts = nullptr) 
   {
 
     Facegraph.Clear();
@@ -1753,7 +2890,12 @@ public:
     std::cout << "Initializing Connections " << std::endl;
 
     InitConnections(Facegraph, VertPos, TetraInternalFaces, FacesFrameField,
-                    ExtEdges, DisableOpp, ChainSingularEdges);
+                    ExtEdges, DisableOpp, ChainSingularEdges, ChainAllEdges);
+
+    // emergency arcs changing M3 direction (option)
+    if (DeviationArcs)
+      AddDeviationConnections(Facegraph, VertPos, TetraInternalFaces,
+                              ExtEdges, DeviationVerts);
 
     std::cout << "Sorting and make them unique " << std::endl;
 

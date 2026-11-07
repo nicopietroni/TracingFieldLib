@@ -37,6 +37,7 @@
 #include <sstream>
 #include <algorithm>
 #include <atomic>
+#include <map>
 #include <set>
 #include <string>
 #include <sys/wait.h> // for WEXITSTATUS
@@ -1027,6 +1028,37 @@ public:
         }
     }
 
+    // AT MOST K of the literals (sequential counter, Sinz 2005): K = 0 all
+    // false
+    static void addAtMostK_Sequential(const std::vector<int>& x, int K,
+                                      std::vector<std::vector<int>>& C,
+                                      AuxGen& aux)
+    {
+        int n = (int)x.size();
+        if (n <= K) return;
+        if (K <= 0) {
+            for (int v: x) C.push_back({-v});
+            return;
+        }
+        // s[i][j]: at least j+1 of x[0..i] are true
+        std::vector<std::vector<int>> s(n - 1, std::vector<int>(K));
+        for (int i = 0; i < n - 1; i++)
+            for (int j = 0; j < K; j++)
+                s[i][j] = aux.newVar();
+        C.push_back({-x[0], s[0][0]});
+        for (int j = 1; j < K; j++) C.push_back({-s[0][j]});
+        for (int i = 1; i < n - 1; i++) {
+            C.push_back({-x[i], s[i][0]});
+            C.push_back({-s[i-1][0], s[i][0]});
+            for (int j = 1; j < K; j++) {
+                C.push_back({-x[i], -s[i-1][j-1], s[i][j]});
+                C.push_back({-s[i-1][j], s[i][j]});
+            }
+            C.push_back({-x[i], -s[i-1][K-1]});
+        }
+        C.push_back({-x[n-1], -s[n-2][K-1]});
+    }
+
     // default path of the kissat executable
     static const std::string &DefaultKissatPath() {
         static const std::string Path =
@@ -1052,7 +1084,15 @@ public:
        //  "TracingFieldLib/external_lib/kissat/build/kissat")
        const std::string &kissatPath = DefaultKissatPath(),
        bool implyAtMostOne = true,
-       int timeLimitSec = 0)
+       int timeLimitSec = 0,
+       // DEVIATION arcs (pairs of real variables): in the continuation of a
+       // node they are used through an auxiliary literal u (u -> both
+       // nodes), at most maxDeviations of them in the whole solution (0:
+       // never used, they are removed from the continuations)
+       const std::vector<std::pair<int,int>>* deviationPairs = nullptr,
+       int maxDeviations = 0,
+       // COVER: at least one variable of each group (one clause each)
+       const std::vector<std::vector<int>>* atLeastOne = nullptr)
     {
         // const std::string cnfFile = "/tmp/tmp_kissat.cnf";
         // unique name: two solves at the same time (other threads or other
@@ -1081,6 +1121,8 @@ public:
             collect(p.first);
             for (int v: p.second) collect(v);
         }
+        if (atLeastOne != nullptr)
+            for (auto& g: *atLeastOne) for (int v: g) collect(v);
 
         if (realVars.empty()) return {true, {}};
 
@@ -1109,6 +1151,15 @@ public:
         // seeds
         for (int v: seedTrue)  C.push_back({ +r2s[v] });
         for (int v: seedFalse) C.push_back({ -r2s[v] });
+
+        // cover: at least one of each group
+        if (atLeastOne != nullptr)
+            for (auto& g: *atLeastOne) {
+                if (g.empty()) continue;
+                std::vector<int> cl;
+                for (int v: g) cl.push_back(r2s[v]);
+                C.push_back(cl);
+            }
 
         // costruiamo aux dopo le reali
         AuxGen aux(satVarsReal+1);
@@ -1140,12 +1191,55 @@ public:
             for (auto& p: ImplyOne)
                 assert(p.second.size() >0);
               
+            // deviation arcs (unordered pairs of real variables)
+            std::set<std::pair<int,int>> DevSet;
+            if (deviationPairs != nullptr)
+                for (auto& d: *deviationPairs)
+                    DevSet.insert({std::min(d.first, d.second),
+                                   std::max(d.first, d.second)});
+            // one auxiliary literal per deviation arc used
+            std::map<std::pair<int,int>, int> DevLit;
             std::vector<std::pair<int,std::vector<int>>> tmp;
             for (auto& p: ImplyOne){
                 int x0 = r2s[p.first];
                 std::vector<int> sg;
-                for (int v: p.second) sg.push_back(r2s[v]);
+                for (int v: p.second) {
+                    std::pair<int,int> K(std::min(p.first, v),
+                                         std::max(p.first, v));
+                    if (DevSet.count(K) == 0) {
+                        sg.push_back(r2s[v]);
+                        continue;
+                    }
+                    if (maxDeviations <= 0)
+                        continue; // deviations not allowed
+                    auto it = DevLit.find(K);
+                    int u;
+                    if (it == DevLit.end()) {
+                        u = aux.newVar();
+                        DevLit[K] = u;
+                        // u -> both nodes
+                        C.push_back({-u, r2s[K.first]});
+                        C.push_back({-u, r2s[K.second]});
+                    } else
+                        u = it->second;
+                    sg.push_back(u);
+                }
+                // no way to continue: the node cannot be selected
+                if (sg.empty()) {
+                    C.push_back({-x0});
+                    continue;
+                }
                 tmp.push_back({x0, sg});
+            }
+            // at most maxDeviations deviation arcs used
+            if (!DevLit.empty()) {
+                std::vector<int> U;
+                for (auto& d: DevLit) U.push_back(d.second);
+                addAtMostK_Sequential(U, maxDeviations, C, aux);
+                if (print_info)
+                    std::cout << "SAT: " << U.size()
+                              << " deviation arcs, at most " << maxDeviations
+                              << std::endl;
             }
             // addConditionalOneOf(tmp, C);
             addConditionalOneOf(tmp, C, implyAtMostOne);

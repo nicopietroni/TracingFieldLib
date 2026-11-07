@@ -63,6 +63,13 @@ public:
     bool addForbidden_Constraints = true;
     // time limit of kissat in seconds (0 = none)
     int TimeLimit = 0;
+    // DEVIATION arcs (M3 direction change, see the graph): the SAT has no
+    // cost, so first without them; if UNSAT, again allowing at most K of
+    // them, K = 1, 2, 4, ... up to MaxDeviations (the fewest deviations
+    // found this way; a sheet deviates along a line of edges, many arcs).
+    // false: never used
+    bool UseDeviations = false;
+    int MaxDeviations = 1024;
   public:
     typename SheetSolve_ConstraintsM3<ScalarType>::ContinuityType CType;
     SAT_ExtractParam() {
@@ -158,10 +165,40 @@ private:
     // the "at most one continuation" of ImplyOne is redundant when the
     // at-most-two on the edge groups is used (the node is in the group)
     bool ImplyAtMostOne = AtMostTwo.empty();
-    res = KissatExternal::solve(SatSeedTrue, SatSeedFalse, AtMostOne, AtMostTwo,
-                                ZeroOrTwo, ImplyOne, Seed, print_msg,
-                                KissatExternal::DefaultKissatPath(),
-                                ImplyAtMostOne, ExtrP.TimeLimit);
+    // the deviation arcs among the continuations
+    std::vector<std::pair<int, int>> DevPairs;
+    {
+      std::set<std::pair<int, int>> Done;
+      for (auto &p : ImplyOne)
+        for (int v : p.second) {
+          std::pair<int, int> K(std::min(p.first, v), std::max(p.first, v));
+          if (Done.count(K) > 0)
+            continue;
+          Done.insert(K);
+          if (M3Graph.IsDeviationArc(M3Constraints.M3VarToNode[p.first],
+                                     M3Constraints.M3VarToNode[v]))
+            DevPairs.push_back(K);
+        }
+    }
+    // without deviations first, then at most K of them (K doubled)
+    int K = 0;
+    while (true) {
+      res = KissatExternal::solve(SatSeedTrue, SatSeedFalse, AtMostOne,
+                                  AtMostTwo, ZeroOrTwo, ImplyOne, Seed,
+                                  print_msg, KissatExternal::DefaultKissatPath(),
+                                  ImplyAtMostOne, ExtrP.TimeLimit, &DevPairs,
+                                  K, &M3Constraints.Cover_Constr);
+      if (res.sat || !ExtrP.UseDeviations || DevPairs.empty() ||
+          (K >= ExtrP.MaxDeviations))
+        break;
+      K = (K == 0) ? 1 : std::min(2 * K, ExtrP.MaxDeviations);
+      std::cout << " ** SAT M3: no solution, allowing at most " << K
+                << " deviation arcs (of " << DevPairs.size() << ")"
+                << std::endl;
+    }
+    if (res.sat && (K > 0))
+      std::cout << " ** SAT M3 solved with at most " << K
+                << " deviation arcs" << std::endl;
                                 
     bool solved = (res.sat);
     if (print_msg) {
@@ -250,8 +287,22 @@ public:
       }
     }
 
-    Geo::LabelGraphFuctions<ScalarType>::FilterSelectedFromSeed(
-        M3Graph, ExtrP.HardNodes, M3Constraints.M3Solution);
+    // only the parts of the solution connected to the seeds; with the
+    // cover constraints (no hard node, e.g. concave by edge) the seeds are
+    // the covering nodes in the solution; without any seed nothing is
+    // filtered (the search from an empty set of seeds crashed)
+    std::vector<int> FilterSeeds = ExtrP.HardNodes;
+    for (auto &G : M3Constraints.CoverNodes)
+      for (int n : G)
+        if ((n >= 0) && (n < (int)M3Constraints.M3Solution.size()) &&
+            M3Constraints.M3Solution[n])
+          FilterSeeds.push_back(n);
+    std::sort(FilterSeeds.begin(), FilterSeeds.end());
+    FilterSeeds.erase(std::unique(FilterSeeds.begin(), FilterSeeds.end()),
+                      FilterSeeds.end());
+    if (!FilterSeeds.empty())
+      Geo::LabelGraphFuctions<ScalarType>::FilterSelectedFromSeed(
+          M3Graph, FilterSeeds, M3Constraints.M3Solution);
 
     // a seed is matched if it is part of the final solution (the skipped
     // seeds are not)

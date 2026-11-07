@@ -47,9 +47,11 @@
 #include "label_graph.h"
 #include "label_graph_functions.h"
 #include <algorithm>
+#include <array>
 #include <iostream>
 #include <map>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -75,9 +77,16 @@ public:
     bool DisableNonManifold = true;
     // full connectivity check at the end of the repair
     bool FinalFullCheck = true;
+    // rounds of repair + cascade on the protected nodes still failing
+    // after the cascade (0: none)
+    int ProtectedRepairRounds = 3;
   };
 
   Param P;
+
+  // (node, vertex) pairs still non manifold after the repair, before the
+  // cascade disabled them (to show where the repair failed)
+  std::vector<std::pair<int, int>> UnrepairedPairs;
 
   // nodes disabled along the singularities and their arcs before that
   std::vector<int> SingDisabledNodes;
@@ -127,9 +136,16 @@ public:
     // only for what still fails, the singular nodes where they close a disk
     if (Reintro && !P.ReintroduceFirst)
       Conn.ReintroduceNodes(SingDisabledNodes, SingSavedArcs);
-    // what still fails is disabled (cascade), the data are current
-    if (P.DisableNonManifold)
+    // what still fails (shown after the repair), then disabled (cascade),
+    // the data are current
+    Conn.GetNonManfoldNodes(UnrepairedPairs);
+    std::cout << "** Repair: " << UnrepairedPairs.size()
+              << " non manifold pairs not repaired **" << std::endl;
+    if (P.DisableNonManifold) {
       Conn.DisableNonManifoldCascade(20, true);
+      if (P.ProtectedRepairRounds > 0)
+        Conn.RepairProtectedFailing(P.ProtectedRepairRounds);
+    }
     // full check at the end (the steps before checked only the changes)
     if (P.FinalFullCheck) {
       std::cout << "** Final full check **" << std::endl;
@@ -400,6 +416,263 @@ public:
     }
     std::cout << "** Separating walls: " << Verts.size() << " vertices **"
               << std::endl;
+  }
+
+  // PAIRS OF CONSECUTIVE CONCAVE NODES: same label (chain and side), faces
+  // sharing a vertex of the concave features (FeatVerts): (A, B, vertex).
+  // Used by the cascade to protect their joint half disks.
+  static void ConcaveJointPairs(const Geo::LabelNeighOrientedGraph<ScalarType> &G,
+                                const std::vector<std::vector<int>> &Faces,
+                                const std::set<int> &FeatVerts,
+                                std::vector<std::array<int, 3>> &Pairs) {
+    Pairs.clear();
+    const std::vector<int> &Nodes = G.NodesOnConcaveE;
+    const std::vector<int> &Labels = G.NodesOnConcaveELabel;
+    if (Nodes.empty() || (Labels.size() != Nodes.size()))
+      return;
+    for (size_t i = 0; i < Nodes.size(); i++)
+      for (size_t j = i + 1; j < Nodes.size(); j++) {
+        if (Labels[i] != Labels[j])
+          continue;
+        const std::vector<int> &FA =
+            Faces[Field::FrameFieldM3Graph::ElemOfNode(Nodes[i])];
+        const std::vector<int> &FB =
+            Faces[Field::FrameFieldM3Graph::ElemOfNode(Nodes[j])];
+        for (int a : FA)
+          for (int b : FB)
+            if ((a == b) && (FeatVerts.count(a) > 0))
+              Pairs.push_back({Nodes[i], Nodes[j], a});
+      }
+    std::cout << "** Concave joint pairs: " << Pairs.size() << " **"
+              << std::endl;
+  }
+
+  // JOINT DISKS ALONG THE CONCAVE CHAINS: two concave nodes of the same
+  // chain and side whose faces share a vertex must be in ONE half disk
+  // around that vertex (a path from one to the other, each edge of the star
+  // used once, not through the surface edges). The connectivity check finds
+  // a disk for each node separately, the strips only a path: neither
+  // guarantees it. Uses the subgraphs of the last check (Conn): call after
+  // the check / repair. BadNodes: the nodes of the pairs without it.
+  // Returns the number of pairs without it.
+  // Force: when the half disk exists only with inactive arcs, those arcs
+  // (the fewest) are enabled in the graph (both ways).
+  static int CheckConcaveJointDisks(
+      Geo::LabelNeighOrientedGraph<ScalarType> &G,
+      const std::vector<std::vector<int>> &Faces,
+      const LabelGraph_ConnectivityM3<ScalarType> &Conn,
+      std::vector<int> *BadNodes = nullptr, const bool Force = true,
+      std::set<int> *ImpossibleVerts = nullptr) {
+    if (ImpossibleVerts != nullptr)
+      ImpossibleVerts->clear();
+    const std::vector<int> &Nodes = G.NodesOnConcaveE;
+    const std::vector<int> &Labels = G.NodesOnConcaveELabel;
+    if (BadNodes != nullptr)
+      BadNodes->clear();
+    if (Nodes.empty() || (Labels.size() != Nodes.size()))
+      return 0;
+    int NumPairs = 0, NumOk = 0, NumOnlyInactive = 0, NumNo = 0, NumUnk = 0;
+    int NumForced = 0, NumArcsEnabled = 0;
+    for (size_t i = 0; i < Nodes.size(); i++)
+      for (size_t j = i + 1; j < Nodes.size(); j++) {
+        if (Labels[i] != Labels[j])
+          continue;
+        const std::vector<int> &FA =
+            Faces[Field::FrameFieldM3Graph::ElemOfNode(Nodes[i])];
+        const std::vector<int> &FB =
+            Faces[Field::FrameFieldM3Graph::ElemOfNode(Nodes[j])];
+        // the common vertices: two consecutive concave faces can share an
+        // edge (the vertex on the feature and an internal one); the half
+        // disk is around the vertex on the feature (one branch): all the
+        // common vertices are tried, the best result is kept
+        std::vector<int> Common;
+        for (int a : FA)
+          for (int b : FB)
+            if (a == b)
+              Common.push_back(a);
+        if (Common.empty())
+          continue;
+        NumPairs++;
+        int Shared = Common[0];
+        int Act = -100;
+        for (int c : Common) {
+          int r = Conn.JointHalfDisk(Nodes[i], Nodes[j], c, true);
+          if (r < 1)
+            r = std::max(r, Conn.JointHalfDisk(Nodes[j], Nodes[i], c, true));
+          if (r > Act) {
+            Act = r;
+            Shared = c;
+          }
+        }
+        if (Act == 1) {
+          NumOk++;
+          continue;
+        }
+        std::vector<std::pair<int, int>> MissingArcs;
+        int All = -100;
+        for (int c : Common) {
+          std::vector<std::pair<int, int>> M;
+          int r = Conn.JointHalfDisk(Nodes[i], Nodes[j], c, false, &M);
+          // also with the nodes swapped (the first one may not have a
+          // subgraph)
+          if (r < 0) {
+            std::vector<std::pair<int, int>> M2;
+            int r2 = Conn.JointHalfDisk(Nodes[j], Nodes[i], c, false, &M2);
+            if (r2 > r) {
+              r = r2;
+              M = M2;
+            }
+          }
+          if (r > All) {
+            All = r;
+            MissingArcs = M;
+            Shared = c;
+          }
+        }
+        if (All == 1)
+          NumOnlyInactive++;
+        // not consecutive along the feature: the only common vertices are
+        // internal (two branches everywhere), not a pair of the chain
+        if (All == -24) {
+          NumPairs--;
+          continue;
+        }
+        if ((All == 1) && Force) {
+          // the inactive arcs of the half disk enabled (both ways)
+          for (auto &A : MissingArcs)
+            for (int w = 0; w < 2; w++) {
+              int n = w ? A.second : A.first;
+              int m = w ? A.first : A.second;
+              if (!G.IsEnabled(n))
+                G.EnableNode(n);
+              for (size_t l = 0; l < G.N[n].size(); l++)
+                for (size_t k = 0; k < G.N[n][l].size(); k++)
+                  if ((G.N[n][l][k].N == m) && !G.N[n][l][k].Enabled) {
+                    G.N[n][l][k].Enabled = true;
+                    NumArcsEnabled++;
+                  }
+            }
+          NumForced++;
+          continue;
+        }
+        else if (All < 0)
+          NumUnk++;
+        else {
+          NumNo++;
+          // the vertices where the joint half disk is impossible (the
+          // common vertices on the feature): to be refined
+          if (ImpossibleVerts != nullptr)
+            ImpossibleVerts->insert(Shared);
+        }
+        auto Reason = [](int c) -> std::string {
+          switch (c) {
+          case -2:
+            return "first node not checked (no subgraph)";
+          case -3:
+            return "second node not in the star";
+          case -4:
+            return "no side to continue";
+          case -24:
+            return "vertex not on the surface for the node (two branches)";
+          case -5:
+            return "star too big";
+          case -6:
+            return "search limit";
+          }
+          return "code " + std::to_string(c);
+        };
+        auto State = [&](int n) -> std::string {
+          std::string St = G.IsEnabled(n) ? "on" : "OFF";
+          if (G.NodeType(n) == Geo::TangentDomain)
+            St += ", tangent";
+          if (G.NodeBorderF[n])
+            St += ", surface face";
+          return St;
+        };
+        std::cout << "   concave nodes " << Nodes[i] << " (" << State(Nodes[i])
+                  << ") - " << Nodes[j] << " (" << State(Nodes[j])
+                  << ") (vertex " << Shared << "): "
+                  << ((All == 1)   ? std::string("joint half disk only with "
+                                                 "inactive arcs")
+                      : (All < 0) ? "not available: " + Reason(All)
+                                  : std::string("NO joint half disk"))
+                  << std::endl;
+        if (BadNodes != nullptr) {
+          BadNodes->push_back(Nodes[i]);
+          BadNodes->push_back(Nodes[j]);
+        }
+      }
+    std::cout << "** Concave joint disks: " << NumPairs << " pairs, " << NumOk
+              << " ok, " << NumOnlyInactive << " only with inactive arcs ("
+              << NumForced << " forced, " << NumArcsEnabled
+              << " arcs enabled), "
+              << NumNo << " impossible, " << NumUnk << " not available **"
+              << std::endl;
+    return NumPairs - NumOk;
+  }
+
+  // CHECK OF SEED NODES (before solving): for each seed, problems that make
+  // it unusable by any sheet: disabled (or disabled before being enabled
+  // again, WasDisabled), a non exit label without active arcs (the sheet
+  // cannot continue from that edge), non manifold / incorrect exit at a
+  // vertex (Conn, if checked). Prints only the seeds with a problem.
+  // Returns their number.
+  static int ReportSeedProblems(
+      const Geo::LabelNeighOrientedGraph<ScalarType> &G,
+      const LabelGraph_ConnectivityM3<ScalarType> *Conn,
+      const std::vector<int> &Seeds,
+      const std::vector<char> &WasDisabled = std::vector<char>()) {
+    int NumBad = 0;
+    for (size_t i = 0; i < Seeds.size(); i++) {
+      int n = Seeds[i];
+      bool Disabled = !G.IsEnabled(n);
+      bool WasOff = (i < WasDisabled.size()) && WasDisabled[i];
+      int EmptyLabels = 0;
+      std::string Arcs;
+      for (int l = 0; l < 3; l++) {
+        std::vector<int> Neigh;
+        std::vector<ScalarType> W;
+        G.ActiveNeigh(n, l, Neigh, W);
+        bool Exit = G.IsExitLabel(n, l);
+        if (Neigh.empty() && !Exit)
+          EmptyLabels++;
+        // active / all the arcs (also the disabled ones) on that label
+        Arcs += " " + std::to_string(Neigh.size()) + "/" +
+                std::to_string(G.N[n][l].size()) + (Exit ? "(exit)" : "");
+      }
+      std::string Check;
+      bool BadCheck = false;
+      if ((Conn != nullptr) && Conn->IsCheckable(n) &&
+          (n < (int)Conn->ManifoldNodevType.size()))
+        for (int k = 0; k < 3; k++) {
+          auto T = Conn->ManifoldNodevType[n][k];
+          if (T == LabelGraph_ConnectivityM3<ScalarType>::MANIFOLD)
+            Check += " M";
+          else {
+            BadCheck = true;
+            Check += (T == LabelGraph_ConnectivityM3<ScalarType>::NON_MANIFOLD)
+                         ? " N"
+                     : (T == LabelGraph_ConnectivityM3<
+                                ScalarType>::INCORRECT_EXIT)
+                         ? " E"
+                         : " U";
+          }
+        }
+      else
+        Check = " -";
+      if (!Disabled && !WasOff && (EmptyLabels == 0) && !BadCheck)
+        continue;
+      NumBad++;
+      std::cout << "   seed " << i << " (node " << n << ", face "
+                << Field::FrameFieldM3Graph::ElemOfNode(n) << "): "
+                << (Disabled ? "DISABLED" : (WasOff ? "re-enabled" : "enabled"))
+                << ", active arcs per label:" << Arcs
+                << ((EmptyLabels > 0) ? " (EMPTY non exit label)" : "")
+                << ", check at the vertices:" << Check << std::endl;
+    }
+    std::cout << "** Seeds: " << NumBad << " out of " << Seeds.size()
+              << " with a problem **" << std::endl;
+    return NumBad;
   }
 
   // DEBUG: nodes reachable from Seed through the active arcs (no constraint

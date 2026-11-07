@@ -129,15 +129,20 @@ public:
     if (P.StartFromSAT)
       StartFromSAT();
     std::vector<int> Seeds = AllILPSeeds();
-    if (!(P.IterateBand && (P.BandSteps >= 0))) {
-      Constr.InitConstraints(Seeds, false, P.BandSteps);
+    // the band (and its iterations) only around the SAT start: without it
+    // the whole graph
+    const int Band = P.StartFromSAT ? P.BandSteps : -1;
+    // if (!(P.IterateBand && (P.BandSteps >= 0))) {
+    if (!(P.StartFromSAT && P.IterateBand && (Band >= 0))) {
+      Constr.InitConstraints(Seeds, false, Band, true, &ILPParam.HardNodes);
       return ILP.Solve(ILPParam, MatchedSeed);
     }
     bool Any = false;
     for (int it = 0; it < P.BandMaxIter; it++) {
       std::vector<bool> Prev = Constr.M3Solution;
       bool PrevValid = Constr.BeenSolved;
-      Constr.InitConstraints(Seeds, false, P.BandSteps);
+      // only the hard seeds must be in the starting solution
+      Constr.InitConstraints(Seeds, false, Band, true, &ILPParam.HardNodes);
       bool FromSolution = Constr.HasStartSolution;
       bool solved = ILP.Solve(ILPParam, MatchedSeed);
       if (!solved) {
@@ -172,7 +177,9 @@ public:
 
   // ILP feasibility check (same setup of the solve)
   bool CheckFeasibilityILP(std::vector<bool> &MatchedSeed) {
-    Constr.InitConstraints(AllILPSeeds(), false, P.BandSteps);
+    Constr.InitConstraints(AllILPSeeds(), false,
+                           P.StartFromSAT ? P.BandSteps : -1, true,
+                           &ILPParam.HardNodes);
     ILPParam.FeasiblityOnly = true;
     bool solved = ILP.Solve(ILPParam, MatchedSeed);
     ILPParam.FeasiblityOnly = false;

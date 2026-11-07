@@ -49,6 +49,8 @@
 #include "tetra_refine.h"
 #include <chrono>
 #include <iostream>
+#include <map>
+#include <algorithm>
 #include <set>
 #include <utility>
 #include <vector>
@@ -68,6 +70,9 @@ public:
     bool OnlyPathEdges = false;
     // recompute the field after each refinement (else inherit it)
     bool RecomputeField = false;
+    // a singular line folding back on itself (tight U turn) is a narrow
+    // region too (see TetraRefine::MarkEdgesBetweenSingularities)
+    bool DetectFolds = true;
     // parameters of the field (the features are set by Run)
     ComputeFrameParam<ScalarType> FrameParam;
   };
@@ -114,7 +119,7 @@ public:
       std::set<TetraRefine::EdgeKey> Marked;
       RS.NumNarrow = TetraRefine::MarkEdgesBetweenSingularities(
           VertPos, Tetra, SingEdges, P.MinSingularGap, Marked,
-          P.OnlyPathEdges);
+          P.OnlyPathEdges, P.DetectFolds);
 
       // stop: no narrow region left or no more rounds
       if ((RS.NumNarrow == 0) || (Round >= P.MaxRounds)) {
@@ -197,6 +202,46 @@ public:
     return NumSplit;
   }
 
+  // refinement around the singular edges with a vertex within Dist edges
+  // (vertex graph of the tet mesh) from the given edges (e.g. the concave
+  // features), field inherited. Returns the number of split edges.
+  static int RefineAroundSingularitiesNearEdges(
+      std::vector<Geo::Point3<ScalarType>> &VertPos,
+      std::vector<std::vector<int>> &Tetra,
+      std::vector<std::pair<int, int>> &Features,
+      std::vector<Field::FrameField<ScalarType>> &TetraFrames, int Rings,
+      const std::vector<std::pair<int, int>> &NearE, const int Dist) {
+    if (NearE.empty())
+      return 0;
+    std::vector<std::set<int>> VV(VertPos.size());
+    for (const std::vector<int> &T : Tetra)
+      for (int a : T)
+        for (int b : T)
+          if (a != b)
+            VV[a].insert(b);
+    std::vector<int> D(VertPos.size(), -1);
+    std::vector<int> Queue;
+    for (const std::pair<int, int> &E : NearE)
+      for (int v : {E.first, E.second})
+        if (D[v] < 0) {
+          D[v] = 0;
+          Queue.push_back(v);
+        }
+    for (size_t q = 0; q < Queue.size(); q++) {
+      int u = Queue[q];
+      if (D[u] >= Dist)
+        continue;
+      for (int w : VV[u])
+        if (D[w] < 0) {
+          D[w] = D[u] + 1;
+          Queue.push_back(w);
+        }
+    }
+    std::set<int> Near(Queue.begin(), Queue.end());
+    return RefineAroundSingularities(VertPos, Tetra, Features, TetraFrames,
+                                     Rings, &Near);
+  }
+
   static void ComputeField(std::vector<Geo::Point3<ScalarType>> &VertPos,
                            std::vector<std::vector<int>> &Tetra,
                            const std::vector<std::pair<int, int>> &Features,
@@ -212,8 +257,113 @@ public:
       ComputeFrame<ScalarType>(VertPos, Tetra, TetraFrames, FP);
   }
 
+  // iterations of local smoothing of the frames of the new tetras after an
+  // inheritance (0 = only inherited)
+  static int &SmoothNewIterations() {
+    static int Iter = 5;
+    return Iter;
+  }
+
+  // local smoothing of the frames of the tetras marked Free (Jacobi: each
+  // free frame becomes the average of itself and its face neighbours,
+  // matched direction by direction, then orthonormalized); the others are
+  // fixed. Inherited frames are piecewise constant (one per old tetra): the
+  // field now varies inside the refined region too.
+  static void SmoothFramesLocal(
+      const std::vector<std::vector<int>> &Tetra,
+      std::vector<Field::FrameField<ScalarType>> &TetraFrames,
+      const std::vector<bool> &Free, const int Iterations) {
+    if (Iterations <= 0)
+      return;
+    std::vector<std::vector<int>> NextT, NextF;
+    Tetra::GetPPAdjacency(Tetra, NextT, NextF);
+    for (int it = 0; it < Iterations; it++) {
+      std::vector<Field::FrameField<ScalarType>> NewFrames = TetraFrames;
+      for (size_t t = 0; t < Tetra.size(); t++) {
+        if (!Free[t])
+          continue;
+        Field::FrameField<ScalarType> Curr = TetraFrames[t];
+        Geo::Point3<ScalarType> Sum[3] = {Curr.D[0], Curr.D[1], Curr.D[2]};
+        for (size_t j = 0; j < NextT[t].size(); j++) {
+          int n = NextT[t][j];
+          if ((n < 0) || (n == (int)t))
+            continue;
+          int Ax[3];
+          Curr.GetBestPairing(TetraFrames[n], Ax[0], Ax[1], Ax[2]);
+          for (int k = 0; k < 3; k++)
+            Sum[k] += TetraFrames[n].GetDirection(Ax[k]);
+        }
+        Field::FrameField<ScalarType> F = Curr;
+        for (int k = 0; k < 3; k++)
+          F.D[k] = Sum[k];
+        F.ForceCorrect();
+        NewFrames[t] = F;
+      }
+      TetraFrames = NewFrames;
+    }
+  }
+
   // each tetra takes the frame of the tetra it comes from
   static void InheritFrames(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            const std::vector<std::vector<int>> &Tetra,
+                            const std::vector<int> &TetOrigin,
+                            std::vector<Field::FrameField<ScalarType>> &TetraFrames) {
+    InheritFramesOnly(VertPos, Tetra, TetOrigin, TetraFrames);
+    // then the new tetras (from a split one), not on the surface (the
+    // frames there are aligned with the boundary), are smoothed
+    int Iter = SmoothNewIterations();
+    if (Iter <= 0)
+      return;
+    std::vector<int> NumFromOrigin(Tetra.size(), 0);
+    for (size_t t = 0; t < TetOrigin.size(); t++)
+      NumFromOrigin[TetOrigin[t]]++;
+    std::map<std::vector<int>, int> FaceCount;
+    for (size_t t = 0; t < Tetra.size(); t++)
+      for (int f = 0; f < 4; f++) {
+        std::vector<int> F;
+        for (int j = 0; j < 4; j++)
+          if (j != f)
+            F.push_back(Tetra[t][j]);
+        std::sort(F.begin(), F.end());
+        FaceCount[F]++;
+      }
+    std::vector<bool> Free(Tetra.size(), false);
+    int NumFree = 0;
+    for (size_t t = 0; t < Tetra.size(); t++) {
+      if (NumFromOrigin[TetOrigin[t]] < 2)
+        continue;
+      bool OnBorder = false;
+      for (int f = 0; f < 4; f++) {
+        std::vector<int> F;
+        for (int j = 0; j < 4; j++)
+          if (j != f)
+            F.push_back(Tetra[t][j]);
+        std::sort(F.begin(), F.end());
+        if (FaceCount[F] == 1)
+          OnBorder = true;
+      }
+      if (OnBorder)
+        continue;
+      Free[t] = true;
+      NumFree++;
+    }
+    if (NumFree == 0)
+      return;
+    SmoothFramesLocal(Tetra, TetraFrames, Free, Iter);
+    // positions at the barycenters (the smoothing keeps them, safety)
+    for (size_t t = 0; t < Tetra.size(); t++) {
+      Geo::Point3<ScalarType> Bary(0, 0, 0);
+      for (size_t j = 0; j < Tetra[t].size(); j++)
+        Bary += VertPos[Tetra[t][j]];
+      TetraFrames[t].Pos = Bary / (ScalarType)Tetra[t].size();
+    }
+    std::cout << "** Frames of " << NumFree
+              << " new internal tetras smoothed (" << Iter << " iterations) **"
+              << std::endl;
+  }
+
+  // each tetra takes the frame of the tetra it comes from (no smoothing)
+  static void InheritFramesOnly(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                             const std::vector<std::vector<int>> &Tetra,
                             const std::vector<int> &TetOrigin,
                             std::vector<Field::FrameField<ScalarType>> &TetraFrames) {

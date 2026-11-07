@@ -431,6 +431,9 @@ public:
 
     if (VertSize != NULL) {
       assert(VertSizeFeat.size() == VertSizeNorm.size());
+      // FIX: values were appended, so a non-empty input vector ended up
+      // longer than the number of vertices
+      (*VertSize).clear();
       for (size_t i = 0; i < VertSizeFeat.size(); i++)
         (*VertSize).push_back(std::min(VertSizeFeat[i], VertSizeNorm[i]));
     }
@@ -454,6 +457,38 @@ public:
       std::cout << "There are Fearures:" << VertPairFeatures.size() << std::endl;
     return (RemeshSizeAggregated(VertPos, Faces, VertPairFeatures, MinSize,
                                  MaxSize, VertSize));
+  }
+
+  // ADAPTIVE: the aggregated field only reacts to nearby distinct features
+  // and to thin parts (normals almost opposite), so isolated sharp edges and
+  // curved regions stayed at MaxSize. This adds a curvature term: the
+  // distance at which the normal turns by CurvAngle (computed by
+  // RemeshSizeNormal with a low angle threshold). Sharp edges are included,
+  // since the normal turns immediately across them.
+  // The curvature term is bounded below by FeatureSize (the global,
+  // non-adaptive size), so the result is:
+  //  - finer than FeatureSize only where the aggregated field already says so
+  //  - FeatureSize near features and curvature
+  //  - up to MaxSize on flat regions
+  // VertSize must hold the aggregated field (same units, one per vertex).
+  static void
+  AdaptiveSizeField(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                    const std::vector<std::vector<int>> &Faces,
+                    const ScalarType &FeatureSize, const ScalarType &MinSize,
+                    const ScalarType &MaxSize, std::vector<ScalarType> &VertSize,
+                    ScalarType CurvAngle = 20, bool subSample = true) {
+    assert(VertSize.size() == VertPos.size());
+    assert(FeatureSize > 0);
+
+    std::vector<ScalarType> CurvSize;
+    RemeshSizeNormal(VertPos, Faces, MinSize, MaxSize, &CurvSize, CurvAngle,
+                     subSample);
+    assert(CurvSize.size() == VertPos.size());
+
+    for (size_t i = 0; i < VertSize.size(); i++) {
+      ScalarType CurvTarget = std::max(FeatureSize, CurvSize[i]);
+      VertSize[i] = std::min(VertSize[i], CurvTarget);
+    }
   }
 };
 } // namespace Geo

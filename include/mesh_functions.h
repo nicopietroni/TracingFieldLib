@@ -1455,7 +1455,13 @@ inline int ExpectedValence(const std::vector<Geo::Point3<ScalarType>> &Pos,
                            const std::vector<std::vector<int>> &VFIndex,
                            const int IndexV) {
   ScalarType AngleV = ComputePerVertAngleDeg(Pos, Faces, VF, VFIndex, IndexV);
-  int ExpVal = floor(0.5 + AngleV / 60);
+  // FIX: angle sums of 30+60k degrees (90 deg border corners, 270 deg cube
+  // corners: very common on CAD meshes) fall exactly on the rounding
+  // boundary; numerical noise of the angles (which depends on the current
+  // triangulation) made the expected valence jump at every flip, so valence
+  // flips undid each other forever. A tiny bias makes the rounding stable.
+  // int ExpVal = floor(0.5 + AngleV / 60);
+  int ExpVal = floor(0.5 + AngleV / 60 + (ScalarType)1e-6);
   ExpVal = std::max(ExpVal, 1);
   return ExpVal;
 }

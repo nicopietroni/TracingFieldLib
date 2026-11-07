@@ -31,6 +31,11 @@
 #include <box3.h>
 #include <point3.h>
 #include <triangle3.h>
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <iostream>
+#include <limits>
 #include <vector>
 
 namespace Geo {
@@ -194,8 +199,12 @@ public:
               GridIndex IndexP = GridIndex(ix, iy, iz);
               if (iboxdone.IsInEx(IndexP))
                 continue;
-              std::vector<int> to_test;
-              Get(IndexP, to_test);
+              // FIX (speed): the cell entries were copied into a new vector
+              // for every visited cell
+              // std::vector<int> to_test;
+              // Get(IndexP, to_test);
+              const std::vector<int> &to_test =
+                  Grid[IndexP.X][IndexP.Y][IndexP.Z].entries;
               for (size_t i = 0; i < to_test.size(); i++) {
                 int currT = to_test[i];
                 if (FaceMark[currT] >= TMark)
@@ -218,8 +227,13 @@ public:
 
 
                 //check distance wrt bbox
+                // FIX: the box was centered on the triangle vertex p0, which
+                // is always inside the triangle box, so nothing was culled.
+                // Centered on the query point it discards only triangles
+                // farther than _minDist (rejected below anyway).
                 Box3<ScalarType> TestBB;
-                TestBB.Set(p0);
+                // TestBB.Set(p0);
+                TestBB.Set(_p);
                 TestBB.Inflate(_minDist);
                 if (!TestBB.Collide(triBB))
                   continue;
@@ -229,6 +243,10 @@ public:
 
                 CoordType closP = ClosestPoint(T, _p);
                 ScalarType currD = (closP - _p).Norm();
+                // FIX (speed): mark as soon as the exact distance is known.
+                // _minDist only decreases, so a triangle rejected now would
+                // be rejected again in the other cells it spans.
+                FaceMark[currT] = TMark;
                 if (currD > _minDist)
                   continue;
 
@@ -237,7 +255,7 @@ public:
                   closestF = currT;
                   _closestPt = closP;
                 }
-                FaceMark[currT] = TMark;
+                // FaceMark[currT] = TMark;
               }
               // closestF=1;
             }
@@ -329,6 +347,164 @@ public:
             TrisIn.push_back(FaceIdx);
           }
         }
+  }
+
+  /*! \brief Candidate faces of the cells overlapping a box (the exact
+   *  test is left to the caller: a face is returned once)
+   *  \param b The query box
+   *  \param out The faces
+   */
+  void FacesInBox(const Box3<ScalarType> &b, std::vector<int> &out) {
+    out.clear();
+    Box3<ScalarType> bf = b;
+    bf.Intersect(bbox);
+    if (bf.IsEmpty())
+      return;
+    Box3<int> ib;
+    BoxToIBox(bf, ib);
+    TMark++;
+    int X0 = std::max(0, ib.Min.X), X1 = std::min(siz.X - 1, ib.Max.X);
+    int Y0 = std::max(0, ib.Min.Y), Y1 = std::min(siz.Y - 1, ib.Max.Y);
+    int Z0 = std::max(0, ib.Min.Z), Z1 = std::min(siz.Z - 1, ib.Max.Z);
+    for (int xi = X0; xi <= X1; xi++)
+      for (int yi = Y0; yi <= Y1; yi++)
+        for (int zi = Z0; zi <= Z1; zi++)
+          for (int f : Grid[xi][yi][zi].entries) {
+            if (FaceMark[f] >= TMark)
+              continue;
+            FaceMark[f] = TMark;
+            out.push_back(f);
+          }
+  }
+
+  /*! \brief Ray / triangle intersection (Moller-Trumbore): t such that
+   *  O + t*D lies on the triangle (A,B,C); false if parallel or outside
+   */
+  static bool RayTriangle(const CoordType &O, const CoordType &D,
+                          const CoordType &A, const CoordType &B,
+                          const CoordType &C, ScalarType &t) {
+    CoordType E1 = B - A;
+    CoordType E2 = C - A;
+    CoordType Pv = Geo::Cross(D, E2);
+    ScalarType Det = Geo::Dot(E1, Pv);
+    ScalarType Scale = E1.Norm() * E2.Norm() * D.Norm();
+    if (std::fabs(Det) <= (ScalarType)1e-12 * Scale)
+      return false;
+    ScalarType Inv = 1 / Det;
+    CoordType S = O - A;
+    ScalarType U = Geo::Dot(S, Pv) * Inv;
+    if ((U < 0) || (U > 1))
+      return false;
+    CoordType Q = Geo::Cross(S, E1);
+    ScalarType V = Geo::Dot(D, Q) * Inv;
+    if ((V < 0) || (U + V > 1))
+      return false;
+    t = Geo::Dot(E2, Q) * Inv;
+    return true;
+  }
+
+  /*! \brief First face hit by the segment O + t*Dir, t in (MinT, MaxT]
+   *  (t in units of Dir). The cells crossed by the segment are visited in
+   *  order (3D DDA), the search stops as soon as the closest hit is inside
+   *  the cells already visited.
+   *  \param vert The vertex vector of the input mesh
+   *  \param face The face vector of the input mesh
+   *  \param O The origin of the ray
+   *  \param Dir The direction of the ray
+   *  \param MinT Hits with t <= MinT are ignored (e.g. the origin itself)
+   *  \param MaxT The end of the segment
+   *  \param HitF The face hit (-1 if none)
+   *  \param HitT The parameter of the hit
+   *  \param Skip Faces to ignore (e.g. the ones incident to the origin)
+   */
+  bool GridRayFirstHit(const std::vector<Geo::Point3<ScalarType>> &vert,
+                       const std::vector<std::vector<int>> &face,
+                       const CoordType &O, const CoordType &Dir,
+                       const ScalarType MinT, const ScalarType MaxT,
+                       int &HitF, ScalarType &HitT,
+                       const std::vector<int> *Skip = nullptr) {
+    HitF = -1;
+    HitT = MaxT;
+    const ScalarType Inf = std::numeric_limits<ScalarType>::max();
+    ScalarType o[3] = {O.X, O.Y, O.Z};
+    ScalarType d[3] = {Dir.X, Dir.Y, Dir.Z};
+    ScalarType bmin[3] = {bbox.Min.X, bbox.Min.Y, bbox.Min.Z};
+    ScalarType bmax[3] = {bbox.Max.X, bbox.Max.Y, bbox.Max.Z};
+    ScalarType vox[3] = {voxel.X, voxel.Y, voxel.Z};
+    int sz[3] = {siz.X, siz.Y, siz.Z};
+    // the part of the segment inside the box
+    ScalarType t0 = std::max(MinT, (ScalarType)0), t1 = MaxT;
+    for (int a = 0; a < 3; a++) {
+      if (d[a] == 0) {
+        if ((o[a] < bmin[a]) || (o[a] > bmax[a]))
+          return false;
+        continue;
+      }
+      ScalarType ta = (bmin[a] - o[a]) / d[a];
+      ScalarType tb = (bmax[a] - o[a]) / d[a];
+      if (ta > tb)
+        std::swap(ta, tb);
+      t0 = std::max(t0, ta);
+      t1 = std::min(t1, tb);
+    }
+    if (t0 > t1)
+      return false;
+    // first cell, steps
+    int c[3], step[3];
+    ScalarType tMax[3], tDelta[3];
+    for (int a = 0; a < 3; a++) {
+      ScalarType p = o[a] + d[a] * t0;
+      c[a] = (int)std::floor((p - bmin[a]) / vox[a]);
+      c[a] = std::max(0, std::min(sz[a] - 1, c[a]));
+      if (d[a] > 0) {
+        step[a] = 1;
+        tMax[a] = (bmin[a] + (c[a] + 1) * vox[a] - o[a]) / d[a];
+        tDelta[a] = vox[a] / d[a];
+      } else if (d[a] < 0) {
+        step[a] = -1;
+        tMax[a] = (bmin[a] + c[a] * vox[a] - o[a]) / d[a];
+        tDelta[a] = -vox[a] / d[a];
+      } else {
+        step[a] = 0;
+        tMax[a] = Inf;
+        tDelta[a] = Inf;
+      }
+    }
+    TMark++;
+    while (true) {
+      for (int f : Grid[c[0]][c[1]][c[2]].entries) {
+        if (FaceMark[f] >= TMark)
+          continue;
+        FaceMark[f] = TMark;
+        if ((Skip != nullptr) &&
+            (std::find(Skip->begin(), Skip->end(), f) != Skip->end()))
+          continue;
+        ScalarType t;
+        if (!RayTriangle(O, Dir, vert[face[f][0]], vert[face[f][1]],
+                         vert[face[f][2]], t))
+          continue;
+        if ((t <= MinT) || (t > HitT))
+          continue;
+        HitT = t;
+        HitF = f;
+      }
+      ScalarType tExit = std::min(tMax[0], std::min(tMax[1], tMax[2]));
+      // the closest hit is in the cells already visited
+      if ((HitF >= 0) && (HitT <= tExit))
+        break;
+      if (tExit > t1)
+        break;
+      int a = 0;
+      if (tMax[1] < tMax[a])
+        a = 1;
+      if (tMax[2] < tMax[a])
+        a = 2;
+      c[a] += step[a];
+      if ((c[a] < 0) || (c[a] >= sz[a]))
+        break;
+      tMax[a] += tDelta[a];
+    }
+    return (HitF >= 0);
   }
 
   /*! \brief Initialize the search structure

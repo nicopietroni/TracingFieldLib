@@ -64,19 +64,30 @@ template <class ScalarType> class LabelNeighOrientedGraph {
     bool Enabled;
     //if reverse or not wrt moving in M6
     bool Reverse;
+    // DEVIATION arc: the sheet changes M3 direction across the edge (not
+    // coherent with the field), to be used only when nothing else is
+    // possible (heavy penalty in the ILP, bounded number in the SAT)
+    bool Deviation;
+    // deviation arcs only: fold of the sheet across the edge (degrees, 0 =
+    // the two faces continue flat, 180 = the sheet folds back on itself)
+    // and length of the edge / average edge length (for the cost)
+    float Fold = 0;
+    float LenRatio = 1;
 
     NeighInfo() {
       N = -1;
       W = -1;
       Enabled = false;
       Reverse = false;
+      Deviation = false;
     }
 
     inline bool operator==(const NeighInfo &N1) const {
       return ((N == N1.N) &&
               (W == N1.W) && 
               (Enabled == N1.Enabled) && 
-              (Reverse == N1.Reverse));
+              (Reverse == N1.Reverse) &&
+              (Deviation == N1.Deviation));
     }
 
     inline bool operator<(const NeighInfo &N1) const {
@@ -85,6 +96,9 @@ template <class ScalarType> class LabelNeighOrientedGraph {
         return true;
       if (!Enabled && N1.Enabled)
         return false;
+      // the deviation arcs after the regular ones
+      if (Deviation != N1.Deviation)
+        return (Deviation < N1.Deviation);
       if (W != N1.W)
         return (W < N1.W);
       if (Reverse != N1.Reverse)
@@ -101,6 +115,7 @@ template <class ScalarType> class LabelNeighOrientedGraph {
       W = _W;
       Enabled = _Enabled;
       Reverse = _Reverse;
+      Deviation = false;
     }
   };
 
@@ -128,6 +143,25 @@ public:
   // tells if a node falls in the border
   std::vector<bool> NodeBorderF;
 
+  // the deviation arcs (switch of M3 direction) count as continuation of a
+  // label in HasActiveNeigh (cleanup of empty labels and dead ends): a node
+  // continuing only with a switch is not removed there, the connectivity
+  // check (regular arcs, switch rescue in the cascade) decides
+  // (on: more correct, a node continuing with a switch is a valid node;
+  // the connectivity check also uses the switches as connections)
+  bool DeviationIsNeigh = true;
+
+  // the deviation arcs (switch of M3 direction) are used: when false they
+  // are seen as not existing by all the queries of active arcs (solver
+  // constraints, cleanup, check), without rebuilding the graph
+  bool DeviationActive = true;
+
+  // an arc is active if enabled and (not a deviation arc or the deviation
+  // arcs are used)
+  bool ArcActive(const NeighInfo &A) const {
+    return A.Enabled && (!A.Deviation || DeviationActive);
+  }
+
   // for each node for each edge tell if it is border or not
   std::vector<std::array<bool, 3>> NodeBorderE;
   // for each node for each vertes tell if it is border or not
@@ -153,11 +187,24 @@ public:
   std::vector<int> NodesOnConvexE;
   // nodes on concave edges by edge
   std::vector<int> NodesOnConcaveE;
+  // for each node of NodesOnConcaveE: the concave chain (concave edges
+  // between two ends, branching vertices or sharp corners) and the side
+  // (which of the two surface faces it continues), as Chain * 2 + Side
+  std::vector<int> NodesOnConcaveELabel;
 
   // nodes on convex edges by vert
   std::vector<int> NodesOnConvexEByV;
   // nodes on concave edges by vert
   std::vector<int> NodesOnConcaveEByV;
+  // same label as NodesOnConcaveELabel
+  std::vector<int> NodesOnConcaveEByVLabel;
+  // CONCAVE COVER: for each side of each concave edge, all the nodes that
+  // can continue that side into the volume (any face through the edge on
+  // the volume side, the M3 direction of that side, exit on the edge): a
+  // solution must contain at least one of them (robust to the meshing:
+  // not a given face). Label as NodesOnConcaveELabel.
+  std::vector<std::vector<int>> ConcaveCover;
+  std::vector<int> ConcaveCoverLabel;
 
   bool IsNeighbour(const int &IndexN0,const int IndexL,const int IndexN1)const
   {
@@ -188,7 +235,7 @@ public:
     for (size_t i = 0; i < N[IndexN0][IndexL].size(); i++)
     {
       if (( N[IndexN0][IndexL][i].N==IndexN1)&&
-          ( N[IndexN0][IndexL][i].Enabled ))
+          ( ArcActive(N[IndexN0][IndexL][i]) ))
           return true;
     }
     return false;
@@ -345,6 +392,57 @@ public:
     N[IndexN0][IndexLabel].push_back(NeighInfo(IndexN1, W, IsActive,Reverse));
   }
 
+  // a deviation arc (see NeighInfo::Deviation)
+  void AddDeviationNeighbour(const int &IndexN0, const int &IndexN1,
+                             const int &IndexLabel, const ScalarType &W,
+                             const float Fold = 0, const float LenRatio = 1) {
+    assert(IndexN0 >= 0);
+    assert(IndexN0 < (int)N.size());
+    assert(IndexN1 >= 0);
+    assert(IndexN1 < (int)N.size());
+    assert(IndexLabel >= 0);
+    assert(IndexLabel < (int)N[IndexN0].size());
+    NeighInfo NI(IndexN1, W, true, false);
+    NI.Deviation = true;
+    NI.Fold = Fold;
+    NI.LenRatio = LenRatio;
+    N[IndexN0][IndexLabel].push_back(NI);
+  }
+
+  // fold (degrees) and relative length of the deviation arc from IndexN0 to
+  // IndexN1: false if there is none
+  bool DeviationArcGeom(const int IndexN0, const int IndexN1, float &Fold,
+                        float &LenRatio) const {
+    for (size_t l = 0; l < N[IndexN0].size(); l++)
+      for (size_t j = 0; j < N[IndexN0][l].size(); j++)
+        if ((N[IndexN0][l][j].N == IndexN1) && N[IndexN0][l][j].Deviation) {
+          Fold = N[IndexN0][l][j].Fold;
+          LenRatio = N[IndexN0][l][j].LenRatio;
+          return true;
+        }
+    return false;
+  }
+
+  // is there a deviation arc from IndexN0 to IndexN1 (any label)?
+  bool IsDeviationArc(const int IndexN0, const int IndexN1) const {
+    for (size_t l = 0; l < N[IndexN0].size(); l++)
+      for (size_t j = 0; j < N[IndexN0][l].size(); j++)
+        if ((N[IndexN0][l][j].N == IndexN1) && N[IndexN0][l][j].Deviation)
+          return true;
+    return false;
+  }
+
+  // number of deviation arcs (both directions counted)
+  int NumDeviationArcs(const bool OnlyEnabled = true) const {
+    int Num = 0;
+    for (size_t n = 0; n < N.size(); n++)
+      for (size_t l = 0; l < N[n].size(); l++)
+        for (size_t j = 0; j < N[n][l].size(); j++)
+          if (N[n][l][j].Deviation && (!OnlyEnabled || ArcActive(N[n][l][j])))
+            Num++;
+    return Num;
+  }
+
   void ClearNeighbor(const int &IndexN, const int &IndexLabel) {
     N[IndexN][IndexLabel].clear();
   }
@@ -359,7 +457,7 @@ public:
 
     for (size_t l = 0; l < N[IndexN].size(); l++)
       for (size_t i = 0; i < N[IndexN][l].size(); i++) {
-        if (!N[IndexN][l][i].Enabled)
+        if (!ArcActive(N[IndexN][l][i]))
           continue;
         int CurrNeigh = N[IndexN][l][i].N;
 
@@ -379,7 +477,7 @@ public:
 
     for (size_t l = 0; l < N[IndexN].size(); l++)
       for (size_t i = 0; i < N[IndexN][l].size(); i++) {
-        if (!N[IndexN][l][i].Enabled)
+        if (!ArcActive(N[IndexN][l][i]))
           continue;
         int CurrNeigh = N[IndexN][l][i].N;
 
@@ -404,7 +502,7 @@ public:
     Reverse.clear();
 
     for (size_t i = 0; i < N[IndexN][IndexLabel].size(); i++) {
-      if (!N[IndexN][IndexLabel][i].Enabled)
+      if (!ArcActive(N[IndexN][IndexLabel][i]))
         continue;
       int CurrNeigh = N[IndexN][IndexLabel][i].N;
 
@@ -429,7 +527,7 @@ public:
     WeightNeigh.clear();
 
     for (size_t i = 0; i < N[IndexN][IndexLabel].size(); i++) {
-      if (!N[IndexN][IndexLabel][i].Enabled)
+      if (!ArcActive(N[IndexN][IndexLabel][i]))
         continue;
       int CurrNeigh = N[IndexN][IndexLabel][i].N;
 
@@ -481,7 +579,7 @@ public:
     IndexNeigh.clear();
 
     for (size_t i = 0; i < N[IndexN][IndexLabel].size(); i++) {
-      if (!N[IndexN][IndexLabel][i].Enabled)
+      if (!ArcActive(N[IndexN][IndexLabel][i]))
         continue;
       int CurrNeigh = N[IndexN][IndexLabel][i].N;
 
@@ -499,7 +597,15 @@ public:
     assert(IndexLabel < (int)N[IndexN].size());
 
     for (size_t i = 0; i < N[IndexN][IndexLabel].size(); i++) {
-      if (!N[IndexN][IndexLabel][i].Enabled)
+      if (!ArcActive(N[IndexN][IndexLabel][i]))
+        continue;
+      // the deviation arcs count only if DeviationIsNeigh (graph cleanup:
+      // empty labels, dead ends). Not counting them disabled the nodes that
+      // continue only with a switch (near the singular lines, where the
+      // regular arcs are missing), before any check
+      // if (N[IndexN][IndexLabel][i].Deviation)
+      //   continue;
+      if (N[IndexN][IndexLabel][i].Deviation && !DeviationIsNeigh)
         continue;
       int CurrNeigh = N[IndexN][IndexLabel][i].N;
 
@@ -518,7 +624,7 @@ public:
     assert(IndexLabel < (int)N[IndexN].size());
     int NumAct = 0;
     for (size_t i = 0; i < N[IndexN][IndexLabel].size(); i++) {
-      if (!N[IndexN][IndexLabel][i].Enabled)
+      if (!ArcActive(N[IndexN][IndexLabel][i]))
         continue;
       int CurrNeigh = N[IndexN][IndexLabel][i].N;
 
@@ -579,7 +685,7 @@ public:
     ActiveLink.clear();
 
     for (size_t i = 0; i < N[IndexN][IndexLabel].size(); i++) {
-      bool IsActive = N[IndexN][IndexLabel][i].Enabled;
+      bool IsActive = ArcActive(N[IndexN][IndexLabel][i]);
       int CurrNeigh = N[IndexN][IndexLabel][i].N;
       ScalarType WeightL = N[IndexN][IndexLabel][i].W;
 
@@ -626,7 +732,7 @@ public:
 
         IndexNeigh.push_back(CurrNeigh);
         WeightNeigh.push_back(N[IndexN][l][i].W);
-        ActiveLink.push_back(N[IndexN][l][i].Enabled);
+        ActiveLink.push_back(ArcActive(N[IndexN][l][i]));
       }
   }
 
@@ -722,7 +828,7 @@ public:
     assert(IndexLabel < (int)N[IndexN0].size());
     assert(LocalIdx >= 0);
     assert(LocalIdx < (int)N[IndexN0][IndexLabel].size());
-    return (N[IndexN0][IndexLabel][LocalIdx].Enabled);
+    return (ArcActive(N[IndexN0][IndexLabel][LocalIdx]));
   }
 
   void GetNodeType(const NType &TypeNode, std::vector<int> &IdxNode) const {
@@ -1145,6 +1251,12 @@ public:
     NodeAreaW.clear();
     NT.clear();
     EnabledN.clear();
+    NodesOnConcaveE.clear();
+    NodesOnConcaveELabel.clear();
+    NodesOnConcaveEByV.clear();
+    NodesOnConcaveEByVLabel.clear();
+    ConcaveCover.clear();
+    ConcaveCoverLabel.clear();
   }
   
   LabelNeighOrientedGraph() {}

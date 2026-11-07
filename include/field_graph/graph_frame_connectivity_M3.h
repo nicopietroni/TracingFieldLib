@@ -1400,6 +1400,125 @@ private:
       return FindLocalDisk(seed, OnlyActive, true);
     }
 
+    // JOINT HALF DISK (surface vertex): is there a half disk through the
+    // vertex containing both the seed and the target? Only for a seed with
+    // one side on the surface (one branch, e.g. a concave node): the branch
+    // must close exactly in the target (entered through its non surface
+    // side, its other side on the surface). Search on (node, used edges),
+    // the inactive arcs cost 1 (OnlyActive: not allowed): the half disk
+    // with the fewest inactive arcs, returned in Missing (local arcs).
+    // Returns 1 yes, 0 no, -1 not applicable / undetermined.
+    // Path: the local nodes of the half disk (seed ... target)
+    // Bad (local nodes, optional): entering one costs BadCost (e.g. nodes
+    // failing the check at another vertex: the half disk made of sound
+    // nodes is preferred, when it exists)
+    int HalfDiskThroughBoth(int seed, int target, bool OnlyActive,
+                            std::vector<MissingEdge> *Missing = nullptr,
+                            std::vector<int> *Path = nullptr,
+                            const std::vector<char> *Bad = nullptr,
+                            const int BadCost = 3) const {
+      if (Missing != nullptr)
+        Missing->clear();
+      if (Path != nullptr)
+        Path->clear();
+      if ((seed < 0) || (target < 0) || (seed == target))
+        return -1;
+      DiskContext C;
+      if (!InitDiskContext(seed, OnlyActive, false, C))
+        return -5;
+      // not one branch: the seed has 0 or 2 sides not on the surface at
+      // this vertex (e.g. the vertex is not seen as on the surface)
+      if (C.Needed.size() != 1)
+        return -4 - 10 * (int)C.Needed.size();
+      std::vector<SearchKey> States;
+      std::vector<int> Parent;
+      std::vector<MissingEdge> ByArc;
+      std::unordered_map<SearchKey, int, SearchKeyHash> Best;
+      typedef std::pair<int, int> QItem; // (cost, state)
+      std::priority_queue<QItem, std::vector<QItem>, std::greater<QItem>> Q;
+      SearchKey S0;
+      S0.node = seed;
+      S0.k = 0;
+      States.push_back(S0);
+      Parent.push_back(-1);
+      ByArc.push_back({-1, -1, -1});
+      Best[S0] = 0;
+      Q.push(QItem(0, 0));
+      size_t Iter = 0;
+      int FinalState = -1;
+      MissingEdge FinalArc = {-1, -1, -1};
+      while (!Q.empty()) {
+        if ((Iter++) > MaxExpandedStates)
+          return -6;
+        QItem top = Q.top();
+        Q.pop();
+        int CurrIdx = top.second;
+        SearchKey cur = States[CurrIdx];
+        if (top.first > Best[cur])
+          continue;
+        int u = cur.node;
+        for (size_t a = 0; a < Neigh[u].size(); a++) {
+          int m = Move(C, u, (int)a, 0);
+          if (m == -1)
+            continue;
+          int e = C.ArcEdge[u][a];
+          if (cur.used[e])
+            continue;
+          int v = Neigh[u][a];
+          int NextCost = top.first + (Active[u][a] ? 0 : 1);
+          MissingEdge Arc = {u, v, (int)a};
+          if (m == 1) {
+            // closed: valid only in the target; the queue is ordered by
+            // cost, but the closing arc can add 1: keep the best one
+            if (v != target)
+              continue;
+            if ((FinalState == -1) ||
+                (NextCost < Best[States[FinalState]] +
+                                (Active[FinalArc.u][FinalArc.k] ? 0 : 1))) {
+              FinalState = CurrIdx;
+              FinalArc = Arc;
+            }
+            continue;
+          }
+          if ((Bad != nullptr) && (*Bad)[v])
+            NextCost += BadCost;
+          SearchKey nxt = cur;
+          nxt.node = v;
+          nxt.used[e] = true;
+          auto it = Best.find(nxt);
+          if ((it != Best.end()) && (it->second <= NextCost))
+            continue;
+          Best[nxt] = NextCost;
+          States.push_back(nxt);
+          Parent.push_back(CurrIdx);
+          ByArc.push_back(Arc);
+          Q.push(QItem(NextCost, (int)States.size() - 1));
+        }
+        // nothing cheaper can still come
+        if ((FinalState != -1) && !Q.empty() &&
+            (Q.top().first >= Best[States[FinalState]] +
+                                  (Active[FinalArc.u][FinalArc.k] ? 0 : 1)))
+          break;
+      }
+      if (FinalState == -1)
+        return 0;
+      if (Missing != nullptr) {
+        if (!Active[FinalArc.u][FinalArc.k])
+          Missing->push_back(FinalArc);
+        for (int Idx = FinalState; Parent[Idx] != -1; Idx = Parent[Idx]) {
+          const MissingEdge &me = ByArc[Idx];
+          if (!Active[me.u][me.k])
+            Missing->push_back(me);
+        }
+      }
+      if (Path != nullptr) {
+        Path->push_back(target);
+        for (int Idx = FinalState; Idx != -1; Idx = Parent[Idx])
+          Path->push_back(States[Idx].node);
+      }
+      return 1;
+    }
+
     void EnableEdges(const std::vector<MissingEdge> &edges) {
       for (const auto &me : edges) {
         int u = me.u;
@@ -2137,7 +2256,25 @@ private:
           std::vector<ScalarType> WeightNeigh;
           std::vector<bool> ActiveLink;
 
-          M3Graph.AllNeigh(IndexGlob0, l, IndexNeigh, WeightNeigh, ActiveLink);
+          // M3Graph.AllNeigh(IndexGlob0, l, IndexNeigh, WeightNeigh, ActiveLink);
+          // (before: the deviation arcs were not part of the check, it
+          // worked as if they did not exist)
+          // the deviation arcs (M3 direction change) are possible
+          // connections of the check when used (see below)
+          for (const auto &A : M3Graph.N[IndexGlob0][l]) {
+            // the switches are possible connections of the check (manifold,
+            // repair) when used and DeviationIsNeigh; only temporarily
+            // (IncludeDeviation, rescue) otherwise
+            // if (A.Deviation && (!IncludeDeviation || !M3Graph.DeviationActive))
+            //   continue;
+            if (A.Deviation &&
+                (!M3Graph.DeviationActive ||
+                 !(IncludeDeviation || M3Graph.DeviationIsNeigh)))
+              continue;
+            IndexNeigh.push_back(A.N);
+            WeightNeigh.push_back(A.W);
+            ActiveLink.push_back(A.Enabled);
+          }
 
           for (size_t n = 0; n < IndexNeigh.size(); n++) {
             int IndexGlob1 = IndexNeigh[n];
@@ -2312,6 +2449,75 @@ private:
 public:
   // nodes that can be part of a sheet: enabled, not tangent and not on a
   // surface face (the surface itself can never be used to trace a sheet)
+  // JOINT HALF DISK at the vertex IndexV (global) of the faces of NodeA
+  // and NodeB: is there a half disk around IndexV containing both (see
+  // SubGraph::HalfDiskThroughBoth)? Uses the subgraphs of the last check
+  // (their active state). Returns 1 yes, 0 no, -1 not available.
+  int JointHalfDisk(const int NodeA, const int NodeB, const int IndexV,
+                    const bool OnlyActive,
+                    std::vector<std::pair<int, int>> *MissingArcs = nullptr,
+                    std::vector<int> *PathNodes = nullptr,
+                    const bool AvoidFailing = false) const {
+    if (MissingArcs != nullptr)
+      MissingArcs->clear();
+    if (PathNodes != nullptr)
+      PathNodes->clear();
+    // codes: -2 NodeA without a subgraph (not checkable at the check),
+    // -3 NodeB not in it, -4 / -14 / -24 not one branch (0 / 2 sides not on
+    // the surface), -5 star too big, -6 search limit
+    if ((NodeA < 0) || (NodeA >= (int)SubGraphIndex.size()))
+      return -2;
+    int FA = Field::FrameFieldM3Graph::ElemOfNode(NodeA);
+    int LocalV = Geo::WhichVert(InternalFaces[FA], IndexV);
+    if (LocalV < 0)
+      return -2;
+    int IndexGraph = SubGraphIndex[NodeA][LocalV];
+    if ((IndexGraph < 0) || (IndexGraph >= (int)SubGraphs.size()))
+      return -2;
+    const SubGraph &SG = SubGraphs[IndexGraph];
+    int LA = -1, LB = -1;
+    for (size_t i = 0; i < SG.NodesIdx.size(); i++) {
+      if (SG.NodesIdx[i] == NodeA)
+        LA = (int)i;
+      if (SG.NodesIdx[i] == NodeB)
+        LB = (int)i;
+    }
+    if ((LA < 0) || (LB < 0))
+      return -3;
+    std::vector<typename SubGraph::MissingEdge> Missing;
+    // AvoidFailing: the nodes failing the check at another vertex (not
+    // IndexV) are avoided when possible
+    std::vector<char> Bad;
+    if (AvoidFailing) {
+      Bad.assign(SG.NodesIdx.size(), 0);
+      for (size_t i = 0; i < SG.NodesIdx.size(); i++) {
+        int n = SG.NodesIdx[i];
+        if ((n < 0) || (n >= (int)ManifoldNodevType.size()))
+          continue;
+        int F = Field::FrameFieldM3Graph::ElemOfNode(n);
+        for (int k = 0; k < 3; k++) {
+          if (InternalFaces[F][k] == IndexV)
+            continue;
+          if ((ManifoldNodevType[n][k] == NON_MANIFOLD) ||
+              (ManifoldNodevType[n][k] == INCORRECT_EXIT))
+            Bad[i] = 1;
+        }
+      }
+    }
+    std::vector<int> Path;
+    int Res = SG.HalfDiskThroughBoth(LA, LB, OnlyActive, &Missing, &Path,
+                                     AvoidFailing ? &Bad : nullptr);
+    if (PathNodes != nullptr)
+      for (int l : Path)
+        PathNodes->push_back(SG.NodesIdx[l]);
+    // inactive arcs of the half disk as pairs of global nodes
+    if (MissingArcs != nullptr)
+      for (auto &me : Missing)
+        MissingArcs->push_back(
+            std::make_pair(SG.NodesIdx[me.u], SG.NodesIdx[me.v]));
+    return Res;
+  }
+
   bool IsCheckable(const int IndexN) const {
     if (!M3Graph.IsEnabled(IndexN))
       return false;
@@ -3116,6 +3322,12 @@ public:
       // their arcs as they were before they were disabled
       std::set<int> RS(R.begin(), R.end());
       Geo::LabelGraphFuctions<ScalarType>::RestoreArcs(M3Graph, SavedArcs, RS);
+      // the disks may close with a switch (e.g. a sheet crossing the singular
+      // line): checked with the deviation arcs, back to the regular
+      // subgraphs at the end of the round
+      const bool WithDev =
+          DeviationRescue && (M3Graph.NumDeviationArcs() > 0);
+      IncludeDeviation = WithDev;
       // Init(PolyLSingV);
       RecheckAroundNodes(R);
       if (RepairEachRound)
@@ -3144,11 +3356,18 @@ public:
       NumBack = (int)Back.size();
       // disabled again with their arcs (consistent graph)
       Geo::LabelGraphFuctions<ScalarType>::DisableNodesAndArcs(M3Graph, Back);
-      if (NumBack > 0)
+      if (WithDev) {
+        // regular subgraphs again (all the vertices touched by R); the pairs
+        // closing only with a switch fail there, the cascade keeps them
+        // (RescueWithDeviations)
+        IncludeDeviation = false;
+        RecheckAroundNodes(R);
+      } else if (NumBack > 0)
         RecheckAroundNodes(Back);
       // Init(PolyLSingV);
       std::cout << "   kept " << Needed.size() << " nodes, " << NumBack
-                << " disabled again" << std::endl;
+                << " disabled again" << (WithDev ? " (switches included)" : "")
+                << std::endl;
       TotKept += (int)Needed.size();
       if (Needed.empty())
         break;
@@ -3165,6 +3384,185 @@ public:
   // last check (e.g. nodes disabled along the singularities).
   // At the end the check data (ManifoldNodevType) refers to the final graph.
   // Returns the total number of nodes disabled.
+  // nodes never disabled by the cascade (e.g. the concave seed nodes: a
+  // concave chain cannot be interrupted; a failing protected node stays
+  // enabled and is reported)
+  std::set<int> ProtectedNodes;
+
+  // the subgraphs include the deviation arcs (only temporarily, see
+  // DeviationRescue)
+  bool IncludeDeviation = false;
+  // in the cascade, a node failing without the deviation arcs is checked
+  // again at those vertices with them: if a disk closes with a switch the
+  // node is kept (the solver may need it to switch there, e.g. where a
+  // sheet crosses a singular line)
+  bool DeviationRescue = true;
+
+  // the failing (node, local vertex) pairs of Types (not the protected
+  // ones) checked again with the deviation arcs: the ones that pass are
+  // set MANIFOLD in Types. Returns their number.
+  int RescueWithDeviations(std::vector<std::array<ManifoldType, 3>> &Types) {
+    if (!DeviationRescue || (M3Graph.NumDeviationArcs() == 0))
+      return 0;
+    // the check already includes the switches: nothing to rescue
+    if (M3Graph.DeviationIsNeigh)
+      return 0;
+    std::vector<std::pair<int, int>> Fail;
+    std::set<int> Verts;
+    for (size_t n = 0; n < Types.size(); n++) {
+      if (!IsCheckable((int)n))
+        continue;
+      for (int k = 0; k < 3; k++)
+        if ((Types[n][k] == NON_MANIFOLD) || (Types[n][k] == INCORRECT_EXIT)) {
+          Fail.push_back(std::make_pair((int)n, k));
+          Verts.insert(
+              InternalFaces[Field::FrameFieldM3Graph::ElemOfNode((int)n)][k]);
+        }
+    }
+    if (Fail.empty())
+      return 0;
+    IncludeDeviation = true;
+    RecheckAroundVerts(Verts);
+    int Rescued = 0;
+    for (auto &P : Fail)
+      if (ManifoldNodevType[P.first][P.second] == MANIFOLD) {
+        Types[P.first][P.second] = MANIFOLD;
+        Rescued++;
+      }
+    // back to the subgraphs without the deviation arcs
+    IncludeDeviation = false;
+    RecheckAroundVerts(Verts);
+    // the pairs rescued stay MANIFOLD in the data too (the next round must
+    // not disable them)
+    for (auto &P : Fail)
+      if (Types[P.first][P.second] == MANIFOLD)
+        ManifoldNodevType[P.first][P.second] = MANIFOLD;
+    std::cout << "   " << Rescued << " of " << Fail.size()
+              << " failing pairs close with a deviation arc: kept" << std::endl;
+    return Rescued;
+  }
+
+  // pairs of consecutive concave nodes (A, B, shared vertex on the
+  // feature): at each round of the cascade the half disk around the vertex
+  // containing both is searched (also through inactive arcs, the fewest),
+  // its inactive arcs are enabled and ALL its nodes are protected for that
+  // round: the cascade can disable what fails around, never the nodes
+  // that keep the concave chain connected
+  std::vector<std::array<int, 3>> JointPairs;
+  // the protected nodes of the last search of the joint half disks
+  std::set<int> LastProtected;
+
+  // ZONE CLEANUP: the nodes enabled only to let the joint half disks be
+  // searched (Candidates, e.g. EnableAllAroundVerts: empty labels, dead
+  // ends removed by the construction) are disabled again, except the ones
+  // used by the joint half disks (and the protected nodes). Call after the
+  // check. Returns the number of candidates kept.
+  int KeepOnlyJointDiskNodes(const std::vector<int> &Candidates) {
+    std::set<int> Prot = ProtectedNodes;
+    if (!JointPairs.empty())
+      ProtectJointDisks(Prot);
+    std::vector<int> ToDisable;
+    for (int n : Candidates)
+      if ((Prot.count(n) == 0) && M3Graph.IsEnabled(n))
+        ToDisable.push_back(n);
+    Geo::LabelGraphFuctions<ScalarType>::DisableNodesAndArcs(M3Graph,
+                                                            ToDisable);
+    if (!ToDisable.empty())
+      RecheckAroundNodes(ToDisable);
+    int Kept = (int)Candidates.size() - (int)ToDisable.size();
+    std::cout << "** Zone: " << Candidates.size()
+              << " nodes enabled again, " << Kept
+              << " kept (joint half disks), " << ToDisable.size()
+              << " disabled again **" << std::endl;
+    return Kept;
+  }
+
+  // the joint half disks of JointPairs: arcs forced, nodes added to Prot.
+  // Returns the number of pairs without a half disk.
+  int ProtectJointDisks(std::set<int> &Prot) {
+    int NumOk = 0, NumForced = 0, NumArcs = 0, NumNo = 0;
+    std::vector<int> Changed;
+    for (const auto &JP : JointPairs) {
+      std::vector<std::pair<int, int>> Missing;
+      std::vector<int> Path;
+      // the half disk with the fewest inactive arcs and nodes failing
+      // elsewhere (protected, they would stay enabled while failing)
+      int r = JointHalfDisk(JP[0], JP[1], JP[2], false, &Missing, &Path, true);
+      if (r != 1)
+        r = JointHalfDisk(JP[1], JP[0], JP[2], false, &Missing, &Path, true);
+      if (r != 1) {
+        NumNo++;
+        continue;
+      }
+      NumOk++;
+      Prot.insert(Path.begin(), Path.end());
+      if (Missing.empty())
+        continue;
+      NumForced++;
+      for (auto &A : Missing)
+        for (int w = 0; w < 2; w++) {
+          int n = w ? A.second : A.first;
+          int m = w ? A.first : A.second;
+          if (!M3Graph.IsEnabled(n))
+            M3Graph.EnableNode(n);
+          for (size_t l = 0; l < M3Graph.N[n].size(); l++)
+            for (size_t k = 0; k < M3Graph.N[n][l].size(); k++)
+              if ((M3Graph.N[n][l][k].N == m) && !M3Graph.N[n][l][k].Enabled) {
+                M3Graph.N[n][l][k].Enabled = true;
+                NumArcs++;
+              }
+          Changed.push_back(n);
+        }
+    }
+    // the subgraphs see the forced arcs
+    if (!Changed.empty())
+      RecheckAroundNodes(Changed);
+    LastProtected = Prot;
+    std::cout << "   joint half disks: " << NumOk << " protected ("
+              << Prot.size() << " nodes), " << NumForced << " with "
+              << NumArcs << " arcs enabled, " << NumNo << " without"
+              << std::endl;
+    return NumNo;
+  }
+
+  // after the cascade only the protected nodes can still fail (enabled):
+  // the situation around them changed (neighbours disabled), so they are
+  // repaired again with links, then the cascade again (the joint half
+  // disks searched again, avoiding the failing nodes), while it improves.
+  // Returns the failing pairs left.
+  int RepairProtectedFailing(int MaxRounds = 3) {
+    auto CountFailing = [&]() {
+      int Num = 0;
+      for (size_t i = 0; i < ManifoldNodevType.size(); i++) {
+        if (!IsCheckable(i))
+          continue;
+        for (int k = 0; k < 3; k++)
+          if ((ManifoldNodevType[i][k] == NON_MANIFOLD) ||
+              (ManifoldNodevType[i][k] == INCORRECT_EXIT))
+            Num++;
+      }
+      return Num;
+    };
+    int Num = CountFailing();
+    for (int Round = 1; Round <= MaxRounds; Round++) {
+      if (Num == 0)
+        break;
+      std::cout << "** Repair of the protected nodes still failing, round "
+                << Round << ": " << Num << " pairs **" << std::endl;
+      SolveNonManifolds(false);
+      DisableNonManifoldCascade(20, true);
+      int NumAfter = CountFailing();
+      std::cout << "   failing pairs " << Num << " -> " << NumAfter
+                << std::endl;
+      if (NumAfter >= Num) {
+        Num = NumAfter;
+        break;
+      }
+      Num = NumAfter;
+    }
+    return Num;
+  }
+
   int DisableNonManifoldCascade(int MaxRounds = 20,
                                 bool CurrentDataValid = false) {
     int TotDisabled = 0;
@@ -3172,9 +3570,59 @@ public:
     if (!CurrentDataValid || !UseIncrementalCheck)
       Init(PolyLSingV);
     for (int Round = 1; Round <= MaxRounds; Round++) {
+      // protected in this round: the given nodes and the nodes of the joint
+      // half disks of the concave pairs (searched again at each round)
+      std::set<int> Prot = ProtectedNodes;
+      if (!JointPairs.empty())
+        ProtectJointDisks(Prot);
       std::vector<bool> EnabledPre = M3Graph.EnabledN;
+      // int Disabled = Geo::LabelGraphFuctions<ScalarType>::DisableNonManifoldNodes(
+      //     M3Graph, ManifoldNodevType, NON_MANIFOLD, INCORRECT_EXIT);
+      // the protected nodes are seen as manifold by the disabling
+      std::vector<std::array<ManifoldType, 3>> Types = ManifoldNodevType;
+      int NumProtectedFailing = 0;
+      for (int n : Prot)
+        if ((n >= 0) && (n < (int)Types.size())) {
+          bool Fail = false;
+          for (int k = 0; k < 3; k++)
+            if ((Types[n][k] == NON_MANIFOLD) ||
+                (Types[n][k] == INCORRECT_EXIT)) {
+              Types[n][k] = MANIFOLD;
+              Fail = true;
+            }
+          if (Fail)
+            NumProtectedFailing++;
+        }
+      if (NumProtectedFailing > 0)
+        std::cout << "   " << NumProtectedFailing
+                  << " protected nodes failing, kept enabled" << std::endl;
+      // the ones that close their disk only with a switch are kept
+      RescueWithDeviations(Types);
+      // the propagation (empty labels) can disable the protected nodes too
+      // (a neighbour disabled leaves their label empty): their arcs are
+      // saved and restored, and they are enabled again
+      std::vector<int> ProtVec(Prot.begin(), Prot.end());
+      std::vector<typename Geo::LabelGraphFuctions<ScalarType>::ArcRef> SavedArcs;
+      Geo::LabelGraphFuctions<ScalarType>::SaveArcsOf(M3Graph, ProtVec,
+                                                      SavedArcs);
       int Disabled = Geo::LabelGraphFuctions<ScalarType>::DisableNonManifoldNodes(
-          M3Graph, ManifoldNodevType, NON_MANIFOLD, INCORRECT_EXIT);
+          M3Graph, Types, NON_MANIFOLD, INCORRECT_EXIT);
+      int NumRestored = 0;
+      for (int n : ProtVec)
+        if (!M3Graph.IsEnabled(n)) {
+          M3Graph.EnableNode(n);
+          NumRestored++;
+        }
+      if (!ProtVec.empty())
+        Geo::LabelGraphFuctions<ScalarType>::RestoreArcs(M3Graph, SavedArcs,
+                                                         Prot);
+      if (NumRestored > 0) {
+        std::cout << "   " << NumRestored
+                  << " protected nodes disabled by the propagation, enabled "
+                     "again"
+                  << std::endl;
+        Disabled -= NumRestored;
+      }
       std::cout << "** Non manifold cascade, round " << Round << ": "
                 << Disabled << " nodes disabled **" << std::endl;
       TotDisabled += Disabled;

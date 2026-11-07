@@ -46,11 +46,30 @@
 #include <set>
 #include <type_traits>
 #include <utility>
+#include <string>
 #include <vector>
 
 #define SOFT_SEED_CONST_M3 100000
 #define SOFT_CONSTR_PENALTY 1000
 #define POW_EXP 4
+// SWITCH (deviation arc) cost: base (units of the worst face, per average
+// edge length) times a factor growing with the distance of the fold of the
+// sheet (degrees, 0 flat, 180 folded back) from DEV_FOLD_TARGET: a real
+// switch between two nodes aligned with their faces turns the sheet by
+// about 90 deg (from the plane of one M3 direction to the plane of
+// another); a flat switch (wrong label for the face) or a sharp fold are
+// wrong. DEV_FOLD_RAMP times the base 90 deg away from the target; above
+// DEV_FOLD_MAX not allowed (folded back). (Before: growing from 0 deg, it
+// penalised exactly the needed switches)
+// (now: a constant cost for each switch used, DEV_BASE_COST; the fold terms
+// are kept commented in DeviationCost)
+// #define DEV_BASE_COST 1
+#define DEV_BASE_COST 0.1
+// #define DEV_FOLD_MIN 0
+#define DEV_FOLD_TARGET 90
+// #define DEV_FOLD_MAX 120
+#define DEV_FOLD_MAX 150
+#define DEV_FOLD_RAMP 10
 
 template <class ScalarType> class SheetSolveILPM3 {
 public:
@@ -96,6 +115,32 @@ public:
     // tighter LP relaxation than node <= sum(neighbours)
     bool MatchingContinuity;
 
+    // cost of using a DEVIATION arc (the sheet changes M3 direction across
+    // an edge, see LabelNeighOrientedGraph::NeighInfo::Deviation). As the
+    // penalties of the soft constraints, after the rescaling it is in units
+    // of the most expensive face (see RescaleObjFunctions): 50 = as 50 of
+    // the worst faces per arc. The regular arcs cost nothing (the base cost
+    // is on the faces). A soft seed is worth about 100 of them
+    // (SOFT_SEED_CONST_M3): with a high cost a crease of several arcs costs
+    // more than a soft seed, so with soft seeds the seed is dropped rather
+    // than deviating; with hard seeds (or hard constraints) the deviation is
+    // used when nothing else is possible. Always much less than a violated
+    // soft constraint (SOFT_CONSTR_PENALTY)
+    ScalarType DeviationPenalty;
+    // fold of the sheet at a switch (degrees, 0 flat): the cost grows with
+    // the distance from DeviationFoldTarget (see DEV_FOLD_TARGET); above
+    // DeviationFoldMax the switch is not allowed (sheet folded back)
+    // (was DeviationFoldMin) fold of a correct switch, see DEV_FOLD_TARGET
+    ScalarType DeviationFoldTarget;
+    ScalarType DeviationFoldMax;
+    // the cost at DeviationFoldMax is this times the base
+    ScalarType DeviationFoldRamp;
+
+    // cover constraints (SheetSolve_ConstraintsM3::Cover_Constr, e.g. the
+    // sides of the concave edges): hard (at least one node of each group)
+    // or soft (bonus as a soft seed for each group covered)
+    bool CoverHard;
+
     // LNS: if > 0 and there is a starting solution, the solution is improved
     // optimizing one window at a time (nodes within LNSWindowSteps steps of
     // a node of the solution), all the other nodes fixed
@@ -135,6 +180,20 @@ public:
 
       warmStart = true;
       MatchingContinuity = true;
+      // cost of a switch arc in units of the largest cost of a node (see
+      // RescaleObjFunctions): 50 made a switch line so expensive that the
+      // solver preferred extra crossing sheets to a single sheet switching
+      // DeviationPenalty = 50;
+      // DeviationPenalty = 0.1;
+      // (base: with the fold term a switch costs at least this, folded ones
+      // much more)
+      DeviationPenalty = DEV_BASE_COST;
+      // DeviationFoldMin = 20;
+      // DeviationFoldMin = DEV_FOLD_MIN;
+      DeviationFoldTarget = DEV_FOLD_TARGET;
+      DeviationFoldMax = DEV_FOLD_MAX;
+      DeviationFoldRamp = DEV_FOLD_RAMP;
+      CoverHard = true;
       LNSWindowSteps = 0;
       LNSWindowTime = 2;
       LNSMaxRounds = 3;
@@ -488,6 +547,97 @@ private:
     }
   }
 
+  // COVER: at least one node of each group; soft: a binary y <= sum of the
+  // group with the bonus of a soft seed (it stays absolute in the
+  // rescaling: negative cost of an auxiliary variable)
+  void AddCoverConstraint(GRBModel &model,
+                          const std::vector<GRBVar> &M3NodeVars, bool Hard) {
+    if (M3Constraints.Cover_Constr.empty())
+      return;
+    for (size_t g = 0; g < M3Constraints.Cover_Constr.size(); g++) {
+      GRBLinExpr Sum;
+      for (int v : M3Constraints.Cover_Constr[g])
+        Sum += M3NodeVars[v];
+      if (Hard)
+        model.addConstr(Sum >= 1, "Cover" + std::to_string(g));
+      else {
+        GRBVar y = model.addVar(0.0, 1.0, -(double)SOFT_SEED_CONST_M3,
+                                GRB_BINARY, "Cover_" + std::to_string(g));
+        model.addConstr(y <= Sum);
+      }
+    }
+    std::cout << " ** Cover constraints: " << M3Constraints.Cover_Constr.size()
+              << (Hard ? " (hard)" : " (soft)") << std::endl;
+  }
+
+  // the arc variables of the deviation arcs of the current model and their
+  // nodes (read after the optimization, LastUsedDeviation)
+  std::vector<std::pair<GRBVar, std::pair<int, int>>> DevArcZ;
+
+  // fold limits of the current solve (from ExtractParam, see SolveGurobi)
+  ScalarType CurrFoldTarget = DEV_FOLD_TARGET, CurrFoldMax = DEV_FOLD_MAX;
+  // the cost at DeviationFoldMax is this times the base
+  ScalarType CurrFoldRamp = DEV_FOLD_RAMP;
+
+  // cost of the switch arc between two nodes: Base * relative length of the
+  // edge * (1 + (CurrFoldRamp - 1) * t), t = |fold - CurrFoldTarget| / 90
+  // (at most 1); -1 above CurrFoldMax (not allowed)
+  double DeviationCost(const int N0, const int N1, const ScalarType Base) const {
+    // constant cost for each switch used (the fold terms below not used)
+    return (double)Base;
+    float Fold = 0, Len = 1;
+    if (!M3Graph.DeviationArcGeom(N0, N1, Fold, Len))
+      return 0;
+    if (Fold > CurrFoldMax)
+      return -1;
+    // double t = 0;
+    // if ((Fold > CurrFoldMin) && (CurrFoldMax > CurrFoldMin))
+    //   t = (Fold - CurrFoldMin) / (CurrFoldMax - CurrFoldMin);
+    double t = std::min(1.0, std::fabs((double)Fold - CurrFoldTarget) / 90.0);
+    return (double)Base * Len * (1.0 + ((double)CurrFoldRamp - 1.0) * t);
+  }
+
+  // deviation arcs without matching: z >= x_a + x_b - 1, cost on z
+  void AddDeviationPenaltyOnNodes(GRBModel &model,
+                                  const std::vector<GRBVar> &M3NodeVars,
+                                  ScalarType DeviationPenalty) {
+    if (DeviationPenalty <= 0)
+      return;
+    std::set<std::pair<int, int>> Done;
+    for (size_t i = 0; i < M3Constraints.EdgeLabel_Continuation_Constr.size();
+         i++) {
+      int Var0 = M3Constraints.EdgeLabel_Continuation_Constr[i].first;
+      for (int Var1 : M3Constraints.EdgeLabel_Continuation_Constr[i].second) {
+        std::pair<int, int> Key(std::min(Var0, Var1), std::max(Var0, Var1));
+        if (Done.count(Key) > 0)
+          continue;
+        if (!M3Graph.IsDeviationArc(M3Constraints.M3VarToNode[Var0],
+                                    M3Constraints.M3VarToNode[Var1]))
+          continue;
+        Done.insert(Key);
+        // GRBVar z = model.addVar(0.0, 1.0, DeviationPenalty, GRB_BINARY);
+        double C = DeviationCost(M3Constraints.M3VarToNode[Var0],
+                                 M3Constraints.M3VarToNode[Var1],
+                                 DeviationPenalty);
+        // too folded: the two nodes never together
+        if (C < 0) {
+          model.addConstr(M3NodeVars[Var0] + M3NodeVars[Var1] <= 1);
+          continue;
+        }
+        GRBVar z = model.addVar(0.0, 1.0, C, GRB_BINARY);
+        model.addConstr(z >= M3NodeVars[Var0] + M3NodeVars[Var1] - 1);
+        {
+          int n0 = M3Constraints.M3VarToNode[Var0];
+          int n1 = M3Constraints.M3VarToNode[Var1];
+          DevArcZ.push_back(std::make_pair(
+              z, std::make_pair(std::min(n0, n1), std::max(n0, n1))));
+        }
+      }
+    }
+    std::cout << " ** Deviation arcs (on the nodes): " << Done.size()
+              << std::endl;
+  }
+
   void AddFoilFaceContinuityConstraint(GRBModel &model,
                                        const std::vector<GRBVar> &M3NodeVars,
                                        bool SoftConstr) {
@@ -546,21 +696,48 @@ private:
   // of the two ends
   void AddMatchingContinuityConstraint(GRBModel &model,
                                        const std::vector<GRBVar> &M3NodeVars,
-                                       bool SoftConstr) {
+                                       bool SoftConstr,
+                                       ScalarType DeviationPenalty = 0) {
     std::map<std::pair<int, int>, GRBVar> ArcVars;
+    int NumDev = 0, NumDevForbidden = 0;
     auto ArcVar = [&](int a, int b) -> GRBVar & {
       std::pair<int, int> Key(std::min(a, b), std::max(a, b));
       auto it = ArcVars.find(Key);
       if (it != ArcVars.end())
         return it->second;
-      GRBVar z = model.addVar(0.0, 1.0, 0, GRB_BINARY,
+      // a deviation arc (M3 direction change) costs DeviationPenalty
+      double Cost = 0;
+      // the switch too folded is not allowed (upper bound 0)
+      double UB = 1.0;
+      if (M3Graph.IsDeviationArc(M3Constraints.M3VarToNode[a],
+                                 M3Constraints.M3VarToNode[b])) {
+        // Cost = DeviationPenalty;
+        Cost = DeviationCost(M3Constraints.M3VarToNode[a],
+                             M3Constraints.M3VarToNode[b], DeviationPenalty);
+        if (Cost < 0) {
+          Cost = 0;
+          UB = 0;
+          NumDevForbidden++;
+        }
+        NumDev++;
+      }
+      // GRBVar z = model.addVar(0.0, 1.0, Cost, GRB_BINARY,
+      GRBVar z = model.addVar(0.0, UB, Cost, GRB_BINARY,
                               "Arc_" + std::to_string(Key.first) + "_" +
                                   std::to_string(Key.second));
+      if (M3Graph.IsDeviationArc(M3Constraints.M3VarToNode[a],
+                                 M3Constraints.M3VarToNode[b]) &&
+          (UB > 0)) {
+        int n0 = M3Constraints.M3VarToNode[a], n1 = M3Constraints.M3VarToNode[b];
+        DevArcZ.push_back(
+            std::make_pair(z, std::make_pair(std::min(n0, n1), std::max(n0, n1))));
+      }
       model.addConstr(z <= M3NodeVars[a]);
       model.addConstr(z <= M3NodeVars[b]);
       // warm start: the arc is used if both ends are selected
       if (!WarmVal.empty())
-        z.set(GRB_DoubleAttr_Start, (WarmVal[a] && WarmVal[b]) ? 1.0 : 0.0);
+        z.set(GRB_DoubleAttr_Start,
+              ((UB > 0) && WarmVal[a] && WarmVal[b]) ? 1.0 : 0.0);
       return ArcVars.emplace(Key, z).first->second;
     };
     for (size_t i = 0; i < M3Constraints.EdgeLabel_Continuation_Constr.size();
@@ -582,7 +759,11 @@ private:
       }
     }
     std::cout << " ** Matching continuity: " << ArcVars.size()
-              << " arc variables" << std::endl;
+              << " arc variables (" << NumDev
+              << " deviation arcs, base cost " << DeviationPenalty << ", "
+              << NumDevForbidden << " too folded (> " << CurrFoldMax
+              << " deg) not allowed)"
+              << std::endl;
   }
 
   void AddSingleFaceConstraint(GRBModel &model,
@@ -960,6 +1141,14 @@ private:
   // solution
   bool SolveGurobi(const ExtractParam &ExtrPIn, std::vector<int> &M3Nodes,
                    std::vector<bool> &VarSolution) {
+    LastObj = -1;
+    LastGap = -1;
+    LastOptimal = false;
+    LastUsedDeviation.clear();
+    DevArcZ.clear();
+    CurrFoldTarget = ExtrPIn.DeviationFoldTarget;
+    CurrFoldMax = ExtrPIn.DeviationFoldMax;
+    CurrFoldRamp = ExtrPIn.DeviationFoldRamp;
     // local copy: AllSoft turns all the soft flags on for this solve
     ExtractParam ExtrP = ExtrPIn;
     if (ExtrP.AllSoft) {
@@ -1028,16 +1217,24 @@ private:
 
         if (ExtrP.MatchingContinuity)
           AddMatchingContinuityConstraint(model, M3NodeVars,
-                                          ExtrP.SoftSurfaceContrinuationM3);
-        else
+                                          ExtrP.SoftSurfaceContrinuationM3,
+                                          ExtrP.DeviationPenalty);
+        else {
           AddFoilFaceContinuityConstraint(model, M3NodeVars,
                                           ExtrP.SoftSurfaceContrinuationM3);
+          // without arc variables: a deviation arc is paid when both its
+          // nodes are in the solution (approximate: also if the sheet does
+          // not go through it)
+          AddDeviationPenaltyOnNodes(model, M3NodeVars,
+                                     ExtrP.DeviationPenalty);
+        }
 
         if (ExtrP.InternalTangentM3) {
           std::cout << " ** Adding Internal Tangent Constraint" << std::endl;
           AddInternalTangentConstraint(model, M3NodeVars, false,
                                        ExtrP.SoftInternalTangentM3);
         }
+        AddCoverConstraint(model, M3NodeVars, ExtrP.CoverHard);
       } else {
         std::cout << " ** Adding Internal Tangent Constraint with Continuity"
                   << std::endl;
@@ -1143,6 +1340,13 @@ private:
         return true;
       }
       if (model.get(GRB_IntAttr_SolCount) > 0) {
+        LastObj = model.get(GRB_DoubleAttr_ObjVal);
+        for (auto &DZ : DevArcZ)
+          if (DZ.first.get(GRB_DoubleAttr_X) > 0.5)
+            LastUsedDeviation.insert(DZ.second);
+        LastOptimal = (Status == GRB_OPTIMAL);
+        if (model.get(GRB_IntAttr_IsMIP))
+          LastGap = model.get(GRB_DoubleAttr_MIPGap);
         if (Status == GRB_OPTIMAL)
           std::cout << "Optimal solution found:\n";
         else
@@ -1172,6 +1376,33 @@ private:
         }
 
         std::cout << "Chosen " << ChosenN << " faces" << std::endl;
+
+        // which soft constraints are violated (all the types: the penalized
+        // relax variables used by the solution, counted by name)
+        {
+          std::map<std::string, int> Violated;
+          int NumV = model.get(GRB_IntAttr_NumVars);
+          GRBVar *Vars = model.getVars();
+          for (int v = 0; v < NumV; v++) {
+            if (Vars[v].get(GRB_DoubleAttr_Obj) <= 0)
+              continue;
+            std::string Name = Vars[v].get(GRB_StringAttr_VarName);
+            if (Name.find("relax") == std::string::npos)
+              continue;
+            if (Vars[v].get(GRB_DoubleAttr_X) < 0.5)
+              continue;
+            while (!Name.empty() && (isdigit((unsigned char)Name.back())))
+              Name.pop_back();
+            Violated[Name]++;
+          }
+          delete[] Vars;
+          if (!Violated.empty()) {
+            std::cout << "Soft constraints violated:";
+            for (auto &V : Violated)
+              std::cout << " [" << V.first << "] " << V.second;
+            std::cout << std::endl;
+          }
+        }
 
         // where the soft continuation was violated
         for (size_t r = 0; r < ContinuationRelax.size(); r++)
@@ -1205,6 +1436,15 @@ private:
   }
 
 public:
+  // last solve (for the info): objective (scaled units of the model, -1
+  // none), gap, optimal or not (written by SolveGurobi)
+  double LastObj = -1;
+  double LastGap = -1;
+  bool LastOptimal = false;
+  // the switches used by the last solve (pairs of nodes, min first): the
+  // arc variables of the deviation arcs at 1
+  std::set<std::pair<int, int>> LastUsedDeviation;
+
   // std::vector<bool> M3Solution;
 
   // debug: appends as last foil the faces of LastViolatedNodes (where the
