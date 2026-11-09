@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <iostream>
 #include <limits>
@@ -73,6 +74,13 @@ public:
   // nodes which are tangent on border for each edge (valence 0 or 1)
   std::vector<std::vector<int>> Border_TangentNodes_Constr;
 
+  // NO CROSSING constraints (optional in the solvers): all the variables on
+  // each internal edge (any direction, at most two: no sheets crossing) and
+  // on each surface edge (at most one: two sheets do not end on the same
+  // edge)
+  std::vector<std::vector<int>> NoCrossInternal_Constr;
+  std::vector<std::vector<int>> NoCrossBorder_Constr;
+
   // the connections that are disabled on a group of faces
   // sharing the edge but are not connected in the graph
   std::vector<std::pair<int, int>> Avoid_Connections;
@@ -95,6 +103,9 @@ public:
   // the same as variables (groups without any variable are skipped:
   // Cover_Group gives the index in CoverNodes of each constraint)
   std::vector<std::vector<int>> Cover_Constr;
+  // the variables only on these nodes (if of the size of the graph, see
+  // InitConstraints)
+  std::vector<bool> Domain;
   std::vector<int> Cover_Group;
 
   // LINK VARIABLES IF USED IN THE OBJECTIVE FUNCTION
@@ -437,6 +448,36 @@ private:
     }
   }
 
+  // all the variables on each edge (see NoCrossInternal_Constr): an edge
+  // is on the surface if it is an exit label of one of its nodes
+  void InitNoCross_Constr() {
+    NoCrossInternal_Constr.clear();
+    NoCrossBorder_Constr.clear();
+    std::map<std::pair<int, int>, std::vector<int>> EdgeVars;
+    std::set<std::pair<int, int>> BorderE;
+    for (size_t n = 0; n < M3Graph.NumNodes(); n++) {
+      if (!IsVariableM3((int)n))
+        continue;
+      const std::vector<int> &F =
+          InternalFaces[Field::FrameFieldM3Graph::ElemOfNode((int)n)];
+      for (size_t l = 0; l < F.size(); l++) {
+        int a = F[l], b = F[(l + 1) % F.size()];
+        std::pair<int, int> E(std::min(a, b), std::max(a, b));
+        EdgeVars[E].push_back(M3NodeToVar[n]);
+        if (M3Graph.IsExitLabel((int)n, (int)l))
+          BorderE.insert(E);
+      }
+    }
+    for (auto &E : EdgeVars) {
+      if (E.second.size() <= 1)
+        continue;
+      if (BorderE.count(E.first) > 0)
+        NoCrossBorder_Constr.push_back(E.second);
+      else if (E.second.size() > 2)
+        NoCrossInternal_Constr.push_back(E.second);
+    }
+  }
+
   void InitBorderTangentNodes_Constr() {
     Border_TangentNodes_Constr.clear();
     for (size_t i = 0; i < M3Graph.BorderTangentConstr.size(); i++) {
@@ -458,6 +499,151 @@ private:
   }
 
 public:
+
+  // CONCAVE CHAIN ONE FOIL: the chain edges are the surface (exit) edges of
+  // the seeds (SeedNodes and the covering nodes, the faces through the
+  // concave edges); at a vertex of two or more chain edges the sheet that
+  // ends on a chain edge goes around the vertex to the next boundary edge of
+  // the sheet at the vertex: if it can only be another chain edge, the
+  // consecutive seeds are on the same sheet (and the whole chain). So the
+  // variables with an exit edge at such a vertex that is not a chain edge
+  // are returned (to be forced false). Only for the extraction of the sheet
+  // of the chain: no other sheet can end at a vertex of the chain
+  void ConcaveChainForbidden(const std::vector<int> &SeedNodes,
+                             std::vector<int> &ForbiddenVars) const {
+    ForbiddenVars.clear();
+    auto Key = [](int a, int b) {
+      return std::make_pair(std::min(a, b), std::max(a, b));
+    };
+    auto ExitEdges = [&](int n, std::vector<std::pair<int, int>> &EE) {
+      EE.clear();
+      const std::vector<int> &F =
+          InternalFaces[Field::FrameFieldM3Graph::ElemOfNode(n)];
+      for (int l = 0; l < (int)F.size(); l++)
+        if (M3Graph.IsExitLabel(n, l))
+          EE.push_back(Key(F[l], F[(l + 1) % F.size()]));
+    };
+    std::vector<int> Seeds = SeedNodes;
+    for (const auto &G : CoverNodes)
+      Seeds.insert(Seeds.end(), G.begin(), G.end());
+    std::set<std::pair<int, int>> ChainE;
+    std::vector<std::pair<int, int>> EE;
+    for (int n : Seeds) {
+      if ((n < 0) || (n >= (int)M3Graph.NumNodes()))
+        continue;
+      ExitEdges(n, EE);
+      ChainE.insert(EE.begin(), EE.end());
+    }
+    std::map<int, int> Valence;
+    for (auto &E : ChainE) {
+      Valence[E.first]++;
+      Valence[E.second]++;
+    }
+    std::set<int> ChainV;
+    for (auto &V : Valence)
+      if (V.second >= 2)
+        ChainV.insert(V.first);
+    for (size_t v = 0; v < M3VarToNode.size(); v++) {
+      ExitEdges(M3VarToNode[v], EE);
+      for (auto &E : EE)
+        if ((ChainE.count(E) == 0) &&
+            ((ChainV.count(E.first) > 0) || (ChainV.count(E.second) > 0))) {
+          ForbiddenVars.push_back((int)v);
+          break;
+        }
+    }
+    std::cout << " ** Concave chain one foil: " << ChainE.size()
+              << " chain edges, " << ChainV.size() << " chain vertices, "
+              << ForbiddenVars.size() << " variables forced false"
+              << std::endl;
+  }
+
+  // CROSSINGS of the solution (debug): the internal edges with more than two
+  // faces of M3Solution, by kind:
+  // - Same: more than two nodes of the same edge group (same direction
+  //   around the edge): parallel crossing (forbidden unless allowed)
+  // - Parallel: nodes of different groups but faces almost coplanar
+  //   (less than ParallelDeg): different labels, parallel in space
+  // - Orthogonal: the others (crossing of different directions)
+  // Edges: the edges of each kind (optional, for drawing)
+  void ReportCrossings(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                       const ScalarType ParallelDeg = 30,
+                       std::vector<std::pair<int, int>> *SameE = nullptr,
+                       std::vector<std::pair<int, int>> *ParallelE = nullptr,
+                       std::vector<std::pair<int, int>> *OrthoE = nullptr) const {
+    if (M3Solution.size() != M3Graph.NumNodes())
+      return;
+    // group of each node on each edge
+    std::map<std::pair<std::pair<int, int>, int>, int> GroupOf;
+    for (size_t i = 0; i < M3Graph.InternalTangentConstr.size(); i++)
+      for (int n : M3Graph.InternalTangentConstr[i])
+        GroupOf[std::make_pair(M3Graph.InternalTangentConstrEdges[i], n)] =
+            (int)i;
+    // selected nodes on each edge
+    std::map<std::pair<int, int>, std::vector<int>> EdgeNodes;
+    for (size_t n = 0; n < M3Solution.size(); n++) {
+      if (!M3Solution[n])
+        continue;
+      const std::vector<int> &F =
+          InternalFaces[Field::FrameFieldM3Graph::ElemOfNode((int)n)];
+      for (size_t j = 0; j < F.size(); j++) {
+        int a = F[j], b = F[(j + 1) % F.size()];
+        EdgeNodes[std::make_pair(std::min(a, b), std::max(a, b))].push_back(
+            (int)n);
+      }
+    }
+    auto FaceN = [&](int n) {
+      const std::vector<int> &F =
+          InternalFaces[Field::FrameFieldM3Graph::ElemOfNode(n)];
+      Geo::Point3<ScalarType> N =
+          Geo::Cross(VertPos[F[1]] - VertPos[F[0]], VertPos[F[2]] - VertPos[F[0]]);
+      N.Normalize();
+      return N;
+    };
+    const ScalarType CosPar = cos(ParallelDeg * M_PI / 180);
+    int NumSame = 0, NumPar = 0, NumOrtho = 0;
+    for (auto &E : EdgeNodes) {
+      const std::vector<int> &N = E.second;
+      if (N.size() <= 2)
+        continue;
+      std::map<int, int> Count;
+      std::vector<int> G(N.size());
+      for (size_t i = 0; i < N.size(); i++) {
+        auto it = GroupOf.find(std::make_pair(E.first, N[i]));
+        // not in a group: a group of its own
+        G[i] = (it != GroupOf.end()) ? it->second : -1 - (int)i;
+        Count[G[i]]++;
+      }
+      bool Same = false;
+      for (auto &c : Count)
+        Same |= (c.second > 2);
+      if (Same) {
+        NumSame++;
+        if (SameE)
+          SameE->push_back(E.first);
+        continue;
+      }
+      bool Par = false;
+      for (size_t i = 0; i < N.size(); i++)
+        for (size_t j = i + 1; j < N.size(); j++)
+          if ((G[i] != G[j]) &&
+              (fabs(Geo::Dot(FaceN(N[i]), FaceN(N[j]))) > CosPar))
+            Par = true;
+      if (Par) {
+        NumPar++;
+        if (ParallelE)
+          ParallelE->push_back(E.first);
+      } else {
+        NumOrtho++;
+        if (OrthoE)
+          OrthoE->push_back(E.first);
+      }
+    }
+    std::cout << " ** Crossing edges: " << NumSame
+              << " same direction (parallel crossing), " << NumPar
+              << " different labels but parallel faces (< " << ParallelDeg
+              << " deg), " << NumOrtho << " orthogonal" << std::endl;
+  }
 
   ScalarType SolutionW(const std::vector<bool> &CurrentVarSol)
   {
@@ -533,6 +719,8 @@ public:
     TwiceEdge_ConstrM3.clear();
     Internal_TangentNodes_Constr.clear();
     Border_TangentNodes_Constr.clear();
+    NoCrossInternal_Constr.clear();
+    NoCrossBorder_Constr.clear();
     Avoid_Connections.clear();
     EdgeLabel_Continuation_Constr.clear();
     Forbidden_Vars.clear();
@@ -656,6 +844,21 @@ public:
       DisabledN.insert(DisabledN.end(),Disabled1.begin(),Disabled1.end());
     }
 
+    // DOMAIN (optional, e.g. the nodes reached by the sweep of the walks):
+    // the nodes out of it are not variables (disabled only here, restored
+    // at the end as the others)
+    if (Domain.size() == M3Graph.NumNodes()) {
+      int NumOut = 0;
+      for (size_t n = 0; n < Domain.size(); n++)
+        if (!Domain[n] && M3Graph.IsEnabled((int)n)) {
+          M3Graph.DisableNode((int)n);
+          DisabledN.push_back((int)n);
+          NumOut++;
+        }
+      if (print_info)
+        std::cout << "Domain: " << NumOut << " nodes excluded" << std::endl;
+    }
+
     // if ((reset_curr_solution) || (M3Solution.size() != M3Graph.NumNodes()))
     if (!KeepSolution)
       InitBaseVariableValues(Seeds);
@@ -695,6 +898,12 @@ public:
     if (print_info)
       std::cout << "Initialized " << Border_TangentNodes_Constr.size()
                 << " border tangent constraint" << std::endl;
+    InitNoCross_Constr();
+    if (print_info)
+      std::cout << "Initialized " << NoCrossInternal_Constr.size() << " + "
+                << NoCrossBorder_Constr.size()
+                << " no crossing constraint (internal + border edges)"
+                << std::endl;
     InitLabelContinuation_Constr();
     // unique: a node can have more than one empty label
     std::sort(Forbidden_Vars.begin(), Forbidden_Vars.end());

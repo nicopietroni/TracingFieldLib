@@ -459,6 +459,53 @@ public:
     Graph.EnabledN = SwapEnabled;
   }
 
+  // as FilterSelectedFromSeed, but only along the continuations really used
+  // by the solution: the regular arcs between two selected nodes and the
+  // switch arcs in UsedDev (pairs of nodes, min first). The other switch
+  // arcs between selected nodes are not continuations (two sheets touching
+  // with different directions): a part without seeds touching one with
+  // seeds was kept
+  static void FilterSelectedFromSeedUsed(
+      const LabelNeighOrientedGraph<ScalarType> &Graph,
+      const std::vector<int> &SeedNodes, std::vector<bool> &SelectedNodes,
+      const std::set<std::pair<int, int>> &UsedDev) {
+    std::vector<bool> Reached(SelectedNodes.size(), false);
+    std::vector<int> Stack;
+    for (int n : SeedNodes)
+      if ((n >= 0) && (n < (int)SelectedNodes.size()) && SelectedNodes[n] &&
+          !Reached[n]) {
+        Reached[n] = true;
+        Stack.push_back(n);
+      }
+    while (!Stack.empty()) {
+      int n = Stack.back();
+      Stack.pop_back();
+      for (size_t l = 0; l < Graph.N[n].size(); l++)
+        for (size_t j = 0; j < Graph.N[n][l].size(); j++) {
+          const auto &A = Graph.N[n][l][j];
+          int m = A.N;
+          if ((m < 0) || (m >= (int)SelectedNodes.size()) || !SelectedNodes[m] ||
+              Reached[m] || !Graph.ArcActive(A))
+            continue;
+          if (A.Deviation &&
+              (UsedDev.count(std::make_pair(std::min(n, m), std::max(n, m))) ==
+               0))
+            continue;
+          Reached[m] = true;
+          Stack.push_back(m);
+        }
+    }
+    int NumRemoved = 0;
+    for (size_t i = 0; i < SelectedNodes.size(); i++)
+      if (SelectedNodes[i] && !Reached[i]) {
+        SelectedNodes[i] = false;
+        NumRemoved++;
+      }
+    if (NumRemoved > 0)
+      std::cout << " ** Removed " << NumRemoved
+                << " selected nodes not connected to a seed" << std::endl;
+  }
+
   static bool CanRemoveByConnections(LabelNeighOrientedGraph<ScalarType> &Graph,
                                      int IndexN0, int IndexN1, int MinNeigh) {
     int IndexL0 = -1;
@@ -1055,9 +1102,11 @@ public:
   // shared edge). Edges: the mesh edges where it happens (to be drawn).
   // Returns their number.
   // UsedPairs (optional): the switches really used by the solver (pairs of
-  // nodes, min first, e.g. the arc variables of the ILP at 1): without it
-  // every pair of selected nodes linked by a switch counts, also two sheets
-  // crossing at an edge (not a switch)
+  // nodes, min first, e.g. the arc variables of the ILP at 1). Without it
+  // (e.g. the SAT) a switch is used on a label of a selected node only when
+  // no regular arc continues the sheet there (two sheets crossing at an
+  // edge are linked by switches too, but each continues with its regular
+  // arc: not a switch)
   static int UsedDeviationArcs(const LabelNeighOrientedGraph<ScalarType> &Graph,
                                const std::vector<bool> &Solution,
                                const std::vector<std::vector<int>> &Faces,
@@ -1069,6 +1118,28 @@ public:
     if (Solution.size() != Graph.NumNodes())
       return 0;
     int Num = 0;
+    // (before, without UsedPairs: every pair of selected nodes linked by a
+    // switch)
+    std::set<std::pair<int, int>> Derived;
+    if (UsedPairs == nullptr) {
+      for (size_t n = 0; n < Graph.NumNodes(); n++) {
+        if (!Solution[n])
+          continue;
+        for (size_t l = 0; l < Graph.N[n].size(); l++) {
+          bool Regular = false;
+          for (const auto &A : Graph.N[n][l])
+            if (!A.Deviation && Graph.ArcActive(A) && Solution[A.N])
+              Regular = true;
+          if (Regular)
+            continue;
+          for (const auto &A : Graph.N[n][l])
+            if (A.Deviation && Graph.ArcActive(A) && Solution[A.N])
+              Derived.insert(std::make_pair(std::min((int)n, A.N),
+                                            std::max((int)n, A.N)));
+        }
+      }
+      UsedPairs = &Derived;
+    }
     for (size_t n = 0; n < Graph.NumNodes(); n++) {
       if (!Solution[n])
         continue;

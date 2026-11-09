@@ -33,15 +33,22 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <algorithm>
 #include <atomic>
+#include <array>
 #include <map>
 #include <set>
+#include <chrono>
 #include <string>
 #include <sys/wait.h> // for WEXITSTATUS
 #include <unistd.h>   // for getpid
+#include <sys/types.h>
+#include <signal.h>
+#include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -960,11 +967,21 @@ public:
         C.push_back({-s[n-2], -g[n-1]});
     }
 
+    // (the triples are n^3 / 6 clauses: about a thousand for a group of
+    // 20, the no crossing groups of the edges; with aux the large groups
+    // use the sequential counter, linear. Tried on the no crossing groups:
+    // 11.2 M -> 2.4 M clauses but 0.3 M -> 1 M variables and twice the time,
+    // kissat propagates the triples better: not used, aux = nullptr)
     static void addAtMostTwo(const std::vector<int>& g,
-                             std::vector<std::vector<int>>& C)
+                             std::vector<std::vector<int>>& C,
+                             AuxGen* aux = nullptr)
     {
         int n = g.size();
         if (n <= 2) return;
+        if ((aux != nullptr) && (n > 6)) {
+            addAtMostK_Sequential(g, 2, C, *aux);
+            return;
+        }
         for (int i=0;i<n;i++)
             for (int j=i+1;j<n;j++)
                 for (int h=j+1;h<n;h++)
@@ -991,6 +1008,8 @@ public:
                              AuxGen& aux)
     {
         addForbidExactlyOne(g,C);
+        // addAtMostTwo(g,C,&aux);
+        // (the triples: faster in practice, see addAtMostTwo)
         addAtMostTwo(g,C);
     }
 
@@ -1059,6 +1078,94 @@ public:
         C.push_back({-x[n-1], -s[n-2][K-1]});
     }
 
+    // the commands at the same time (each in its own process group, the
+    // output read by a thread); the first that answers (exit 10 SAT, 20
+    // UNSAT) wins and the others are stopped. Winner -1: no answer (rc and
+    // out of the first run)
+    // AllRc / AllOut (not null): all the runs are waited for (none stopped)
+    // and their answers returned
+    static bool RunPortfolio(const std::vector<std::string>& Cmds, int& rcOut,
+                             std::string& outOut, int& WinnerOut,
+                             std::vector<int>* AllRc = nullptr,
+                             std::vector<std::string>* AllOut = nullptr)
+    {
+        const bool WaitAll = (AllRc != nullptr) && (AllOut != nullptr);
+        const int N = (int)Cmds.size();
+        std::vector<pid_t> Pids(N, -1);
+        std::vector<int> Fds(N, -1);
+        for (int i = 0; i < N; i++) {
+            int P[2];
+            if (pipe(P) != 0)
+                continue;
+            pid_t pid = fork();
+            if (pid < 0) {
+                close(P[0]);
+                close(P[1]);
+                continue;
+            }
+            if (pid == 0) {
+                setpgid(0, 0);
+                dup2(P[1], 1);
+                close(P[0]);
+                close(P[1]);
+                execl("/bin/sh", "sh", "-c", Cmds[i].c_str(), (char*)nullptr);
+                _exit(127);
+            }
+            setpgid(pid, pid);
+            close(P[1]);
+            Pids[i] = pid;
+            Fds[i] = P[0];
+        }
+        std::mutex M;
+        int Winner = -1;
+        std::vector<std::string> Outs(N);
+        std::vector<int> Rcs(N, -1);
+        std::vector<char> Finished(N, 0);
+        std::vector<std::thread> Threads;
+        for (int i = 0; i < N; i++) {
+            if (Pids[i] <= 0)
+                continue;
+            Threads.emplace_back([&, i]() {
+                char buf[65536];
+                ssize_t r;
+                while ((r = read(Fds[i], buf, sizeof(buf))) > 0)
+                    Outs[i].append(buf, (size_t)r);
+                close(Fds[i]);
+                int st = 0;
+                waitpid(Pids[i], &st, 0);
+                int rc = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
+                std::lock_guard<std::mutex> L(M);
+                Rcs[i] = rc;
+                Finished[i] = 1;
+                if ((rc == 10) || (rc == 20)) {
+                    if (Winner < 0) {
+                        Winner = i;
+                        if (!WaitAll)
+                            for (int j = 0; j < N; j++)
+                                if ((j != i) && (Pids[j] > 0) && !Finished[j])
+                                    kill(-Pids[j], SIGTERM);
+                    }
+                }
+            });
+        }
+        for (auto& T : Threads)
+            T.join();
+        WinnerOut = Winner;
+        if (WaitAll) {
+            *AllRc = Rcs;
+            *AllOut = Outs;
+        }
+        if (Winner >= 0) {
+            rcOut = Rcs[Winner];
+            outOut.swap(Outs[Winner]);
+            return true;
+        }
+        rcOut = (N > 0) ? Rcs[0] : -1;
+        if (N > 0)
+            outOut.swap(Outs[0]);
+        return false;
+    }
+
     // default path of the kissat executable
     static const std::string &DefaultKissatPath() {
         static const std::string Path =
@@ -1085,14 +1192,27 @@ public:
        const std::string &kissatPath = DefaultKissatPath(),
        bool implyAtMostOne = true,
        int timeLimitSec = 0,
-       // DEVIATION arcs (pairs of real variables): in the continuation of a
-       // node they are used through an auxiliary literal u (u -> both
-       // nodes), at most maxDeviations of them in the whole solution (0:
-       // never used, they are removed from the continuations)
-       const std::vector<std::pair<int,int>>* deviationPairs = nullptr,
-       int maxDeviations = 0,
+       // (the deviation arcs and the switch lines were encoded here: moved
+       // to the caller, SheetSolveSATM3, with the generic inputs below)
+       // const std::vector<std::pair<int,int>>* deviationPairs = nullptr,
+       // int maxDeviations = 0,
        // COVER: at least one variable of each group (one clause each)
-       const std::vector<std::vector<int>>* atLeastOne = nullptr)
+       const std::vector<std::vector<int>>* atLeastOne = nullptr,
+       // const std::vector<std::pair<int,int>>* deviationEdgeVerts = nullptr)
+       // GENERIC CLAUSES on the real variables (0-based): literal +(v + 1)
+       // for v, -(v + 1) for not v
+       const std::vector<std::vector<int>>* extraClauses = nullptr,
+       // AT MOST K of each group of real variables
+       const std::vector<std::pair<std::vector<int>,int>>* atMostK = nullptr,
+       // OPTIONS of kissat (configuration, initial phase, ...)
+       const std::string& kissatArgs = "--relaxed",
+       // PORTFOLIO: this many kissat at the same time on the same CNF with
+       // different seeds, the first answer is kept, the others stopped
+       int numParallel = 1,
+       // BEST OF THE RUNS: with more runs, all of them are waited for and
+       // the solution with the lowest score (on the assignment of the real
+       // variables) is kept; nullptr: the first answer
+       const std::function<double(const std::vector<int>&)>* score = nullptr)
     {
         // const std::string cnfFile = "/tmp/tmp_kissat.cnf";
         // unique name: two solves at the same time (other threads or other
@@ -1123,6 +1243,11 @@ public:
         }
         if (atLeastOne != nullptr)
             for (auto& g: *atLeastOne) for (int v: g) collect(v);
+        if (extraClauses != nullptr)
+            for (auto& cl: *extraClauses)
+                for (int l: cl) collect(std::abs(l) - 1);
+        if (atMostK != nullptr)
+            for (auto& g: *atMostK) for (int v: g.first) collect(v);
 
         if (realVars.empty()) return {true, {}};
 
@@ -1165,16 +1290,27 @@ public:
         AuxGen aux(satVarsReal+1);
 
         // AMO
+        // (small groups, e.g. the 3 nodes of a face: the pairs, binary
+        // clauses and no auxiliary variable; the ladder only for the large
+        // ones)
         for (auto& g: atMostOne){
             std::vector<int> sg;
             for (int v: g) sg.push_back(r2s[v]);
-            addAtMostOne_Ladder(sg, C, aux);
+            // addAtMostOne_Ladder(sg, C, aux);
+            if (sg.size() <= 5) {
+                for (size_t i = 0; i < sg.size(); i++)
+                    for (size_t j = i + 1; j < sg.size(); j++)
+                        C.push_back({-sg[i], -sg[j]});
+            } else
+                addAtMostOne_Ladder(sg, C, aux);
         }
 
         // AMT
         for (auto& g: atMostTwo){
             std::vector<int> sg;
             for (int v: g) sg.push_back(r2s[v]);
+            // addAtMostTwo(sg, C, &aux);
+            // (the triples: faster in practice, see addAtMostTwo)
             addAtMostTwo(sg, C);
         }
 
@@ -1191,73 +1327,80 @@ public:
             for (auto& p: ImplyOne)
                 assert(p.second.size() >0);
               
-            // deviation arcs (unordered pairs of real variables)
-            std::set<std::pair<int,int>> DevSet;
-            if (deviationPairs != nullptr)
-                for (auto& d: *deviationPairs)
-                    DevSet.insert({std::min(d.first, d.second),
-                                   std::max(d.first, d.second)});
-            // one auxiliary literal per deviation arc used
-            std::map<std::pair<int,int>, int> DevLit;
+            // (the deviation arcs and the switch lines: see the caller)
             std::vector<std::pair<int,std::vector<int>>> tmp;
             for (auto& p: ImplyOne){
                 int x0 = r2s[p.first];
                 std::vector<int> sg;
-                for (int v: p.second) {
-                    std::pair<int,int> K(std::min(p.first, v),
-                                         std::max(p.first, v));
-                    if (DevSet.count(K) == 0) {
-                        sg.push_back(r2s[v]);
-                        continue;
-                    }
-                    if (maxDeviations <= 0)
-                        continue; // deviations not allowed
-                    auto it = DevLit.find(K);
-                    int u;
-                    if (it == DevLit.end()) {
-                        u = aux.newVar();
-                        DevLit[K] = u;
-                        // u -> both nodes
-                        C.push_back({-u, r2s[K.first]});
-                        C.push_back({-u, r2s[K.second]});
-                    } else
-                        u = it->second;
-                    sg.push_back(u);
-                }
-                // no way to continue: the node cannot be selected
-                if (sg.empty()) {
-                    C.push_back({-x0});
-                    continue;
-                }
+                for (int v: p.second) sg.push_back(r2s[v]);
                 tmp.push_back({x0, sg});
-            }
-            // at most maxDeviations deviation arcs used
-            if (!DevLit.empty()) {
-                std::vector<int> U;
-                for (auto& d: DevLit) U.push_back(d.second);
-                addAtMostK_Sequential(U, maxDeviations, C, aux);
-                if (print_info)
-                    std::cout << "SAT: " << U.size()
-                              << " deviation arcs, at most " << maxDeviations
-                              << std::endl;
             }
             // addConditionalOneOf(tmp, C);
             addConditionalOneOf(tmp, C, implyAtMostOne);
         }
+
+        // generic clauses and cardinalities on the real variables
+        if (extraClauses != nullptr)
+            for (auto& cl: *extraClauses) {
+                std::vector<int> sc;
+                for (int l: cl)
+                    sc.push_back(l > 0 ? r2s[l - 1] : -r2s[-l - 1]);
+                C.push_back(sc);
+            }
+        if (atMostK != nullptr)
+            for (auto& g: *atMostK) {
+                std::vector<int> sg;
+                for (int v: g.first) sg.push_back(r2s[v]);
+                addAtMostK_Sequential(sg, g.second, C, aux);
+            }
 
         int finalSatVars = aux.next - 1;
 
         // ----------------------------------------------------------------------
         // 4) SCRIVI CNF
         // ----------------------------------------------------------------------
+        // {
+        //     std::ofstream cnf(cnfFile);
+        //     cnf << "p cnf " << finalSatVars << " " << C.size() << "\n";
+        //     for (auto& cl : C){
+        //         for (int lit : cl) cnf << lit << " ";
+        //         cnf << "0\n";
+        //     }
+        // }
+        // (faster: the text in a buffer, the integers written by hand, one
+        // fwrite for each block)
+        auto tWrite0 = std::chrono::steady_clock::now();
         {
-            std::ofstream cnf(cnfFile);
-            cnf << "p cnf " << finalSatVars << " " << C.size() << "\n";
+            FILE* f = fopen(cnfFile.c_str(), "wb");
+            if (!f) return {false,{}};
+            std::string Buf;
+            Buf.reserve(1 << 24);
+            Buf += "p cnf " + std::to_string(finalSatVars) + " " +
+                   std::to_string(C.size()) + "\n";
+            char Tmp[16];
             for (auto& cl : C){
-                for (int lit : cl) cnf << lit << " ";
-                cnf << "0\n";
+                for (int lit : cl) {
+                    unsigned int u = (lit < 0) ? (unsigned int)(-lit) : (unsigned int)lit;
+                    int k = 0;
+                    do { Tmp[k++] = (char)('0' + (u % 10)); u /= 10; } while (u > 0);
+                    if (lit < 0) Buf += '-';
+                    while (k > 0) Buf += Tmp[--k];
+                    Buf += ' ';
+                }
+                Buf += "0\n";
+                if (Buf.size() > (1u << 23)) {
+                    fwrite(Buf.data(), 1, Buf.size(), f);
+                    Buf.clear();
+                }
             }
+            fwrite(Buf.data(), 1, Buf.size(), f);
+            fclose(f);
         }
+        auto tWrite1 = std::chrono::steady_clock::now();
+        std::cout << "Kissat: " << finalSatVars << " variables, " << C.size()
+                  << " clauses, CNF written in "
+                  << std::chrono::duration<double>(tWrite1 - tWrite0).count()
+                  << " s" << std::endl;
 
         // ----------------------------------------------------------------------
         // 5) RUN KISSAT
@@ -1265,32 +1408,45 @@ public:
         std::string dir = kissatPath.substr(0, kissatPath.find_last_of('/'));
         std::string exe = kissatPath.substr(kissatPath.find_last_of('/')+1);
 
-        std::string cmd =
-            "cd " + dir + " && ./" + exe +
-            " --seed=" + std::to_string(seed) +
-            " --relaxed ";
-        // time limit (kissat stops with exit code 0 = unknown)
-        if (timeLimitSec > 0)
-            cmd += " --time=" + std::to_string(timeLimitSec) + " ";
-        cmd += cnfFile;
-
-        if (!print_info)
-            cmd += " 2>/dev/null";
-
-        if (print_info)
-            std::cout << "Running: " << cmd << std::endl;
-
-        FILE* pipe = popen(cmd.c_str(), "r");
-        if (!pipe) return {false,{}};
+        // std::string cmd = ... (one run: now a command for each run of
+        // the portfolio, seed + i)
+        if (numParallel < 1) numParallel = 1;
+        std::vector<std::string> Cmds;
+        for (int r = 0; r < numParallel; r++) {
+            std::string cmd =
+                "cd " + dir + " && ./" + exe +
+                " --seed=" + std::to_string(seed + 7919 * r) +
+                " " + kissatArgs + " ";
+            // time limit (kissat stops with exit code 0 = unknown)
+            if (timeLimitSec > 0)
+                cmd += " --time=" + std::to_string(timeLimitSec) + " ";
+            cmd += cnfFile;
+            // (the messages only of the first run)
+            if (!print_info || (r > 0))
+                cmd += " 2>/dev/null";
+            if (print_info)
+                std::cout << "Running: " << cmd << std::endl;
+            Cmds.push_back(cmd);
+        }
 
         std::string out;
-        char buf[4096];
-        while (fgets(buf,sizeof(buf),pipe))
-            out += buf;
-
-        int status = pclose(pipe);
-        int rc = WEXITSTATUS(status);
+        int rc = -1;
+        int Winner = -1;
+        // RunPortfolio(Cmds, rc, out, Winner);
+        const bool BestOf = (score != nullptr) && (numParallel > 1);
+        std::vector<int> AllRc;
+        std::vector<std::string> AllOut;
+        RunPortfolio(Cmds, rc, out, Winner, BestOf ? &AllRc : nullptr,
+                     BestOf ? &AllOut : nullptr);
         std::remove(cnfFile.c_str());
+        std::cout << "Kissat: run (parse + solve) "
+                  << std::chrono::duration<double>(
+                         std::chrono::steady_clock::now() - tWrite1).count()
+                  << " s";
+        if (numParallel > 1)
+            std::cout << " (" << numParallel << " runs, answer from run "
+                      << Winner << ")";
+        std::cout << std::endl;
 
         if ((rc == 0) && (timeLimitSec > 0)) {
             std::cerr << "Kissat: time limit (" << timeLimitSec
@@ -1312,27 +1468,53 @@ public:
         // ----------------------------------------------------------------------
         // 6) PARSE MODELLO E DE-REMAP → 0-based
         // ----------------------------------------------------------------------
+        const int AssignSize = *std::max_element(sorted.begin(),sorted.end())+1;
+        auto Parse = [&](const std::string& Out, std::vector<int>& A) {
+            A.assign(AssignSize, 0);
+            std::stringstream ss(Out);
+            std::string line;
+            while (std::getline(ss,line)){
+                if (line.empty() || line[0]!='v') continue;
+                std::stringstream ls(line.substr(2));
+                int lit;
+                while (ls >> lit){
+                    if (lit==0) continue;
+                    int sv = std::abs(lit);
+                    if (sv > satVarsReal) continue; // ignora aux
+                    int real = s2r[sv];
+                    A[real] = (lit>0);
+                }
+            }
+        };
         Result R;
         R.sat = (rc==10);
-        R.assignment.assign(*std::max_element(sorted.begin(),sorted.end())+1, 0);
+        R.assignment.assign(AssignSize, 0);
 
         if (!R.sat) return R;
 
-        std::stringstream ss(out);
-        std::string line;
-        while (std::getline(ss,line)){
-            if (line.empty() || line[0]!='v') continue;
-            std::stringstream ls(line.substr(2));
-            int lit;
-            while (ls >> lit){
-                if (lit==0) continue;
-                int sv = std::abs(lit);
-                if (sv > satVarsReal) continue; // ignora aux
-                int real = s2r[sv];
-                R.assignment[real] = (lit>0);
+        // Result R; ... (the parse: now Parse)
+        if (!BestOf) {
+            Parse(out, R.assignment);
+            return R;
+        }
+        // the best of the solutions of all the runs
+        double BestScore = 0;
+        int BestRun = -1;
+        for (size_t r = 0; r < AllRc.size(); r++) {
+            if (AllRc[r] != 10)
+                continue;
+            std::vector<int> A;
+            Parse(AllOut[r], A);
+            double Sc = (*score)(A);
+            std::cout << "Kissat: run " << r << " score " << Sc << std::endl;
+            if ((BestRun < 0) || (Sc < BestScore)) {
+                BestScore = Sc;
+                BestRun = (int)r;
+                R.assignment.swap(A);
             }
         }
-
+        std::cout << "Kissat: best of " << AllRc.size() << " runs: run "
+                  << BestRun << " (score " << BestScore << ")" << std::endl;
         return R;
     }
 };

@@ -42,6 +42,7 @@
 #include "label_graph.h"
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <iostream>
 #include <vector>
 
@@ -51,10 +52,20 @@ public:
     // the ILP (and the cut) start from the SAT solution of the seeds
     bool StartFromSAT = true;
     // band around the starting solution, steps of the graph (-1 = none)
-    int BandSteps = 3;
+    // int BandSteps = 3;
+    // (-1: no band, the whole graph: often faster)
+    // int BandSteps = -1;
+    // (5 steps around the SAT start: much faster)
+    int BandSteps = 5;
     // repeat the ILP moving the band until the solution does not change
     bool IterateBand = true;
     int BandMaxIter = 10;
+    // (before: the ILP started from a region as from a solution)
+    // DOMAIN given by the caller (e.g. the nodes reached by the sweep of
+    // M3SheetWalks): the variables only there (with the SAT start / band if
+    // also on)
+    bool StartFromRegion = false;
+    std::vector<bool> Region;
   };
   Param P;
 
@@ -126,16 +137,44 @@ public:
   // ILP: start (SAT), constraints, single solve or band iterations
   bool SolveILP(std::vector<bool> &MatchedSeed) {
     ILPParam.FeasiblityOnly = false;
+    // warm start only from the SAT (Start From SAT): otherwise always from
+    // scratch (the previous solution is not used, repeatable tests)
+    ILPParam.warmStart = P.StartFromSAT;
+    // the region as domain of the variables (not a starting solution)
+    // const bool FromRegion =
+    //     P.StartFromRegion && (P.Region.size() == M3Graph.NumNodes());
+    // if (FromRegion) {
+    //   Constr.M3Solution = P.Region;
+    //   Constr.BeenSolved = true;
+    // } else if (P.StartFromSAT)
+    //   StartFromSAT();
+    // const bool HasStart = FromRegion || P.StartFromSAT;
+    // if (P.StartFromRegion && (P.Region.size() == M3Graph.NumNodes()))
+    //   Constr.Domain = P.Region;
+    // else
+    //   Constr.Domain.clear();
+    // if (P.StartFromSAT)
+    //   StartFromSAT();
+    // the SAT start on the whole graph (the domain made it slower), the
+    // domain only for the ILP
+    Constr.Domain.clear();
     if (P.StartFromSAT)
       StartFromSAT();
+    if (P.StartFromRegion && (P.Region.size() == M3Graph.NumNodes()))
+      Constr.Domain = P.Region;
+    const bool HasStart = P.StartFromSAT;
     std::vector<int> Seeds = AllILPSeeds();
     // the band (and its iterations) only around the SAT start: without it
     // the whole graph
-    const int Band = P.StartFromSAT ? P.BandSteps : -1;
+    // const int Band = P.StartFromSAT ? P.BandSteps : -1;
+    const int Band = HasStart ? P.BandSteps : -1;
     // if (!(P.IterateBand && (P.BandSteps >= 0))) {
-    if (!(P.StartFromSAT && P.IterateBand && (Band >= 0))) {
+    // if (!(P.StartFromSAT && P.IterateBand && (Band >= 0))) {
+    if (!(HasStart && P.IterateBand && (Band >= 0))) {
       Constr.InitConstraints(Seeds, false, Band, true, &ILPParam.HardNodes);
-      return ILP.Solve(ILPParam, MatchedSeed);
+      bool Res = ILP.Solve(ILPParam, MatchedSeed);
+      Constr.Domain.clear();
+      return Res;
     }
     bool Any = false;
     for (int it = 0; it < P.BandMaxIter; it++) {
@@ -172,7 +211,115 @@ public:
         break;
       }
     }
+    Constr.Domain.clear();
     return Any;
+  }
+
+  // BENCHMARK of the Gurobi options (root LP Method x Presolve, all the
+  // combinations, see ExtractParam): the same solve for each (from scratch,
+  // or from the SAT with Start From SAT: see SolveILP), then a table of the
+  // times. The options are
+  // restored at the end, the solution is the one of the last run
+  void BenchmarkILPOptions(std::vector<bool> &MatchedSeed) {
+    const int Methods[] = {-1, 0, 1, 2};
+    const int Presolves[] = {-1, 0, 1, 2};
+    const char *MName[] = {"Auto", "Primal", "Dual", "Barrier"};
+    const char *PName[] = {"Auto", "Off", "Conserv", "Aggress"};
+    const int OldMethod = ILPParam.Method;
+    const int OldPresolve = ILPParam.Presolve;
+    struct Row {
+      int M, P;
+      bool Solved;
+      double Total, Opt, Obj, Gap;
+    };
+    std::vector<Row> Rows;
+    for (int m = 0; m < 4; m++)
+      for (int p = 0; p < 4; p++) {
+        ILPParam.Method = Methods[m];
+        ILPParam.Presolve = Presolves[p];
+        std::cout << std::endl
+                  << "######## BENCHMARK " << MName[m] << " / " << PName[p]
+                  << " ########" << std::endl;
+        auto t0 = std::chrono::steady_clock::now();
+        bool Res = SolveILP(MatchedSeed);
+        auto t1 = std::chrono::steady_clock::now();
+        Rows.push_back({m, p, Res,
+                        std::chrono::duration<double>(t1 - t0).count(),
+                        ILP.LastOptTime, ILP.LastObj, ILP.LastGap});
+      }
+    // the fastest solved combination
+    int Best = -1;
+    for (size_t i = 0; i < Rows.size(); i++)
+      if (Rows[i].Solved && ((Best < 0) || (Rows[i].Total < Rows[Best].Total)))
+        Best = (int)i;
+    // solved again with it: the solution shown is a valid one (the last
+    // run could have failed)
+    if (Best >= 0) {
+      ILPParam.Method = Methods[Rows[Best].M];
+      ILPParam.Presolve = Presolves[Rows[Best].P];
+      std::cout << std::endl
+                << "######## BENCHMARK: solution of the fastest ("
+                << MName[Rows[Best].M] << " / " << PName[Rows[Best].P]
+                << ") ########" << std::endl;
+      SolveILP(MatchedSeed);
+    }
+    ILPParam.Method = OldMethod;
+    ILPParam.Presolve = OldPresolve;
+    std::cout << std::endl << "######## BENCHMARK RESULTS ########" << std::endl;
+    std::cout << "Method   Presolve  solved   total(s)  optimize(s)  objective"
+                 "   gap"
+              << std::endl;
+    for (const Row &R : Rows) {
+      char Line[256];
+      snprintf(Line, sizeof(Line), "%-8s %-9s %-7s %9.1f %12.1f %10.1f %6.2f%%",
+               MName[R.M], PName[R.P], R.Solved ? "yes" : "no", R.Total, R.Opt,
+               R.Obj, (R.Gap >= 0) ? 100.0 * R.Gap : -1.0);
+      std::cout << Line << std::endl;
+    }
+    if (Best >= 0)
+      std::cout << "Fastest: " << MName[Rows[Best].M] << " / "
+                << PName[Rows[Best].P] << " (" << Rows[Best].Total << " s)"
+                << std::endl;
+  }
+
+  // BENCHMARK of the switch topology (Clean Switch Lines): the same solve
+  // without and with it (from scratch, or from the SAT with Start From SAT:
+  // see SolveILP); the run with
+  // the current setting is the last one (its solution is the one shown)
+  void BenchmarkILPSwitchTopology(std::vector<bool> &MatchedSeed) {
+    const bool OldTopo = ILPParam.SwitchTopology;
+    const bool Order[2] = {!OldTopo, OldTopo};
+    bool Solved[2];
+    double Total[2], Opt[2], Obj[2], Gap[2];
+    size_t Used[2];
+    for (int r = 0; r < 2; r++) {
+      ILPParam.SwitchTopology = Order[r];
+      std::cout << std::endl
+                << "######## BENCHMARK switch topology "
+                << (Order[r] ? "ON" : "OFF") << " ########" << std::endl;
+      auto t0 = std::chrono::steady_clock::now();
+      Solved[r] = SolveILP(MatchedSeed);
+      auto t1 = std::chrono::steady_clock::now();
+      Total[r] = std::chrono::duration<double>(t1 - t0).count();
+      Opt[r] = ILP.LastOptTime;
+      Obj[r] = ILP.LastObj;
+      Gap[r] = ILP.LastGap;
+      Used[r] = ILP.LastUsedDeviation.size();
+    }
+    ILPParam.SwitchTopology = OldTopo;
+    std::cout << std::endl
+              << "######## BENCHMARK SWITCH TOPOLOGY ########" << std::endl;
+    std::cout << "Topology  solved   total(s)  optimize(s)  objective     gap"
+                 "  switches"
+              << std::endl;
+    for (int r = 0; r < 2; r++) {
+      char Line[256];
+      snprintf(Line, sizeof(Line), "%-9s %-7s %9.1f %12.1f %10.1f %6.2f%% %9d",
+               Order[r] ? "on" : "off", Solved[r] ? "yes" : "no", Total[r],
+               Opt[r], Obj[r], (Gap[r] >= 0) ? 100.0 * Gap[r] : -1.0,
+               (int)Used[r]);
+      std::cout << Line << std::endl;
+    }
   }
 
   // ILP feasibility check (same setup of the solve)

@@ -37,6 +37,7 @@
 #include "graph_frame_field.h"
 #include "label_graph.h"
 #include "label_graph_functions.h"
+#include "m3_sheet_walks.h"
 #include "mesh_functions.h"
 #include "mesh_mapping.h"
 #include "patch_basic.h"
@@ -974,10 +975,16 @@ private:
   // where other concave edges meet (e.g. the floor of a pocket, all the
   // edges around a face). The two sides of a concave edge have different
   // M3 directions and are never joined. Labels are compacted (0 ..).
+  // The shared vertex must be a vertex of the node's own chain
+  // (VertChains: tetra mesh vertex -> the chains of its concave edges; the
+  // labels before the merge are chain * 2 + side): on a coarse mesh the
+  // faces of a chain reach the inner vertices and also the concave vertices
+  // of a parallel chain nearby, and separate chains were all joined.
   static void MergeConcaveLabelsByM3(
       Geo::LabelNeighOrientedGraph<ScalarType> &Facegraph,
       const std::vector<std::vector<int>> &TetraInternalFaces,
-      const std::vector<Field::FrameField<ScalarType>> &FacesFrameField) {
+      const std::vector<Field::FrameField<ScalarType>> &FacesFrameField,
+      const std::map<int, std::set<int>> &VertChains) {
     std::vector<int> &NE = Facegraph.NodesOnConcaveE;
     std::vector<int> &LE = Facegraph.NodesOnConcaveELabel;
     std::vector<int> &NV = Facegraph.NodesOnConcaveEByV;
@@ -1013,12 +1020,18 @@ private:
       }
       return x;
     };
-    // nodes by vertex
+    // nodes by vertex (only the concave vertices of their own chain)
     std::map<int, std::vector<int>> ByVert; // vertex -> index in Nodes
     for (size_t i = 0; i < Nodes.size(); i++) {
+      if (Labels[i] < 0)
+        continue;
       int f = Field::FrameFieldM3Graph::ElemOfNode(Nodes[i]);
-      for (int v : TetraInternalFaces[f])
-        ByVert[v].push_back((int)i);
+      for (int v : TetraInternalFaces[f]) {
+        // ByVert[v].push_back((int)i);
+        auto It = VertChains.find(v);
+        if ((It != VertChains.end()) && (It->second.count(Labels[i] / 2) > 0))
+          ByVert[v].push_back((int)i);
+      }
     }
     // same M3 direction: the frame directions of the two faces closer than
     // the other two (they are 90 deg apart, 45 deg separates them)
@@ -1074,6 +1087,19 @@ private:
     std::cout << "Concave groups by M3 direction: " << NumBefore
               << " chain sides -> " << NewId.size() << " groups (" << NumJoins
               << " joins)" << std::endl;
+    // the chains in each group (more than one: joined at a shared vertex)
+    std::map<int, std::set<int>> GroupChains;
+    for (int L : Labels)
+      if (L >= 0)
+        GroupChains[Remap(L)].insert(L / 2);
+    for (auto &GC : GroupChains) {
+      if (GC.second.size() < 2)
+        continue;
+      std::cout << "   group " << GC.first << ": chains";
+      for (int c : GC.second)
+        std::cout << " " << c;
+      std::cout << std::endl;
+    }
   }
 
   static void AddFeatureEdges(
@@ -1435,7 +1461,22 @@ private:
 
       // the chains of the same M3 direction joined (also where more
       // concave edges meet): one label per group
-      MergeConcaveLabelsByM3(Facegraph, TetraInternalFaces, FacesFrameField);
+      // MergeConcaveLabelsByM3(Facegraph, TetraInternalFaces, FacesFrameField);
+      {
+        // the vertices of the concave edges in the tetra mesh, with the
+        // chains of their edges
+        std::vector<int> VertMap;
+        FindVertCorrespondences(SurfVertPos, VertPos, VertMap);
+        std::map<int, std::set<int>> VertChains;
+        for (size_t i = 0; i < SurfConcaveE.size(); i++) {
+          int Ends[2] = {SurfConcaveE[i].first, SurfConcaveE[i].second};
+          for (int v : Ends)
+            if ((v >= 0) && (v < (int)VertMap.size()) && (VertMap[v] >= 0))
+              VertChains[VertMap[v]].insert(ChainOf[i]);
+        }
+        MergeConcaveLabelsByM3(Facegraph, TetraInternalFaces, FacesFrameField,
+                               VertChains);
+      }
 
       std::cout << "Concave cover: " << Facegraph.ConcaveCover.size()
                 << " concave edge sides with candidates" << std::endl;
@@ -2445,7 +2486,8 @@ private:
       const std::vector<Geo::Point3<ScalarType>> &VertPos,
       const std::vector<std::vector<int>> &TetraInternalFaces,
       const std::set<std::pair<int, int>> &ExtEdges,
-      const std::set<int> *DeviationVerts = nullptr) {
+      const std::set<int> *DeviationVerts = nullptr,
+      const std::set<std::pair<int, int>> *DeviationEdges = nullptr) {
     // faces by edge, with the label of the edge in the face
     std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> EF;
     for (size_t f = 0; f < TetraInternalFaces.size(); f++)
@@ -2483,6 +2525,10 @@ private:
       AvgLen = 1;
     for (auto &E : EF) {
       if (ExtEdges.count(E.first) > 0)
+        continue;
+      // only on the candidate edges, if given (e.g. the walks from the
+      // singularities, M3SheetWalks::SwitchCandidateEdges)
+      if ((DeviationEdges != nullptr) && (DeviationEdges->count(E.first) == 0))
         continue;
       // only in the zone (an endpoint in DeviationVerts), if given
       if ((DeviationVerts != nullptr) &&
@@ -2818,7 +2864,13 @@ public:
          const bool ChainSingularEdges = true,
          const bool ChainAllEdges = false,
          const bool DeviationArcs = false,
-         const std::set<int> *DeviationVerts = nullptr) 
+         const std::set<int> *DeviationVerts = nullptr,
+         // switch arcs only on the edges of the walks from these vertices
+         // (the singular ones), see M3SheetWalks::SwitchCandidateEdges
+         const std::set<int> *SwitchSingVerts = nullptr,
+         // with SwitchSingVerts: only the side edges of the walks (along
+         // them, not the crossed ones)
+         const bool SwitchSideEdges = false)
   {
 
     Facegraph.Clear();
@@ -2894,8 +2946,29 @@ public:
 
     // emergency arcs changing M3 direction (option)
     if (DeviationArcs)
+    {
+      // the candidate edges of the switch lines: walks on the regular arcs
+      // (already built) from the singular vertices
+      std::set<std::pair<int, int>> CandE;
+      const bool UseCand = (SwitchSingVerts != nullptr) &&
+                           !SwitchSingVerts->empty();
+      if (UseCand) {
+        Geo::M3SheetWalks<ScalarType, Field::FrameField<ScalarType>> Walks(
+            Facegraph, VertPos, TetraInternalFaces, FacesFrameField);
+        // Walks.SwitchCandidateEdges(*SwitchSingVerts, CandE);
+        Walks.SwitchCandidateEdges(*SwitchSingVerts, CandE, SwitchSideEdges);
+      }
+      // AddDeviationConnections(Facegraph, VertPos, TetraInternalFaces,
+      //                         ExtEdges, DeviationVerts);
+      // AddDeviationConnections(Facegraph, VertPos, TetraInternalFaces,
+      //                         ExtEdges, DeviationVerts,
+      //                         UseCand ? &CandE : nullptr);
       AddDeviationConnections(Facegraph, VertPos, TetraInternalFaces,
-                              ExtEdges, DeviationVerts);
+                              ExtEdges, DeviationVerts,
+                              UseCand ? &CandE : nullptr);
+      // how the folds are distributed (for a fold limit)
+      Facegraph.PrintDeviationFoldHistogram(15, false);
+    }
 
     std::cout << "Sorting and make them unique " << std::endl;
 

@@ -33,6 +33,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <iomanip>
 #include <iostream>
 #include <set>
 #include <stdio.h>
@@ -40,6 +41,7 @@
 #include <cstddef>   // C++
 #include <unordered_set>
 #include <utility>
+#include <iomanip>
 #include <vector>
 
 namespace Geo {
@@ -441,6 +443,36 @@ public:
           if (N[n][l][j].Deviation && (!OnlyEnabled || ArcActive(N[n][l][j])))
             Num++;
     return Num;
+  }
+
+  // HISTOGRAM of the fold of the deviation arcs (each arc once), bins of
+  // BinDeg degrees: how many arcs a fold limit would remove
+  void PrintDeviationFoldHistogram(const int BinDeg = 15,
+                                   const bool OnlyEnabled = true) const {
+    const int NumBins = (180 + BinDeg - 1) / BinDeg;
+    std::vector<int> Bins(NumBins, 0);
+    int Tot = 0;
+    for (size_t n = 0; n < N.size(); n++)
+      for (size_t l = 0; l < N[n].size(); l++)
+        for (size_t j = 0; j < N[n][l].size(); j++) {
+          const NeighInfo &A = N[n][l][j];
+          if (!A.Deviation || (A.N < (int)n))
+            continue;
+          if (OnlyEnabled && !ArcActive(A))
+            continue;
+          int b = std::min(NumBins - 1, std::max(0, (int)(A.Fold / BinDeg)));
+          Bins[b]++;
+          Tot++;
+        }
+    std::cout << "Fold of the deviation arcs (" << Tot << " arcs):" << std::endl;
+    int Above = Tot;
+    for (int b = 0; b < NumBins; b++) {
+      std::cout << "  " << std::setw(3) << b * BinDeg << "-" << std::setw(3)
+                << std::min(180, (b + 1) * BinDeg) << " deg: " << std::setw(9)
+                << Bins[b] << "   (from " << b * BinDeg << " up: " << Above
+                << ")" << std::endl;
+      Above -= Bins[b];
+    }
   }
 
   void ClearNeighbor(const int &IndexN, const int &IndexLabel) {

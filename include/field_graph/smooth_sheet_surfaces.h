@@ -76,7 +76,8 @@ private:
       const std::vector<std::pair<int, int>> &FeatureE,
       const std::vector<int> &Corners, int SmoothSteps,
       const bool KeepHoles = true,
-      const std::vector<Geo::Point3<ScalarType>> *RestPos = nullptr) {
+      const std::vector<Geo::Point3<ScalarType>> *RestPos = nullptr,
+      const std::vector<std::pair<int, int>> *LineE = nullptr) {
 
     // TAUBIN smoothing instead of the plain laplacian: the laplacian shrinks
     // the surface, a narrow loop (a foil folding on itself) collapses and
@@ -291,13 +292,36 @@ private:
       }
     std::set<int> BorderSet(BorderV.begin(), BorderV.end());
     std::map<int, std::vector<int>> CurveAdj;
+    // for (typename std::map<std::pair<int, int>, int>::iterator it =
+    //          EdgeCount.begin();
+    //      it != EdgeCount.end(); it++)
+    //   if (it->second > 2) {
+    //     CurveAdj[it->first.first].push_back(it->first.second);
+    //     CurveAdj[it->first.second].push_back(it->first.first);
+    //   }
+    // LINES (LineE, e.g. the M3 switches: where a foil turns into another
+    // direction) smoothed in the same way, as features inside the foils
+    std::set<std::pair<int, int>> CurveE;
     for (typename std::map<std::pair<int, int>, int>::iterator it =
              EdgeCount.begin();
          it != EdgeCount.end(); it++)
-      if (it->second > 2) {
-        CurveAdj[it->first.first].push_back(it->first.second);
-        CurveAdj[it->first.second].push_back(it->first.first);
+      if (it->second > 2)
+        CurveE.insert(it->first);
+    int NumLineE = 0;
+    if (LineE != nullptr)
+      for (const auto &E : *LineE) {
+        std::pair<int, int> K(std::min(E.first, E.second),
+                              std::max(E.first, E.second));
+        if ((K.first < 0) || (K.first == K.second) || (EdgeCount.count(K) == 0))
+          continue;
+        if (CurveE.insert(K).second)
+          NumLineE++;
       }
+    (void)NumLineE;
+    for (const auto &K : CurveE) {
+      CurveAdj[K.first].push_back(K.second);
+      CurveAdj[K.second].push_back(K.first);
+    }
 
     // HOLES: the border vertices not on the surface (borders of holes inside
     // the volume). They were smoothed as the others (the hole shrinks and
@@ -460,7 +484,8 @@ public:
               const bool KeepHoles = true,
               const std::vector<Geo::Point3<ScalarType>> *OrigVertPos = nullptr,
               const std::vector<std::vector<int>> *FoilVertOriginalIdx =
-                  nullptr) {
+                  nullptr,
+              const std::vector<std::pair<int, int>> *TetLineE = nullptr) {
 
     // concatenate to a single surface
     std::vector<Geo::Point3<ScalarType>> NonManifV;
@@ -491,9 +516,36 @@ public:
         }
     }
 
+    // the lines (TetLineE: pairs of tet mesh vertices, e.g. the M3
+    // switches) on the joined mesh
+    std::vector<std::pair<int, int>> LineE;
+    if ((TetLineE != nullptr) && (FoilVertOriginalIdx != nullptr) &&
+        (FoilVertOriginalIdx->size() == FoilVertices.size())) {
+      std::map<int, int> TetToJoined;
+      for (size_t i = 0; i < FoilVertices.size(); i++)
+        for (size_t j = 0; (j < FoilVertices[i].size()) &&
+                           (j < (*FoilVertOriginalIdx)[i].size());
+             j++) {
+          typename std::map<Geo::Point3<ScalarType>, int>::iterator it =
+              PosIdxMap.find(FoilVertices[i][j]);
+          if (it != PosIdxMap.end())
+            TetToJoined[(*FoilVertOriginalIdx)[i][j]] = it->second;
+        }
+      for (const auto &E : *TetLineE) {
+        std::map<int, int>::iterator i0 = TetToJoined.find(E.first);
+        std::map<int, int>::iterator i1 = TetToJoined.find(E.second);
+        if ((i0 != TetToJoined.end()) && (i1 != TetToJoined.end()))
+          LineE.push_back(std::make_pair(i0->second, i1->second));
+      }
+    }
+
+    // SmoothReprojectSubMeshes(NonManifV, NonManifFaces, ReprojectV,
+    //                          ReprojectFaces, FeatureE, Corners, SmoothSteps,
+    //                          KeepHoles, RestPos.empty() ? nullptr : &RestPos);
     SmoothReprojectSubMeshes(NonManifV, NonManifFaces, ReprojectV,
                              ReprojectFaces, FeatureE, Corners, SmoothSteps,
-                             KeepHoles, RestPos.empty() ? nullptr : &RestPos);
+                             KeepHoles, RestPos.empty() ? nullptr : &RestPos,
+                             LineE.empty() ? nullptr : &LineE);
 
     // copy back positions
     for (size_t i = 0; i < FoilVertices.size(); i++)
@@ -582,6 +634,78 @@ public:
         if (EdgeFaces[std::make_pair(std::min(O0, O1), std::max(O0, O1))] > 2)
           IntersEdges[i].push_back(E.first);
       }
+  }
+
+  // THE TET MESH FOLLOWING THE SMOOTHED FOILS: the displacement of each tet
+  // mesh vertex on a foil is the one of its foil vertex; the surface
+  // vertices not on a foil do not move; the other ones get the average of
+  // their neighbours (Iter Jacobi steps of a harmonic interpolation, Disp
+  // is the start: warm start when called a step at a time). Out: VertPos +
+  // Disp (e.g. to draw the singular lines moving with the foils)
+  static void DeformTetMeshWithFoils(
+      const std::vector<Geo::Point3<ScalarType>> &VertPos,
+      const std::vector<std::vector<int>> &Tetra,
+      const std::vector<std::vector<Geo::Point3<ScalarType>>> &FoilVertices,
+      const std::vector<std::vector<int>> &FoilVertOriginalIdx,
+      std::vector<Geo::Point3<ScalarType>> &Disp,
+      std::vector<Geo::Point3<ScalarType>> &OutPos, const int Iter = 30) {
+    const size_t N = VertPos.size();
+    if (Disp.size() != N)
+      Disp.assign(N, Geo::Point3<ScalarType>(0, 0, 0));
+    // 0 free, 1 on a foil (given), 2 on the surface (fixed)
+    std::vector<char> Known(N, 0);
+    std::set<int> SurfV;
+    TetraSurfaceVerts(Tetra, SurfV);
+    for (int v : SurfV)
+      if ((v >= 0) && (v < (int)N)) {
+        Known[v] = 2;
+        Disp[v] = Geo::Point3<ScalarType>(0, 0, 0);
+      }
+    // (a vertex in more foils: the average of its foil vertices)
+    std::vector<Geo::Point3<ScalarType>> Sum(N, Geo::Point3<ScalarType>(0, 0, 0));
+    std::vector<int> Cnt(N, 0);
+    for (size_t i = 0; (i < FoilVertices.size()) && (i < FoilVertOriginalIdx.size());
+         i++)
+      for (size_t j = 0;
+           (j < FoilVertices[i].size()) && (j < FoilVertOriginalIdx[i].size());
+           j++) {
+        int O = FoilVertOriginalIdx[i][j];
+        if ((O < 0) || (O >= (int)N))
+          continue;
+        Sum[O] += FoilVertices[i][j] - VertPos[O];
+        Cnt[O]++;
+      }
+    for (size_t v = 0; v < N; v++)
+      if (Cnt[v] > 0) {
+        Known[v] = 1;
+        Disp[v] = Sum[v] / (ScalarType)Cnt[v];
+      }
+    // vertex neighbours (edges of the tetras)
+    std::vector<std::vector<int>> VV(N);
+    {
+      std::vector<std::set<int>> VVS(N);
+      for (const auto &T : Tetra)
+        for (size_t a = 0; a < T.size(); a++)
+          for (size_t b = 0; b < T.size(); b++)
+            if (a != b)
+              VVS[T[a]].insert(T[b]);
+      for (size_t v = 0; v < N; v++)
+        VV[v].assign(VVS[v].begin(), VVS[v].end());
+    }
+    for (int it = 0; it < Iter; it++) {
+      std::vector<Geo::Point3<ScalarType>> Prev = Disp;
+      for (size_t v = 0; v < N; v++) {
+        if (Known[v] || VV[v].empty())
+          continue;
+        Geo::Point3<ScalarType> Avg(0, 0, 0);
+        for (int w : VV[v])
+          Avg += Prev[w];
+        Disp[v] = Avg / (ScalarType)VV[v].size();
+      }
+    }
+    OutPos.resize(N);
+    for (size_t v = 0; v < N; v++)
+      OutPos[v] = VertPos[v] + Disp[v];
   }
 
   // the vertices on the surface of a tet mesh (of the tet faces not shared)

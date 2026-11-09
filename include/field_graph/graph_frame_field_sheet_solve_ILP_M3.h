@@ -91,6 +91,30 @@ public:
 
     bool InternalTangentM3;
     bool SoftInternalTangentM3;
+    // NO CROSSINGS: at most two nodes (any direction) on each internal edge
+    // and one on each surface edge (see NoCrossInternal_Constr): the
+    // sheets do not cross at all (the parallel crossings are never allowed,
+    // see the internal tangent constraint)
+    bool NoCrossings;
+    // M3 SWITCHES (deviation arcs) in the solve: off, the switch arcs are
+    // not in the model at all (removed from the continuations), as in the
+    // SAT
+    bool UseDeviations;
+    // SWITCH TOPOLOGY (with the deviation arcs and the matching): the mesh
+    // edges where the solution switches form lines: each vertex has 0 or 2
+    // switch edges, 0 or 1 on the surface and on the singularities
+    // (SwitchEndVerts): no bifurcation, no end inside, no line through a
+    // singularity
+    bool SwitchTopology;
+    // the vertices where a switch line can end (surface and singular)
+    std::vector<int> SwitchEndVerts;
+    // SWITCH PER NODE: one variable for each node and edge (see SwitchCont)
+    // instead of one for each switch arc; false: the arcs (faster: tighter
+    // relaxation)
+    bool SwitchPerNode;
+    // all the seeds of a concave chain on the same sheet (see
+    // SheetSolve_ConstraintsM3::ConcaveChainForbidden)
+    bool ConcaveChainOneFoil;
 
     bool BorderTangentM3;
     bool SoftBorderTangentM3;
@@ -141,6 +165,12 @@ public:
     // or soft (bonus as a soft seed for each group covered)
     bool CoverHard;
 
+    // Gurobi LP method of the root (-1 automatic: concurrent; 0 primal
+    // simplex, 1 dual simplex, 2 barrier) and presolve level (-1
+    // automatic, 0 off, 1 conservative, 2 aggressive)
+    int Method;
+    int Presolve;
+
     // LNS: if > 0 and there is a starting solution, the solution is improved
     // optimizing one window at a time (nodes within LNSWindowSteps steps of
     // a node of the solution), all the other nodes fixed
@@ -158,6 +188,11 @@ public:
       TwiceEdgeConstrM3 = true;
       // LabelM3 = true;
       InternalTangentM3 = true;
+      NoCrossings = false;
+      UseDeviations = true;
+      SwitchTopology = false;
+      SwitchPerNode = false;
+      ConcaveChainOneFoil = false;
       BorderTangentM3 = true;
       // GlobalNeigh=true;
       // Gap = 0.1;
@@ -195,6 +230,12 @@ public:
       DeviationFoldRamp = DEV_FOLD_RAMP;
       CoverHard = true;
       LNSWindowSteps = 0;
+      // Method = -1;
+      // Presolve = -1;
+      // (benchmark: dual simplex and conservative presolve the fastest,
+      // primal and barrier did not finish in 120 s)
+      Method = 1;
+      Presolve = 1;
       LNSWindowTime = 2;
       LNSMaxRounds = 3;
     }
@@ -381,6 +422,7 @@ private:
 
     // largest cost of a node/link after the scaling
     double MaxScaledCost = 1 + maxObjCoeff * scale;
+    LastMaxScaledCost = MaxScaledCost;
     for (int i = 0; i < nVars; ++i) {
       GRBVar v = model.getVar(i);
       if (SoftVars.count(i) > 0) {
@@ -574,6 +616,209 @@ private:
   // nodes (read after the optimization, LastUsedDeviation)
   std::vector<std::pair<GRBVar, std::pair<int, int>>> DevArcZ;
 
+  // SWITCHES ON THE NODES (matching continuity): instead of a variable for
+  // each switch arc (pair of nodes), one for each node and edge, t = "the
+  // node continues across the edge with a switch" (to one of the nodes To,
+  // the other directions across the edge, selected), and one for each edge,
+  // s = "the solution switches across the edge". On an edge with a switch
+  // the sheets do not cross (at most two nodes): the node reached by the
+  // switch has no other continuation, it switches back (exact pairs)
+  struct SwitchCont {
+    GRBVar t;
+    int Var;
+    std::vector<int> To;
+    std::pair<int, int> E;
+  };
+  std::vector<SwitchCont> SwitchT;
+  std::map<std::pair<int, int>, GRBVar> SwitchEdgeVar;
+
+  double LastMaxScaledCost = 1;
+
+  // the mesh edge shared by the faces of two nodes ((-1, -1) if none)
+  std::pair<int, int> SharedEdge(const int N0, const int N1) const {
+    const std::vector<int> &F0 =
+        InternalFaces[Field::FrameFieldM3Graph::ElemOfNode(N0)];
+    const std::vector<int> &F1 =
+        InternalFaces[Field::FrameFieldM3Graph::ElemOfNode(N1)];
+    std::vector<int> C;
+    for (int a : F0)
+      for (int b : F1)
+        if (a == b)
+          C.push_back(a);
+    if (C.size() != 2)
+      return std::make_pair(-1, -1);
+    return std::make_pair(std::min(C[0], C[1]), std::max(C[0], C[1]));
+  }
+
+  // SWITCH TOPOLOGY (on the switch edges, SwitchEdgeVar: after the
+  // matching continuity): each vertex sum s_e = 2 y_v (0 or 2), at the
+  // EndVerts (surface and singular) sum s_e <= 1
+  // (before: on the arc variables of the deviation arcs, DevArcZ)
+  void AddSwitchTopology(GRBModel &model, const std::vector<int> &EndVerts) {
+    // switches on the arcs: the edge variables from DevArcZ
+    if (SwitchEdgeVar.empty() && !DevArcZ.empty())
+      SwitchEdgesFromArcs(model);
+    if (SwitchEdgeVar.empty())
+      return;
+    std::set<int> EndSet(EndVerts.begin(), EndVerts.end());
+    std::map<int, GRBLinExpr> VertSum;
+    std::map<int, int> VertStart;
+    for (auto &E : SwitchEdgeVar) {
+      const int On = SwitchEdgeStart.count(E.first) ? 1 : 0;
+      for (int v : {E.first.first, E.first.second}) {
+        VertSum[v] += E.second;
+        VertStart[v] += On;
+      }
+    }
+    int NumEnd = 0;
+    for (auto &V : VertSum) {
+      if (EndSet.count(V.first) > 0) {
+        NumEnd++;
+        // (lazy: in the model only when violated)
+        GRBConstr CEnd = model.addConstr(V.second <= 1);
+        CEnd.set(GRB_IntAttr_Lazy, 1);
+        continue;
+      }
+      GRBVar y = model.addVar(0.0, 1.0, 0, GRB_BINARY);
+      if (!WarmVal.empty())
+        y.set(GRB_DoubleAttr_Start, (VertStart[V.first] >= 2) ? 1.0 : 0.0);
+      GRBConstr CV = model.addConstr(V.second == 2 * y);
+      CV.set(GRB_IntAttr_Lazy, 1);
+    }
+    std::cout << " ** Switch topology: " << SwitchEdgeVar.size() << " edges, "
+              << VertSum.size() << " vertices (" << NumEnd
+              << " surface / singular)" << std::endl;
+  }
+
+  // the switch edges with a switch in the warm start
+  std::set<std::pair<int, int>> SwitchEdgeStart;
+
+  // switches on the arcs (DevArcZ): c_e = 1 if a switch arc of the edge e
+  // is used (c_e >= z, c_e <= sum z), as SwitchEdgeVar (for the topology)
+  void SwitchEdgesFromArcs(GRBModel &model) {
+    SwitchEdgeVar.clear();
+    SwitchEdgeStart.clear();
+    std::map<std::pair<int, int>, std::vector<int>> EdgeZ;
+    for (size_t i = 0; i < DevArcZ.size(); i++) {
+      std::pair<int, int> E =
+          SharedEdge(DevArcZ[i].second.first, DevArcZ[i].second.second);
+      if (E.first >= 0)
+        EdgeZ[E].push_back((int)i);
+    }
+    for (auto &E : EdgeZ) {
+      GRBVar c = model.addVar(0.0, 1.0, 0, GRB_BINARY);
+      GRBLinExpr Sum;
+      bool On = false;
+      for (int z : E.second) {
+        model.addConstr(c >= DevArcZ[z].first);
+        Sum += DevArcZ[z].first;
+        // (as the warm start of the arc: both ends selected)
+        if (!WarmVal.empty())
+          On |= (WarmVal[M3Constraints.M3NodeToVar[DevArcZ[z].second.first]] &&
+                 WarmVal[M3Constraints.M3NodeToVar[DevArcZ[z].second.second]]);
+      }
+      // (lazy: in the model only when violated)
+      GRBConstr CUp = model.addConstr(c <= Sum);
+      CUp.set(GRB_IntAttr_Lazy, 1);
+      if (!WarmVal.empty())
+        c.set(GRB_DoubleAttr_Start, On ? 1.0 : 0.0);
+      if (On)
+        SwitchEdgeStart.insert(E.first);
+      SwitchEdgeVar[E.first] = c;
+    }
+  }
+
+  // the edge variables of the switches (after the t of the matching): s >=
+  // t, s <= sum t, and no crossing on a switch edge: sum of the nodes of the
+  // edge <= 2 + (n - 2) (1 - s)
+  void AddSwitchEdges(GRBModel &model, const std::vector<GRBVar> &M3NodeVars) {
+    SwitchEdgeVar.clear();
+    SwitchEdgeStart.clear();
+    if (SwitchT.empty())
+      return;
+    std::map<std::pair<int, int>, std::vector<int>> EdgeT;
+    for (size_t i = 0; i < SwitchT.size(); i++)
+      EdgeT[SwitchT[i].E].push_back((int)i);
+    // the variables of the nodes on the switch edges
+    std::map<std::pair<int, int>, std::vector<int>> EdgeVars;
+    for (size_t v = 0; v < M3Constraints.M3VarToNode.size(); v++) {
+      const std::vector<int> &F = InternalFaces[Field::FrameFieldM3Graph::
+                                                    ElemOfNode(
+                                                        M3Constraints
+                                                            .M3VarToNode[v])];
+      for (size_t l = 0; l < F.size(); l++) {
+        int a = F[l], b = F[(l + 1) % F.size()];
+        std::pair<int, int> E(std::min(a, b), std::max(a, b));
+        if (EdgeT.count(E) > 0)
+          EdgeVars[E].push_back((int)v);
+      }
+    }
+    for (auto &E : EdgeT) {
+      GRBVar sv = model.addVar(0.0, 1.0, 0, GRB_BINARY);
+      GRBLinExpr Sum;
+      bool On = false;
+      for (int i : E.second) {
+        model.addConstr(sv >= SwitchT[i].t);
+        Sum += SwitchT[i].t;
+        On |= SwitchStart[i];
+      }
+      GRBConstr CUp = model.addConstr(sv <= Sum);
+      CUp.set(GRB_IntAttr_Lazy, 1);
+      const std::vector<int> &V = EdgeVars[E.first];
+      const int n = (int)V.size();
+      if (n > 2) {
+        GRBLinExpr Nodes;
+        for (int v : V)
+          Nodes += M3NodeVars[v];
+        GRBConstr CN = model.addConstr(Nodes <= 2 + (n - 2) * (1 - sv));
+        CN.set(GRB_IntAttr_Lazy, 1);
+      }
+      if (!WarmVal.empty())
+        sv.set(GRB_DoubleAttr_Start, On ? 1.0 : 0.0);
+      if (On)
+        SwitchEdgeStart.insert(E.first);
+      SwitchEdgeVar[E.first] = sv;
+    }
+    std::cout << " ** Switches: " << SwitchT.size() << " node-edge variables on "
+              << SwitchEdgeVar.size() << " edges (no crossing on a switch edge)"
+              << std::endl;
+  }
+
+  // warm start of each t (as SwitchT)
+  std::vector<bool> SwitchStart;
+
+  // no crossings: at most two nodes on each internal edge (any direction);
+  // on the surface edges the sheets can always cross orthogonally (two
+  // concave sides solved at the same time), never tangentially (the border
+  // tangent constraint, kept)
+  void AddNoCrossingConstraint(GRBModel &model,
+                               const std::vector<GRBVar> &M3NodeVars) {
+    // lazy: in the model only when violated (most edges never reached)
+    for (const std::vector<int> &G : M3Constraints.NoCrossInternal_Constr) {
+      GRBLinExpr Sum;
+      for (int v : G)
+        Sum += M3NodeVars[v];
+      // model.addConstr(Sum <= 2);
+      GRBConstr C = model.addConstr(Sum <= 2);
+      C.set(GRB_IntAttr_Lazy, 1);
+    }
+    // (not on the surface edges any more: one node there in any direction
+    // forbade the orthogonal crossings on the surface)
+    // for (const std::vector<int> &G : M3Constraints.NoCrossBorder_Constr) {
+    //   GRBLinExpr Sum;
+    //   for (int v : G)
+    //     Sum += M3NodeVars[v];
+    //   GRBConstr C = model.addConstr(Sum <= 1);
+    //   C.set(GRB_IntAttr_Lazy, 1);
+    // }
+    std::cout << " ** No crossings: "
+              << M3Constraints.NoCrossInternal_Constr.size()
+              << " internal edges (crossing on the surface allowed)"
+              << std::endl;
+  }
+
+private:
+
   // fold limits of the current solve (from ExtractParam, see SolveGurobi)
   ScalarType CurrFoldTarget = DEV_FOLD_TARGET, CurrFoldMax = DEV_FOLD_MAX;
   // the cost at DeviationFoldMax is this times the base
@@ -694,10 +939,13 @@ private:
   // matching continuity (see ExtractParam::MatchingContinuity): one binary
   // variable for each arc between two variables, shared by the constraints
   // of the two ends
+  // PerNode: the switches as SwitchCont (t for each node and edge),
+  // otherwise one variable for each switch arc (DevArcZ)
   void AddMatchingContinuityConstraint(GRBModel &model,
                                        const std::vector<GRBVar> &M3NodeVars,
                                        bool SoftConstr,
-                                       ScalarType DeviationPenalty = 0) {
+                                       ScalarType DeviationPenalty = 0,
+                                       const bool PerNode = false) {
     std::map<std::pair<int, int>, GRBVar> ArcVars;
     int NumDev = 0, NumDevForbidden = 0;
     auto ArcVar = [&](int a, int b) -> GRBVar & {
@@ -740,13 +988,57 @@ private:
               ((UB > 0) && WarmVal[a] && WarmVal[b]) ? 1.0 : 0.0);
       return ArcVars.emplace(Key, z).first->second;
     };
+    SwitchT.clear();
+    SwitchStart.clear();
     for (size_t i = 0; i < M3Constraints.EdgeLabel_Continuation_Constr.size();
          i++) {
       int IndexVar0 = M3Constraints.EdgeLabel_Continuation_Constr[i].first;
       GRBLinExpr SumArcs;
+      // for (int IndexVar1 :
+      //      M3Constraints.EdgeLabel_Continuation_Constr[i].second)
+      //   SumArcs += ArcVar(IndexVar0, IndexVar1);
+      // regular arcs: one variable for each arc; the switches: one t for
+      // the node on this edge (see SwitchCont)
+      std::vector<int> To;
+      bool RegStart = false;
       for (int IndexVar1 :
-           M3Constraints.EdgeLabel_Continuation_Constr[i].second)
+           M3Constraints.EdgeLabel_Continuation_Constr[i].second) {
+        if (PerNode &&
+            M3Graph.IsDeviationArc(M3Constraints.M3VarToNode[IndexVar0],
+                                   M3Constraints.M3VarToNode[IndexVar1])) {
+          To.push_back(IndexVar1);
+          continue;
+        }
         SumArcs += ArcVar(IndexVar0, IndexVar1);
+        if (!WarmVal.empty() && WarmVal[IndexVar1])
+          RegStart = true;
+      }
+      if (!To.empty()) {
+        std::pair<int, int> E = SharedEdge(M3Constraints.M3VarToNode[IndexVar0],
+                                           M3Constraints.M3VarToNode[To[0]]);
+        // half the cost of a switch: both its nodes switch
+        GRBVar t = model.addVar(0.0, 1.0, 0.5 * (double)DeviationPenalty,
+                                GRB_BINARY);
+        GRBLinExpr Reach;
+        bool ToStart = false;
+        for (int b : To) {
+          Reach += M3NodeVars[b];
+          if (!WarmVal.empty() && WarmVal[b])
+            ToStart = true;
+        }
+        model.addConstr(t <= Reach);
+        model.addConstr(t <= M3NodeVars[IndexVar0]);
+        SumArcs += t;
+        bool Start = !WarmVal.empty() && WarmVal[IndexVar0] && !RegStart &&
+                     ToStart;
+        if (!WarmVal.empty())
+          t.set(GRB_DoubleAttr_Start, Start ? 1.0 : 0.0);
+        if (E.first >= 0) {
+          SwitchT.push_back({t, IndexVar0, To, E});
+          SwitchStart.push_back(Start);
+        }
+        NumDev += (int)To.size();
+      }
       if (!SoftConstr) {
         model.addConstr(SumArcs == M3NodeVars[IndexVar0],
                         "Match" + std::to_string(i));
@@ -758,12 +1050,21 @@ private:
         ContinuationRelax.push_back(std::make_pair(relax, IndexVar0));
       }
     }
-    std::cout << " ** Matching continuity: " << ArcVars.size()
-              << " arc variables (" << NumDev
-              << " deviation arcs, base cost " << DeviationPenalty << ", "
-              << NumDevForbidden << " too folded (> " << CurrFoldMax
-              << " deg) not allowed)"
-              << std::endl;
+    if (PerNode)
+      std::cout << " ** Matching continuity: " << ArcVars.size()
+                << " arc variables, " << SwitchT.size()
+                << " switch variables (node, edge) for " << NumDev / 2
+                << " deviation arcs, base cost " << DeviationPenalty
+                << std::endl;
+    else
+      std::cout << " ** Matching continuity: " << ArcVars.size()
+                << " arc variables (" << NumDev
+                << " deviation arcs, base cost " << DeviationPenalty << ")"
+                << std::endl;
+    (void)NumDevForbidden;
+    // the edges of the switches (no crossing there)
+    if (PerNode)
+      AddSwitchEdges(model, M3NodeVars);
   }
 
   void AddSingleFaceConstraint(GRBModel &model,
@@ -953,8 +1254,14 @@ private:
     model.update();
     int nVars = model.get(GRB_IntAttr_NumVars);
     int NumAux = 0;
+    // (the ones with a start already, e.g. the arc variables of the
+    // matching, are kept: before they were all set to 0, the start was not
+    // a solution)
     for (int i = NumCostVars; i < nVars; i++) {
-      model.getVar(i).set(GRB_DoubleAttr_Start, 0.0);
+      GRBVar v = model.getVar(i);
+      if (v.get(GRB_DoubleAttr_Start) < GRB_UNDEFINED)
+        continue;
+      v.set(GRB_DoubleAttr_Start, 0.0);
       NumAux++;
     }
     for (size_t i = 0; i < WarmEven.size(); i++)
@@ -1142,15 +1449,48 @@ private:
   bool SolveGurobi(const ExtractParam &ExtrPIn, std::vector<int> &M3Nodes,
                    std::vector<bool> &VarSolution) {
     LastObj = -1;
+    LastOptTime = -1;
     LastGap = -1;
     LastOptimal = false;
     LastUsedDeviation.clear();
     DevArcZ.clear();
+    SwitchT.clear();
+    SwitchStart.clear();
+    SwitchEdgeVar.clear();
+    SwitchEdgeStart.clear();
     CurrFoldTarget = ExtrPIn.DeviationFoldTarget;
     CurrFoldMax = ExtrPIn.DeviationFoldMax;
     CurrFoldRamp = ExtrPIn.DeviationFoldRamp;
     // local copy: AllSoft turns all the soft flags on for this solve
     ExtractParam ExtrP = ExtrPIn;
+    // no switches: the switch arcs removed from the continuations for this
+    // solve (put back at the end, whatever the exit)
+    struct ContinuationRestore {
+      std::vector<std::pair<int, std::vector<int>>> &Ref;
+      std::vector<std::pair<int, std::vector<int>>> Saved;
+      bool Active = false;
+      ~ContinuationRestore() {
+        if (Active)
+          Ref.swap(Saved);
+      }
+    } Restore{M3Constraints.EdgeLabel_Continuation_Constr, {}, false};
+    if (!ExtrP.UseDeviations) {
+      Restore.Saved = M3Constraints.EdgeLabel_Continuation_Constr;
+      Restore.Active = true;
+      int NumRemoved = 0;
+      for (auto &C : M3Constraints.EdgeLabel_Continuation_Constr) {
+        std::vector<int> Kept;
+        for (int v : C.second)
+          if (M3Graph.IsDeviationArc(M3Constraints.M3VarToNode[C.first],
+                                     M3Constraints.M3VarToNode[v]))
+            NumRemoved++;
+          else
+            Kept.push_back(v);
+        C.second.swap(Kept);
+      }
+      std::cout << " ** M3 switches off: " << NumRemoved
+                << " switch continuations removed" << std::endl;
+    }
     if (ExtrP.AllSoft) {
       ExtrP.SoftSurfaceContrinuationM3 = true;
       ExtrP.SoftSingleFConstrM3 = true;
@@ -1184,6 +1524,20 @@ private:
 
       std::vector<GRBVar> M3NodeVars;
       InitNodeVariables(ExtrP, model, M3NodeVars);
+      // concave chain one foil: the variables ending at a chain vertex out
+      // of the chain forced to 0 (upper bound)
+      if (ExtrP.ConcaveChainOneFoil) {
+        std::vector<int> ChainF;
+        M3Constraints.ConcaveChainForbidden(ExtrP.HardNodes, ChainF);
+        std::set<int> Hard(ExtrP.HardNodes.begin(), ExtrP.HardNodes.end());
+        for (int v : ChainF) {
+          if (Hard.count(M3Constraints.M3VarToNode[v]) > 0)
+            continue;
+          M3NodeVars[v].set(GRB_DoubleAttr_UB, 0.0);
+          if (!WarmVal.empty() && WarmVal[v])
+            M3NodeVars[v].set(GRB_DoubleAttr_Start, 0.0);
+        }
+      }
 
       // add the link nodes if needed
       std::vector<GRBVar> M3LinkVars;
@@ -1218,7 +1572,8 @@ private:
         if (ExtrP.MatchingContinuity)
           AddMatchingContinuityConstraint(model, M3NodeVars,
                                           ExtrP.SoftSurfaceContrinuationM3,
-                                          ExtrP.DeviationPenalty);
+                                          ExtrP.DeviationPenalty,
+                                          ExtrP.SwitchPerNode);
         else {
           AddFoilFaceContinuityConstraint(model, M3NodeVars,
                                           ExtrP.SoftSurfaceContrinuationM3);
@@ -1229,11 +1584,27 @@ private:
                                      ExtrP.DeviationPenalty);
         }
 
-        if (ExtrP.InternalTangentM3) {
+        // the switch lines (on the arc variables of the deviation arcs,
+        // only with the matching)
+        if (ExtrP.SwitchTopology) {
+          if (ExtrP.MatchingContinuity)
+            AddSwitchTopology(model, ExtrP.SwitchEndVerts);
+          else
+            std::cout << "WARNING: switch topology only with the matching "
+                         "continuity, skipped"
+                      << std::endl;
+        }
+
+        // (no crossings: the internal tangent constraint is contained in
+        // the one of the edge, not added)
+        // if (ExtrP.InternalTangentM3) {
+        if (ExtrP.InternalTangentM3 && !ExtrP.NoCrossings) {
           std::cout << " ** Adding Internal Tangent Constraint" << std::endl;
           AddInternalTangentConstraint(model, M3NodeVars, false,
                                        ExtrP.SoftInternalTangentM3);
         }
+        if (ExtrP.NoCrossings)
+          AddNoCrossingConstraint(model, M3NodeVars);
         AddCoverConstraint(model, M3NodeVars, ExtrP.CoverHard);
       } else {
         std::cout << " ** Adding Internal Tangent Constraint with Continuity"
@@ -1246,6 +1617,12 @@ private:
                                       ExtrP.SoftAvoidConnectionsM3);
       }
       // ADD Exit Label CONSTR
+      // (before, with no crossings: the border tangent constraint was
+      // contained in the one of the surface edge, not added)
+      // if (ExtrP.BorderTangentM3 &&
+      //     !(ExtrP.NoCrossings &&
+      //       (ExtrP.CType == SheetSolve_ConstraintsM3<ScalarType>::FaceBased))) {
+      // (always: no crossings does not cover the surface edges any more)
       if (ExtrP.BorderTangentM3) {
         std::cout << " ** Adding Border Tangent Constraint" << std::endl;
         AddBorderTangentConstraint(model, M3NodeVars,
@@ -1261,6 +1638,9 @@ private:
       // the dual simplex forced for the root LP was often slower than the
       // default (concurrent, barrier) on these large degenerate LPs
       // model.set(GRB_IntParam_Method, 1);
+      // (now an option, -1: Gurobi default)
+      model.set(GRB_IntParam_Method, ExtrP.Method);
+      model.set(GRB_IntParam_Presolve, ExtrP.Presolve);
       // model.set(GRB_IntParam_MIPFocus, 1);
       // with a starting solution (e.g. the SAT one) the problem is to prove
       // that it is good: focus on the bound; without it, find solutions
@@ -1283,8 +1663,9 @@ private:
       model.update();
       auto tBuild1 = std::chrono::steady_clock::now();
 
-      if (ExtrP.OptimizeObj)
+      if (ExtrP.OptimizeObj) {
         OptimizeCoefficients(model);
+      }
 
       // complete starting solution (also the auxiliary variables)
       CompleteWarmStart(model);
@@ -1308,6 +1689,7 @@ private:
       else
         model.optimize();
       auto tOpt1 = std::chrono::steady_clock::now();
+      LastOptTime = std::chrono::duration<double>(tOpt1 - tOpt0).count();
       std::cout << "** ILP times: build "
                 << std::chrono::duration<double>(tBuild1 - tBuild0).count()
                 << " s, coefficients + warm start "
@@ -1344,6 +1726,18 @@ private:
         for (auto &DZ : DevArcZ)
           if (DZ.first.get(GRB_DoubleAttr_X) > 0.5)
             LastUsedDeviation.insert(DZ.second);
+        // the switches on the nodes: the node and its selected targets
+        for (auto &S : SwitchT) {
+          if (S.t.get(GRB_DoubleAttr_X) < 0.5)
+            continue;
+          int n0 = M3Constraints.M3VarToNode[S.Var];
+          for (int b : S.To)
+            if (M3NodeVars[b].get(GRB_DoubleAttr_X) > 0.5) {
+              int n1 = M3Constraints.M3VarToNode[b];
+              LastUsedDeviation.insert(
+                  std::make_pair(std::min(n0, n1), std::max(n0, n1)));
+            }
+        }
         LastOptimal = (Status == GRB_OPTIMAL);
         if (model.get(GRB_IntAttr_IsMIP))
           LastGap = model.get(GRB_DoubleAttr_MIPGap);
@@ -1441,6 +1835,8 @@ public:
   double LastObj = -1;
   double LastGap = -1;
   bool LastOptimal = false;
+  // time of the last optimize (s, -1 none)
+  double LastOptTime = -1;
   // the switches used by the last solve (pairs of nodes, min first): the
   // arc variables of the deviation arcs at 1
   std::set<std::pair<int, int>> LastUsedDeviation;

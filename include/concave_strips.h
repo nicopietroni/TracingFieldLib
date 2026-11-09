@@ -99,10 +99,17 @@ public:
     // grouping by M3 direction is done on the graph)
     ScalarType CoplanarAngle = 5;
     // rounds of pulling back the strips in conflict
-    int MaxShrink = 8;
+    // int MaxShrink = 8;
+    int MaxShrink = 16;
+    // the width of a strip vertex in conflict is multiplied by this at each
+    // round (before 0.5: with the min width below, 4 rounds tapered the
+    // strips on a coarse mesh where two strips facing each other only
+    // needed to be a bit shorter, sides left without strip)
+    ScalarType ShrinkFactor = 0.75;
     // a strip vertex closer than this (local edge lengths) to its surface
     // vertex is tapered (it becomes the surface vertex)
-    ScalarType MinWidth = 0.1;
+    // ScalarType MinWidth = 0.1;
+    ScalarType MinWidth = 0.03;
     // too close (not intersecting): two triangles with a shared edge folded
     // on the same side below MinAngle (deg), with a shared vertex closer than
     // that angle, or apart closer than MinDist times their size
@@ -122,6 +129,15 @@ public:
   std::vector<int> Label;
   // strip triangles dropped (still intersecting after the pull backs)
   std::vector<std::array<int, 3>> Dropped;
+  // DEBUG: the strip triangles in conflict at the first round (full width),
+  // as positions (to draw them)
+  std::vector<std::array<CoordType, 3>> FirstConflicts;
+  // DEBUG: the strip triangles in conflict at the last round that still
+  // had conflicts (the ones never solved by the pull back)
+  std::vector<std::array<CoordType, 3>> LastConflicts;
+  // DEBUG: the concave edges (endpoints) of the sides without strip before
+  // the conflicts
+  std::vector<std::array<CoordType, 2>> EmptyAtStart;
   // number of strips (labels 0 .. NumChains - 1)
   int NumChains = 0;
   // edge sides left without strip (pulled back onto the surface)
@@ -152,6 +168,9 @@ private:
     bool FixedDir = false;       // direction given (corner vertices)
     ScalarType WScale = -1;      // width factor (> 0: given, corner quads)
     int Index = -1;        // index in Vert
+    // (debug) the surface hit along the direction made it too short (below
+    // the min width) already before the conflicts
+    bool RayKilled = false;
   };
   struct StripTri {
     // a, b: the concave edge; SV: the strip vertices used (-1 none)
@@ -492,15 +511,64 @@ public:
     const CoordType B0 = Vert[IB[0]], B1 = Vert[IB[1]], B2 = Vert[IB[2]];
     if (Sh.size() == 1) {
       const CoordType &V = Vert[Sh[0]];
+      // the two triangles almost share an edge: a vertex p of one along an
+      // edge (V,q) of the other (seen from V, closer than MinAngle). It
+      // happens where a strip was pulled back almost onto the surface on
+      // one side of a concave edge (or of two edges in line) and tapered on
+      // the other: the pull back moves p towards q and never solves the
+      // closeness, while the two triangles are as far as the angle of their
+      // half planes around that common direction (the shared edge test)
+      auto AlongEdge = [&](const std::array<int, 3> &T1, const int p,
+                           const std::array<int, 3> &T2) {
+        CoordType Dp = Vert[p] - V;
+        ScalarType Lp = Dp.Norm();
+        if (Lp <= 0)
+          return false;
+        Dp = Dp / Lp;
+        for (int q : T2) {
+          if (q == Sh[0])
+            continue;
+          CoordType Ax = Vert[q] - V;
+          ScalarType La = Ax.Norm();
+          if (La <= 0)
+            continue;
+          Ax = Ax / La;
+          if (Geo::Cross(Dp, Ax).Norm() >= SinA || Geo::Dot(Dp, Ax) <= 0)
+            continue;
+          // the half planes of the two triangles around the direction Ax:
+          // the farthest other vertex of each from the axis
+          auto Side = [&](const std::array<int, 3> &T) {
+            CoordType Best(0, 0, 0);
+            ScalarType BestL = 0;
+            for (int v : T) {
+              CoordType C = Vert[v] - V;
+              C = C - Ax * Geo::Dot(C, Ax);
+              if (C.Norm() > BestL) {
+                BestL = C.Norm();
+                Best = C;
+              }
+            }
+            return std::make_pair(Best, BestL);
+          };
+          auto S1 = Side(T1), S2 = Side(T2);
+          if ((S1.second <= 0) || (S2.second <= 0))
+            return false;
+          return Geo::Dot(S1.first / S1.second, S2.first / S2.second) <=
+                 std::cos(P.MinAngle * (ScalarType)M_PI / (ScalarType)180);
+        }
+        return false;
+      };
       for (int i = 0; i < 3; i++) {
         if (IA[i] != Sh[0]) {
           const CoordType &p = Vert[IA[i]];
-          if (PointTriDist(p, B0, B1, B2) < SinA * (p - V).Norm())
+          if ((PointTriDist(p, B0, B1, B2) < SinA * (p - V).Norm()) &&
+              !AlongEdge(IA, IA[i], IB))
             return true;
         }
         if (IB[i] != Sh[0]) {
           const CoordType &p = Vert[IB[i]];
-          if (PointTriDist(p, A0, A1, A2) < SinA * (p - V).Norm())
+          if ((PointTriDist(p, A0, A1, A2) < SinA * (p - V).Norm()) &&
+              !AlongEdge(IB, IB[i], IA))
             return true;
         }
       }
@@ -608,6 +676,9 @@ public:
     Faces.clear();
     Label.clear();
     Dropped.clear();
+    FirstConflicts.clear();
+    LastConflicts.clear();
+    EmptyAtStart.clear();
     SVerts.clear();
     NumChains = 0;
 
@@ -969,6 +1040,8 @@ public:
                                &S.Skip)) {
         S.W = std::min(S.W, P.RayFraction * HitT);
         NumRay++;
+        if (S.W < P.MinWidth * S.L)
+          S.RayKilled = true;
       }
     }
     UpdatePositions();
@@ -978,7 +1051,40 @@ public:
     std::vector<std::vector<int>> TriSV;
     std::vector<int> TriLabel;
     int Round = 0, NumPulled = 0;
+    // DIAGNOSTIC: the kinds of conflicts (first and last round): crossing
+    // the surface, too close to it (by angle or distance), between strips
+    int FirstC[3] = {0, 0, 0}, LastC[3] = {0, 0, 0};
+    // between strips in the first round: sharing an edge / a vertex /
+    // nothing, crossing or only too close
+    int FirstSS[3][2] = {{0, 0}, {0, 0}, {0, 0}};
+    // (debug) the edge sides without strip already at the first round: both
+    // ends tapered / too short by the surface hit
+    {
+      int NumEmpty0 = 0, NumByTaper = 0, NumByRay = 0;
+      for (auto &T : Pieces) {
+        std::vector<std::array<int, 3>> O;
+        std::vector<std::vector<int>> OS;
+        TrianglesOf(T, O, OS);
+        if (!O.empty())
+          continue;
+        NumEmpty0++;
+        bool Ray = false;
+        for (int k : {T.SV0, T.SV1, T.SV2})
+          if ((k >= 0) && SVerts[k].RayKilled)
+            Ray = true;
+        if (Ray)
+          NumByRay++;
+        else
+          NumByTaper++;
+        EmptyAtStart.push_back({Vert[T.a], (T.b >= 0) ? Vert[T.b] : Vert[T.a]});
+      }
+      std::cout << "   edge sides without strip before the conflicts: "
+                << NumEmpty0 << " (" << NumByRay
+                << " too short by the surface along the strip direction, "
+                << NumByTaper << " tapered at both ends)" << std::endl;
+    }
     for (Round = 0; Round <= P.MaxShrink; Round++) {
+      int CurrC[3] = {0, 0, 0};
       Tris.clear();
       TriSV.clear();
       TriLabel.clear();
@@ -1018,7 +1124,17 @@ public:
         Grid.FacesInBox(BB[t], Cand);
         for (int f : Cand) {
           std::array<int, 3> SFace = {SF[f][0], SF[f][1], SF[f][2]};
-          if (Conflict(Tris[t], SFace)) {
+          // if (Conflict(Tris[t], SFace)) {
+          //   Bad[t] = 1;
+          //   break;
+          // }
+          if (Intersect(Tris[t], SFace)) {
+            CurrC[0]++;
+            Bad[t] = 1;
+            break;
+          }
+          if (TooClose(Tris[t], SFace)) {
+            CurrC[1]++;
             Bad[t] = 1;
             break;
           }
@@ -1042,11 +1158,63 @@ public:
           if (Conflict(Tris[t1], Tris[t2])) {
             Bad[t1] = 1;
             Bad[t2] = 1;
+            CurrC[2]++;
+            if (Round == 0) {
+              int NSh = 0;
+              for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                  NSh += (Tris[t1][i] == Tris[t2][j]) ? 1 : 0;
+              int k = (NSh >= 2) ? 0 : ((NSh == 1) ? 1 : 2);
+              FirstSS[k][Intersect(Tris[t1], Tris[t2]) ? 0 : 1]++;
+            }
           }
         }
       int NumBad = 0;
       for (char b : Bad)
         NumBad += b;
+      if (Round == 0)
+        for (size_t t = 0; t < Tris.size(); t++)
+          if (Bad[t])
+            FirstConflicts.push_back(
+                {Vert[Tris[t][0]], Vert[Tris[t][1]], Vert[Tris[t][2]]});
+      if (NumBad > 0) {
+        LastConflicts.clear();
+        for (size_t t = 0; t < Tris.size(); t++)
+          if (Bad[t])
+            LastConflicts.push_back(
+                {Vert[Tris[t][0]], Vert[Tris[t][1]], Vert[Tris[t][2]]});
+        // (debug) the kinds of the strip pairs still in conflict
+        if (Round >= 2) {
+          int K[3][2] = {{0, 0}, {0, 0}, {0, 0}};
+          int SameLabel = 0;
+          for (size_t t1 = 0; t1 < Tris.size(); t1++)
+            for (size_t t2 = t1 + 1; t2 < Tris.size(); t2++) {
+              if (!Bad[t1] || !Bad[t2] || !BB[t1].Collide(BB[t2]))
+                continue;
+              if (!Conflict(Tris[t1], Tris[t2]))
+                continue;
+              int NSh = 0;
+              for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                  NSh += (Tris[t1][i] == Tris[t2][j]) ? 1 : 0;
+              int k = (NSh >= 2) ? 0 : ((NSh == 1) ? 1 : 2);
+              K[k][Intersect(Tris[t1], Tris[t2]) ? 0 : 1]++;
+              SameLabel += (TriLabel[t1] == TriLabel[t2]) ? 1 : 0;
+            }
+          std::cout << "   round " << Round << ": " << NumBad
+                    << " triangles in conflict; pairs (crossing / too close): "
+                       "sharing an edge "
+                    << K[0][0] << " / " << K[0][1] << ", a vertex " << K[1][0]
+                    << " / " << K[1][1] << ", apart " << K[2][0] << " / "
+                    << K[2][1] << " (" << SameLabel << " of the same strip)"
+                    << std::endl;
+        }
+      }
+      for (int c = 0; c < 3; c++) {
+        if (Round == 0)
+          FirstC[c] = CurrC[c];
+        LastC[c] = CurrC[c];
+      }
       if ((NumBad == 0) || (Round == P.MaxShrink)) {
         // pieces of strip left without triangles (both ends pulled back
         // onto the surface)
@@ -1074,7 +1242,8 @@ public:
         if (Bad[t])
           ToPull.insert(TriSV[t].begin(), TriSV[t].end());
       for (int k : ToPull)
-        SVerts[k].W *= (ScalarType)0.5;
+        // SVerts[k].W *= (ScalarType)0.5;
+        SVerts[k].W *= P.ShrinkFactor;
       NumPulled += (int)ToPull.size();
       UpdatePositions();
     }
@@ -1091,6 +1260,16 @@ public:
               << NumPulled << " vertices), " << Dropped.size()
               << " triangles dropped (still intersecting), " << NumEmptyPieces
               << " edge sides without strip **" << std::endl;
+    std::cout << "   strip conflicts (first round / last round): crossing the "
+                 "surface "
+              << FirstC[0] << " / " << LastC[0] << ", too close to the surface "
+              << FirstC[1] << " / " << LastC[1] << ", between strips "
+              << FirstC[2] << " / " << LastC[2] << std::endl;
+    std::cout << "   between strips (first round, crossing / too close): "
+                 "sharing an edge "
+              << FirstSS[0][0] << " / " << FirstSS[0][1] << ", sharing a vertex "
+              << FirstSS[1][0] << " / " << FirstSS[1][1] << ", apart "
+              << FirstSS[2][0] << " / " << FirstSS[2][1] << std::endl;
     return true;
   }
 

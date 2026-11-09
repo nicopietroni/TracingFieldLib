@@ -102,7 +102,11 @@ void SmoothLaplacianTetMesh(std::vector<Geo::Point3<ScalarType>> &TetraVertPos,
   }
 
   // fix all the boundary
-  std::set<int> FixedTetraV;
+  // std::set<int> FixedTetraV;
+  // (also the given fixed vertices: before only the surface smoothing used
+  // FixedV, the internal one moved them, e.g. the old vertices and the ones
+  // on the concave planes after a refinement)
+  std::set<int> FixedTetraV = FixedV;
   for (size_t i = 0; i < VertMap.size(); i++) {
     if (VertMap[i] == -1)
       continue;

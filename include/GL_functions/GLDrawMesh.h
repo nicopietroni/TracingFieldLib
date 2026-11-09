@@ -660,7 +660,13 @@ void DrawSurfaceMesh(const std::vector<Geo::Point3<ScalarType>> &VertPos,
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
   if (drawire) {
-    glColor4f(.3f, .3f, .3f, .3f);
+    // glColor4f(.3f, .3f, .3f, .3f);
+    // (more visible: dark and fully opaque, no blending)
+    // glColor4f(.15f, .15f, .15f, .7f);
+    glDisable(GL_BLEND);
+    // (the width set by other drawings, e.g. the graph, was kept)
+    glLineWidth(1.f);
+    glColor4f(.1f, .1f, .1f, 1.f);
     DrawSurfaceWire<CoordType>(VertPos, Connectivity);
   }
   glPopAttrib();
