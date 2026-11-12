@@ -529,7 +529,10 @@ int main(int argc, char *argv[]) {
 
   for (int i = 1; i < argc; i++) {
     if (GetFileExtension(std::string(argv[i])) == std::string("obj")) {
-      PathMesh = std::string(argv[1]);
+      // OLD (always the first argument, wrong if the mesh is not first)
+      // PathMesh = std::string(argv[1]);
+      // NEW
+      PathMesh = std::string(argv[i]);
       has_loaded_mesh = LoadMesh(PathMesh);
       if (!MQuad.MatchPreconditions()) {
         exit(0);
@@ -561,7 +564,15 @@ int main(int argc, char *argv[]) {
     }
 
     if (std::string(argv[i]) == std::string("-angle")) {
-      initial_feature_angle = static_cast<ScalarType>(std::stod(argv[i + 1]));
+      // NEW (argument check): the value must follow the flag
+      if (i + 1 >= argc) {
+        std::cout << "Missing value after -angle" << std::endl;
+        exit(0);
+      }
+      // OLD (value read but not skipped)
+      // initial_feature_angle = static_cast<ScalarType>(std::stod(argv[i + 1]));
+      // NEW (skip the value)
+      initial_feature_angle = static_cast<ScalarType>(std::stod(argv[++i]));
       std::cout << "Initial Feature Angle: " << initial_feature_angle
                 << std::endl;
       add_features = true;
@@ -569,13 +580,29 @@ int main(int argc, char *argv[]) {
     }
 
     if (std::string(argv[i]) == std::string("-size")) {
-      SizeMult = static_cast<ScalarType>(std::stod(argv[i + 1]));
+      // NEW (argument check): the value must follow the flag
+      if (i + 1 >= argc) {
+        std::cout << "Missing value after -size" << std::endl;
+        exit(0);
+      }
+      // OLD (value read but not skipped)
+      // SizeMult = static_cast<ScalarType>(std::stod(argv[i + 1]));
+      // NEW (skip the value)
+      SizeMult = static_cast<ScalarType>(std::stod(argv[++i]));
       std::cout << "Size Multiplier:" << SizeMult << std::endl;
       continue;
     }
 
     if (std::string(argv[i]) == std::string("-smooth")) {
-      smooth_steps = std::atoi(argv[i + 1]);
+      // NEW (argument check): the value must follow the flag
+      if (i + 1 >= argc) {
+        std::cout << "Missing value after -smooth" << std::endl;
+        exit(0);
+      }
+      // OLD (value read but not skipped)
+      // smooth_steps = std::atoi(argv[i + 1]);
+      // NEW (skip the value)
+      smooth_steps = std::atoi(argv[++i]);
       std::cout << "Smooth Steps:" << smooth_steps << std::endl;
       continue;
     }

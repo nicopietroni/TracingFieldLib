@@ -57,6 +57,12 @@ template <class ScalarType> struct TriRemParam {
   // SAFETY: check manifoldness after every remeshing step and stop with an
   // error if it is broken (costs a few linear passes). Default false.
   bool check_manifold;
+  // POST PROJECTION: final smoothing steps where the input attracts the
+  // remeshed surface (post_project of SmoothLaplacian), feature lines moving
+  // along themselves and reprojected on the input features, corners fixed.
+  // Default false (remesher unchanged).
+  bool post_project;
+  int post_project_steps;
 
   ScalarType minEdgeRatio;
   ScalarType maxEdgeRatio;
@@ -96,6 +102,8 @@ template <class ScalarType> struct TriRemParam {
     early_stop_ratio=0; // EARLY STOP: disabled by default
     max_faces=0; // MAX FACES: disabled by default
     check_manifold=false; // SAFETY: disabled by default
+    post_project=false; // POST PROJECTION: disabled by default
+    post_project_steps=10;
   }
 };
 

@@ -157,6 +157,38 @@ bool StillManifold(std::vector<Geo::Point3<ScalarType>> &VertPos,
   return false;
 }
 
+// POST PROJECTION: feature lines and corners of a mesh as used by the
+// final smoothing: the ones in RemP (tracked by the remesher) plus the ones
+// found by RemP.feature_angle (as SmoothReproject3DStep does)
+template <class ScalarType>
+void GetPostProjectFeatures(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                            const std::vector<std::vector<int>> &Faces,
+                            const TriRemParam<ScalarType> &TRemParam,
+                            std::vector<std::pair<int, int>> &FeatureLines,
+                            std::vector<int> *Corners) {
+  std::vector<std::vector<int>> NextF, NextE;
+  Geo::getFFAdjacency(Faces, NextF, NextE);
+  std::vector<int> CornersA;
+  FeatureLines.clear();
+  Geo::MeshFeatures<ScalarType>::FeatureCorners(
+      VertPos, Faces, NextF, TRemParam.feature_angle, FeatureLines, CornersA,
+      true);
+  if ((TRemParam.IsFaceEFeature.size() == Faces.size()) &&
+      (TRemParam.IsVertCorner.size() == VertPos.size())) {
+    std::vector<std::pair<int, int>> FeatureLinesB;
+    std::vector<int> CornersB;
+    Geo::MeshFeatures<ScalarType>::GetVertPairFromBoolFeatures(
+        Faces, TRemParam.IsFaceEFeature, FeatureLinesB);
+    Geo::MeshFeatures<ScalarType>::GetVertIndexFromBoolCorners(
+        TRemParam.IsVertCorner, CornersB);
+    FeatureLines.insert(FeatureLines.end(), FeatureLinesB.begin(),
+                        FeatureLinesB.end());
+    CornersA.insert(CornersA.end(), CornersB.begin(), CornersB.end());
+  }
+  if (Corners != NULL)
+    (*Corners) = CornersA;
+}
+
 template <class ScalarType>
 int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
               std::vector<std::vector<int>> &Faces,
@@ -187,6 +219,13 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
   std::vector<std::vector<int>> Faces0 = Faces;
   Geo::TriangleSpatialIndex<ScalarType> TriGrid;
   TriGrid.Init(VertPos0, Faces0);
+
+  // POST PROJECTION: features of the input (the given ones and the ones
+  // found by angle, as in SmoothReproject3DStep), the targets of the final
+  // reprojection of the feature lines
+  std::vector<std::pair<int, int>> FeatureLines0;
+  if (TRemParam.post_project)
+    GetPostProjectFeatures(VertPos0, Faces0, TRemParam, FeatureLines0, NULL);
 
   int iter = 0;
   auto t0 = std::chrono::high_resolution_clock::now();
@@ -339,6 +378,22 @@ int TriRemesh(std::vector<Geo::Point3<ScalarType>> &VertPos,
     durationSmooth +=
         std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
   }
+  // POST PROJECTION: final smoothing where the input attracts the mesh
+  if (TRemParam.post_project) {
+    SmoothParam<ScalarType> SParam;
+    GetPostProjectFeatures(VertPos, Faces, TRemParam, SParam.Features,
+                           &SParam.FixedVert);
+    // (with fix_borders the border vertices are corners: fixed too)
+    SParam.ReprojFeatures = FeatureLines0;
+    SParam.ReprojVert = &VertPos0;
+    SParam.ReprojFaces = &Faces0;
+    SParam.ReprojStep = 1;
+    SParam.post_project = true;
+    SParam.line_border = false;
+    SParam.NumIte = TRemParam.post_project_steps;
+    Geo::SmoothLaplacian(VertPos, Faces, SParam);
+  }
+
   // Output the duration
   if (TRemParam.writeMSG) {
     std::cout << "** Performed Iterations: " << iter << std::endl;
