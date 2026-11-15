@@ -43,6 +43,7 @@
 #include <cassert>
 #include <cstddef>
 #include <iostream>
+#include <limits>
 #include <mesh_manifold.h>
 #include <point3.h>
 #include <set>
@@ -1574,6 +1575,73 @@ public:
       FindBestSidePos(EMode_Side);
       FindBestCentralPos(EMode_Center);
     }
+  }
+
+  // The dual vertex of every side made only of anchor vertices (ends
+  // included) goes on one of its inner vertices instead of the middle of an
+  // edge; the anchor taken is the closest one along the side (by number of
+  // edges) to the edge chosen by the optimization. Anchors are e.g. the old
+  // vertices of a fixed mesh border, so these are the sides lying entirely
+  // on that border: their dual vertex belongs to this patch only. A side
+  // only partly on the border (it goes on inside, e.g. along a path that
+  // meets the border with no corner) keeps its edge: its dual vertex is
+  // shared with the patch on the other side of the inner part. The split of
+  // a side on a vertex is the (Index, Index) pair (see
+  // DualPatch::SplitPatchWith).
+  void PlaceSidesOnAnchors(const std::set<Geo::Point3<ScalarType>> &Anchors) {
+    int Placed = 0;
+    for (size_t i = 0; i < PData.PatchVertPos.size(); i++) {
+      if (!ToSplit[i])
+        continue;
+      if (PData.PatchCorners[i].size() != 1)
+        continue;
+      if (i >= BestSplEdges.size())
+        continue;
+      for (size_t s = 0; s < PData.EdgePatchSides[i][0].size(); s++) {
+        if (s >= BestSplEdges[i].size())
+          continue;
+        const std::vector<std::pair<int, int>> &SideE =
+            PData.EdgePatchSides[i][0][s];
+        if (SideE.empty())
+          continue;
+        std::vector<int> SideV;
+        GetOrderedPatchSideVert(i, s, SideV);
+        // the chosen edge along the side (-1 if not found)
+        int E = -1;
+        std::pair<int, int> Curr = BestSplEdges[i][s];
+        for (size_t e = 0; e < SideE.size(); e++)
+          if (((SideE[e].first == Curr.first) &&
+               (SideE[e].second == Curr.second)) ||
+              ((SideE[e].first == Curr.second) &&
+               (SideE[e].second == Curr.first)))
+            E = (int)e;
+        bool AllAnchors = true;
+        for (size_t k = 0; k < SideV.size(); k++)
+          if (Anchors.count(PData.PatchVertPos[i][SideV[k]]) == 0)
+            AllAnchors = false;
+        if (!AllAnchors)
+          continue;
+        int BestK = -1;
+        int BestD = std::numeric_limits<int>::max();
+        for (int k = 1; k + 1 < (int)SideV.size(); k++) {
+          // edges between the vertex k and the edge E (from SideV[E] to
+          // SideV[E+1])
+          int D = 0;
+          if (E >= 0)
+            D = (k <= E) ? (E - k) : (k - (E + 1));
+          if (D < BestD) {
+            BestD = D;
+            BestK = k;
+          }
+        }
+        if (BestK < 0)
+          continue;
+        BestSplEdges[i][s] = std::pair<int, int>(SideV[BestK], SideV[BestK]);
+        Placed++;
+      }
+    }
+    std::cout << "Dual placement: " << Placed
+              << " side vertices on anchor vertices" << std::endl;
   }
 
   void

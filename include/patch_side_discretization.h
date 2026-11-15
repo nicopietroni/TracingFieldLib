@@ -341,7 +341,134 @@ public:
     _VarValue = VarValue;
   }
 
+  // -----------------------------------------------------
+  // Generic mechanism: a variable (sub-side) can be fixed to a value and to
+  // its sample points; the solvers (integer LSQ and flow graph) keep it. The
+  // class does not know WHICH sides are fixed nor why: that policy is decided
+  // outside (e.g. FixedPolylineSides in fixed_polyline_sides.h matches the
+  // variables with given polylines). Fixed variables are cleared by
+  // InitFromLabels, so set them after it.
+
+  // per variable: fixed value (-1 = free)
+  std::vector<int> FixedVarValue;
+
+  // GetFeaturesQuadrData marks as feature only
+  // the sample segments covering (mostly) feature edges of the side; false =
+  // the whole side of a feature edge (the old behaviour: an open feature line
+  // is prolonged up to the next corner)
+  bool ExactFeatureSamples = false;
+  // per variable: fixed samples, same order as PointsOfVariable (empty = free)
+  std::vector<std::vector<Geo::Point3<ScalarType>>> FixedVarSamples;
+
+  // Queries needed by who decides the constraints
+  int NumVars() const { return NumVariables; }
+
+  // true if the variable is on the border of the mesh (one patch side only)
+  bool IsBorderVariable(const int IndexVar) const {
+    return (IndexVar >= 0) && (IndexVar < (int)VarSide.size()) &&
+           (VarSide[IndexVar].size() == 1);
+  }
+
+  // fixes variable IndexVar to Value segments; Samples (optional) are its
+  // Value+1 points, from PointsOfVariable(IndexVar).front() to .back(); empty
+  // = only the value is fixed, samples placed as usual
+  bool SetFixedVariable(const int IndexVar, const int Value,
+                        const std::vector<Geo::Point3<ScalarType>> &Samples =
+                            std::vector<Geo::Point3<ScalarType>>()) {
+    if ((IndexVar < 0) || (IndexVar >= NumVariables) || (Value < 1))
+      return false;
+    if (!Samples.empty() && ((int)Samples.size() != Value + 1))
+      return false;
+    if ((int)FixedVarValue.size() != NumVariables)
+      FixedVarValue.assign(NumVariables, -1);
+    if ((int)FixedVarSamples.size() != NumVariables)
+      FixedVarSamples.assign(NumVariables,
+                             std::vector<Geo::Point3<ScalarType>>());
+    FixedVarValue[IndexVar] = Value;
+    FixedVarSamples[IndexVar] = Samples;
+    return true;
+  }
+
+  void ClearFixedVariables() {
+    FixedVarValue.clear();
+    FixedVarSamples.clear();
+  }
+
+  // The sample points of every side again (e.g. after some
+  // variables have been fixed to their samples once solved)
+  void RecomputeSamples() {
+    InitMatchingType();
+    FindDiscretizationPoint();
+  }
+
+  bool IsFixedVariable(const int IndexVar) const {
+    return ((IndexVar >= 0) && (IndexVar < (int)FixedVarValue.size()) &&
+            (FixedVarValue[IndexVar] >= 0));
+  }
+
+  int NumFixedVariables() const {
+    int Num = 0;
+    for (size_t i = 0; i < FixedVarValue.size(); i++)
+      if (FixedVarValue[i] >= 0)
+        Num++;
+    return Num;
+  }
+
+  // per variable true if fixed (for the flow graph)
+  std::vector<bool> FixedVarMask() const {
+    std::vector<bool> Mask(NumVariables, false);
+    for (size_t i = 0; i < FixedVarValue.size() && i < Mask.size(); i++)
+      Mask[i] = (FixedVarValue[i] >= 0);
+    return Mask;
+  }
+
+  // puts back the fixed values (after a step that cannot handle them, or the
+  // even/duplicate trick); returns how many were different
+  int EnforceFixedValues(bool warn = true) {
+    int Changed = 0;
+    for (size_t i = 0; i < FixedVarValue.size() && i < VarValue.size(); i++) {
+      if (FixedVarValue[i] < 0)
+        continue;
+      if (VarValue[i] == FixedVarValue[i])
+        continue;
+      VarValue[i] = FixedVarValue[i];
+      Changed++;
+    }
+    if (warn && (Changed > 0))
+      std::cout << "WARNING: " << Changed << " fixed variables restored"
+                << std::endl;
+    return Changed;
+  }
+
 private:
+  // Distance of P from the polyline and arc length
+  // parameter of its closest point (ArcL: cumulative length of the points)
+  static void ProjectOnPolyline(const std::vector<Geo::Point3<ScalarType>> &Poly,
+                                const std::vector<ScalarType> &ArcL,
+                                const Geo::Point3<ScalarType> &P,
+                                ScalarType &Dist, ScalarType &Param) {
+    Dist = std::numeric_limits<ScalarType>::max();
+    Param = 0;
+    if (Poly.size() == 1) {
+      Dist = (P - Poly[0]).Norm();
+      return;
+    }
+    for (size_t k = 0; k + 1 < Poly.size(); k++) {
+      Geo::Point3<ScalarType> A = Poly[k];
+      Geo::Point3<ScalarType> Dir = Poly[k + 1] - A;
+      ScalarType L2 = Geo::Dot(Dir, Dir);
+      ScalarType t = 0;
+      if (L2 > 0)
+        t = Geo::Dot(P - A, Dir) / L2;
+      t = std::max((ScalarType)0, std::min((ScalarType)1, t));
+      ScalarType D = (P - (A + Dir * t)).Norm();
+      if (D < Dist) {
+        Dist = D;
+        Param = ArcL[k] + t * (ArcL[k + 1] - ArcL[k]);
+      }
+    }
+  }
+
   void SortFromSeparator(std::vector<Geo::Point3<ScalarType>> &SideSeq,
                          const std::set<Geo::Point3<ScalarType>> &Separator) {
     // sort the sequence from the first corner
@@ -490,6 +617,11 @@ private:
       VarTargetValue.push_back(SubdNum);
     }
     // VarTargetValue = VarValue;
+
+    // A fixed variable is its own target
+    for (size_t i = 0; i < VarTargetValue.size(); i++)
+      if (IsFixedVariable(i))
+        VarTargetValue[i] = FixedVarValue[i];
   }
 
   void GetPatchVariances(std::vector<ScalarType> &PatchVariance) {
@@ -641,6 +773,15 @@ private:
   }
 
   void FindDiscretizationPoint(const int IndexVariable) {
+    // The given samples
+    if (IsFixedVariable(IndexVariable) &&
+        (VarValue[IndexVariable] == FixedVarValue[IndexVariable]) &&
+        (IndexVariable < (int)FixedVarSamples.size()) &&
+        (!FixedVarSamples[IndexVariable].empty())) {
+      SampleSidePoints[IndexVariable] = FixedVarSamples[IndexVariable];
+      return;
+    }
+
     std::vector<std::array<int, 3>> PatchSides;
     SideOfVariable(IndexVariable, PatchSides);
     assert(PatchSides.size() > 0);
@@ -851,11 +992,21 @@ private:
     }
   }
 
+  // Inverse of DuplicateSolution on the values
+  // (they are even after DuplicateSolution; an odd fixed value is rounded
+  // down and restored by DuplicateSolution)
+  void HalveSolution() {
+    for (size_t i = 0; i < VarValue.size(); i++)
+      VarValue[i] = std::max(VarValue[i] / 2, MIN_SUBD);
+  }
+
   void DuplicateSolution() {
     for (size_t i = 0; i < VarValue.size(); i++)
       VarValue[i] *= 2;
     assert(OldTarget.size() == VarTargetValue.size());
     VarTargetValue = OldTarget;
+    // An odd fixed value was halved and doubled
+    EnforceFixedValues(false);
   }
 
   // MEASURE (integer solve quality): equalities violated by the integer solution
@@ -873,52 +1024,9 @@ private:
         SumGap += std::abs(Sum0 - Sum1);
       }
     }
-    
-    // MEASURE (integer solve): fingerprint of the integer solution
-    unsigned long long SolHash = 1469598103934665603ULL;
-    for (size_t i = 0; i < VarValue.size(); i++) {
-      SolHash ^= (unsigned long long)VarValue[i];
-      SolHash *= 1099511628211ULL;
-    }
     std::cout << "Integer solve: violated equalities " << NumViolated << " / "
-              << OppEquivalences.size() << " total gap " << SumGap
-              << " hash " << SolHash << std::endl;
-
-        // MEASURE (integer solve): size error, absolute and relative to target
-    ScalarType IsoErr = 0, IsoErrRel = 0;
-    for (size_t i = 0; i < VarValue.size(); i++) {
-      ScalarType Diff = (ScalarType)(VarValue[i] - VarTargetValue[i]);
-      IsoErr += Diff * Diff;
-      IsoErrRel += pow(Diff / (ScalarType)VarTargetValue[i], 2);
-    }
-    std::cout << "Integer solve: iso error " << IsoErr
-              << " relative " << IsoErrRel << std::endl;
-  }
-
-    // DEBUG (graph input): saves the input of the graph optimization, to
-  // reproduce it outside the pipeline
-  void SaveGraphInput(const std::string &FileName) {
-    std::vector<std::vector<std::vector<int>>> PatchVar;
-    GetPerPatchVars(PatchVar);
-    std::ofstream File(FileName);
-    File << VarValue.size() << std::endl;
-    for (size_t i = 0; i < VarValue.size(); i++)
-      File << VarValue[i] << " ";
-    File << std::endl;
-    for (size_t i = 0; i < VarTargetValue.size(); i++)
-      File << VarTargetValue[i] << " ";
-    File << std::endl;
-    File << PatchVar.size() << std::endl;
-    for (size_t i = 0; i < PatchVar.size(); i++) {
-      File << PatchVar[i].size();
-      for (size_t j = 0; j < PatchVar[i].size(); j++) {
-        File << " " << PatchVar[i][j].size();
-        for (size_t k = 0; k < PatchVar[i][j].size(); k++)
-          File << " " << PatchVar[i][j][k];
-      }
-      File << std::endl;
-    }
-    std::cout << "Saved graph input in " << FileName << std::endl;
+              << OppEquivalences.size() << " total gap " << SumGap << std::endl;
+    
   }
 
   void SolveGlobal(bool pre_divide, bool post_duplicate) {
@@ -995,6 +1103,15 @@ private:
     Geo::IntegerLinearConstraintLeastSQSolver<ScalarType> IntLSQ;
     IntLSQ.FOrdType = FixType;
 
+    // Fixed to their target (the fixed value, halved if
+    // pre_divide)
+    if (NumFixedVariables() > 0) {
+      IntLSQ.UserFixedValue.assign(NumVariables, -1);
+      for (int i = 0; i < NumVariables; i++)
+        if (IsFixedVariable(i))
+          IntLSQ.UserFixedValue[i] = VarTargetValue[i];
+    }
+
     std::vector<int> MinVal(NumVariables, 1);
     std::vector<int> MaxVal(NumVariables, 1000);
 
@@ -1017,10 +1134,7 @@ private:
                 RoundPrio);
     IntLSQ.Solve(VarValue);
     MeasureIntegerSolveQuality();
-    // MEASURE (integer solve): parameters actually seen by the solver
-    std::cout << "Integer solve: batch " << IntLSQ.max_batch_size
-              << " use_batch " << IntLSQ.use_batch_fixing
-              << " lns " << IntLSQ.use_lns << std::endl;
+
     if (post_duplicate)
       DuplicateSolution();
   }
@@ -1043,12 +1157,21 @@ public:
     OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
     // FlowG.MinRatio = MinRatio;
     // FlowG.MaxRatio = MaxRatio;
+    FlowG.FixedVar = FixedVarMask();
     int steps = FlowG.SolveParity();
 
     // then the one that allow invert u and v
     GetPerPatchVars(PatchVar);
+    // ConstraintGraph does not know the fixed variables,
+    // if it changes one its whole result is dropped
+    std::vector<int> VarValueBefore = VarValue;
     ConstraintGraph<ScalarType> CostrGraph(VarValue, VarTargetValue);
     steps += CostrGraph.SolveParity(PatchVar);
+    if (EnforceFixedValues(false) > 0) {
+      std::cout << "WARNING: ConstraintGraph changed fixed variables, undone"
+                << std::endl;
+      VarValue = VarValueBefore;
+    }
 
     if (find_points) {
       InitMatchingType();
@@ -1066,6 +1189,7 @@ public:
     OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
     // FlowG.MinRatio = MinRatio;
     // FlowG.MaxRatio = MaxRatio;
+    FlowG.FixedVar = FixedVarMask();
 
     int steps = FlowG.SolveEquality();
 
@@ -1083,6 +1207,7 @@ public:
     GetPerPatchVars(PatchVar);
 
     OrientFLowGraph<ScalarType> FlowG(VarValue, VarTargetValue, PatchVar);
+    FlowG.FixedVar = FixedVarMask();
     int steps = FlowG.ImproveSize();
 
     if (find_points) {
@@ -1091,6 +1216,106 @@ public:
       WritePatchStats();
     }
     return steps;
+  }
+
+  // Makes the odd 4 sided patches even. A free
+  // variable shared by two patches changes the parity of both by one, so the
+  // free variables along a path of patches from an odd patch to another odd
+  // one, each changed by one, make both even and leave the patches in
+  // between as they were. With an even border (always, for a quad region)
+  // the odd patches are an even number, so they pair up as long as they are
+  // linked by free sides; an odd patch with no odd partner can end on a free
+  // variable of the mesh border instead. Each variable goes one step towards
+  // its target (or up, if it is at the minimum). Returns the patches fixed.
+  int RepairParityByPaths() {
+    int NP = NumPatches();
+    std::vector<bool> Odd(NP, false);
+    int NumOddP = 0;
+    for (int p = 0; p < NP; p++)
+      if (PatchMatchingType(p) == OddSubd) {
+        Odd[p] = true;
+        NumOddP++;
+      }
+    if (NumOddP == 0)
+      return 0;
+    // patch graph: the free variables shared by two different patches; the
+    // free variables of one patch only (mesh border)
+    std::vector<std::vector<std::pair<int, int>>> Adj(NP);
+    std::vector<int> BorderVar(NP, -1);
+    for (int v = 0; v < NumVariables; v++) {
+      if (IsFixedVariable(v) || (v >= (int)VarSide.size()))
+        continue;
+      if (VarSide[v].size() == 1) {
+        int P = VarSide[v][0][0];
+        if ((P >= 0) && (P < NP) && (BorderVar[P] < 0))
+          BorderVar[P] = v;
+        continue;
+      }
+      // (a variable twice in one patch changes it by two: no use)
+      if (VarSide[v].size() != 2)
+        continue;
+      int P0 = VarSide[v][0][0], P1 = VarSide[v][1][0];
+      if ((P0 == P1) || (P0 < 0) || (P1 < 0) || (P0 >= NP) || (P1 >= NP))
+        continue;
+      Adj[P0].push_back(std::make_pair(P1, v));
+      Adj[P1].push_back(std::make_pair(P0, v));
+    }
+    auto Toggle = [&](int v) {
+      if ((VarValue[v] < VarTargetValue[v]) || (VarValue[v] <= MIN_SUBD))
+        VarValue[v]++;
+      else
+        VarValue[v]--;
+    };
+    int Repaired = 0, Left = 0;
+    for (int s = 0; s < NP; s++) {
+      if (!Odd[s])
+        continue;
+      // nearest other odd patch (first choice) or patch with a free border
+      // variable (only if no odd patch can be reached)
+      std::vector<int> PrevP(NP, -2), PrevV(NP, -1);
+      std::queue<int> Q;
+      Q.push(s);
+      PrevP[s] = -1;
+      int FoundOdd = -1, FoundBorder = -1;
+      while (!Q.empty() && (FoundOdd < 0)) {
+        int P = Q.front();
+        Q.pop();
+        if ((P != s) && Odd[P]) {
+          FoundOdd = P;
+          break;
+        }
+        if ((FoundBorder < 0) && (BorderVar[P] >= 0))
+          FoundBorder = P;
+        for (size_t k = 0; k < Adj[P].size(); k++) {
+          int W = Adj[P][k].first;
+          if (PrevP[W] != -2)
+            continue;
+          PrevP[W] = P;
+          PrevV[W] = Adj[P][k].second;
+          Q.push(W);
+        }
+      }
+      int End = (FoundOdd >= 0) ? FoundOdd : FoundBorder;
+      if (End < 0) {
+        Left++;
+        continue;
+      }
+      for (int P = End; P != s; P = PrevP[P])
+        Toggle(PrevV[P]);
+      Odd[s] = false;
+      Repaired++;
+      if (FoundOdd >= 0) {
+        Odd[FoundOdd] = false;
+        Repaired++;
+      } else
+        Toggle(BorderVar[FoundBorder]);
+    }
+    std::cout << "Parity repair (fixed sides): " << Repaired << " / "
+              << NumOddP << " odd patches made even";
+    if (Left > 0)
+      std::cout << ", " << Left << " not reachable through free sides";
+    std::cout << std::endl;
+    return Repaired;
   }
 
   int NumOdd() {
@@ -1145,17 +1370,18 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
     using Clock = std::chrono::steady_clock;
 
     
+    // Targets and values at the same half scale
     if (PMode == Geo::SideDiscretization<ScalarType>::EvenVar)
+    {
         DivideTargetVal();
+        HalveSolution();
+    }
     
     int stepEq = 0;
     int stepSize = 0;
     int stepParity = 0;
 
     auto tStart = Clock::now();
-
-    //SaveGraphInput("graph_input.txt");
-
     if (OptimizeEquality)
         stepEq = SolveEqualityViaGraph(false);
     auto tEquality = Clock::now();
@@ -1167,7 +1393,15 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
         stepSize = SolveSizeViaGraphCycles(false);
     auto tSize = Clock::now();
 
-    if ((PMode == Geo::SideDiscretization<ScalarType>::SolvePost) && MakeEven)
+    // With EvenVar an odd fixed value breaks the parity
+    // of its patches, so the parity step runs also in that case
+    bool FixedOdd = false;
+    for (size_t i = 0; i < FixedVarValue.size(); i++)
+        if ((FixedVarValue[i] >= 0) && ((FixedVarValue[i] % 2) == 1))
+            FixedOdd = true;
+    if (MakeEven &&
+        ((PMode == Geo::SideDiscretization<ScalarType>::SolvePost) ||
+         ((PMode == Geo::SideDiscretization<ScalarType>::EvenVar) && FixedOdd)))
         stepParity = SolveParityViaGraph(false);
     auto tParity = Clock::now();
 
@@ -1238,6 +1472,7 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
     VarValue.clear();
     VarSequences.clear();
     NumVariables = 0;
+    ClearFixedVariables();
 
     OppEquivalences.clear();
     PatchFacesIdx.clear();
@@ -1245,12 +1480,20 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
 
     // filters the ones that are not quads
     assert(_PatchFacesIdx.size() == _PatchCornersIdx.size());
+    int NumNotQuad = 0;
     for (size_t i = 0; i < _PatchFacesIdx.size(); i++) {
-      if (_PatchCornersIdx[i].size() != 4)
+      if (_PatchCornersIdx[i].size() != 4) {
+        NumNotQuad++;
         continue;
+      }
       PatchFacesIdx.push_back(_PatchFacesIdx[i]);
       PatchCornersIdx.push_back(_PatchCornersIdx[i]);
     }
+    // (they are left as holes: not tessellated, their neighbours see their
+    // shared sides as border sides)
+    if (NumNotQuad > 0)
+      std::cout << "WARNING: " << NumNotQuad
+                << " dual patches without 4 corners, left out" << std::endl;
     std::set<Geo::Point3<ScalarType>> AllCornerPos;
     std::vector<std::set<Geo::Point3<ScalarType>>> PatchCornerPos;
     PatchCornerPos.resize(PatchCornersIdx.size());
@@ -1379,7 +1622,6 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
     InitPatchAdj();
 
     InitFeatureVariables(Vert, Features);
-
 
     // PrintStats();
   }
@@ -1510,6 +1752,51 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
         if (IsFeature)
           break;
       }
+      // Only the sample segments covering
+      // feature edges of the side, not the whole side
+      if (IsFeature && ExactFeatureSamples) {
+        assert(SampleSidePoints[i].size() >= 2);
+        // arc length of the side and feature flag of each of its edges
+        std::vector<ScalarType> ArcL(SubSidePoints.size(), 0);
+        std::vector<bool> EdgeFeat(SubSidePoints.size() - 1, false);
+        for (size_t j = 0; j + 1 < SubSidePoints.size(); j++) {
+          ArcL[j + 1] =
+              ArcL[j] + (SubSidePoints[j + 1] - SubSidePoints[j]).Norm();
+          EdgeFeat[j] =
+              (FeaturesPos.count(EdgePos(
+                   std::min(SubSidePoints[j], SubSidePoints[j + 1]),
+                   std::max(SubSidePoints[j], SubSidePoints[j + 1]))) > 0);
+        }
+        // parameter of every sample on the side
+        std::vector<ScalarType> SPar(SampleSidePoints[i].size(), 0);
+        for (size_t j = 0; j < SampleSidePoints[i].size(); j++) {
+          ScalarType D;
+          ProjectOnPolyline(SubSidePoints, ArcL, SampleSidePoints[i][j], D,
+                            SPar[j]);
+        }
+        // a sample segment is a feature if most of the part of the side it
+        // covers is made of feature edges
+        for (size_t j = 0; j + 1 < SampleSidePoints[i].size(); j++) {
+          ScalarType T0 = std::min(SPar[j], SPar[j + 1]);
+          ScalarType T1 = std::max(SPar[j], SPar[j + 1]);
+          ScalarType FeatL = 0, TotL = 0;
+          for (size_t e = 0; e < EdgeFeat.size(); e++) {
+            ScalarType O = std::min(T1, ArcL[e + 1]) - std::max(T0, ArcL[e]);
+            if (O <= 0)
+              continue;
+            TotL += O;
+            if (EdgeFeat[e])
+              FeatL += O;
+          }
+          if (!(TotL > 0) || (FeatL < (ScalarType)0.5 * TotL))
+            continue;
+          Geo::Point3<ScalarType> Pos0 = SampleSidePoints[i][j];
+          Geo::Point3<ScalarType> Pos1 = SampleSidePoints[i][j + 1];
+          GeoFeatures.push_back(
+              EdgePos(std::min(Pos0, Pos1), std::max(Pos0, Pos1)));
+        }
+        continue;
+      }
       if (IsFeature) {
         assert(SampleSidePoints[i].size() >= 2);
         for (size_t j = 0; j < SampleSidePoints[i].size() - 1; j++) {
@@ -1524,6 +1811,13 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
     std::sort(GeoFeatures.begin(), GeoFeatures.end());
     GeoFeatures.erase(std::unique(GeoFeatures.begin(), GeoFeatures.end()),
                       GeoFeatures.end());
+  }
+
+  // The faces of every patch kept by InitFromLabels (a
+  // patch it discards, e.g. with other than 4 sides, is not here: the
+  // indices of the patches can differ from the ones passed)
+  const std::vector<std::vector<int>> &GetPatchFacesIdx() const {
+    return PatchFacesIdx;
   }
 
   void GetQuadrangulationData(
@@ -1641,6 +1935,15 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
 
     std::cout << "Graph Optimization..." << std::endl;
     AutomaticGraphOptimize(OptimizeEquality, OptimizeSize, MakeEven, false);
+
+    // Safety, nothing should have changed them
+    EnforceFixedValues();
+
+    // The patches still odd (the parity steps
+    // could not touch the fixed sides, or their result was undone) made even
+    // along paths of free sides; only with fixed sides (else as before)
+    if (NumFixedVariables() > 0)
+      RepairParityByPaths();
 
     InitMatchingType();
 

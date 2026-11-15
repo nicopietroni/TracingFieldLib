@@ -44,22 +44,11 @@
 namespace Geo {
 
 template <class ScalarType> struct EmbedPolylineParam {
-  // smoothing of the polyline (each step: Laplacian + reprojection on the
-  // target surface), 0 = no smoothing
-  int smooth_steps = 5;
-  ScalarType smooth_damp = 0.5;
   // distance between the samples of the line, as a fraction of the bounding
   // box diagonal (not of the average edge: on CAD meshes the edges go from
   // tiny to huge); at least min_samples samples per line
   ScalarType sample_ratio = 0.005;
   int min_samples = 10;
-  // a sample whose closest mesh vertex is closer than this (fraction of the
-  // sample distance) moves that vertex onto the line, if the vertex is free
-  // (not on a border, a feature or a corner)
-  ScalarType snap_ratio = 0.5;
-  // a sample this close to an edge (barycentric coordinate) splits the edge
-  // instead of the face
-  ScalarType edge_bary = 0.1;
   // local refinement: faces under the line with edges longer than
   // refine_factor * sample distance are split (longest edge first)
   int refine_steps = 20;
@@ -71,23 +60,27 @@ template <class ScalarType> struct EmbedPolylineParam {
   // corner; the samples closer than cross_clear * sample distance to the
   // crossing are dropped (no slivers next to the feature)
   ScalarType cross_clear = 0.75;
-  // SMOOTH AROUND: after the embedding, the vertices within smooth_rings
-  // rings of the line are smoothed (Laplacian + reprojection on the target),
-  // the line, the features and the borders fixed; 0 steps = off
-  int smooth_rings = 3;
-  int smooth_around_steps = 5;
-  // LINE RELAXATION: steps of smoothing of the embedded line (on the mesh,
-  // reprojected), the surroundings following; damping as smooth_damp
-  int relax_steps = 10;
+  // Between two consecutive samples the mesh is cut
+  // along the line (the plane through the segment and the surface normal):
+  // the vertices whose crossing is closer than cut_min_alpha (fraction of the
+  // crossed edge, as minAlpha in RefineMesh) are first moved onto the line,
+  // then the edges still crossed are split at the crossing. The line edges
+  // lie on the line (no shortest path, no move of far vertices, no
+  // relaxation). A vertex that cannot be moved (locked, or TryMove refuses)
+  // gives a split at the exact crossing anyway: a thin face, left to the
+  // triangle remesh that follows the embedding. The samples become vertices
+  // with the same rule (a mesh vertex used only within cut_min_alpha). If
+  // the cut gets lost on a segment, that segment is a shortest path.
+  ScalarType cut_min_alpha = 0.05;
 };
 
-// Embeds a polyline (e.g. drawn on screen) in a triangle mesh: the line is
-// smoothed and reprojected on a target surface (the original mesh), the mesh
-// is refined under it where the faces are too big, every sample becomes a
-// vertex (moving a close free vertex, or splitting an edge or a face), the
-// consecutive vertices are connected by mesh edges (shortest path, the free
-// vertices in between moved onto the line) and every vertex touched is
-// reprojected on the target. The new edges become features.
+// Embeds a polyline (e.g. drawn on screen, already fitted) in a triangle
+// mesh: the line is reprojected on a target surface (the original mesh) and
+// resampled, the mesh is refined under it where the faces are too big, every
+// sample becomes a vertex (a mesh vertex within cut_min_alpha, or a split of
+// an edge or a face), the consecutive vertices are connected by cutting the
+// mesh along the line (a shortest path where the cut gets lost). The new
+// edges become features.
 // The splits only append vertices and faces (indices never change) and keep
 // IsFaceEFeature in sync.
 template <class ScalarType> class MeshEmbedPolyline {
@@ -321,9 +314,6 @@ template <class ScalarType> class MeshEmbedPolyline {
     for (size_t i = 0; i < Inner.size(); i++)
       Uniform.AddPoint(Inner[i]);
     Uniform.AddPoint(Poly.PolyPos.back());
-    if (Param.smooth_steps > 0)
-      Geo::SmoothReproject(Uniform, Param.smooth_steps, TargetPos, TargetFaces,
-                           TargetGrid, Param.smooth_damp);
     Samples = Uniform.PolyPos;
   }
 
@@ -417,18 +407,14 @@ template <class ScalarType> class MeshEmbedPolyline {
           if (b[k] > b[BestK])
             BestK = k;
         int CloseV = Faces[IndexF][BestK];
-        ScalarType DistV = (Pos[CloseV] - Samples[i]).Norm();
-        if (UsedV.count(CloseV) == 0) {
-          if ((!IsLockedV[CloseV]) && (DistV < Param.snap_ratio * H)) {
-            SampleV[i] = CloseV;
-            UsedV.insert(CloseV);
-            continue;
-          }
-          if (DistV < (ScalarType)0.01 * H) {
-            SampleV[i] = CloseV;
-            UsedV.insert(CloseV);
-            continue;
-          }
+        // the same rule as the cut, relative to the face: a vertex is used
+        // (and moved onto the sample) only if the sample is within
+        // cut_min_alpha of it
+        if ((UsedV.count(CloseV) == 0) &&
+            (b[BestK] > 1 - Param.cut_min_alpha)) {
+          SampleV[i] = CloseV;
+          UsedV.insert(CloseV);
+          continue;
         }
 
         // 2. close to an edge: split it
@@ -436,7 +422,8 @@ template <class ScalarType> class MeshEmbedPolyline {
         for (int k = 1; k < 3; k++)
           if (b[k] < b[MinK])
             MinK = k;
-        if (b[MinK] < Param.edge_bary) {
+        // an edge split only within cut_min_alpha
+        if (b[MinK] < Param.cut_min_alpha) {
           int VA = Faces[IndexF][(MinK + 1) % 3];
           int VB = Faces[IndexF][(MinK + 2) % 3];
           bool free = true;
@@ -741,91 +728,6 @@ template <class ScalarType> class MeshEmbedPolyline {
     }
   }
 
-  // SMOOTH AROUND --------------------------------------------------------
-  // Laplacian smoothing (reprojected on the target) of the vertices within
-  // Rings rings of the line, the line, features, borders and corners fixed
-  void SmoothAround(const std::set<int> &LineV, int Rings, int Steps) {
-    if ((Rings <= 0) || (Steps <= 0))
-      return;
-    std::vector<int> ToSmooth;
-    AroundRegion(LineV, Rings, ToSmooth);
-    for (int s = 0; s < Steps; s++)
-      SmoothStep(ToSmooth);
-  }
-
-  // the vertices within Rings rings of the line that can move
-  void AroundRegion(const std::set<int> &LineV, int Rings,
-                    std::vector<int> &ToSmooth) {
-    ToSmooth.clear();
-    std::vector<int> Ring(Pos.size(), -1);
-    std::vector<int> Front(LineV.begin(), LineV.end());
-    for (size_t i = 0; i < Front.size(); i++)
-      Ring[Front[i]] = 0;
-    for (int r = 1; r <= Rings; r++) {
-      std::vector<int> Next;
-      for (size_t i = 0; i < Front.size(); i++)
-        for (size_t k = 0; k < VF[Front[i]].size(); k++)
-          for (int j = 0; j < 3; j++) {
-            int W = Faces[VF[Front[i]][k]][j];
-            if (Ring[W] >= 0)
-              continue;
-            Ring[W] = r;
-            Next.push_back(W);
-          }
-      Front = Next;
-    }
-    for (size_t i = 0; i < Pos.size(); i++)
-      if ((Ring[i] > 0) && (!IsLockedV[i]) && (LineV.count((int)i) == 0))
-        ToSmooth.push_back((int)i);
-  }
-
-  // one Laplacian step (reprojected) of the given vertices
-  void SmoothStep(const std::vector<int> &ToSmooth) {
-    for (size_t i = 0; i < ToSmooth.size(); i++) {
-      int V = ToSmooth[i];
-      std::set<int> Neigh;
-      for (size_t k = 0; k < VF[V].size(); k++)
-        for (int j = 0; j < 3; j++)
-          if (Faces[VF[V][k]][j] != V)
-            Neigh.insert(Faces[VF[V][k]][j]);
-      if (Neigh.empty())
-        continue;
-      CoordType Avg(0, 0, 0);
-      typename std::set<int>::iterator ItN;
-      for (ItN = Neigh.begin(); ItN != Neigh.end(); ItN++)
-        Avg += Pos[*ItN];
-      Avg = Avg * ((ScalarType)1 / Neigh.size());
-      CoordType NewP = Pos[V] + (Avg - Pos[V]) * (ScalarType)0.5;
-      TryMove(V, ProjectOnTarget(NewP));
-    }
-  }
-
-  // LINE RELAXATION: the embedded line (vertex sequence) smoothed along
-  // itself and reprojected, the mesh around following it: each step moves
-  // the line vertices towards the middle of their neighbours on the line,
-  // then smooths the surroundings, so the faces make room for the next move
-  // (a zigzag left by the embedding on badly shaped faces goes away).
-  // Extremes, corners and the vertices of other features stay.
-  void RelaxLine(const std::vector<int> &Seq, const std::set<int> &LineV,
-                 int Rings, int Steps, ScalarType Damp) {
-    if ((Steps <= 0) || (Seq.size() < 3))
-      return;
-    std::vector<int> ToSmooth;
-    AroundRegion(LineV, std::max(Rings, 1), ToSmooth);
-    for (int s = 0; s < Steps; s++) {
-      for (size_t k = 1; k + 1 < Seq.size(); k++) {
-        int W = Seq[k];
-        if (IsLockedV[W] || IsVertCorner[W])
-          continue;
-        CoordType Mid = (Pos[Seq[k - 1]] + Pos[Seq[k + 1]]) * (ScalarType)0.5;
-        CoordType NewP = Pos[W] + (Mid - Pos[W]) * Damp;
-        // only flips refused: the faces around follow at the next step
-        TryMove(W, ProjectOnTarget(NewP), -1);
-      }
-      SmoothStep(ToSmooth);
-    }
-  }
-
   // moves V to NewP only if no face around it flips (or becomes
   // degenerate); otherwise tries half the way. True if moved.
   // (MinCos: cosine of the largest turn allowed to a face; -1 = only flips
@@ -860,6 +762,112 @@ template <class ScalarType> class MeshEmbedPolyline {
         return true;
       }
       Target = (OldP + Target) * (ScalarType)0.5;
+    }
+    return false;
+  }
+
+  // -------------------------------------------------------
+  // the vertex path from A to B cutting the mesh along the segment: the plane
+  // through A and B containing the surface normal (the reference normals
+  // around A and B) is followed from A, face after face, always to the
+  // crossing furthest along the segment among the edges opposite to the
+  // current vertex. A crossing closer than MinAlpha to an end of its edge
+  // moves that vertex onto the plane (if free and not in Fixed and TryMove
+  // accepts the whole move), otherwise the edge is split at the crossing.
+  // False if the walk gets lost (the caller uses the shortest path)
+  bool SnapCutSegment(int A, int B, ScalarType MinAlpha,
+                      const std::set<int> &Fixed, std::vector<int> &Path) {
+    Path.assign(1, A);
+    if (A == B)
+      return true;
+    CoordType PA = Pos[A];
+    CoordType Dir = Pos[B] - PA;
+    ScalarType L = Dir.Norm();
+    if (!(L > 0))
+      return false;
+    Dir = Dir * ((ScalarType)1 / L);
+    CoordType N(0, 0, 0);
+    for (size_t k = 0; k < VF[A].size(); k++)
+      if (VF[A][k] < (int)RefN.size())
+        N += RefN[VF[A][k]];
+    for (size_t k = 0; k < VF[B].size(); k++)
+      if (VF[B][k] < (int)RefN.size())
+        N += RefN[VF[B][k]];
+    CoordType PlaneN = Geo::Cross(Dir, N);
+    if (!(PlaneN.Norm() > 0))
+      return false;
+    PlaneN.Normalize();
+    int C = A;
+    ScalarType Progress = 0;
+    // (each step moves forward on a mesh refined under the line: the bound
+    // only stops a walk that went wrong)
+    for (size_t iter = 0; iter < Faces.size(); iter++) {
+      if (Adjacent(C, B)) {
+        Path.push_back(B);
+        return true;
+      }
+      int BestU = -1, BestW = -1;
+      ScalarType BestT = 0, BestProg = Progress;
+      for (size_t k = 0; k < VF[C].size(); k++) {
+        const std::vector<int> &Fc = Faces[VF[C][k]];
+        int j = 0;
+        while (Fc[j] != C)
+          j++;
+        int U = Fc[(j + 1) % 3], W = Fc[(j + 2) % 3];
+        ScalarType dU = Geo::Dot(Pos[U] - PA, PlaneN);
+        ScalarType dW = Geo::Dot(Pos[W] - PA, PlaneN);
+        if ((dU > 0) == (dW > 0) && (dU != 0) && (dW != 0))
+          continue;
+        if (dU == dW)
+          continue; // the edge on the plane: its vertices are met as crossings
+        ScalarType T = dU / (dU - dW);
+        CoordType X = Pos[U] + (Pos[W] - Pos[U]) * T;
+        ScalarType Prog = Geo::Dot(X - PA, Dir);
+        if (Prog > BestProg) {
+          BestProg = Prog;
+          BestU = U;
+          BestW = W;
+          BestT = T;
+        }
+      }
+      if (BestU < 0)
+        return false;
+      // (the end of the edge closest to the crossing as U)
+      if (BestT > (ScalarType)0.5) {
+        std::swap(BestU, BestW);
+        BestT = 1 - BestT;
+      }
+      int Next = -1;
+      if (BestT == 0)
+        Next = BestU;
+      else if (BestT < MinAlpha) {
+        CoordType OnPlane =
+            Pos[BestU] - PlaneN * Geo::Dot(Pos[BestU] - PA, PlaneN);
+        // (TryMove can also do part of the move: then the vertex is put
+        // back, the crossing computed above still valid)
+        CoordType OldU = Pos[BestU];
+        if ((!IsLockedV[BestU]) && (Fixed.count(BestU) == 0) &&
+            TryMove(BestU, OnPlane) &&
+            ((Pos[BestU] - OnPlane).Norm() == 0))
+          Next = BestU;
+        else {
+          // Split at the exact crossing, the line stays exact; the
+          // thin face left is for the triangle remesh after the embedding
+          Pos[BestU] = OldU;
+        }
+      }
+      if (Next < 0)
+        Next = SplitEdge(BestU, BestW,
+                         Pos[BestU] + (Pos[BestW] - Pos[BestU]) * BestT);
+      if ((Next < 0) || (Next == C))
+        return false;
+      Path.push_back(Next);
+      if (Next == B)
+        return true;
+      C = Next;
+      Progress = Geo::Dot(Pos[C] - PA, Dir);
+      if (Progress > 2 * L)
+        return false; // past B without meeting it
     }
     return false;
   }
@@ -943,7 +951,21 @@ public:
     InsertCrossings(Cross, CrossIdx, SampleV);
 
     // 4. a vertex for every other sample (moved there)
+    // The last sample is the first one (same point): the
+    // same vertex, not a second one at the same place (two corners and a gap
+    // there, the loop cut by the cleanup below)
+    bool closed = (Samples.size() > 3) &&
+                  ((Samples.front() - Samples.back()).Norm() == 0) &&
+                  (SampleV.size() == Samples.size());
+    if (closed) {
+      Samples.pop_back();
+      SampleV.pop_back();
+    }
     InsertSamples(Samples, Param, H, SampleV);
+    if (closed) {
+      Samples.push_back(Samples.front());
+      SampleV.push_back(SampleV.front());
+    }
     // (no move that flips a face: then the vertex stays a bit off the line)
     for (size_t i = 0; i < Samples.size(); i++)
       if ((SampleV[i] >= 0) && (!IsLockedV[SampleV[i]]))
@@ -963,6 +985,11 @@ public:
     // with them only very expensive), with the sample of every vertex
     std::vector<int> Seq;
     std::vector<int> SeqSample; // sample index of the segment it belongs to
+    // the sample vertices and the line cut so far never moved
+    std::set<int> CutFixed;
+    for (size_t i = 0; i < SampleV.size(); i++)
+        if (SampleV[i] >= 0)
+          CutFixed.insert(SampleV[i]);
     int Prev = -1;
     size_t PrevI = 0;
     for (size_t i = 0; i < SampleV.size(); i++) {
@@ -974,6 +1001,16 @@ public:
         SeqSample.push_back((int)i);
       } else if (Prev != V) {
         std::vector<int> Path;
+        if (SnapCutSegment(Prev, V, Param.cut_min_alpha, CutFixed, Path)) {
+          for (size_t k = 1; k < Path.size(); k++) {
+            Seq.push_back(Path[k]);
+            SeqSample.push_back((int)PrevI);
+            CutFixed.insert(Path[k]);
+          }
+          Prev = V;
+          PrevI = i;
+          continue;
+        }
         bool found = ShortestPath(Prev, V, Path, 2000, FeatureE, true, H);
         // a strict path going around a feature (much longer than the
         // distance) is worse than touching it
@@ -1000,6 +1037,12 @@ public:
     }
     // CLEANUP: no going back and forth (a vertex left off the line gives
     // A-X-A spurs) and no loops (a vertex met twice: the part between is cut)
+    // (the closing vertex out of it, back after)
+    bool closed_seq = (Seq.size() > 3) && (Seq.front() == Seq.back());
+    if (closed_seq) {
+      Seq.pop_back();
+      SeqSample.pop_back();
+    }
     bool changed = true;
     while (changed) {
       changed = false;
@@ -1015,6 +1058,10 @@ public:
         }
         Seen[Seq[k]] = k;
       }
+    }
+    if (closed_seq) {
+      Seq.push_back(Seq.front());
+      SeqSample.push_back(SeqSample.back());
     }
     // HAIRPINS: a vertex where the line turns back (more than 120 degrees)
     // and whose two neighbours on the line share an edge is skipped (a
@@ -1045,7 +1092,6 @@ public:
     for (size_t i = 0; i < SampleV.size(); i++)
       if (SampleV[i] >= 0)
         SampleSet.insert(SampleV[i]);
-    std::set<int> LineV(Seq.begin(), Seq.end());
     std::set<std::pair<int, int>> EdgeSet;
     for (size_t k = 0; k < Seq.size(); k++) {
       if (k + 1 < Seq.size()) {
@@ -1061,17 +1107,18 @@ public:
       }
       if (IsLockedV[W] || (SampleSet.count(W) > 0))
         continue;
+      // the cut vertices are on the line already: only the vertices of a
+      // shortest path (a segment where the cut got lost) are moved onto it
+      if (CutFixed.count(W) > 0)
+        continue;
       size_t i0 = SeqSample[k];
       size_t i1 = std::min(i0 + 1, Samples.size() - 1);
       TryMove(W, ProjectOnTarget(
                      ClosestOnSegment(Pos[W], Samples[i0], Samples[i1])));
     }
 
-    // 6. the embedded line relaxed (the mesh around following), then the
-    // surroundings adjusted with the line fixed
-    RelaxLine(Seq, LineV, Param.smooth_rings, Param.relax_steps,
-              Param.smooth_damp);
-    SmoothAround(LineV, Param.smooth_rings, Param.smooth_around_steps);
+    // (6. relaxation of the line and smoothing around it: removed, the
+    // patch around the line is remeshed after the embedding)
 
     // 7. features and corners
     typename std::set<std::pair<int, int>>::iterator ItE;

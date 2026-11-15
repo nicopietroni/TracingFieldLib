@@ -579,6 +579,48 @@ template <class ScalarType> class OrientFLowGraph {
     Enabled.resize(GraphAdj.size());
     for (size_t i = 0; i < GraphAdj.size(); i++)
       Enabled[i] = std::vector<bool>(GraphAdj[i].size(), true);
+    // NEW (fixed variables): the nodes of a fixed variable are never enabled,
+    // so no path can start, pass or end there
+    DisableFixedNodes();
+  }
+
+  // NEW (fixed variables)
+  bool IsFixedVar(const int IndexVar) const {
+    return ((IndexVar >= 0) && (IndexVar < (int)FixedVar.size()) &&
+            FixedVar[IndexVar]);
+  }
+
+  // NEW (fixed variables)
+  bool TouchesFixed(const std::vector<int> &PathNodes) const {
+    if (FixedVar.empty())
+      return false;
+    for (size_t i = 0; i < PathNodes.size(); i++)
+      if (IsFixedVar(VarOfNode(PathNodes[i])))
+        return true;
+    return false;
+  }
+
+  // NEW (fixed variables)
+  void DisableFixedNodes() {
+    if (FixedVar.empty())
+      return;
+    for (size_t i = 0; i < GraphAdj.size(); i++) {
+      if (!IsFixedVar(VarOfNode(i)))
+        continue;
+      EnabledN[i] = false;
+      Enabled[i] = std::vector<bool>(GraphAdj[i].size(), false);
+    }
+  }
+
+  // NEW (fixed variables): removes the nodes of fixed variables from a list
+  void RemoveFixedNodes(std::vector<int> &Nodes) const {
+    if (FixedVar.empty())
+      return;
+    std::vector<int> Kept;
+    for (size_t i = 0; i < Nodes.size(); i++)
+      if (!IsFixedVar(VarOfNode(Nodes[i])))
+        Kept.push_back(Nodes[i]);
+    Nodes = Kept;
   }
 
   bool SetupSolve(bool equality, bool parity) {
@@ -654,6 +696,14 @@ template <class ScalarType> class OrientFLowGraph {
       SourceDecr.insert(SourceDecr.end(), CurrSourceDecr.begin(),
                         CurrSourceDecr.end());
     }
+
+    // NEW (fixed variables): a fixed variable is never a source, a target or
+    // a sink (its patch is still solved through the other sides)
+    RemoveFixedNodes(BoundarySinks);
+    RemoveFixedNodes(SourceIncr);
+    RemoveFixedNodes(SourceDecr);
+    RemoveFixedNodes(TargetIncr);
+    RemoveFixedNodes(TargetDecr);
 
     // that is the same can increase or decrease
     SourceParity = SourceIncr;
@@ -1324,7 +1374,10 @@ template <class ScalarType> class OrientFLowGraph {
       int IndexN = NodeSeq[j];
       assert(EnabledN[IndexN]);
       int IndexVar = VarOfNode(IndexN);
-      if (!VarValue[IndexVar] > 1)
+      // OLD (always false: ! applied to the value, not to the comparison)
+      // if (!VarValue[IndexVar] > 1)
+      // NEW (parentheses)
+      if (!(VarValue[IndexVar] > 1))
         return false;
     }
     return true;
@@ -1341,6 +1394,10 @@ template <class ScalarType> class OrientFLowGraph {
     //   std::cout << "ERROR SIZE DONT' MATCH" << std::endl;
     //   exit(0);
     // }
+    // NEW (fixed variables)
+    if (TouchesFixed(NodeIdx))
+      return false;
+
     std::vector<int> TempVal = VarValue;
 
     for (size_t j = 0; j < NodeIdx.size(); j++) {
@@ -1740,6 +1797,11 @@ template <class ScalarType> class OrientFLowGraph {
   };
 
   void Apply(const PathPriority &PPrio) {
+    // NEW (fixed variables): never modified (CanApply refuses these paths)
+    if (TouchesFixed(PPrio.pathNodes)) {
+      std::cout << "WARNING: path on a fixed variable not applied" << std::endl;
+      return;
+    }
     for (size_t i = 0; i < PPrio.pathNodes.size(); i++) {
       int IndexN = PPrio.pathNodes[i];
       int VarNum = VarOfNode(IndexN);
@@ -1812,6 +1874,10 @@ template <class ScalarType> class OrientFLowGraph {
   // }
   
     bool CanApply(const PathPriority &PPrio) {
+    // NEW (fixed variables)
+    if (TouchesFixed(PPrio.pathNodes))
+      return false;
+
     if (ApplyDelta.size() != VarValue.size())
       ApplyDelta.assign(VarValue.size(), 0);
 
@@ -2346,8 +2412,17 @@ template <class ScalarType> class OrientFLowGraph {
       return false;
 
     std::sort(AllPathModifications.begin(), AllPathModifications.end());
-    Apply(AllPathModifications[0]);
-    return true;
+    // OLD (before fixed variables)
+    // Apply(AllPathModifications[0]);
+    // return true;
+    // NEW (fixed variables): the first path not touching a fixed variable
+    for (size_t i = 0; i < AllPathModifications.size(); i++) {
+      if (TouchesFixed(AllPathModifications[i].pathNodes))
+        continue;
+      Apply(AllPathModifications[i]);
+      return true;
+    }
+    return false;
     // if ((IncreasePaths.size() == 0) && (DecreasePaths.size() == 0))
     //   return false;
 
@@ -2808,7 +2883,10 @@ template <class ScalarType> class OrientFLowGraph {
     for (size_t i = 0; i < NodeIdx.size(); i++) {
       assert(NodeIdx[i] >= 0);
       assert(NodeIdx[i] < static_cast<int>(EnabledN.size()));
-      assert(EnabledN[NodeIdx[i]]);
+      // (no check on EnabledN: the stored paths of SolveEqStep are
+      // re-evaluated at every step, while EnabledN is still the one of the
+      // last path search (the decrease one); the priority does not depend on
+      // it, the enabled nodes only restrict the search of the paths)
       // OLD (before Priority without copy): value computed and never used
       // ScalarType CurrPrio = PriorityChange(NodeIdx[i], Diff[i], true);
       Prio += PriorityChange(NodeIdx[i], Diff[i]);
@@ -2853,6 +2931,9 @@ template <class ScalarType> class OrientFLowGraph {
     for (size_t i = 0; i < GraphAdj.size(); i++) {
       int IndexVar = VarOfNode(i);
       if (VarValue[IndexVar] == VarTargetValue[IndexVar])
+        continue;
+      // NEW (fixed variables): not a starting node
+      if (IsFixedVar(IndexVar))
         continue;
       if (check_unitary && (VarValue[IndexVar] <= 1))
         continue;
@@ -3021,6 +3102,9 @@ template <class ScalarType> class OrientFLowGraph {
     for (size_t i = 0; i < GraphAdj.size(); i++) {
       int IndexVar = VarOfNode(i);
       if (VarValue[IndexVar] == VarTargetValue[IndexVar])
+        continue;
+      // NEW (fixed variables): not a starting node
+      if (IsFixedVar(IndexVar))
         continue;
       sourceN.push_back(i);
     }
@@ -3208,6 +3292,11 @@ template <class ScalarType> class OrientFLowGraph {
 public:
   ScalarType MinRatio, MaxRatio;
 
+  // NEW (fixed variables): FixedVar[i] true = variable i is never changed
+  // by equality, parity or size steps (empty = none fixed). Set it before
+  // calling SolveEquality / SolveParity / ImproveSize.
+  std::vector<bool> FixedVar;
+
   // NEW (congestion): like negotiated congestion routing (PathFinder), every
   // time a path modifies a variable its nodes get more expensive to cross, so
   // the next paths look for another corridor instead of reusing the same one
@@ -3348,10 +3437,10 @@ public:
       : VarTargetValue(_VarTargetValue), VarValue(_VarValue),
         PatchSideVariables(_PatchSideVariables) {
     WriteDebug = false;
-    // MinRatio = -1;
-    // MaxRatio = -1;
-    MinRatio = 1.0/4.0;
-    MaxRatio = 4.0;
+    MinRatio = -1;
+    MaxRatio = -1;
+    // MinRatio = 1.0/4.0;
+    // MaxRatio = 4.0;
   }
 };
 

@@ -47,6 +47,8 @@
 #include <cmath>
 #include <connectivity.h>
 #include <cstddef>
+#include <limits>
+#include <fstream>
 #include <iostream>
 #include <mesh_mapping.h>
 #include <string>
@@ -496,6 +498,20 @@ namespace Geo
           Geo::Point3<ScalarType> closestPt;
           bool has_found = Grid.GridClosest(PatchVert, Patch_Faces, Pos3D, BB.Diag(), closestF,
                                             closestPt);
+          // a side sample farther than the patch diagonal from the patch:
+          // no face (closestF = -1, read out of the faces before); the patch
+          // cannot be parametrized on its sides, it is a problematic patch
+          if (!has_found || (closestF < 0))
+          {
+            ScalarType MinD = std::numeric_limits<ScalarType>::max();
+            for (size_t k = 0; k < PatchVert.size(); k++)
+              MinD = std::min(MinD, (PatchVert[k] - Pos3D).Norm());
+            std::cout << "WARNING: side " << i << " sample " << j << " / "
+                      << SideSubd[i].size() << " not on the patch (distance "
+                      << MinD << ", patch diagonal " << BB.Diag() << ")"
+                      << std::endl;
+            return false;
+          }
 
           Geo::Traingle3<ScalarType> CloseT =
               TriangleOfFace<ScalarType>(PatchVert, Patch_Faces, closestF);
@@ -696,11 +712,7 @@ namespace Geo
         //           << Size3 << std::endl;
         std::array<int, 4> SideSubdNum = {Size0, Size1, Size2, Size3};
 
-        // OLD (before alternative splits): a single split position
-        // SplitInfo Sinfo = DeriveSplitInfo(SideSubdNum);
-        // NEW (alternative splits): preferred position first, then nearby ones
-        std::vector<SplitInfo> SinfoCandidates =
-            DeriveSplitInfoAlternatives(SideSubdNum);
+        SplitInfo Sinfo = DeriveSplitInfo(SideSubdNum);
 
         // std::cout << "Split Edge: " << Sinfo.SplitEdge << std::endl;
         // std::cout << "Split Num0: " << Sinfo.SplitNum0 << std::endl;
@@ -717,27 +729,10 @@ namespace Geo
         // SaveQuadrData(CurrData, "BeforeSplit");
         // std::cout << "Splitting Patch " << std::endl;
 
-        // OLD (before alternative splits)
-        // bool OkSplit = Geo::Quadrangulation<ScalarType>::SplitSideIntoSubPatches(
-        //     CurrData.PatchVert, CurrData.Patch_Faces, CurrData.PatchCorners,
-        //     CurrData.SideSubd, Sinfo, SubPatchVert, SubPatchFaces,
-        //     SubPatchCorners, SubPatchSideSubd);
-        // NEW (alternative splits): try the candidates until one can be cut
-        bool OkSplit = false;
-        for (size_t c = 0; (c < SinfoCandidates.size()) && (!OkSplit); c++)
-        {
-          SubPatchVert.clear();
-          SubPatchFaces.clear();
-          SubPatchCorners.clear();
-          SubPatchSideSubd.clear();
-          OkSplit = Geo::Quadrangulation<ScalarType>::SplitSideIntoSubPatches(
-              CurrData.PatchVert, CurrData.Patch_Faces, CurrData.PatchCorners,
-              CurrData.SideSubd, SinfoCandidates[c], SubPatchVert,
-              SubPatchFaces, SubPatchCorners, SubPatchSideSubd);
-          // DEBUG (alternative splits)
-          if (OkSplit && (c > 0))
-            std::cout << "Split ok at alternative " << c << std::endl;
-        }
+        bool OkSplit = Geo::Quadrangulation<ScalarType>::SplitSideIntoSubPatches(
+            CurrData.PatchVert, CurrData.Patch_Faces, CurrData.PatchCorners,
+            CurrData.SideSubd, Sinfo, SubPatchVert, SubPatchFaces,
+            SubPatchCorners, SubPatchSideSubd);
 
         if (!OkSplit)
         {
@@ -1067,13 +1062,8 @@ namespace Geo
         for (int sign = -1; sign <= 1; sign += 2)
         {
           SplitInfo SI = Base;
-          // OLD (same sign on both sides): the opposite side runs in the
-          // reverse direction, so the same sign tilted the cut
-          // SI.SplitNum0 = Base.SplitNum0 + sign * d;
-          // SI.SplitNum1 = Base.SplitNum1 + sign * d;
-          // NEW (opposite sign): the cut is translated, not tilted
           SI.SplitNum0 = Base.SplitNum0 + sign * d;
-          SI.SplitNum1 = Base.SplitNum1 - sign * d;
+          SI.SplitNum1 = Base.SplitNum1 + sign * d;
           // both split points strictly inside their sides
           if ((SI.SplitNum0 < 1) || (SI.SplitNum0 > n0 - 1))
             continue;
@@ -1734,6 +1724,30 @@ namespace Geo
 
       SplitByFFConnectedComponenent(SplitVert, SplitFaces, SubPatchVert,
                                     SubPatchFaces);
+      // the cut must split the patch in two (e.g. a cut that does not reach
+      // the border on both ends leaves one piece): read below as two
+      if (SubPatchVert.size() != 2)
+      {
+        // (a cut from border to border splits a disk in two: the number of
+        // border loops tells if the patch is not a disk)
+        std::vector<std::vector<int>> PatchLoops;
+        getBorderSequncesVert(Patch_Faces, PatchLoops);
+        std::cout << "WARNING: split of a patch in " << SubPatchVert.size()
+                  << " pieces instead of 2 (patch: " << PatchVert.size()
+                  << " vertices, " << Patch_Faces.size() << " faces, "
+                  << PatchLoops.size() << " border loops; cut of "
+                  << NewEdges.size() << " edges), saved as split_fail_*.obj"
+                  << std::endl;
+        WriteOBJ("split_fail_patch.obj", PatchVert, Patch_Faces);
+        std::ofstream Cut("split_fail_cut.obj");
+        for (size_t i = 0; i < SplitVert.size(); i++)
+          Cut << "v " << SplitVert[i].X << " " << SplitVert[i].Y << " "
+              << SplitVert[i].Z << "\n";
+        for (size_t i = 0; i < NewEdges.size(); i++)
+          Cut << "l " << NewEdges[i].first + 1 << " " << NewEdges[i].second + 1
+              << "\n";
+        return false;
+      }
 
       // then retrieve the side subdivisions for the subpatches
       SplitSideSubdivisions(SideSubd, SplitInfo, PolylineSplit[0],

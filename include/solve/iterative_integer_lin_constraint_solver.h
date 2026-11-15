@@ -161,7 +161,19 @@ public:
   int  lns_num_iterations;     // number of LNS iterations
   int  lns_neighborhood_size;  // variables freed per LNS iteration
 
+  // NEW (user fixed variables): value imposed on a variable before solving
+  // (-1 = free). Set it before Init(): the variables are fixed in Init(),
+  // the greedy never changes them, LNS never frees them and the integer
+  // solution returns exactly that value. Empty = no fixed variable.
+  std::vector<int> UserFixedValue;
+
 private:
+  // NEW (user fixed variables)
+  bool IsUserFixed(const int IndexVar) const {
+    return ((IndexVar >= 0) && (IndexVar < (int)UserFixedValue.size()) &&
+            (UserFixedValue[IndexVar] >= 0));
+  }
+
   // --------------------------------------------------------------------------
   // Problem data
   // --------------------------------------------------------------------------
@@ -557,6 +569,10 @@ private:
       int v = (int)floor(Float_Solution[i] + 0.5);
       v = std::max(MinValue[i], v);
       v = std::min(MaxValue[i], v);
+      // NEW (user fixed variables): exactly the imposed value (the float one
+      // is only approximately there, it is held by a big weight)
+      if (IsUserFixed(i))
+        v = UserFixedValue[i];
       IntSolution.push_back(v);
     }
   }
@@ -574,6 +590,8 @@ private:
     std::vector<std::pair<ScalarType, int>> contrib;
     for (int i = 0; i < (int)currentIntSol.size(); i++) {
       if (!FixedVar[i]) continue;
+      // NEW (user fixed variables): never freed
+      if (IsUserFixed(i)) continue;
       ScalarType frac = fabs((ScalarType)currentIntSol[i]
                              - RoundedValue(i, (ScalarType)currentIntSol[i]));
       ScalarType cn   = colNormCache.empty() ? ScalarType(1) : colNormCache[i];
@@ -731,6 +749,25 @@ public:
     // and the batch-fixing correlation check.
     if (use_colnorm_branching || use_lns || use_batch_fixing)
       BuildColNormCache();
+
+    // NEW (user fixed variables): fixed from the start, before the greedy
+    // (in incremental mode FixOneVariable updates the factorization)
+    for (int i = 0; i < NumVar; i++) {
+      if (!IsUserFixed(i)) continue;
+      int Val = UserFixedValue[i];
+      if (i < (int)MinValue.size())
+        Val = std::max(Val, MinValue[i]);
+      if (i < (int)MaxValue.size())
+        Val = std::min(Val, MaxValue[i]);
+      if (Val != UserFixedValue[i])
+        std::cout << "Warning: fixed variable " << i << " value "
+                  << UserFixedValue[i] << " out of bounds, clamped to " << Val
+                  << std::endl;
+      UserFixedValue[i] = Val;
+      FixOneVariable(i, Val);
+    }
+    if (!use_incremental_solve)
+      UpdateHardConstraints();
   }
 
   // Computes the integer solution.
