@@ -1484,6 +1484,21 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
     for (size_t i = 0; i < _PatchFacesIdx.size(); i++) {
       if (_PatchCornersIdx[i].size() != 4) {
         NumNotQuad++;
+        // Which one (the corners it has, its size and where it is)
+        Geo::Point3<ScalarType> Bary(0, 0, 0);
+        int NumV = 0;
+        for (size_t f = 0; f < _PatchFacesIdx[i].size(); f++)
+          for (size_t k = 0; k < Faces[_PatchFacesIdx[i][f]].size(); k++) {
+            Bary = Bary + Vert[Faces[_PatchFacesIdx[i][f]][k]];
+            NumV++;
+          }
+        if (NumV > 0)
+          Bary = Bary * ((ScalarType)1 / (ScalarType)NumV);
+        std::cout << "  dual patch " << i << ": "
+                  << _PatchCornersIdx[i].size() << " corners, "
+                  << _PatchFacesIdx[i].size() << " triangles, around ("
+                  << Bary.X << " " << Bary.Y << " " << Bary.Z << ")"
+                  << std::endl;
         continue;
       }
       PatchFacesIdx.push_back(_PatchFacesIdx[i]);
@@ -1953,6 +1968,56 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
     int NumOK1 = 0, NumNoQuad1 = 0, NumNoMatch1 = 0, NumOdd1 = 0;
     GetPatchStats(NumOK1, NumNoQuad1, NumNoMatch1, NumOdd1);
 
+    WritePatchStats(NumOK0, NumNoQuad0, NumNoMatch0, NumOdd0, NumOK1,
+                    NumNoQuad1, NumNoMatch1, NumOdd1);
+  }
+
+  // A local solve, for who changes a part of a solved layout (e.g. a region
+  // remeshed): the variables not Free keep their current value CurVal
+  // (samples CurPts). 1. the free ones are solved (as SolveSystem, targets
+  // from the lengths) with the others fixed at their current value; 2. the
+  // others are freed again, with their current value as target, and only
+  // the flow steps (equality, parity: paths of +-1 from a violation to
+  // where it is compensated, from the current values) run: where the free
+  // part closes by itself nothing else changes, otherwise only the sides
+  // along the paths of the correction. No size step (it would move every
+  // side towards its length). The variables fixed before stay fixed
+  void FindDiscretizationLocal(
+      const ScalarType &_TargetL, const ScalarType _RegVsIso,
+      const std::vector<bool> &Free, const std::vector<int> &CurVal,
+      const std::vector<std::vector<Geo::Point3<ScalarType>>> &CurPts) {
+    std::vector<int> UserFixVal = FixedVarValue;
+    std::vector<std::vector<Geo::Point3<ScalarType>>> UserFixS =
+        FixedVarSamples;
+    int NumHeld = 0;
+    for (int i = 0; i < NumVariables; i++)
+      if ((i < (int)Free.size()) && !Free[i] && !IsFixedVariable(i) &&
+          (i < (int)CurVal.size()) && (CurVal[i] >= 1) &&
+          (i < (int)CurPts.size())) {
+        SetFixedVariable(i, CurVal[i], CurPts[i]);
+        NumHeld++;
+      }
+    std::cout << "Solving Integer System (local: " << NumHeld
+              << " variables held at their current value)..." << std::endl;
+    SolveSystem(_TargetL, _RegVsIso, false);
+    // the held ones free again, their current value as target
+    FixedVarValue = UserFixVal;
+    FixedVarSamples = UserFixS;
+    for (int i = 0; i < NumVariables; i++)
+      if ((i < (int)Free.size()) && !Free[i] && (i < (int)CurVal.size()) &&
+          (CurVal[i] >= 1) && (i < (int)VarTargetValue.size()))
+        VarTargetValue[i] = CurVal[i];
+    int NumOK0 = 0, NumNoQuad0 = 0, NumNoMatch0 = 0, NumOdd0 = 0;
+    GetPatchStats(NumOK0, NumNoQuad0, NumNoMatch0, NumOdd0);
+    std::cout << "Graph Optimization (flow only)..." << std::endl;
+    AutomaticGraphOptimize(true, false, true, false);
+    EnforceFixedValues();
+    if (NumFixedVariables() > 0)
+      RepairParityByPaths();
+    InitMatchingType();
+    FindDiscretizationPoint();
+    int NumOK1 = 0, NumNoQuad1 = 0, NumNoMatch1 = 0, NumOdd1 = 0;
+    GetPatchStats(NumOK1, NumNoQuad1, NumNoMatch1, NumOdd1);
     WritePatchStats(NumOK0, NumNoQuad0, NumNoMatch0, NumOdd0, NumOK1,
                     NumNoQuad1, NumNoMatch1, NumOdd1);
   }

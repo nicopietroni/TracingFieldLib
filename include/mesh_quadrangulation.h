@@ -267,7 +267,7 @@ template <class ScalarType> class MeshQuadrangulator {
 
     Geo::TracingPreprocess<ScalarType>::RefineCloseSingFaces(
         TriVertPos, TriConnectivity, FaceCurv, TriFeatures, SingIndex,
-        min_sing_distance);
+        min_sing_distance, keep_border_edges);
 
     UpdateAfterRemesh();
 
@@ -349,6 +349,9 @@ template <class ScalarType> class MeshQuadrangulator {
     Geo::PrimalOptimizer<ScalarType> PrimalOpt(PData);
     PrimalOpt.Optimize();
 
+    if (!BorderTurnEdges.empty())
+      AddCornersWhereBorderTurns(PData, BorderTurnEdges);
+
     std::vector<std::vector<int>> PerDualPatchFaceIDX;
     std::vector<std::vector<int>> PerDualPatchCornerIDX;
 
@@ -405,6 +408,62 @@ template <class ScalarType> class MeshQuadrangulator {
               << " corners on fixed samples (moved, out of the corners on the "
                  "fixed sides)"
               << std::endl;
+  }
+
+  // Every primal patch side running partly on the border edges given
+  // (by position) and partly inside gets a corner where it changes: along
+  // each side, a vertex between a border edge and an inner edge becomes a
+  // corner (PrimalPatchData::InsertCorner)
+  static void AddCornersWhereBorderTurns(
+      Geo::PrimalPatchData<ScalarType> &PData,
+      const std::set<std::pair<Geo::Point3<ScalarType>,
+                               Geo::Point3<ScalarType>>> &BorderE) {
+    auto OnBorder = [&](size_t i, const std::pair<int, int> &E) {
+      const Geo::Point3<ScalarType> &A = PData.PatchVertPos[i][E.first];
+      const Geo::Point3<ScalarType> &B = PData.PatchVertPos[i][E.second];
+      return BorderE.count(std::make_pair(std::min(A, B), std::max(A, B))) > 0;
+    };
+    // the corners of all the patches (by position): where a side changes
+    // at the corner of another patch it is already split in two sub-sides
+    // there (a T-junction), nothing to add
+    std::set<Geo::Point3<ScalarType>> CornerPos;
+    for (size_t i = 0; i < PData.PatchCorners.size(); i++)
+      for (size_t b = 0; b < PData.PatchCorners[i].size(); b++)
+        for (size_t c = 0; c < PData.PatchCorners[i][b].size(); c++)
+          CornerPos.insert(PData.PatchVertPos[i][PData.PatchCorners[i][b][c]]);
+    // the patches with fewer corners first (a triangle becomes a quad
+    // rather than a quad a pentagon), never more than 5 corners (as the
+    // primal optimization: the dual placement has no data for more)
+    const size_t MaxCorners = 5;
+    std::vector<std::pair<size_t, size_t>> Order;
+    for (size_t i = 0; i < PData.EdgePatchSides.size(); i++)
+      if (PData.PatchCorners[i].size() == 1)
+        Order.push_back(std::make_pair(PData.PatchCorners[i][0].size(), i));
+    std::sort(Order.begin(), Order.end());
+    int NumAdded = 0;
+    for (size_t o = 0; o < Order.size(); o++) {
+      const size_t i = Order[o].second;
+      bool Again = true;
+      while (Again && (PData.PatchCorners[i][0].size() < MaxCorners)) {
+        Again = false;
+        const std::vector<std::vector<std::pair<int, int>>> &Sides =
+            PData.EdgePatchSides[i][0];
+        for (size_t s = 0; (s < Sides.size()) && !Again; s++)
+          for (size_t e = 0; e + 1 < Sides[s].size(); e++)
+            if ((OnBorder(i, Sides[s][e]) != OnBorder(i, Sides[s][e + 1])) &&
+                (CornerPos.count(PData.PatchVertPos[i][Sides[s][e].second]) ==
+                 0)) {
+              CornerPos.insert(PData.PatchVertPos[i][Sides[s][e].second]);
+              PData.InsertCorner((int)i, (int)s, (int)e);
+              NumAdded++;
+              Again = true;
+              break;
+            }
+      }
+    }
+    if (NumAdded > 0)
+      std::cout << "Primal patches: " << NumAdded
+                << " corners added where a side leaves the border" << std::endl;
   }
 
   void InitDefaultDualParameters() {
@@ -847,6 +906,18 @@ public:
   SnapMap QuadVertSnap;
   // Border vertices of the quad mesh fixed in smoothing
   bool fix_border_vert = false;
+  // The refinements of the preprocessing (RefineCloseSingFaces) do not
+  // split the border edges (a region remeshed with its border fixed: its
+  // border vertices must stay the old ones); false = as always
+  bool keep_border_edges = false;
+  // The border edges (by position) of the mesh given: a primal patch side
+  // that runs partly on them and partly inside gets a corner where it
+  // changes (AddCornersWhereBorderTurns): a separatrix traced up to the
+  // border and then along it is one side of the patch, bent where it meets
+  // the border; with a fixed border (a region) a corner is needed there.
+  // Empty = as always
+  std::set<std::pair<Geo::Point3<ScalarType>, Geo::Point3<ScalarType>>>
+      BorderTurnEdges;
   // Only the quad edges on the feature lines are
   // features, the open lines are not prolonged to the next patch corner
   bool exact_feature_samples = false;

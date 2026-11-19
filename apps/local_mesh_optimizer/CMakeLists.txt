@@ -8,6 +8,10 @@ set(CMAKE_CXX_STANDARD 17)
 #if(NOT CMAKE_BUILD_TYPE)
 #    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 #endif()
+# Release by default: the remesher is about 10x slower in Debug
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+endif()
 
 set(IMGUI_DIR "/Users/134750/Desktop/imgui/" CACHE INTERNAL "")
 set(TRACEFIELD_DIR = "../../include" CACHE INTERNAL "")

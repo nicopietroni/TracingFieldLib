@@ -45,6 +45,7 @@
 #include <limits>
 #include <cctype>
 #include <cstddef>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <queue>
@@ -79,6 +80,7 @@
 #include <mesh_sketch_remesh.h>
 #include <sketch_log.h>
 #include <sketch_symmetry.h>
+#include <sketch_snap.h>
 #include <remesh_size.h>
 #include <triangular_remesh.h>
 
@@ -103,7 +105,7 @@ bool showBorderFeatures = false;
 // from (green), to tell where a quad feature comes from
 bool showSourceFeatures = false;
 // the quads of the last region remesh (shown in light blue on the quad view)
-bool showLastRegion = true;
+bool showLastRegion = false;
 std::vector<bool> LastRegionFace;
 std::vector<std::pair<Geo::Point3<double>, Geo::Point3<double>>>
     SourceFeatSegs;
@@ -130,6 +132,22 @@ std::vector<bool> IsVertCorner0;
 // the input as loaded, target of the sketch reprojection
 std::vector<CoordType> VertPosOrig;
 std::vector<std::vector<int>> ConnectivityOrig;
+// with the symmetry, the input cut by the plane as the quads (the half on the
+// positive side): the surface of the half quads, whose border on the plane
+// is its border too (the full input goes on past the plane, a point near it
+// would be projected on the other side)
+std::vector<CoordType> VertPosOrigHalf;
+std::vector<std::vector<int>> ConnectivityOrigHalf;
+bool QuadIsHalf = false;
+// the surface of the quads: the input, cut as them if they are the half
+const std::vector<CoordType> &QuadSurfVert() {
+  return (QuadIsHalf && !ConnectivityOrigHalf.empty()) ? VertPosOrigHalf
+                                                        : VertPosOrig;
+}
+const std::vector<std::vector<int>> &QuadSurfFaces() {
+  return (QuadIsHalf && !ConnectivityOrigHalf.empty()) ? ConnectivityOrigHalf
+                                                        : ConnectivityOrig;
+}
 
 // TRIANGLE REMESH result
 bool hasTri = false;
@@ -162,6 +180,8 @@ std::vector<std::pair<int, int>> RenderEdges; // quad view: polygon edges
 std::vector<std::pair<int, int>> RenderVertFeatures;
 std::vector<int> RenderVertCorners;
 std::vector<std::pair<int, int>> RenderSketchEdges;
+// the features that are not sketch edges (drawn purple, the sketches red)
+std::vector<std::pair<int, int>> RenderOtherFeatures;
 
 Geo::Box3<ScalarType> MeshBox; // of the input: the view does not jump
 ScalarType AVGL = 0;
@@ -228,7 +248,11 @@ bool seam_smooth = true;
 // Whole layout patches, for the layout refit
 enum RegionMode { RegionRings = 0, RegionDistance = 1, RegionPatches = 2 };
 int region_mode = RegionPatches;
-int region_patch_rings = 0;
+// One ring of patches around the touched ones by default: the region border
+// away from the line, more room for the new layout before it meets the fixed
+// border (fewer corners in the middle of an old border edge, fewer tiny
+// patches next to the border)
+int region_patch_rings = 1;
 float region_radius = 3.f; // in quad edges
 int region_face_rings = 3;  // rings of quads (RegionRings)
 
@@ -248,6 +272,16 @@ float fit_window_quads = 3.f;
 // distance of the control points in quad edges
 int fit_mode = 0;
 float fit_spacing_quads = 10.f;
+// A new line closer than snap_quads quad edges to a constraint (feature or
+// older sketch) is snapped to it: fused where it runs along it, an end
+// joined orthogonally (SketchSnap); recorded in the sketch log
+bool snap_constraints = true;
+float snap_quads = 1.f;
+// After the fitting the line is projected on the surface (closest points):
+// the fitted curve passes slightly off the surface, and where the surface
+// bends the projection makes a kink. Smoothed on the surface: steps of
+// Laplacian (Polyline3::SmoothLaplacian), each followed by the projection
+int line_surface_smooth = 5;
 // DEBUG (fitting preview): a drawn line is only processed and shown (the
 // line as drawn in blue, the fitted one in orange), nothing is embedded
 bool debug_fit_only = false;
@@ -396,8 +430,24 @@ void PolyNormals(const std::vector<CoordType> &Vert,
 // VIEW
 // ---------------------------------------------------------------------------
 
+// the features without the sketch edges
+void UpdateRenderOtherFeatures() {
+  std::set<std::pair<int, int>> SketchE;
+  for (size_t i = 0; i < RenderSketchEdges.size(); i++)
+    SketchE.insert(std::make_pair(
+        std::min(RenderSketchEdges[i].first, RenderSketchEdges[i].second),
+        std::max(RenderSketchEdges[i].first, RenderSketchEdges[i].second)));
+  RenderOtherFeatures.clear();
+  for (size_t i = 0; i < RenderVertFeatures.size(); i++) {
+    int V0 = RenderVertFeatures[i].first, V1 = RenderVertFeatures[i].second;
+    if (SketchE.count(std::make_pair(std::min(V0, V1), std::max(V0, V1))) == 0)
+      RenderOtherFeatures.push_back(RenderVertFeatures[i]);
+  }
+}
+
 void UpdateRenderSketches() {
   RenderSketchEdges.clear();
+  RenderOtherFeatures = RenderVertFeatures;
   std::set<PosEdge> SketchPos;
   for (size_t i = 0; i < Sketches.size(); i++) {
     if (Sketches[i].on_quad != (viewMode == ViewQuad))
@@ -414,6 +464,7 @@ void UpdateRenderSketches() {
     if (SketchPos.count(MakePosEdge(VertPos[Edges[i].first],
                                     VertPos[Edges[i].second])) > 0)
       RenderSketchEdges.push_back(Edges[i]);
+  UpdateRenderOtherFeatures();
 }
 
 void ShowView(int view) {
@@ -543,7 +594,7 @@ Geo::SketchLog<ScalarType> SLog;
 Geo::SketchSymmetry<ScalarType> Sym;
 // the quads are only the half on the positive side of HalfSym (the plane as
 // it was at the quadrangulation), shown and saved with their mirror
-bool QuadIsHalf = false;
+// (QuadIsHalf, declared with the input)
 Geo::SketchSymmetry<ScalarType> HalfSym;
 std::string SketchLogPath;
 
@@ -698,6 +749,28 @@ bool RunTriRemesh() {
 
 ScalarType AvgQuadEdge(); // (below)
 
+// DEBUG (coincident vertices): distinct quad vertices at the same position
+// (a patch side collapsed to a point: a strip of quads with a zero edge),
+// printed after the steps that make the quads
+void PrintCoincident(const char *Step) {
+  std::map<CoordType, int> Count;
+  for (size_t i = 0; i < QuadVert.size(); i++)
+    Count[QuadVert[i]]++;
+  int Groups = 0, Verts = 0;
+  for (std::map<CoordType, int>::const_iterator It = Count.begin();
+       It != Count.end(); It++)
+    if ((*It).second > 1) {
+      Groups++;
+      Verts += (*It).second;
+      if (Groups <= 3)
+        std::cout << "  coincident: " << (*It).second << " vertices at ("
+                  << (*It).first.X << " " << (*It).first.Y << " "
+                  << (*It).first.Z << ")" << std::endl;
+    }
+  std::cout << "DEBUG coincident vertices after " << Step << ": " << Groups
+            << " positions, " << Verts << " vertices" << std::endl;
+}
+
 void DoQuadrangulate() {
   if (!loadedMesh)
     return;
@@ -730,6 +803,15 @@ void DoQuadrangulate() {
   if (QuadIsHalf) {
     HalfSym = Sym;
     HalfSym.CutHalf(TriV, TriF, TriFeatures, MeshBox.Center(), BBDiag);
+  }
+  VertPosOrigHalf.clear();
+  ConnectivityOrigHalf.clear();
+  if (QuadIsHalf && !ConnectivityOrig.empty()) {
+    VertPosOrigHalf = VertPosOrig;
+    ConnectivityOrigHalf = ConnectivityOrig;
+    std::vector<std::pair<int, int>> NoFeatures;
+    HalfSym.CutHalf(VertPosOrigHalf, ConnectivityOrigHalf, NoFeatures,
+                    MeshBox.Center(), BBDiag);
   }
 
   // DEBUG: the triangle features the quadrangulation starts from
@@ -819,6 +901,7 @@ void DoQuadrangulate() {
 
   auto end = std::chrono::high_resolution_clock::now();
   char buf[256];
+  PrintCoincident("the quadrangulation");
   snprintf(buf, sizeof(buf), "quad: %.2f s, %zu quads, %zu feature edges%s",
            std::chrono::duration<double>(end - start).count(),
            QuadFaces.size(), QuadFeatures.size(),
@@ -1043,6 +1126,12 @@ bool RemeshQuadRegion(const std::vector<bool> &Touched,
   // The true surface (the triangle mesh of the full
   // quadrangulation)
   RParam.save_debug = debug_region_save;
+  // projected on the input surface, not on the quads (no loss of detail
+  // edit after edit)
+  if (!QuadSurfFaces().empty()) {
+    RParam.OrigVert = &QuadSurfVert();
+    RParam.OrigFaces = &QuadSurfFaces();
+  }
   if (!seam_smooth)
     RParam.SeamSmoothSteps = 0;
   // the size chosen at the start, not measured again on the region
@@ -1083,6 +1172,11 @@ bool RemeshQuadRegion(const std::vector<bool> &Touched,
     // The old mesh, to count its singularities
     std::vector<std::vector<int>> OldFaces = QuadFaces;
     std::vector<std::pair<int, int>> OldFeatures = QuadFeatures;
+    // (all back as before if a border segment had to be split and the
+    // layout refit does not follow)
+    std::vector<CoordType> OldVert = QuadVert;
+    Geo::QuadRegionHistory<ScalarType> OldHistory = RegionHistory;
+    std::vector<bool> OldLastRegion = LastRegionFace;
     bool done = Geo::QuadRegionRemesher<ScalarType>::Remesh(
         QuadVert, QuadFaces, Region, QuadFeatures, Lines, RParam,
         &NewRegionFaces, &NewRegionPatch, &EmbeddedLines, &UsedRegion,
@@ -1129,8 +1223,16 @@ bool RemeshQuadRegion(const std::vector<bool> &Touched,
         NewPatchCorner.push_back(
             (i < NewRegionPatchCorner.size()) ? NewRegionPatchCorner[i] : 0);
       QuadPatchCorner = NewPatchCorner;
-      if (QuadPatchCorner.size() != QuadFaces.size())
+      if (QuadPatchCorner.size() != QuadFaces.size()) {
+        // DEBUG: why the corners are lost
+        std::cout << "Region remesh: corner masks lost (old masks "
+                  << OldPatchCorner.size() << " for " << OldPatch.size()
+                  << " quads, region " << RegionSet.size() << ", new masks "
+                  << NewRegionPatchCorner.size() << " for "
+                  << NewRegionFaces.size() << " new quads, mesh "
+                  << QuadFaces.size() << " quads)" << std::endl;
         QuadPatchCorner.clear(); // (unknown: the refit guesses them)
+      }
     }
     // (updated by the remesher)
     // the quads of this region (the merged mesh: the new ones at the end)
@@ -1146,6 +1248,7 @@ bool RemeshQuadRegion(const std::vector<bool> &Touched,
     std::string RefitMsg;
     // With a region cut through the old
     // patches these are not 4 sided any more and stay fixed: no propagation
+    PrintCoincident("the region remesh");
     if (region_refit_layout && (region_mode == RegionPatches)) {
       std::vector<int> AllF(QuadFaces.size());
       for (size_t i = 0; i < AllF.size(); i++)
@@ -1163,6 +1266,52 @@ bool RemeshQuadRegion(const std::vector<bool> &Touched,
       // Its steps and mode
       LP.SmoothSteps = quad_smooth_steps;
       LP.reliable_smooth = reliable_smooth;
+      // the smoothing projects on the input surface
+      if (!QuadSurfFaces().empty()) {
+        LP.SurfVert = &QuadSurfVert();
+        LP.SurfFaces = &QuadSurfFaces();
+      }
+      // the vertices the remesh added on the edges of the kept quads
+      {
+        const std::vector<CoordType> &Added =
+            Geo::QuadRegionRemesher<ScalarType>::LastAddedSamples();
+        LP.AddedVert.insert(Added.begin(), Added.end());
+      }
+      // DEBUG (to run the refit again outside): its input at full precision
+      // (quads, layout patch and corner mask per quad, seed faces)
+      if (debug_region_save) {
+        std::ofstream FR("refit_input.txt");
+        FR.precision(17);
+        FR << "verts " << QuadVert.size() << "\n";
+        for (size_t i = 0; i < QuadVert.size(); i++)
+          FR << QuadVert[i].X << " " << QuadVert[i].Y << " " << QuadVert[i].Z
+             << "\n";
+        FR << "faces " << QuadFaces.size() << "\n";
+        for (size_t i = 0; i < QuadFaces.size(); i++) {
+          FR << QuadFaces[i].size();
+          for (size_t j = 0; j < QuadFaces[i].size(); j++)
+            FR << " " << QuadFaces[i][j];
+          FR << " " << ((i < QuadPatch.size()) ? QuadPatch[i] : -1) << " "
+             << ((i < QuadPatchCorner.size()) ? QuadPatchCorner[i] : -1)
+             << "\n";
+        }
+        FR << "corners_known " << (QuadPatchCorner.size() == QuadFaces.size())
+           << "\n";
+        FR << "features " << QuadFeatures.size() << "\n";
+        for (size_t i = 0; i < QuadFeatures.size(); i++)
+          FR << QuadFeatures[i].first << " " << QuadFeatures[i].second << "\n";
+        FR << "seeds " << NewRegionFaces.size() << "\n";
+        for (size_t i = 0; i < NewRegionFaces.size(); i++)
+          FR << NewRegionFaces[i] << "\n";
+        FR << "added " << LP.AddedVert.size() << "\n";
+        for (typename std::set<CoordType>::const_iterator It =
+                 LP.AddedVert.begin();
+             It != LP.AddedVert.end(); It++)
+          FR << (*It).X << " " << (*It).Y << " " << (*It).Z << "\n";
+        FR << "params " << LP.PatchRings << " " << LP.TargetEdge << " "
+           << LP.keep_connected_only << " " << LP.SmoothSteps << " "
+           << LP.reliable_smooth << "\n";
+      }
       std::vector<int> OldFaceOf;
       auto TR = std::chrono::high_resolution_clock::now();
       bool refit = Geo::QuadLayoutRefit<ScalarType>::Refit(
@@ -1172,6 +1321,7 @@ bool RemeshQuadRegion(const std::vector<bool> &Touched,
       double RSec = std::chrono::duration<double>(
                         std::chrono::high_resolution_clock::now() - TR)
                         .count();
+      PrintCoincident("the layout refit");
       if (refit) {
         // (updated by the refit)
         std::vector<bool> NewLast(QuadFaces.size(), false);
@@ -1204,6 +1354,33 @@ bool RemeshQuadRegion(const std::vector<bool> &Touched,
                RLay0, RLay1, RIn0, RIn1,
                debug_refit_no_cut ? " (DEBUG: no cut)" : "");
       RefitMsg += buf;
+      if (!refit &&
+          Geo::QuadRegionRemesher<ScalarType>::LastNeedsRefit()) {
+        QuadVert = OldVert;
+        QuadFaces = OldFaces;
+        QuadFeatures = OldFeatures;
+        QuadPatch = OldPatch;
+        QuadPatchCorner = OldPatchCorner;
+        RegionHistory = OldHistory;
+        LastRegionFace = OldLastRegion;
+        Msg = "a border segment was split in two and the layout refit did "
+              "not follow (" +
+              Geo::QuadLayoutRefit<ScalarType>::LastMessage() +
+              "), mesh unchanged";
+        return false;
+      }
+    } else if (Geo::QuadRegionRemesher<ScalarType>::LastNeedsRefit()) {
+      // (the split border needs the refit: the patches mode with the refit)
+      QuadVert = OldVert;
+      QuadFaces = OldFaces;
+      QuadFeatures = OldFeatures;
+      QuadPatch = OldPatch;
+      QuadPatchCorner = OldPatchCorner;
+      RegionHistory = OldHistory;
+      LastRegionFace = OldLastRegion;
+      Msg = "a border segment had to be split in two: it needs the layout "
+            "refit (patches mode with refit on), mesh unchanged";
+      return false;
     }
     // Attempt, selected vs used (manifold completion)
     snprintf(buf, sizeof(buf),
@@ -1332,47 +1509,213 @@ void QuadSketchesToInputAndRequad() {
             " quad sketches moved to the input, quadrangulated again";
 }
 
+// The constraints a new line snaps to (SketchSnap::ConstraintSegs): the
+// feature and border edges of the quads, or of the input when the line goes
+// into the input
+std::vector<PosEdge> SnapConstraintSegs() {
+  std::vector<PosEdge> Segs;
+  if ((viewMode == ViewQuad) && !requad_all && hasQuad)
+    Geo::SketchSnap<ScalarType>::ConstraintSegs(QuadVert, QuadFaces,
+                                                &QuadFeatures, NULL, true, Segs);
+  else
+    Geo::SketchSnap<ScalarType>::ConstraintSegs(
+        VertPos0, Connectivity0, NULL, &IsFaceEFeature0, true, Segs);
+  return Segs;
+}
+
+void EmbedPreparedLine(const std::vector<CoordType> &DrawnLine,
+                       const std::vector<CoordType> &Line, bool requad = true);
+void RebuildInputSketches();
+void RemoveSketch(int Index, bool remesh);
+
 void EmbedUserLine(const std::vector<CoordType> &DrawnLine) {
   if (!loadedMesh || (DrawnLine.size() < 2))
     return;
   // The line made ready once, used as it is below
   // (samples at the spacing of the embedding)
   std::vector<CoordType> Line;
-  {
+  // The surface the points go back onto: the input, or, on the half quads,
+  // the input cut as them (a line on the half reaches the plane, its border)
+  bool on_half = QuadIsHalf && (viewMode == ViewQuad) && !requad_all;
+  const std::vector<CoordType> &SV = on_half ? QuadSurfVert() : VertPosOrig;
+  const std::vector<std::vector<int>> &SF =
+      on_half ? QuadSurfFaces() : ConnectivityOrig;
+  Geo::TriangleSpatialIndex<ScalarType> Grid;
+  if (!SF.empty())
+    Grid.Init(SV, SF);
+  // The fitted points lie on chords, slightly
+  // off the surface, and the embedding reprojects only inside its own
+  // smoothing (off now): each point on the closest point of the surface.
+  // KeepEnds: the open ends stay (after the snap they are on a constraint
+  // or on the border, where the snap put them)
+  auto Reproject = [&](std::vector<CoordType> &Pts, bool KeepEnds) {
+    if (SF.empty())
+      return;
+    bool Closed = (Pts.size() > 3) && (Pts.front() == Pts.back());
+    for (size_t i = 0; i < Pts.size(); i++) {
+      if (KeepEnds && !Closed && ((i == 0) || (i + 1 == Pts.size())))
+        continue;
+      int IndexF = -1;
+      CoordType Q;
+      if (Grid.GridClosest(SV, SF, Pts[i], Grid.bbox.Diag(), IndexF, Q) &&
+          (IndexF >= 0))
+        Pts[i] = Q;
+    }
+    if (Closed)
+      Pts.back() = Pts.front();
+  };
+  // smoothed on the surface (the ends stay)
+  auto SmoothOnSurface = [&](std::vector<CoordType> &Pts) {
+    if (SF.empty())
+      return;
+    for (int it = 0; it < line_surface_smooth; it++) {
+      Geo::Polyline3<ScalarType> PL;
+      PL.PolyPos = Pts;
+      PL.SmoothLaplacian(1, (ScalarType)0.5);
+      Pts = PL.PolyPos;
+      Reproject(Pts, true);
+    }
+  };
+  // In quad edges (the quad edge of the last
+  // quadrangulation, or 2% of the diagonal before it)
+  ScalarType QuadE =
+      (AbsQuadEdge > 0) ? AbsQuadEdge : BBDiag * (ScalarType)0.02;
+  // the fitting of a drawn line (also of a line merged with an older
+  // sketch, fitted again as one line)
+  auto Fit = [&](const std::vector<CoordType> &In, std::vector<CoordType> &Fitted,
+                 bool &Closed) {
     Geo::SketchPolylineParam<ScalarType> P = FitP;
     P.Step = BBDiag * EmbedP.sample_ratio;
-    // In quad edges (the quad edge of the last
-    // quadrangulation, or 2% of the diagonal before it)
-    ScalarType QuadE = (AbsQuadEdge > 0) ? AbsQuadEdge : BBDiag * (ScalarType)0.02;
     P.WindowLength = fit_window_quads * QuadE;
     P.Mode = (fit_mode == 0)
                  ? Geo::SketchPolylineParam<ScalarType>::FitBSpline
                  : Geo::SketchPolylineParam<ScalarType>::FitLocalBezier;
     P.ControlSpacing = fit_spacing_quads * QuadE;
+    Closed = false;
+    Geo::SketchPolyline<ScalarType>::Process(In, P, Fitted, &Closed);
+  };
+  {
     bool Closed = false;
-    Geo::SketchPolyline<ScalarType>::Process(DrawnLine, P, Line, &Closed);
+    Fit(DrawnLine, Line, Closed);
     if (Line.size() < 2)
       return;
-    // The fitted points lie on chords, slightly
-    // off the surface, and the embedding reprojects only inside its own
-    // smoothing (off now): each point on the closest point of the input
-    if (!ConnectivityOrig.empty()) {
-      Geo::TriangleSpatialIndex<ScalarType> Grid;
-      Grid.Init(VertPosOrig, ConnectivityOrig);
-      for (size_t i = 0; i < Line.size(); i++) {
-        int IndexF = -1;
-        CoordType Q;
-        if (Grid.GridClosest(VertPosOrig, ConnectivityOrig, Line[i],
-                             Grid.bbox.Diag(), IndexF, Q) &&
-            (IndexF >= 0))
-          Line[i] = Q;
-      }
-      if (Closed)
-        Line.back() = Line.front();
-    }
+    Reproject(Line, false);
+    SmoothOnSurface(Line);
     if (Closed)
       std::cout << "Sketch: almost a loop, closed" << std::endl;
   }
+  // Snapped to the constraints closer than snap_quads quad edges: one or
+  // more lines (each piece embedded as a sketch, the pieces of one drawn
+  // line in one group, removed together)
+  std::vector<std::vector<CoordType>> Pieces(1, Line);
+  // per piece the older sketches merged into it (their lines, to find them)
+  std::vector<std::vector<std::vector<CoordType>>> MergedInputs(1);
+  bool from_quads = (viewMode == ViewQuad);
+  bool on_quads = from_quads && !requad_all;
+  if (snap_constraints && (snap_quads > 0) && !debug_embed_only) {
+    Geo::SketchSnapParam<ScalarType> SP;
+    SP.Dist = (ScalarType)snap_quads * QuadE;
+    std::string Info;
+    // the older sketches where the line goes (on the quads or in the
+    // input), the open ones: a piece going on past one of their ends is
+    // merged with it
+    std::vector<std::vector<CoordType>> SketchLines;
+    for (size_t i = 0; i < Sketches.size(); i++)
+      if ((Sketches[i].on_quad == on_quads) &&
+          (Sketches[i].Input.size() >= 2))
+        SketchLines.push_back(Sketches[i].Input);
+    std::vector<std::vector<int>> MergedWith;
+    Geo::SketchSnap<ScalarType>::Apply(Line, SnapConstraintSegs(), SP, Pieces,
+                                       &Info, &SketchLines, &MergedWith);
+    MergedInputs.assign(Pieces.size(),
+                        std::vector<std::vector<CoordType>>());
+    for (size_t k = 0; k < Pieces.size(); k++) {
+      for (size_t m = 0; m < MergedWith[k].size(); m++)
+        MergedInputs[k].push_back(SketchLines[MergedWith[k][m]]);
+      // a merged line fitted again as one line
+      if (!MergedInputs[k].empty()) {
+        std::vector<CoordType> Fitted;
+        bool Closed = false;
+        Fit(Pieces[k], Fitted, Closed);
+        if (Fitted.size() >= 2)
+          Pieces[k] = Fitted;
+      }
+      Reproject(Pieces[k], true);
+      SmoothOnSurface(Pieces[k]);
+    }
+    std::cout << "Sketch snap: " << Info << std::endl;
+    if (Pieces.empty()) {
+      char buf[160];
+      snprintf(buf, sizeof(buf),
+               "sketch NOT added: it runs along a constraint (closer than "
+               "%.1f quad edges), fused with it",
+               (double)snap_quads);
+      LineMsg = buf;
+      return;
+    }
+  }
+  if (debug_fit_only ||
+      ((Pieces.size() == 1) && MergedInputs[0].empty())) {
+    EmbedPreparedLine(DrawnLine, Pieces[0]);
+    return;
+  }
+  // several pieces (or merged ones): one group; into the input, one
+  // quadrangulation at the end
+  bool OwnGroup = (NewSketchGroup < 0);
+  if (OwnGroup)
+    NewSketchGroup = NumSketchGroups++;
+  bool Changed = false;
+  for (size_t k = 0; k < Pieces.size(); k++) {
+    if (MergedInputs[k].empty()) {
+      size_t N0 = Sketches.size();
+      EmbedPreparedLine(DrawnLine, Pieces[k], on_quads);
+      Changed = Changed || (Sketches.size() > N0);
+      continue;
+    }
+    // A merged line in place of the older sketches: they are removed
+    // without a remesh (only their features: on the quads the region of
+    // the merged line goes over them), then the merged line is embedded;
+    // if it is not, everything back as before
+    std::vector<Sketch> SketchesBefore = Sketches;
+    std::vector<std::pair<int, int>> FeaturesBefore = QuadFeatures;
+    for (size_t m = 0; m < MergedInputs[k].size(); m++)
+      for (int i = (int)Sketches.size() - 1; i >= 0; i--)
+        if ((Sketches[i].on_quad == on_quads) &&
+            (Sketches[i].Input == MergedInputs[k][m])) {
+          RemoveSketch(i, false);
+          break;
+        }
+    size_t N0 = Sketches.size();
+    EmbedPreparedLine(DrawnLine, Pieces[k], on_quads);
+    if (Sketches.size() > N0) {
+      Changed = true;
+      std::cout << "Sketch snap: merged with " << MergedInputs[k].size()
+                << " older sketches, embedded as one line" << std::endl;
+      continue;
+    }
+    std::string Msg = LineMsg;
+    Sketches = SketchesBefore;
+    if (on_quads) {
+      QuadFeatures = FeaturesBefore;
+      UpdateQuadSketchSegs();
+    } else
+      RebuildInputSketches();
+    LineMsg = Msg + " (the older sketches kept)";
+  }
+  if (!on_quads && from_quads && Changed) {
+    std::string Msg = LineMsg;
+    DoQuadrangulate();
+    LineMsg = Msg + ", quadrangulated again";
+  }
+  if (OwnGroup)
+    NewSketchGroup = -1;
+}
+
+// The line (fitted and snapped) embedded: in the quads (a region remesh) or
+// in the input (and, drawn on the quads, everything quadrangulated again if
+// requad)
+void EmbedPreparedLine(const std::vector<CoordType> &DrawnLine,
+                       const std::vector<CoordType> &Line, bool requad) {
   // DEBUG (embedding check): embedded in the input only, then measured
   if (debug_embed_only) {
     PreviewDrawn = DrawnLine;
@@ -1453,7 +1796,7 @@ void EmbedUserLine(const std::vector<CoordType> &DrawnLine) {
   bool from_quads = (viewMode == ViewQuad);
   size_t NumSketches = Sketches.size();
   SketchOnTriangles(Line); // also from the remesh view: into the input
-  if (from_quads && (Sketches.size() > NumSketches)) {
+  if (requad && from_quads && (Sketches.size() > NumSketches)) {
     std::string Msg = LineMsg;
     DoQuadrangulate();
     LineMsg = Msg + ", quadrangulated again";
@@ -1649,6 +1992,7 @@ Geo::SketchAction<ScalarType> CurrentAction(char Type) {
   A.RegionMode = region_mode;
   A.Refit = region_refit_layout;
   A.PatchRings = region_patch_rings;
+  A.Snap = snap_constraints ? snap_quads : 0.f;
   return A;
 }
 
@@ -1662,6 +2006,10 @@ void DoAction(const Geo::SketchAction<ScalarType> &A, bool record = true) {
   region_mode = A.RegionMode;
   region_refit_layout = A.Refit;
   region_patch_rings = A.PatchRings;
+  // (an old log has no snap: off, as when it was recorded)
+  snap_constraints = (A.Snap > 0);
+  if (A.Snap > 0)
+    snap_quads = A.Snap;
   if (A.Type == 'Q')
     DoQuadrangulate();
   else if (A.Type == 'L')
@@ -1900,6 +2248,24 @@ void SetDrawLinesWindow() {
     ImGui::SetNextItemWidth(W);
     ImGui::SliderFloat("line fitting window (quad edges)", &fit_window_quads,
                        0.5f, 10.f, "%.1f");
+  }
+  ImGui::SetNextItemWidth(W);
+  ImGui::SliderInt("line smoothing on the surface", &line_surface_smooth, 0,
+                   20);
+  Help("the fitted line is projected on the surface, where the surface "
+       "bends the projection makes kinks: steps of smoothing, each projected "
+       "again (the ends stay)");
+  ImGui::Checkbox("snap to the constraints", &snap_constraints);
+  Help("a new line closer than this to a feature, an older sketch or the "
+       "border of the mesh: where it runs along it (same direction) the two "
+       "are fused, the new line stops on it and starts again where it leaves "
+       "it (going on past the end of an older sketch: merged with it, fitted "
+       "again as one line); an end coming to it from another direction is "
+       "joined orthogonally");
+  if (snap_constraints) {
+    ImGui::SetNextItemWidth(W);
+    ImGui::SliderFloat("snap distance (quad edges)", &snap_quads, 0.2f, 3.f,
+                       "%.1f");
   }
   ImGui::Checkbox("close almost loops", &FitP.close_loops);
   Help("a line whose start and end come close (less than 10% of its length, "
@@ -2275,14 +2641,15 @@ void DrawMirrorHalf() {
     DrawQuadMesh();
   if (showFeatures) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
-    GLDraw::GLDrawEdges<ScalarType>(VertPos, RenderVertFeatures, 10,
-                                    CoordType(1, 0, 1));
+    GLDraw::GLDrawEdges<ScalarType>(
+        VertPos, showSketches ? RenderOtherFeatures : RenderVertFeatures, 10,
+        CoordType(1, 0, 1));
     glPopAttrib();
   }
   if (showSketches) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
-    GLDraw::GLDrawEdges<ScalarType>(VertPos, RenderSketchEdges, 12,
-                                    CoordType(1, 0.5, 0));
+    GLDraw::GLDrawEdges<ScalarType>(VertPos, RenderSketchEdges, 6,
+                                    CoordType(0.9, 0.1, 0.1));
     glPopAttrib();
   }
   glFrontFace(GL_CCW);
@@ -2370,8 +2737,9 @@ void GLDrawMesh() {
   LinePick.Draw();
   if (showFeatures) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
-    GLDraw::GLDrawEdges<ScalarType>(VertPos, RenderVertFeatures, 10,
-                                    CoordType(1, 0, 1));
+    GLDraw::GLDrawEdges<ScalarType>(
+        VertPos, showSketches ? RenderOtherFeatures : RenderVertFeatures, 10,
+        CoordType(1, 0, 1));
     glPopAttrib();
   }
   // DEBUG: source triangle features over the quads
@@ -2427,8 +2795,8 @@ void GLDrawMesh() {
   }
   if (showSketches) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
-    GLDraw::GLDrawEdges<ScalarType>(VertPos, RenderSketchEdges, 12,
-                                    CoordType(1, 0.5, 0));
+    GLDraw::GLDrawEdges<ScalarType>(VertPos, RenderSketchEdges, 6,
+                                    CoordType(0.9, 0.1, 0.1));
     glPopAttrib();
   }
   if (showCorners) {

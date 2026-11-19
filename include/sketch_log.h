@@ -49,6 +49,9 @@ template <class ScalarType> struct SketchAction {
   int View = 0, RequadAll = 0, RegionMode = 0, Refit = 0, PatchRings = 0;
   int Index = -1;
   std::vector<Geo::Point3<ScalarType>> Line;
+  // snap to the constraints, in quad edges (0 = off); last in the row, an
+  // old log without it reads 0
+  float Snap = 0;
 };
 
 template <class ScalarType> class SketchLog {
@@ -59,9 +62,9 @@ public:
   // is kept as PrevPath(), the file emptied
   void Start(const std::string &_Path) {
     Path = _Path;
-    // (only a log with sketches: one with only quadrangulations would
-    // overwrite the previous one, e.g. the one of a crash, with nothing to
-    // replay)
+    // (only a log with drawn lines: one with only quadrangulations or
+    // removals would overwrite the previous one, e.g. the one of a crash,
+    // with nothing to replay)
     if (HasSketches(Path))
       std::rename(Path.c_str(), PrevPath().c_str());
     std::ofstream F(Path.c_str(), std::ios::trunc);
@@ -77,12 +80,13 @@ public:
     return Load(From, Actions) && !Actions.empty();
   }
 
-  // a log with at least one sketch action (not only quadrangulations)
+  // a log with at least one drawn line (only quadrangulations or removals,
+  // e.g. of the sketches of a replay, have nothing to replay)
   static bool HasSketches(const std::string &FilePath) {
     std::vector<SketchAction<ScalarType>> Actions;
     Load(FilePath, Actions);
     for (size_t i = 0; i < Actions.size(); i++)
-      if (Actions[i].Type != 'Q')
+      if (Actions[i].Type == 'L')
         return true;
     return false;
   }
@@ -102,6 +106,7 @@ public:
     }
     if (A.Type == 'R')
       F << " " << A.Index;
+    F << " " << A.Snap;
     F << std::endl;
   }
 
@@ -129,6 +134,8 @@ public:
       }
       if (A.Type == 'R')
         In >> A.Index;
+      if (!(In >> A.Snap))
+        A.Snap = 0;
       Actions.push_back(A);
     }
     return true;

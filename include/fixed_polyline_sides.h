@@ -37,7 +37,19 @@ public:
   Apply(Geo::SideDiscretization<ScalarType> &SideD,
         const std::vector<std::vector<CoordType>> &FixedPolylines,
         const ScalarType TolRatio, const bool AllBorderSides,
-        std::map<CoordType, CoordType> &CornerSnap) {
+        std::map<CoordType, CoordType> &CornerSnap,
+        std::vector<CoordType> *AddedSamples = NULL,
+        const std::vector<std::vector<CoordType>> *FinePolylines = NULL,
+        std::vector<std::vector<CoordType>> *FinalPolylines = NULL) {
+    // FinePolylines (optional, with AllBorderSides): every polyline with
+    // the points the quadrangulator added on its segments before the sides
+    // were made (same start and direction; e.g. an old border edge split in
+    // two by a refinement, and its halves split again by the dual): they are
+    // on the polyline too (not samples), a corner there goes to one of the
+    // samples around it, or becomes a sample. Without it only the exact
+    // middles of the segments are known.
+    // FinalPolylines (optional): the polylines with the samples added
+    // (AddedSamples, in their place), the border the quads will have
     SideD.ClearFixedVariables();
     CornerSnap.clear();
     const int NumV = SideD.NumVars();
@@ -46,6 +58,10 @@ public:
 
     // arc length of the polylines, closed if the first point is repeated
     size_t NumPoly = FixedPolylines.size();
+    // The polylines, with the samples added (see AddedSamples below)
+    std::vector<std::vector<CoordType>> Polys = FixedPolylines;
+    if (AddedSamples != NULL)
+      AddedSamples->clear();
     std::vector<std::vector<ScalarType>> ArcL(NumPoly);
     std::vector<bool> Closed(NumPoly, false);
     ScalarType SumSeg = 0;
@@ -64,12 +80,40 @@ public:
     if (NumSeg == 0)
       return 0;
     ScalarType Tol = TolRatio * SumSeg / NumSeg;
-    // to tell the region border from the inner borders along the features
-    ScalarType BorderTol = std::max(Tol, (ScalarType)0.5 * SumSeg / NumSeg);
+    // With AllBorderSides a border variable is on a polyline only if all its
+    // points are exactly its vertices or the middle points of its segments
+    // (the region border is not refined: its vertices are the old ones, a
+    // dual vertex on it is an old vertex or an edge middle). Before it was
+    // any border variable within half a segment, and an inner border along a
+    // feature running close to the region border was taken as a border side:
+    // its corners were snapped onto the border (folds)
+    std::map<CoordType, int> ExactPoly;
+    for (size_t j = 0; j < NumPoly; j++) {
+      const std::vector<CoordType> &Poly = FixedPolylines[j];
+      for (size_t k = 0; k < Poly.size(); k++) {
+        ExactPoly[Poly[k]] = (int)j;
+        if (k + 1 < Poly.size())
+          ExactPoly[Poly[k] * (ScalarType)0.5 + Poly[k + 1] * (ScalarType)0.5] =
+              (int)j;
+      }
+    }
+    // The points of the fine polylines: their polyline and their index
+    // along it (the order of the points, topological)
+    std::vector<std::map<CoordType, int>> FineIdx(NumPoly);
+    if ((FinePolylines != NULL) && (FinePolylines->size() == NumPoly))
+      for (size_t j = 0; j < NumPoly; j++) {
+        const std::vector<CoordType> &Fine = (*FinePolylines)[j];
+        const int NF = (Closed[j] && (Fine.size() > 1)) ? (int)Fine.size() - 1
+                                                         : (int)Fine.size();
+        for (int k = 0; k < NF; k++) {
+          FineIdx[j][Fine[k]] = k;
+          ExactPoly[Fine[k]] = (int)j;
+        }
+      }
 
     // 1. the variables lying on a polyline
     std::vector<int> VarPoly(NumV, -1);
-    int NumBorderVar = 0, NumBorderFixed = 0;
+    int NumBorderVar = 0, NumBorderFixed = 0, NumStraddle = 0;
     for (int i = 0; i < NumV; i++) {
       std::vector<CoordType> SubS = SideD.PointsOfVariable(i);
       if (SubS.size() < 2)
@@ -80,6 +124,13 @@ public:
       bool IsBorderVar = SideD.IsBorderVariable(i);
       if (IsBorderVar)
         NumBorderVar++;
+      // With AllBorderSides only the border variables: a side shared by two
+      // patches is inside the region, it cannot be on its border (before,
+      // one running close to the border was taken within the tolerance, and
+      // its corners, not polyline points, sent the whole polyline to the
+      // nearest-sample snapping)
+      if (AllBorderSides && !IsBorderVar)
+        continue;
       // the polyline with the smallest maximum distance
       int BestJ = -1;
       ScalarType BestMaxD = std::numeric_limits<ScalarType>::max();
@@ -97,15 +148,80 @@ public:
           BestJ = (int)j;
         }
       }
-      bool Take = (BestJ >= 0) &&
-                  ((AllBorderSides && IsBorderVar && (BestMaxD <= BorderTol)) ||
-                   (BestMaxD <= Tol));
-      if (AllBorderSides && IsBorderVar && !Take)
-        std::cout << "Fixed sides: border side " << i << " left free, "
-                  << SubS.size() << " points, max distance from the region "
-                     "border "
-                  << BestMaxD << " (half segment " << BorderTol << ")"
-                  << std::endl;
+      bool Take = (BestJ >= 0) && (BestMaxD <= Tol);
+      if (AllBorderSides && IsBorderVar) {
+        int ExactJ = -1;
+        bool AllExact = true;
+        for (size_t k = 0; k < SubS.size(); k++) {
+          typename std::map<CoordType, int>::const_iterator It =
+              ExactPoly.find(SubS[k]);
+          if ((It == ExactPoly.end()) ||
+              ((ExactJ >= 0) && ((*It).second != ExactJ))) {
+            AllExact = false;
+            break;
+          }
+          ExactJ = (*It).second;
+        }
+        Take = AllExact && (ExactJ >= 0);
+        // A side partly on a polyline (a point inside it on the polyline,
+        // another one not): with open polylines (the seam of a region, the
+        // rest of its border on the border of the mesh, free) a side going
+        // past the end of a polyline, where there is no corner. It cannot be
+        // fixed, so that part of the polyline is not matched
+        if (!Take) {
+          bool InnerOn = false, AnyOff = false;
+          for (size_t k = 0; k < SubS.size(); k++) {
+            bool On = (ExactPoly.count(SubS[k]) > 0);
+            if (!On)
+              AnyOff = true;
+            else if ((k > 0) && (k + 1 < SubS.size()))
+              InnerOn = true;
+          }
+          if (InnerOn && AnyOff) {
+            NumStraddle++;
+            // DEBUG (sides partly on a polyline): where its points off the
+            // polyline are (distance from it, position along the closest
+            // segment: 0.25, 0.75 = an edge split twice, any other value = a
+            // vertex moved or added elsewhere)
+            if (NumStraddle <= 8) {
+              int NumOff = 0;
+              std::cout << "  side " << i << " (" << SubS.size()
+                        << " points), off:";
+              for (size_t k = 0; k < SubS.size(); k++) {
+                if (ExactPoly.count(SubS[k]) > 0)
+                  continue;
+                NumOff++;
+                if (NumOff > 4)
+                  continue;
+                ScalarType BestD = std::numeric_limits<ScalarType>::max();
+                ScalarType BestT = 0;
+                ScalarType SegL = 0;
+                for (size_t j = 0; j < NumPoly; j++)
+                  for (size_t q = 0; q + 1 < FixedPolylines[j].size(); q++) {
+                    const CoordType &A = FixedPolylines[j][q];
+                    CoordType E = FixedPolylines[j][q + 1] - A;
+                    ScalarType L2 = Geo::Dot(E, E);
+                    ScalarType t =
+                        (L2 > 0) ? Geo::Dot(SubS[k] - A, E) / L2 : 0;
+                    t = std::max((ScalarType)0, std::min((ScalarType)1, t));
+                    ScalarType D = (SubS[k] - (A + E * t)).Norm();
+                    if (D < BestD) {
+                      BestD = D;
+                      BestT = t;
+                      SegL = std::sqrt(L2);
+                    }
+                  }
+                std::cout << " [#" << k << " dist " << BestD << " ("
+                          << ((SegL > 0) ? BestD / SegL : 0)
+                          << " segments) at " << BestT << "]";
+              }
+              std::cout << " (" << NumOff << " off)" << std::endl;
+            }
+          }
+        }
+        if (Take)
+          BestJ = ExactJ;
+      }
       if (Take) {
         VarPoly[i] = BestJ;
         if (IsBorderVar)
@@ -115,8 +231,13 @@ public:
     if (AllBorderSides && (NumBorderFixed < NumBorderVar))
       std::cout << "Fixed sides: " << NumBorderVar - NumBorderFixed << " / "
                 << NumBorderVar
-                << " border sides not on the region border (inner borders, "
-                   "e.g. along features), left free"
+                << " border sides not on the fixed polylines (free border, "
+                   "inner borders), left free"
+                << std::endl;
+    if (NumStraddle > 0)
+      std::cout << "WARNING: fixed sides: " << NumStraddle
+                << " border sides partly on a fixed polyline (going past its "
+                   "end without a corner), left free"
                 << std::endl;
 
     // 2. the corners (extremes of these variables) snapped to a sample
@@ -138,7 +259,133 @@ public:
     for (size_t j = 0; j < NumPoly; j++) {
       if (PolyCorners[j].empty())
         continue;
-      const std::vector<CoordType> &Poly = FixedPolylines[j];
+      // With AllBorderSides the corners are exactly polyline points: a
+      // vertex is its own sample, a segment middle goes to one of the two
+      // ends of its segment that no other corner uses (the corners on the
+      // vertices first). Nearest samples and pushes (below) would move
+      // corners already on their sample (a middle taking the sample of the
+      // next corner, that one pushed to the next one, ...). Both ends used:
+      // a side of one segment split in two, it cannot be on the samples
+      // (AddedSamples given: that segment gets its middle as one more
+      // sample, the corner goes there; only that side of the border changes,
+      // by one segment, the layout refit after it makes the patches around
+      // consistent)
+      if (AllBorderSides) {
+        bool Exact = true;
+        bool Done = false;
+        while (!Done) {
+          const std::vector<CoordType> &PolyX = Polys[j];
+          const int MX = Closed[j] ? (int)PolyX.size() - 1 : (int)PolyX.size();
+          std::map<CoordType, int> VertIdx;
+          std::map<CoordType, int> MidIdx; // middle of the segment k, k+1
+          for (int k = 0; k < MX; k++)
+            VertIdx[PolyX[k]] = k;
+          for (int k = 0; k + 1 < (int)PolyX.size(); k++)
+            MidIdx[PolyX[k] * (ScalarType)0.5 + PolyX[k + 1] * (ScalarType)0.5] =
+                k;
+          // the fine index of every sample (all known: the samples are fine
+          // points, or none is used)
+          std::vector<int> SampleFine(MX, -1);
+          bool FineOk = !FineIdx[j].empty();
+          for (int k = 0; (k < MX) && FineOk; k++) {
+            typename std::map<CoordType, int>::const_iterator ItF =
+                FineIdx[j].find(PolyX[k]);
+            if (ItF == FineIdx[j].end())
+              FineOk = false;
+            else
+              SampleFine[k] = (*ItF).second;
+          }
+          // the segment K0, K0+1 of the samples with C inside (-1 unknown)
+          auto SegOf = [&](const CoordType &C) -> int {
+            if (FineOk) {
+              typename std::map<CoordType, int>::const_iterator ItF =
+                  FineIdx[j].find(C);
+              if (ItF != FineIdx[j].end()) {
+                const int FC = (*ItF).second;
+                int K0 = -1;
+                for (int k = 0; k < MX; k++)
+                  if (SampleFine[k] < FC)
+                    K0 = k;
+                if (K0 < 0)
+                  K0 = Closed[j] ? MX - 1 : -1;
+                if ((K0 >= 0) && (Closed[j] || (K0 + 1 < MX)))
+                  return K0;
+              }
+            }
+            typename std::map<CoordType, int>::const_iterator ItM =
+                MidIdx.find(C);
+            return (ItM != MidIdx.end()) ? (*ItM).second : -1;
+          };
+          CornerSample[j].clear();
+          std::vector<bool> Used(MX, false);
+          typename std::map<CoordType, ScalarType>::iterator ItX;
+          for (ItX = PolyCorners[j].begin(); ItX != PolyCorners[j].end();
+               ItX++) {
+            const CoordType &C = (*ItX).first;
+            if (VertIdx.count(C) > 0) {
+              CornerSample[j][C] = VertIdx[C];
+              Used[VertIdx[C]] = true;
+            } else if (SegOf(C) < 0)
+              Exact = false;
+          }
+          if (!Exact)
+            break;
+          Done = true;
+          for (ItX = PolyCorners[j].begin(); ItX != PolyCorners[j].end();
+               ItX++) {
+            const CoordType &C = (*ItX).first;
+            if (VertIdx.count(C) > 0)
+              continue;
+            int K0 = SegOf(C);
+            int K1 = (K0 + 1) % MX;
+            int K = (!Used[K0]) ? K0 : ((!Used[K1]) ? K1 : -1);
+            if ((K < 0) && (AddedSamples != NULL)) {
+              // the middle as a sample, then all again
+              Polys[j].insert(Polys[j].begin() + K0 + 1, C);
+              AddedSamples->push_back(C);
+              ArcL[j].assign(Polys[j].size(), 0);
+              for (size_t k = 1; k < Polys[j].size(); k++)
+                ArcL[j][k] =
+                    ArcL[j][k - 1] + (Polys[j][k] - Polys[j][k - 1]).Norm();
+              std::cout << "Fixed sides: polyline " << j
+                        << ": a corner inside the segment " << K0 << " - "
+                        << K1
+                        << " with both ends used (a side of one segment "
+                           "split in two), the corner added as a sample"
+                        << std::endl;
+              Done = false;
+              break;
+            }
+            if (K < 0) {
+              std::cout << "WARNING: fixed polyline " << j
+                        << ": a corner in the middle of the segment " << K0
+                        << " - " << K1
+                        << " with both ends used by other corners (a side of "
+                           "one segment split in two), left free"
+                        << std::endl;
+              PolyOk[j] = false;
+              break;
+            }
+            CornerSample[j][C] = K;
+            Used[K] = true;
+          }
+          if (!PolyOk[j])
+            break;
+        }
+        if (Exact) {
+          if (PolyOk[j]) {
+            typename std::map<CoordType, int>::iterator ItS;
+            for (ItS = CornerSample[j].begin(); ItS != CornerSample[j].end();
+                 ItS++)
+              CornerSnap[(*ItS).first] = Polys[j][(*ItS).second];
+          } else
+            CornerSample[j].clear();
+          continue;
+        }
+        // (a corner not on the polyline: as before)
+        CornerSample[j].clear();
+      }
+      const std::vector<CoordType> &Poly = Polys[j];
       // number of distinct samples
       int M = Closed[j] ? (int)Poly.size() - 1 : (int)Poly.size();
       // corners along the polyline
@@ -231,6 +478,88 @@ public:
       for (size_t c = 0; c < Sorted.size(); c++) {
         CornerSample[j][Sorted[c].second] = Idx[c];
         CornerSnap[Sorted[c].second] = Poly[Idx[c]];
+        // DEBUG (moved corners): a corner not on its sample
+        if (!(Sorted[c].second == Poly[Idx[c]]))
+          std::cout << "Fixed sides: corner (" << Sorted[c].second.X << " "
+                    << Sorted[c].second.Y << " " << Sorted[c].second.Z
+                    << ") moved by " << (Sorted[c].second - Poly[Idx[c]]).Norm()
+                    << " to sample " << Idx[c] << " of " << M
+                    << (ExactPoly.count(Sorted[c].second) > 0
+                            ? " (it is a polyline point)"
+                            : " (not a polyline point)")
+                    << std::endl;
+      }
+    }
+
+    // 2b. Parity of the border. A quad mesh has an even number of border
+    // edges (4 F = 2 E_inner + E_border), so a region whose border got an odd
+    // number of middles has an odd border and cannot be quadrangulated: one
+    // patch stays odd whatever the free sides do (it was left as a hole).
+    // One more middle is added, on the first segment next to the last added
+    // middle (forward, then backward along its polyline) whose middle is not
+    // a corner: that fixed side gets one segment more. The quad on the other
+    // side is next to the one that got the previous middle, mostly in the
+    // same layout patch, which then gets two vertices more (even again); the
+    // layout refit makes the patches around consistent as for any middle
+    // (only if every polyline is closed: an open one leaves part of the
+    // border free, which takes the parity)
+    bool AllClosed = true;
+    for (size_t j = 0; j < NumPoly; j++)
+      AllClosed = AllClosed && Closed[j];
+    if ((AddedSamples != NULL) && (!AddedSamples->empty()) && AllClosed) {
+      int TotSeg = 0;
+      for (size_t j = 0; j < NumPoly; j++)
+        TotSeg += (int)Polys[j].size() - 1;
+      if ((TotSeg % 2) != 0) {
+        const CoordType Last = AddedSamples->back();
+        int JL = -1, PL = -1;
+        for (size_t j = 0; (j < NumPoly) && (JL < 0); j++)
+          for (size_t k = 0; k < Polys[j].size(); k++)
+            if (Polys[j][k] == Last) {
+              JL = (int)j;
+              PL = (int)k;
+              break;
+            }
+        bool AddedOne = false;
+        if ((JL >= 0) && PolyOk[JL]) {
+          std::vector<CoordType> &PolyX = Polys[JL];
+          const int NS = (int)PolyX.size() - 1; // segments k, k+1
+          // the middle at PL splits the old segment in PL-1 and PL
+          for (int d = 1; (d < NS) && (!AddedOne); d++) {
+            for (int dir = 0; (dir < 2) && (!AddedOne); dir++) {
+              int K = (dir == 0) ? (PL + d) : (PL - 1 - d);
+              if (Closed[JL])
+                K = ((K % NS) + NS) % NS;
+              else if ((K < 0) || (K >= NS))
+                continue;
+              CoordType Mid = PolyX[K] * (ScalarType)0.5 +
+                              PolyX[K + 1] * (ScalarType)0.5;
+              if (PolyCorners[JL].count(Mid) > 0)
+                continue;
+              PolyX.insert(PolyX.begin() + K + 1, Mid);
+              AddedSamples->push_back(Mid);
+              // the samples after it move by one
+              typename std::map<CoordType, int>::iterator ItS;
+              for (ItS = CornerSample[JL].begin();
+                   ItS != CornerSample[JL].end(); ItS++)
+                if ((*ItS).second > K)
+                  (*ItS).second++;
+              ArcL[JL].assign(PolyX.size(), 0);
+              for (size_t k = 1; k < PolyX.size(); k++)
+                ArcL[JL][k] = ArcL[JL][k - 1] + (PolyX[k] - PolyX[k - 1]).Norm();
+              std::cout << "Fixed sides: polyline " << JL
+                        << ": odd border (" << TotSeg
+                        << " segments), the middle of the segment " << K
+                        << " - " << K + 1 << " added as a sample too"
+                        << std::endl;
+              AddedOne = true;
+            }
+          }
+        }
+        if (!AddedOne)
+          std::cout << "WARNING: fixed sides: odd border (" << TotSeg
+                    << " segments), no segment for one more middle"
+                    << std::endl;
       }
     }
 
@@ -241,7 +570,7 @@ public:
       int j = VarPoly[i];
       if (!PolyOk[j])
         continue;
-      const std::vector<CoordType> &Poly = FixedPolylines[j];
+      const std::vector<CoordType> &Poly = Polys[j];
       int M = Closed[j] ? (int)Poly.size() - 1 : (int)Poly.size();
       std::vector<CoordType> SubS = SideD.PointsOfVariable(i);
       int K0 = CornerSample[j][SubS.front()];
@@ -280,8 +609,11 @@ public:
       Samples.push_back(SubS.back());
       SideD.SetFixedVariable(i, Count, Samples);
     }
+    if (FinalPolylines != NULL)
+      *FinalPolylines = Polys;
     std::cout << "Fixed variables: " << SideD.NumFixedVariables() << " / "
               << NumV << ", snapped corners: " << CornerSnap.size()
+              << (AllBorderSides ? " (border sides: exact rule)" : "")
               << std::endl;
     return SideD.NumFixedVariables();
   }

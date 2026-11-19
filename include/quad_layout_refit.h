@@ -22,6 +22,7 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <chrono>
 #include <map>
 #include <set>
 #include <string>
@@ -54,6 +55,20 @@ template <class ScalarType> struct QuadLayoutRefitParam {
   // seed patches are kept (the others back as before); false = every change
   // of the new solve kept, as the full quadrangulation would do
   bool keep_connected_only = true;
+  // The vertices added on the edges of kept quads (faces with more than 4
+  // vertices) by the region remesh: never corners of their patch. Empty =
+  // only the exact middles of an edge are recognised as added
+  std::set<Geo::Point3<ScalarType>> AddedVert;
+  // The original surface (e.g. the input triangle mesh) the smoothing
+  // projects on, instead of the quads before the refit (which lose detail
+  // edit after edit); the feature lines stay the ones of the quads. NULL =
+  // the quads (as before)
+  const std::vector<Geo::Point3<ScalarType>> *SurfVert = NULL;
+  const std::vector<std::vector<int>> *SurfFaces = NULL;
+  // true: only the region solved, the rest kept and changed only along the
+  // flow paths a violation needs (SideDiscretization::FindDiscretizationLocal);
+  // false: everything solved again from the lengths (as before)
+  bool local_solve = true;
 };
 
 template <class ScalarType> class QuadLayoutRefit {
@@ -85,6 +100,9 @@ public:
                     std::vector<int> *OldFaceOf = NULL,
                     QuadRegionHistory<ScalarType> *History = NULL,
                     std::vector<int> *QuadPatchCorner = NULL) {
+    // (QuadPatchCorner below may point to a local copy of the masks; the
+    // result goes to the caller's one)
+    std::vector<int> *OutPatchCorner = QuadPatchCorner;
     // QuadPatchCorner, if given (one mask per quad, bit
     // j = vertex j is a corner of the quad's patch), gives the corners of the
     // patches as the quadrangulator made them; it is updated with the
@@ -95,19 +113,60 @@ public:
       LastMessage() = "no patch layout";
       return false;
     }
-    for (size_t i = 0; i < NF; i++)
-      if (QuadFaces[i].size() != 4) {
+    // Faces with more than 4 vertices are allowed: a quad next to a region
+    // with a vertex added on one of its edges (a border segment of the
+    // region split in two, see FixedPolylineSides AddedSamples); their
+    // patches are always tessellated again, so the result is all quads
+    std::set<int> PolyLabels;
+    for (size_t i = 0; i < NF; i++) {
+      if (QuadFaces[i].size() < 4) {
         LastMessage() = "not a quad mesh";
         return false;
       }
+      if (QuadFaces[i].size() > 4)
+        PolyLabels.insert(QuadPatch[i]);
+    }
+    // The corner masks of those faces: a vertex added in the middle of an
+    // edge (exactly the middle of its two neighbours) is not a corner, the
+    // bits of the other vertices are the old ones in order
+    std::vector<int> PolyMask;
+    if ((QuadPatchCorner != NULL) && (QuadPatchCorner->size() == NF)) {
+      PolyMask = *QuadPatchCorner;
+      for (size_t i = 0; i < NF; i++) {
+        size_t SZ = QuadFaces[i].size();
+        if (SZ == 4)
+          continue;
+        int Old = PolyMask[i], New = 0, Bit = 0;
+        for (size_t j = 0; j < SZ; j++) {
+          const CoordType &P = QuadVert[QuadFaces[i][j]];
+          const CoordType &A = QuadVert[QuadFaces[i][(j + SZ - 1) % SZ]];
+          const CoordType &B = QuadVert[QuadFaces[i][(j + 1) % SZ]];
+          if ((P == (A * (ScalarType)0.5 + B * (ScalarType)0.5)) ||
+              (Param.AddedVert.count(P) > 0))
+            continue;
+          if ((Old >> Bit) & 1)
+            New |= (1 << j);
+          Bit++;
+        }
+        PolyMask[i] = New;
+      }
+      QuadPatchCorner = &PolyMask;
+    }
 
+    auto TR0 = std::chrono::high_resolution_clock::now();
     // 1. the domain: the quads triangulated, the patches -------------------
+    // (a fan for the faces with more vertices)
     std::vector<std::vector<int>> TriF;
+    std::vector<int> FaceOfTri;
+    std::vector<std::vector<int>> TrisOfFace(NF);
     TriF.reserve(2 * NF);
     for (size_t i = 0; i < NF; i++) {
       const std::vector<int> &Q = QuadFaces[i];
-      TriF.push_back({Q[0], Q[1], Q[2]});
-      TriF.push_back({Q[0], Q[2], Q[3]});
+      for (size_t k = 1; k + 1 < Q.size(); k++) {
+        TrisOfFace[i].push_back((int)TriF.size());
+        TriF.push_back({Q[0], Q[k], Q[k + 1]});
+        FaceOfTri.push_back((int)i);
+      }
     }
     std::map<int, std::vector<int>> LabelQuads;
     int NoLabel = 0;
@@ -133,14 +192,15 @@ public:
     // the patches to improve were left out (and their neighbours fixed)
     std::vector<int> VertQuads(QuadVert.size(), 0);
     for (size_t i = 0; i < NF; i++)
-      for (size_t j = 0; j < 4; j++)
+      for (size_t j = 0; j < QuadFaces[i].size(); j++)
         VertQuads[QuadFaces[i][j]]++;
     std::vector<bool> OnMeshBorderV(QuadVert.size(), false);
     {
       std::map<std::pair<int, int>, int> EC0;
       for (size_t i = 0; i < NF; i++)
-        for (size_t j = 0; j < 4; j++) {
-          int V0 = QuadFaces[i][j], V1 = QuadFaces[i][(j + 1) % 4];
+        for (size_t j = 0; j < QuadFaces[i].size(); j++) {
+          int V0 = QuadFaces[i][j],
+              V1 = QuadFaces[i][(j + 1) % QuadFaces[i].size()];
           EC0[std::make_pair(std::min(V0, V1), std::max(V0, V1))]++;
         }
       std::map<std::pair<int, int>, int>::iterator ItB;
@@ -153,6 +213,9 @@ public:
     std::vector<int> Labels; // patch passed -> its label
     std::vector<std::vector<int>> PatchTris, PatchCorners;
     std::map<int, int> LabelIdx;
+    // The corners of every patch (known or guessed), to give the masks of
+    // the faces kept as they are when the corners were not known
+    std::map<int, std::set<int>> LabelCornerSet;
     // The patches left out (not 4 corners: e.g. an old
     // patch cut by the region border), with their quads
     int NumNot4 = 0, QuadsNot4 = 0;
@@ -160,7 +223,7 @@ public:
     for (ItL = LabelQuads.begin(); ItL != LabelQuads.end(); ItL++) {
       std::map<int, int> VCount;
       for (size_t k = 0; k < (*ItL).second.size(); k++)
-        for (size_t j = 0; j < 4; j++)
+        for (size_t j = 0; j < QuadFaces[(*ItL).second[k]].size(); j++)
           VCount[QuadFaces[(*ItL).second[k]][j]]++;
       std::vector<int> Corners;
       std::map<int, int>::iterator ItV;
@@ -170,7 +233,7 @@ public:
         std::set<int> CS;
         for (size_t k = 0; k < (*ItL).second.size(); k++) {
           int Fq = (*ItL).second[k];
-          for (size_t j = 0; j < 4; j++)
+          for (size_t j = 0; j < QuadFaces[Fq].size(); j++)
             if (((*QuadPatchCorner)[Fq] >> j) & 1)
               CS.insert(QuadFaces[Fq][j]);
         }
@@ -185,6 +248,32 @@ public:
         if (corner)
           Corners.push_back((*ItV).first);
       }
+      // (kept: the masks of the faces not tessellated again, below)
+      LabelCornerSet[(*ItL).first] =
+          std::set<int>(Corners.begin(), Corners.end());
+      // A patch with an edge of length zero (two distinct vertices at the
+      // same position: a side collapsed to a point, e.g. a fan of quads of
+      // the full quadrangulation) cannot be measured nor tessellated again:
+      // kept as it is, as the patches without 4 corners
+      bool ZeroEdge = false;
+      for (size_t k = 0; (k < (*ItL).second.size()) && !ZeroEdge; k++) {
+        const std::vector<int> &Fq = QuadFaces[(*ItL).second[k]];
+        for (size_t j = 0; j < Fq.size(); j++)
+          if ((Fq[j] != Fq[(j + 1) % Fq.size()]) &&
+              (QuadVert[Fq[j]] == QuadVert[Fq[(j + 1) % Fq.size()]])) {
+            ZeroEdge = true;
+            break;
+          }
+      }
+      if (ZeroEdge) {
+        NumNot4++;
+        QuadsNot4 += (int)(*ItL).second.size();
+        std::cout << "Layout refit: patch " << (*ItL).first << " ("
+                  << (*ItL).second.size()
+                  << " quads) has an edge of length zero, kept fixed"
+                  << std::endl;
+        continue;
+      }
       if (Corners.size() != 4) {
         NumNot4++;
         QuadsNot4 += (int)(*ItL).second.size();
@@ -197,10 +286,9 @@ public:
         continue; // kept as it is (its neighbours' sides fixed below)
       }
       std::vector<int> Tris;
-      for (size_t k = 0; k < (*ItL).second.size(); k++) {
-        Tris.push_back(2 * (*ItL).second[k]);
-        Tris.push_back(2 * (*ItL).second[k] + 1);
-      }
+      for (size_t k = 0; k < (*ItL).second.size(); k++)
+        Tris.insert(Tris.end(), TrisOfFace[(*ItL).second[k]].begin(),
+                    TrisOfFace[(*ItL).second[k]].end());
       LabelIdx[(*ItL).first] = (int)Labels.size();
       Labels.push_back((*ItL).first);
       PatchTris.push_back(Tris);
@@ -219,8 +307,9 @@ public:
       {
         std::map<std::pair<int, int>, std::vector<int>> EF;
         for (size_t i = 0; i < NF; i++)
-          for (size_t j = 0; j < 4; j++) {
-            int V0 = QuadFaces[i][j], V1 = QuadFaces[i][(j + 1) % 4];
+          for (size_t j = 0; j < QuadFaces[i].size(); j++) {
+            int V0 = QuadFaces[i][j],
+                V1 = QuadFaces[i][(j + 1) % QuadFaces[i].size()];
             EF[std::make_pair(std::min(V0, V1), std::max(V0, V1))].push_back(
                 (int)i);
           }
@@ -237,7 +326,7 @@ public:
           }
         }
       }
-      std::set<int> In;
+      std::set<int> In(PolyLabels.begin(), PolyLabels.end());
       for (size_t i = 0; i < SeedFaces.size(); i++)
         if ((SeedFaces[i] >= 0) && (SeedFaces[i] < (int)NF))
           In.insert(QuadPatch[SeedFaces[i]]);
@@ -272,7 +361,7 @@ public:
     {
       const std::vector<std::vector<int>> &PFI = SideD.GetPatchFacesIdx();
       for (size_t p = 0; p < PFI.size(); p++) {
-        int L = PFI[p].empty() ? -1 : QuadPatch[PFI[p][0] / 2];
+        int L = PFI[p].empty() ? -1 : QuadPatch[FaceOfTri[PFI[p][0]]];
         PsdLabel.push_back(L);
         PsdAllowed.push_back((LabelIdx.count(L) > 0) ? Allowed[LabelIdx[L]]
                                                       : false);
@@ -290,8 +379,9 @@ public:
     {
       std::map<std::pair<int, int>, int> EC;
       for (size_t i = 0; i < NF; i++)
-        for (size_t j = 0; j < 4; j++) {
-          int V0 = QuadFaces[i][j], V1 = QuadFaces[i][(j + 1) % 4];
+        for (size_t j = 0; j < QuadFaces[i].size(); j++) {
+          int V0 = QuadFaces[i][j],
+              V1 = QuadFaces[i][(j + 1) % QuadFaces[i].size()];
           EC[std::make_pair(std::min(V0, V1), std::max(V0, V1))]++;
         }
       std::map<std::pair<int, int>, int>::iterator ItE;
@@ -343,12 +433,14 @@ public:
     std::cout << "Layout refit: " << Labels.size() << " patches, " << NumV
               << " sides (" << NumFixed << " fixed)" << std::endl;
 
+    auto TR1 = std::chrono::high_resolution_clock::now();
     // 3. solve (as MeshQuadrangulator::FindSubdivisions) ---------------------
     ScalarType AvgE = 0;
     int NumE = 0;
     for (size_t i = 0; i < NF; i++)
-      for (size_t j = 0; j < 4; j++) {
-        AvgE += (QuadVert[QuadFaces[i][j]] - QuadVert[QuadFaces[i][(j + 1) % 4]])
+      for (size_t j = 0; j < QuadFaces[i].size(); j++) {
+        AvgE += (QuadVert[QuadFaces[i][j]] -
+                 QuadVert[QuadFaces[i][(j + 1) % QuadFaces[i].size()]])
                     .Norm();
         NumE++;
       }
@@ -357,10 +449,37 @@ public:
     SideD.PrioritizeTJunction = true;
     // the same optimization as MeshQuadrangulator::FindSubdivisions
     ScalarType EdgeS = (Param.TargetEdge > 0) ? Param.TargetEdge : AvgE;
-    SideD.FindDiscretization(EdgeS, Param.RegVsIso, true, true, true);
-    if (SideD.NumOdd() > 0) {
-      SideD.PMode = Geo::SideDiscretization<ScalarType>::EvenVar;
+    if (Param.local_solve) {
+      // Only the region solved: the sides of the patches of the seed
+      // (the region just remeshed) and of the patches with a vertex added on
+      // an edge are free; the others keep their current subdivision, and
+      // change only along the flow paths that a violation needs
+      std::set<int> SeedL(PolyLabels.begin(), PolyLabels.end());
+      for (size_t i = 0; i < SeedFaces.size(); i++)
+        if ((SeedFaces[i] >= 0) && (SeedFaces[i] < (int)NF))
+          SeedL.insert(QuadPatch[SeedFaces[i]]);
+      std::vector<bool> Free(NumV, false);
+      int NumFree = 0;
+      for (int i = 0; i < NumV; i++) {
+        std::vector<std::array<int, 3>> PS;
+        SideD.SideOfVariable(i, PS);
+        for (size_t k = 0; k < PS.size(); k++)
+          if ((PS[k][0] >= 0) && (PS[k][0] < (int)PsdLabel.size()) &&
+              (SeedL.count(PsdLabel[PS[k][0]]) > 0))
+            Free[i] = true;
+        if (Free[i])
+          NumFree++;
+      }
+      std::cout << "Layout refit: local solve, " << NumFree << " of " << NumV
+                << " sides free (the region)" << std::endl;
+      SideD.FindDiscretizationLocal(EdgeS, Param.RegVsIso, Free, OldVal,
+                                    OldPts);
+    } else {
       SideD.FindDiscretization(EdgeS, Param.RegVsIso, true, true, true);
+      if (SideD.NumOdd() > 0) {
+        SideD.PMode = Geo::SideDiscretization<ScalarType>::EvenVar;
+        SideD.FindDiscretization(EdgeS, Param.RegVsIso, true, true, true);
+      }
     }
     std::vector<int> Val;
     SideD.GetVariablesValues(Val);
@@ -394,7 +513,8 @@ public:
     }
     std::set<int> KeepRoots;
     {
-      std::set<int> SeedLabels;
+      // (the patches with a face to remake are seeds too)
+      std::set<int> SeedLabels(PolyLabels.begin(), PolyLabels.end());
       for (size_t i = 0; i < SeedFaces.size(); i++)
         if ((SeedFaces[i] >= 0) && (SeedFaces[i] < (int)NF))
           SeedLabels.insert(QuadPatch[SeedFaces[i]]);
@@ -421,6 +541,11 @@ public:
       for (size_t k = 0; k < VarPatches[i].size(); k++)
         Changed.insert(VarPatches[i][k]);
     }
+    // The patches with a face with more than 4 vertices are always
+    // tessellated again (their sides keep the values found)
+    for (int p = 0; (p < NP) && (p < (int)PsdLabel.size()); p++)
+      if (PolyLabels.count(PsdLabel[p]) > 0)
+        Changed.insert(p);
     if (NumReverted > 0)
       std::cout << "Layout refit: " << NumReverted
                 << " changed sides not connected to the region, back as "
@@ -445,6 +570,7 @@ public:
           MeshBorderPos.insert(MakeEdgePos(SideD.SampleSidePoints[i][k],
                                            SideD.SampleSidePoints[i][k + 1]));
 
+    auto TR2 = std::chrono::high_resolution_clock::now();
     // 4. the changed patches tessellated again ---------------------------------
     std::vector<std::vector<int>> PF, PC;
     std::vector<std::vector<std::vector<CoordType>>> SS;
@@ -478,6 +604,15 @@ public:
     std::vector<EdgePos> NewFeatData;
     SideD.GetFeaturesQuadrData(QuadVert, QuadFeatures, NewFeatData);
 
+    auto TR3 = std::chrono::high_resolution_clock::now();
+    // (where the time goes)
+    std::cout << "Layout refit times: graph and sides "
+              << std::chrono::duration<double>(TR1 - TR0).count()
+              << " s, solve "
+              << std::chrono::duration<double>(TR2 - TR1).count()
+              << " s, tessellation "
+              << std::chrono::duration<double>(TR3 - TR2).count() << " s"
+              << std::endl;
     // 5. merge: the kept quads, then the new ones (shared vertices by
     // position: the sides between a kept and a changed patch did not change)
     std::set<int> ChangedLabelSet(ChangedLabel.begin(), ChangedLabel.end());
@@ -492,6 +627,7 @@ public:
     std::vector<int> MP, MOld;
     std::vector<int> MC;
     std::map<CoordType, int> PosIdx;
+    std::map<int, int> KeptIdx; // kept vertex (old index) -> new index
     auto VertIdx = [&](const CoordType &P) -> int {
       typename std::map<CoordType, int>::iterator It = PosIdx.find(P);
       if (It != PosIdx.end())
@@ -504,16 +640,60 @@ public:
     for (size_t i = 0; i < NF; i++) {
       if (ChangedLabelSet.count(QuadPatch[i]) > 0)
         continue;
+      // (a face with more than 4 vertices kept: its patch was not
+      // tessellated again)
+      if (QuadFaces[i].size() != 4) {
+        // Which patch and why
+        bool Passed = (LabelIdx.count(QuadPatch[i]) > 0);
+        typename std::map<int, std::set<int>>::const_iterator ItCS =
+            LabelCornerSet.find(QuadPatch[i]);
+        std::cout << "Layout refit: face " << i << " (" << QuadFaces[i].size()
+                  << " vertices) of the patch " << QuadPatch[i] << ", "
+                  << (Passed ? "a 4 sided patch not tessellated again"
+                             : "a patch left out with ")
+                  << ((!Passed && (ItCS != LabelCornerSet.end()))
+                          ? std::to_string((*ItCS).second.size()) +
+                                " corners"
+                          : std::string(""))
+                  << std::endl;
+        LastMessage() = "a face with a vertex added on an edge was not "
+                        "tessellated again, mesh unchanged";
+        std::cout << "Layout refit: " << LastMessage() << std::endl;
+        return false;
+      }
+      // the kept quads keep their vertices (by index: two kept vertices at
+      // the same position stay two, as the merge of the region remesh);
+      // the new ones are joined to them by position
       std::vector<int> F;
-      for (size_t j = 0; j < 4; j++)
-        F.push_back(VertIdx(QuadVert[QuadFaces[i][j]]));
+      for (size_t j = 0; j < 4; j++) {
+        const int OV = QuadFaces[i][j];
+        typename std::map<int, int>::iterator ItK = KeptIdx.find(OV);
+        if (ItK == KeptIdx.end()) {
+          int Idx = (int)MV.size();
+          MV.push_back(QuadVert[OV]);
+          PosIdx.insert(std::make_pair(QuadVert[OV], Idx));
+          ItK = KeptIdx.insert(std::make_pair(OV, Idx)).first;
+        }
+        F.push_back((*ItK).second);
+      }
       MF.push_back(F);
       MP.push_back(QuadPatch[i]);
       MOld.push_back((int)i);
-      MC.push_back(((QuadPatchCorner != NULL) &&
-                    (QuadPatchCorner->size() == NF))
-                       ? (*QuadPatchCorner)[i]
-                       : 0);
+      // The mask of a kept face: the known one, or the guessed corners of
+      // its patch (a 0 here would be read as "known, no corners" by the next
+      // refit: every kept patch with 0 corners, all fixed)
+      if ((QuadPatchCorner != NULL) && (QuadPatchCorner->size() == NF))
+        MC.push_back((*QuadPatchCorner)[i]);
+      else {
+        int Mask = 0;
+        typename std::map<int, std::set<int>>::const_iterator ItCS =
+            LabelCornerSet.find(QuadPatch[i]);
+        if (ItCS != LabelCornerSet.end())
+          for (size_t j = 0; j < 4; j++)
+            if ((*ItCS).second.count(QuadFaces[i][j]) > 0)
+              Mask |= (1 << j);
+        MC.push_back(Mask);
+      }
     }
     for (size_t i = 0; i < NQF.size(); i++) {
       std::vector<int> F;
@@ -645,6 +825,7 @@ public:
     // the features fixed (not the open ends, as there); limited to the
     // quads tessellated again plus one ring of kept quads around them
     if ((Param.SmoothSteps > 0) && !NQF.empty()) {
+      auto TSmooth0 = std::chrono::high_resolution_clock::now();
       Geo::SmoothParam<ScalarType> SParam;
       SParam.Clear();
       SParam.Features = MFeat;
@@ -661,6 +842,61 @@ public:
       Geo::getBorderEdges(TriF, BorderETris);
       SParam.ReprojFeatures.insert(SParam.ReprojFeatures.end(),
                                    BorderETris.begin(), BorderETris.end());
+      // The edges of length zero (two distinct vertices at the same
+      // position: a slit of zero area, e.g. a side collapsed to a point in
+      // the full quadrangulation) are not lines to slide on (a line of zero
+      // length breaks the spatial index of the reprojection): out of the
+      // feature lines, their vertices fixed
+      std::set<int> ZeroEdgeV;
+      {
+        std::vector<std::pair<int, int>> Kept;
+        for (size_t i = 0; i < SParam.Features.size(); i++) {
+          const std::pair<int, int> &E = SParam.Features[i];
+          if (MV[E.first] == MV[E.second]) {
+            ZeroEdgeV.insert(E.first);
+            ZeroEdgeV.insert(E.second);
+            continue;
+          }
+          Kept.push_back(E);
+        }
+        SParam.Features = Kept;
+        Kept.clear();
+        for (size_t i = 0; i < SParam.ReprojFeatures.size(); i++) {
+          const std::pair<int, int> &E = SParam.ReprojFeatures[i];
+          if (QuadVert[E.first] == QuadVert[E.second])
+            continue;
+          Kept.push_back(E);
+        }
+        SParam.ReprojFeatures = Kept;
+      }
+      // On the original surface: its triangles for the surface, and the
+      // feature lines of the quads appended as extra vertices (not used by
+      // the triangles) for the lines
+      std::vector<CoordType> SurfV;
+      std::vector<std::vector<int>> SurfF;
+      if ((Param.SurfVert != NULL) && (Param.SurfFaces != NULL) &&
+          !Param.SurfFaces->empty()) {
+        SurfV = *Param.SurfVert;
+        SurfF = *Param.SurfFaces;
+        std::map<int, int> LineV;
+        std::vector<std::pair<int, int>> SurfFeat;
+        for (size_t i = 0; i < SParam.ReprojFeatures.size(); i++) {
+          int E[2] = {SParam.ReprojFeatures[i].first,
+                      SParam.ReprojFeatures[i].second};
+          for (int k = 0; k < 2; k++) {
+            std::map<int, int>::iterator It = LineV.find(E[k]);
+            if (It == LineV.end()) {
+              It = LineV.insert(std::make_pair(E[k], (int)SurfV.size())).first;
+              SurfV.push_back(QuadVert[E[k]]);
+            }
+            E[k] = (*It).second;
+          }
+          SurfFeat.push_back(std::make_pair(E[0], E[1]));
+        }
+        SParam.ReprojVert = &SurfV;
+        SParam.ReprojFaces = &SurfF;
+        SParam.ReprojFeatures = SurfFeat;
+      }
       SParam.Damp = 0.5;
       SParam.post_project = true;
       SParam.NumIte = Param.SmoothSteps;
@@ -679,17 +915,25 @@ public:
       Geo::MeshFeatures<ScalarType>::VerticesWithValence1(MFeat, Valence1);
       std::set<int> Fixed(Corners.begin(), Corners.end());
       Fixed.insert(Valence1.begin(), Valence1.end());
-      // movable: the vertices of the new quads and of the kept quads
-      // touching them (one ring, so the seam is smoothed too, as the seam
-      // smoothing of the region remesh); the other kept vertices fixed
+      Fixed.insert(ZeroEdgeV.begin(), ZeroEdgeV.end());
+      // movable: the vertices of the new quads, of the seed quads (the
+      // region just remeshed: its quadrangulation is smoothed again together
+      // with the patches around it, a fold left inside it can be undone) and
+      // of the kept quads touching them (one ring, so the seam is smoothed
+      // too, as the seam smoothing of the region remesh); the other kept
+      // vertices fixed
+      std::vector<bool> SeedFace(NF, false);
+      for (size_t k = 0; k < SeedFaces.size(); k++)
+        if ((SeedFaces[k] >= 0) && (SeedFaces[k] < (int)NF))
+          SeedFace[SeedFaces[k]] = true;
       std::vector<bool> Movable(MV.size(), false);
       for (size_t i = 0; i < MF.size(); i++)
-        if (MOld[i] < 0)
+        if ((MOld[i] < 0) || SeedFace[MOld[i]])
           for (size_t j = 0; j < MF[i].size(); j++)
             Movable[MF[i][j]] = true;
       std::vector<bool> NewV = Movable;
       for (size_t i = 0; i < MF.size(); i++) {
-        if (MOld[i] < 0)
+        if ((MOld[i] < 0) || SeedFace[MOld[i]])
           continue;
         bool touch = false;
         for (size_t j = 0; j < MF[i].size(); j++)
@@ -703,14 +947,23 @@ public:
           Fixed.insert((int)v);
       SParam.FixedVert.assign(Fixed.begin(), Fixed.end());
       Geo::SmoothLaplacian<ScalarType>(MV, MF, SParam);
+      int NumMovable = 0;
+      for (size_t v = 0; v < Movable.size(); v++)
+        if (Movable[v])
+          NumMovable++;
+      auto TSmooth1 = std::chrono::high_resolution_clock::now();
+      std::cout << "Layout refit: smoothing "
+                << std::chrono::duration<double>(TSmooth1 - TSmooth0).count()
+                << " s (" << NumMovable << " movable of " << MV.size()
+                << " vertices)" << std::endl;
     }
     std::vector<int> OldQuadPatch = QuadPatch; // (for the region history)
     QuadVert = MV;
     QuadFaces = MF;
     QuadPatch = MP;
     QuadFeatures = MFeat;
-    if (QuadPatchCorner != NULL)
-      *QuadPatchCorner = MC;
+    if (OutPatchCorner != NULL)
+      *OutPatchCorner = MC;
     if (OldFaceOf != NULL)
       *OldFaceOf = MOld;
     // The kept faces keep their region, the faces
