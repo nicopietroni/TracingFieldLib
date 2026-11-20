@@ -147,6 +147,11 @@ public:
   // the effect is negligible and single-variable fixing is just as fast.
   bool       use_batch_fixing;
   int        max_batch_size;         // upper bound on variables fixed per iteration
+  // > 0: the bound grows with the free variables, max_batch_size or
+  // (free variables / batch_div) if larger (a large system fixes many
+  // uncorrelated variables per step, the last ones still few at a time);
+  // 0 = max_batch_size only
+  int        batch_div;
   ScalarType batch_max_correlation;  // max allowed |cos similarity| between
                                      // columns of two variables fixed together
                                      // (0 = only totally disjoint columns, 1 = no check)
@@ -389,8 +394,12 @@ private:
     const auto &A0 = LQSolver.OriginalA();
     batch.push_back(RoundRank[0]);
 
+    // RoundRank holds the free variables
+    int MaxBatch = max_batch_size;
+    if (batch_div > 0)
+      MaxBatch = std::max(MaxBatch, (int)RoundRank.size() / batch_div);
     for (size_t i = 1; i < RoundRank.size() &&
-                       (int)batch.size() < max_batch_size; i++) {
+                       (int)batch.size() < MaxBatch; i++) {
       int cand = RoundRank[i].first;
       ScalarType nCand = colNormCache.empty() ? ScalarType(1)
                                               : colNormCache[cand];
@@ -798,6 +807,7 @@ public:
     use_incremental_solve = true;   // rank-1 Cholesky updates (fast)
     use_batch_fixing      = true;   // fix several uncorrelated vars per step
     max_batch_size        = 8;      // conservative — raise for very large n
+    batch_div             = 0;
     batch_max_correlation = ScalarType(0.15);
     use_lns               = false;   // post-greedy neighbourhood search
     lns_num_iterations    = 100;

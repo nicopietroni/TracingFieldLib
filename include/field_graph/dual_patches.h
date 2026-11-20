@@ -482,6 +482,14 @@ public:
     // such a side gets its dual vertex on one of them, not in the middle of
     // an edge. Empty = the old behaviour
     std::set<Geo::Point3<ScalarType>> BorderAnchors;
+    // The two patches sharing a side choose their split edge on it each on
+    // its own: two different edges = two dual vertices on that side, a
+    // T-junction of the dual (one more side variable each). SnapSides: the
+    // two take the same edge when it moves the split by less than
+    // SideSnapRatio of the side length (DualVertexPlacement::SnapBorders,
+    // BorderSnapRatio). Off = the old behaviour
+    bool SnapSides;
+    ScalarType SideSnapRatio;
     // int SmoothSteps;
 
     DualParameter() {
@@ -495,6 +503,8 @@ public:
       RType = RT_UVDist_LSC;
       Minimize_t_junctions = false;
       OptimizeForQuad = false;
+      SnapSides = false;
+      SideSnapRatio = 0.1;
       // RType = RT_CCability;
       //  SmoothSteps = 5;
     }
@@ -604,6 +614,8 @@ public:
 
     DualVertexPlacement<ScalarType> DualVP(PData, CentralV, SplEdgesIDX);
 
+    DualVP.SnapBorders = DualParam.SnapSides;
+    DualVP.BorderSnapRatio = DualParam.SideSnapRatio;
     DualVP.Init(ToSplit, PatchesParam.PatchVertUVLSC,
                 PatchesParam.PatchVertUVTutte);
     DualVP.Optimize();

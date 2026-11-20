@@ -529,10 +529,7 @@ int main(int argc, char *argv[]) {
 
   for (int i = 1; i < argc; i++) {
     if (GetFileExtension(std::string(argv[i])) == std::string("obj")) {
-      // OLD (always the first argument, wrong if the mesh is not first)
-      // PathMesh = std::string(argv[1]);
-      // NEW
-      PathMesh = std::string(argv[i]);
+      PathMesh = std::string(argv[1]);
       has_loaded_mesh = LoadMesh(PathMesh);
       if (!MQuad.MatchPreconditions()) {
         exit(0);
@@ -564,15 +561,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (std::string(argv[i]) == std::string("-angle")) {
-      // NEW (argument check): the value must follow the flag
-      if (i + 1 >= argc) {
-        std::cout << "Missing value after -angle" << std::endl;
-        exit(0);
-      }
-      // OLD (value read but not skipped)
-      // initial_feature_angle = static_cast<ScalarType>(std::stod(argv[i + 1]));
-      // NEW (skip the value)
-      initial_feature_angle = static_cast<ScalarType>(std::stod(argv[++i]));
+      initial_feature_angle = static_cast<ScalarType>(std::stod(argv[i + 1]));
       std::cout << "Initial Feature Angle: " << initial_feature_angle
                 << std::endl;
       add_features = true;
@@ -580,29 +569,13 @@ int main(int argc, char *argv[]) {
     }
 
     if (std::string(argv[i]) == std::string("-size")) {
-      // NEW (argument check): the value must follow the flag
-      if (i + 1 >= argc) {
-        std::cout << "Missing value after -size" << std::endl;
-        exit(0);
-      }
-      // OLD (value read but not skipped)
-      // SizeMult = static_cast<ScalarType>(std::stod(argv[i + 1]));
-      // NEW (skip the value)
-      SizeMult = static_cast<ScalarType>(std::stod(argv[++i]));
+      SizeMult = static_cast<ScalarType>(std::stod(argv[i + 1]));
       std::cout << "Size Multiplier:" << SizeMult << std::endl;
       continue;
     }
 
     if (std::string(argv[i]) == std::string("-smooth")) {
-      // NEW (argument check): the value must follow the flag
-      if (i + 1 >= argc) {
-        std::cout << "Missing value after -smooth" << std::endl;
-        exit(0);
-      }
-      // OLD (value read but not skipped)
-      // smooth_steps = std::atoi(argv[i + 1]);
-      // NEW (skip the value)
-      smooth_steps = std::atoi(argv[++i]);
+      smooth_steps = std::atoi(argv[i + 1]);
       std::cout << "Smooth Steps:" << smooth_steps << std::endl;
       continue;
     }
@@ -616,6 +589,12 @@ int main(int argc, char *argv[]) {
     if (std::string(argv[i]) == std::string("-fastsmooth")) {
       MQuad.reliable_smooth = false;
       std::cout << "Using fast but less reliable smooth" << std::endl;
+      continue;
+    }
+
+    if (std::string(argv[i]) == std::string("-fastsolve")) {
+      MQuad.SetFastSolve();
+      std::cout << "Using the fast integer solve" << std::endl;
       continue;
     }
 

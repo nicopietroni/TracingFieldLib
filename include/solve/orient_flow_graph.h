@@ -3437,10 +3437,10 @@ public:
       : VarTargetValue(_VarTargetValue), VarValue(_VarValue),
         PatchSideVariables(_PatchSideVariables) {
     WriteDebug = false;
-    MinRatio = -1;
-    MaxRatio = -1;
-    // MinRatio = 1.0/4.0;
-    // MaxRatio = 4.0;
+    // MinRatio = -1;
+    // MaxRatio = -1;
+    MinRatio = 1.0/4.0;
+    MaxRatio = 4.0;
   }
 };
 

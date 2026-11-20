@@ -27,6 +27,7 @@
 #ifndef PATCH_SIDE_DISCRETIZATION
 #define PATCH_SIDE_DISCRETIZATION
 
+#include <chrono>
 #include "./solve/constraint_graph.h"
 #include "./solve/iterative_integer_lin_constraint_solver.h"
 #include "./solve/linear_constraint_feasibility.h"
@@ -43,6 +44,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <iostream>
+#include <functional>
 #include <limits>
 #include <map>
 #include <queue>
@@ -357,6 +359,18 @@ public:
   // the whole side of a feature edge (the old behaviour: an open feature line
   // is prolonged up to the next corner)
   bool ExactFeatureSamples = false;
+  // FAST MODE (off = as always)
+  // MergeChords: the opposite sides of a 4 sided patch that are one variable
+  // each (no T-junction on them) must be equal: they become one variable of
+  // the integer solve, and so the whole chain of such sides through the
+  // patches (a flowline). The integer solve has one variable per chain
+  // instead of one per side; the sides with a T-junction keep their own
+  // variable. Two variables fixed at different values are never merged
+  bool MergeChords = false;
+  // BatchDiv > 0: the integer rounding fixes at each step up to
+  // (free variables / BatchDiv) uncorrelated variables (at least 8, as
+  // always); 0 = at most 8 per step
+  int BatchDiv = 0;
   // per variable: fixed samples, same order as PointsOfVariable (empty = free)
   std::vector<std::vector<Geo::Point3<ScalarType>>> FixedVarSamples;
 
@@ -1024,9 +1038,169 @@ private:
         SumGap += std::abs(Sum0 - Sum1);
       }
     }
-    std::cout << "Integer solve: violated equalities " << NumViolated << " / "
-              << OppEquivalences.size() << " total gap " << SumGap << std::endl;
     
+    // MEASURE (integer solve): fingerprint of the integer solution
+    unsigned long long SolHash = 1469598103934665603ULL;
+    for (size_t i = 0; i < VarValue.size(); i++) {
+      SolHash ^= (unsigned long long)VarValue[i];
+      SolHash *= 1099511628211ULL;
+    }
+    std::cout << "Integer solve: violated equalities " << NumViolated << " / "
+              << OppEquivalences.size() << " total gap " << SumGap
+              << " hash " << SolHash << std::endl;
+
+        // MEASURE (integer solve): size error, absolute and relative to target
+    ScalarType IsoErr = 0, IsoErrRel = 0;
+    for (size_t i = 0; i < VarValue.size(); i++) {
+      ScalarType Diff = (ScalarType)(VarValue[i] - VarTargetValue[i]);
+      IsoErr += Diff * Diff;
+      IsoErrRel += pow(Diff / (ScalarType)VarTargetValue[i], 2);
+    }
+    std::cout << "Integer solve: iso error " << IsoErr
+              << " relative " << IsoErrRel << std::endl;
+  }
+
+    // DEBUG (graph input): saves the input of the graph optimization, to
+  // reproduce it outside the pipeline
+  void SaveGraphInput(const std::string &FileName) {
+    std::vector<std::vector<std::vector<int>>> PatchVar;
+    GetPerPatchVars(PatchVar);
+    std::ofstream File(FileName);
+    File << VarValue.size() << std::endl;
+    for (size_t i = 0; i < VarValue.size(); i++)
+      File << VarValue[i] << " ";
+    File << std::endl;
+    for (size_t i = 0; i < VarTargetValue.size(); i++)
+      File << VarTargetValue[i] << " ";
+    File << std::endl;
+    File << PatchVar.size() << std::endl;
+    for (size_t i = 0; i < PatchVar.size(); i++) {
+      File << PatchVar[i].size();
+      for (size_t j = 0; j < PatchVar[i].size(); j++) {
+        File << " " << PatchVar[i][j].size();
+        for (size_t k = 0; k < PatchVar[i][j].size(); k++)
+          File << " " << PatchVar[i][j][k];
+      }
+      File << std::endl;
+    }
+    std::cout << "Saved graph input in " << FileName << std::endl;
+  }
+
+  // The variables of the integer solve merged along the chords: the two
+  // sides of an equality made of one variable each (opposite sides of a 4
+  // sided patch, no T-junction) are joined (union-find), unless both
+  // classes are fixed at different values. Every constraint, bound and
+  // weight is written on the classes (the isotropy of every side stays, on
+  // its class: the class goes to the average of its targets); an equality
+  // that becomes 0 = 0 is dropped. ClassOf: class of every variable.
+  // Returns the number of classes
+  int MergeChordVariables(std::vector<LinearConstraint<ScalarType>> &Constr,
+                          std::vector<int> &MinVal, std::vector<int> &MaxVal,
+                          std::vector<int> &SoftLow, std::vector<int> &SoftHigh,
+                          std::vector<int> &SoftOptimal,
+                          std::vector<ScalarType> &RoundPrio,
+                          std::vector<int> &UserFixed,
+                          std::vector<int> &ClassOf) {
+    int NV = NumVariables;
+    std::vector<int> Parent(NV);
+    for (int i = 0; i < NV; i++)
+      Parent[i] = i;
+    // fixed value of the root of each class (-1 = free)
+    std::vector<int> RootFix(NV, -1);
+    for (int i = 0; i < NV; i++)
+      if ((i < (int)UserFixed.size()) && (UserFixed[i] >= 0))
+        RootFix[i] = UserFixed[i];
+    std::function<int(int)> Find = [&](int x) {
+      while (Parent[x] != x) {
+        Parent[x] = Parent[Parent[x]];
+        x = Parent[x];
+      }
+      return x;
+    };
+    int NumJoined = 0, NumKept = 0;
+    for (size_t i = 0; i < OppEquivalences.size(); i++) {
+      if ((OppEquivalences[i].first.size() != 1) ||
+          (OppEquivalences[i].second.size() != 1))
+        continue;
+      int A = Find(OppEquivalences[i].first[0]);
+      int B = Find(OppEquivalences[i].second[0]);
+      if (A == B)
+        continue;
+      if ((RootFix[A] >= 0) && (RootFix[B] >= 0) && (RootFix[A] != RootFix[B])) {
+        NumKept++;
+        continue;
+      }
+      Parent[B] = A;
+      if (RootFix[A] < 0)
+        RootFix[A] = RootFix[B];
+      NumJoined++;
+    }
+    // class indices
+    std::vector<int> RootClass(NV, -1);
+    ClassOf.assign(NV, -1);
+    int NC = 0;
+    for (int i = 0; i < NV; i++) {
+      int R = Find(i);
+      if (RootClass[R] < 0)
+        RootClass[R] = NC++;
+      ClassOf[i] = RootClass[R];
+    }
+    // constraints on the classes (terms of the same class summed)
+    std::vector<LinearConstraint<ScalarType>> NewConstr;
+    for (size_t i = 0; i < Constr.size(); i++) {
+      std::map<int, ScalarType> W;
+      for (size_t j = 0; j < Constr[i].LHSide.size(); j++)
+        W[ClassOf[Constr[i].LHSide[j].IndexVar]] += Constr[i].LHSide[j].W;
+      LinearConstraint<ScalarType> C;
+      C.RHSide = Constr[i].RHSide;
+      C.Weight = Constr[i].Weight;
+      for (typename std::map<int, ScalarType>::iterator It = W.begin();
+           It != W.end(); It++)
+        if ((*It).second != 0)
+          C.LHSide.push_back(VarTerm<ScalarType>((*It).first, 0, (*It).second));
+      if (C.LHSide.empty())
+        continue;
+      NewConstr.push_back(C);
+    }
+    Constr = NewConstr;
+    // per class: the bounds intersected, the soft values averaged, the
+    // priority the highest (the smallest value), the fixed value
+    std::vector<int> CMin(NC, 1), CMax(NC, 1000), CFix(NC, -1);
+    std::vector<ScalarType> SLow(NC, 0), SHigh(NC, 0), SOpt(NC, 0), Cnt(NC, 0);
+    std::vector<ScalarType> CPrio(NC, std::numeric_limits<ScalarType>::max());
+    for (int i = 0; i < NV; i++) {
+      int c = ClassOf[i];
+      CMin[c] = std::max(CMin[c], MinVal[i]);
+      CMax[c] = std::min(CMax[c], MaxVal[i]);
+      SLow[c] += SoftLow[i];
+      SHigh[c] += SoftHigh[i];
+      SOpt[c] += SoftOptimal[i];
+      Cnt[c] += 1;
+      if (i < (int)RoundPrio.size())
+        CPrio[c] = std::min(CPrio[c], RoundPrio[i]);
+      if ((i < (int)UserFixed.size()) && (UserFixed[i] >= 0))
+        CFix[c] = UserFixed[i];
+    }
+    MinVal.assign(NC, 1);
+    MaxVal.assign(NC, 1000);
+    SoftLow.assign(NC, 1);
+    SoftHigh.assign(NC, 1);
+    SoftOptimal.assign(NC, 1);
+    for (int c = 0; c < NC; c++) {
+      MinVal[c] = CMin[c];
+      MaxVal[c] = std::max(CMin[c], CMax[c]);
+      SoftLow[c] = (int)floor(0.5 + SLow[c] / Cnt[c]);
+      SoftHigh[c] = (int)floor(0.5 + SHigh[c] / Cnt[c]);
+      SoftOptimal[c] = (int)floor(0.5 + SOpt[c] / Cnt[c]);
+    }
+    if (!RoundPrio.empty())
+      RoundPrio = CPrio;
+    if (!UserFixed.empty())
+      UserFixed = CFix;
+    std::cout << "Merge chords: " << NV << " variables -> " << NC
+              << " (" << NumJoined << " equalities joined, " << NumKept
+              << " not joined: different fixed values)" << std::endl;
+    return NC;
   }
 
   void SolveGlobal(bool pre_divide, bool post_duplicate) {
@@ -1129,12 +1303,39 @@ private:
       SoftOptimal.push_back(VarTargetValue[i]);
     }
 
+    // The chains of equal sides: one variable each (see MergeChords)
+    std::vector<int> ClassOf;
+    int NumClasses = NumVariables;
+    if (MergeChords)
+      NumClasses = MergeChordVariables(LSQCostr, MinVal, MaxVal, SoftLow,
+                                       SoftHigh, SoftOptimal, RoundPrio,
+                                       IntLSQ.UserFixedValue, ClassOf);
+    IntLSQ.batch_div = BatchDiv;
+
     // InitMinMaxVectors(MinVal,MaxVal);
     IntLSQ.Init(LSQCostr, MinVal, MaxVal, SoftLow, SoftHigh, SoftOptimal,
                 RoundPrio);
-    IntLSQ.Solve(VarValue);
+    auto TSolve0 = std::chrono::high_resolution_clock::now();
+    if (MergeChords) {
+      std::vector<int> ClassValue;
+      IntLSQ.Solve(ClassValue);
+      VarValue.assign(NumVariables, MIN_SUBD);
+      for (int i = 0; i < NumVariables; i++)
+        if ((ClassOf[i] >= 0) && (ClassOf[i] < (int)ClassValue.size()))
+          VarValue[i] = ClassValue[ClassOf[i]];
+    } else
+      IntLSQ.Solve(VarValue);
+    auto TSolve1 = std::chrono::high_resolution_clock::now();
+    std::cout << "Integer solve: " << NumVariables << " variables";
+    if (MergeChords)
+      std::cout << " (" << NumClasses << " after merging the chords)";
+    std::cout << ", " << std::chrono::duration<double>(TSolve1 - TSolve0).count()
+              << " s" << std::endl;
     MeasureIntegerSolveQuality();
-
+    // MEASURE (integer solve): parameters actually seen by the solver
+    std::cout << "Integer solve: batch " << IntLSQ.max_batch_size
+              << " use_batch " << IntLSQ.use_batch_fixing
+              << " lns " << IntLSQ.use_lns << std::endl;
     if (post_duplicate)
       DuplicateSolution();
   }
@@ -1382,6 +1583,9 @@ void AutomaticGraphOptimize(const bool OptimizeEquality,
     int stepParity = 0;
 
     auto tStart = Clock::now();
+
+    //SaveGraphInput("graph_input.txt");
+
     if (OptimizeEquality)
         stepEq = SolveEqualityViaGraph(false);
     auto tEquality = Clock::now();

@@ -37,7 +37,9 @@
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
+#include <functional>
 #include <limits> // NEW (smart angle based)
+#include <thread>
 #include <set>
 #include <solve/least_squares_lin_constraint_solver.h>
 #include <stack>
@@ -262,7 +264,6 @@ void SmoothLaplacianStep(
   }
 }
 
-template <class ScalarType>
 // OLD (before smart angle based)
 // void SmoothAngleBasedStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
 //                           const std::vector<std::vector<int>> &Faces,
@@ -270,28 +271,48 @@ template <class ScalarType>
 // NEW (smart angle based): with smart, a vertex moves only if the worst
 // scaled jacobian of its faces does not get worse, or stays above
 // SmartJacThr (smart smoothing, Zhou and Shimada 2000)
+// NEW (speed): the sorted stars (VertFan, HasBorder) and the faces of every
+// vertex (VFIn) depend only on the connectivity, which a smoothing never
+// changes: who does many steps computes them once and passes them (NULL =
+// computed here, as before). The two loops over the vertices read only the
+// positions before the step and write only their own vertex, so they run on
+// several threads with the same result
+template <class ScalarType>
 void SmoothAngleBasedStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
                           const std::vector<std::vector<int>> &Faces,
                           const std::set<int> &FixedV, ScalarType Damp = 0.5,
                           bool smart = true,
-                          ScalarType SmartJacThr = (ScalarType)0.5) {
-  std::vector<std::vector<int>> VertFan;
-  std::vector<bool> HasBorder;
-  GetSortedVertStar(Faces, VertFan, HasBorder);
+                          ScalarType SmartJacThr = (ScalarType)0.5,
+                          const std::vector<std::vector<int>> *FanIn = NULL,
+                          const std::vector<bool> *BorderIn = NULL,
+                          const std::vector<std::vector<int>> *VFIn = NULL) {
+  std::vector<std::vector<int>> VertFanLocal;
+  std::vector<bool> HasBorderLocal;
+  if ((FanIn == NULL) || (BorderIn == NULL))
+    GetSortedVertStar(Faces, VertFanLocal, HasBorderLocal);
+  const std::vector<std::vector<int>> &VertFan =
+      ((FanIn != NULL) && (BorderIn != NULL)) ? *FanIn : VertFanLocal;
+  const std::vector<bool> &HasBorder =
+      ((FanIn != NULL) && (BorderIn != NULL)) ? *BorderIn : HasBorderLocal;
+  std::vector<bool> IsFixed(VertPos.size(), false);
+  for (std::set<int>::const_iterator It = FixedV.begin(); It != FixedV.end();
+       It++)
+    if ((*It >= 0) && (*It < (int)IsFixed.size()))
+      IsFixed[*It] = true;
 
   std::vector<Geo::Point3<ScalarType>> AngleVal(VertPos.size());
 
-  for (size_t i = 0; i < VertPos.size(); i++) {
-    if (FixedV.count((int)i) > 0) {
+  ParallelFor(VertPos.size(), [&](size_t i) {
+    if (IsFixed[i]) {
       AngleVal[i] = VertPos[i];
-      continue;
+      return;
     }
 
     const std::vector<int> &Ring = VertFan[i];
     int n = (int)Ring.size();
     if (n < 3) {
       AngleVal[i] = VertPos[i];
-      continue;
+      return;
     }
 
     bool isBoundary = HasBorder[i];
@@ -338,7 +359,7 @@ void SmoothAngleBasedStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
 
     AngleVal[i] = (AccumWeight > (ScalarType)1e-8) ? AccumTarget / AccumWeight
                                                    : VertPos[i];
-  }
+  });
 
   // OLD (before smart angle based)
   // for (size_t i = 0; i < AngleVal.size(); i++) {
@@ -348,13 +369,14 @@ void SmoothAngleBasedStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
   // }
 
   // NEW (smart angle based)
-  std::vector<std::vector<int>> VF;
-  if (smart) {
-    VF.resize(VertPos.size());
+  std::vector<std::vector<int>> VFLocal;
+  if (smart && (VFIn == NULL)) {
+    VFLocal.resize(VertPos.size());
     for (size_t f = 0; f < Faces.size(); f++)
       for (size_t j = 0; j < Faces[f].size(); j++)
-        VF[Faces[f][j]].push_back((int)f);
+        VFLocal[Faces[f][j]].push_back((int)f);
   }
+  const std::vector<std::vector<int>> &VF = (VFIn != NULL) ? *VFIn : VFLocal;
   // worst scaled jacobian of the faces around vertex i, with i at PosI and
   // the other vertices at their positions before the step
   const std::vector<Geo::Point3<ScalarType>> PrevPos = VertPos;
@@ -370,9 +392,9 @@ void SmoothAngleBasedStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
     return Worst;
   };
 
-  for (size_t i = 0; i < AngleVal.size(); i++) {
-    if (FixedV.count(i) > 0)
-      continue;
+  ParallelFor(AngleVal.size(), [&](size_t i) {
+    if (IsFixed[i])
+      return;
     Geo::Point3<ScalarType> NewP =
         PrevPos[i] * Damp + AngleVal[i] * (1 - Damp);
     if (smart && (!VF[i].empty())) {
@@ -380,11 +402,11 @@ void SmoothAngleBasedStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
       if (Q1 < SmartJacThr) {
         ScalarType Q0 = WorstJac(i, PrevPos[i]);
         if (Q1 < Q0)
-          continue; // the move makes its faces worse: keep the old position
+          return; // the move makes its faces worse: keep the old position
       }
     }
     VertPos[i] = NewP;
-  }
+  });
 }
 
 
@@ -845,7 +867,11 @@ template <class ScalarType> struct SmoothPolyAlignParam {
     NextI.clear();
     getFFAdjacency(Faces, NextF, NextI);
     LaplacianBestPolyWeight(VertPos, Faces, LineSmooth, LaplW, 0.5, 3);
+    // NEW (parallel): faces of every vertex (in face order), for the gather
+    // of the targets
+    getVFAdjacency(Faces, VF, VFIndex);
   }
+  std::vector<std::vector<int>> VF, VFIndex;
 };
 
 // template <class ScalarType>
@@ -902,24 +928,52 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
   SmoothPolyScale(TargetPoly, Weights, SParam.NextF, 3);
   //SmoothPolyOrientation(TargetPoly, Weights, SParam.NextF, 3);
 
-  for (size_t i = 0; i < Faces.size(); i++) {
-    for (size_t j = 0; j < Faces[i].size(); j++) {
-      int IndexV = Faces[i][j];
-      bool IsFixedV = (FixedV.count(IndexV) > 0);
-      bool IsLineSmoothV = false;
-
-      if ((SParam.line_neight_features) &&
-          (SParam.LineSmoothV.count(IndexV) > 0) &&
-          (SParam.LineSmoothV.at(IndexV) > 1))
-        IsLineSmoothV = true;
-
-      if ((!IsFixedV) && (!IsLineSmoothV)) {
-        AvgPos[IndexV] += (TargetPoly[i][j] * Weights[i]);
-        AvgW[IndexV] += Weights[i];
-        // FromBorder[IndexV].push_back(HasB);
-      }
-    }
+  // OLD (scatter over the faces, serial)
+  // for (size_t i = 0; i < Faces.size(); i++) {
+  //   for (size_t j = 0; j < Faces[i].size(); j++) {
+  //     int IndexV = Faces[i][j];
+  //     bool IsFixedV = (FixedV.count(IndexV) > 0);
+  //     bool IsLineSmoothV = false;
+  //     if ((SParam.line_neight_features) &&
+  //         (SParam.LineSmoothV.count(IndexV) > 0) &&
+  //         (SParam.LineSmoothV.at(IndexV) > 1))
+  //       IsLineSmoothV = true;
+  //     if ((!IsFixedV) && (!IsLineSmoothV)) {
+  //       AvgPos[IndexV] += (TargetPoly[i][j] * Weights[i]);
+  //       AvgW[IndexV] += Weights[i];
+  //     }
+  //   }
+  // }
+  // NEW (parallel): the same sums gathered per vertex, its faces in the same
+  // (increasing) order as the scatter, so the same result; VF from Init
+  // (computed here if the param was not initialized on these faces)
+  std::vector<std::vector<int>> VFLocal, VFIndexLocal;
+  if (SParam.VF.size() != VertPos.size())
+    getVFAdjacency(Faces, VFLocal, VFIndexLocal);
+  const std::vector<std::vector<int>> &VFg =
+      (SParam.VF.size() == VertPos.size()) ? SParam.VF : VFLocal;
+  const std::vector<std::vector<int>> &VFIg =
+      (SParam.VF.size() == VertPos.size()) ? SParam.VFIndex : VFIndexLocal;
+  std::vector<char> SkipV(VertPos.size(), 0);
+  for (size_t v = 0; v < VertPos.size(); v++) {
+    bool IsFixedV = (FixedV.count((int)v) > 0);
+    bool IsLineSmoothV = false;
+    if ((SParam.line_neight_features) &&
+        (SParam.LineSmoothV.count((int)v) > 0) &&
+        (SParam.LineSmoothV.at((int)v) > 1))
+      IsLineSmoothV = true;
+    SkipV[v] = (IsFixedV || IsLineSmoothV) ? 1 : 0;
   }
+  ParallelFor(VertPos.size(), [&](size_t v) {
+    if (SkipV[v])
+      return;
+    for (size_t k = 0; k < VFg[v].size(); k++) {
+      int i = VFg[v][k];
+      int j = VFIg[v][k];
+      AvgPos[v] += (TargetPoly[i][j] * Weights[i]);
+      AvgW[v] += Weights[i];
+    }
+  });
 
   // cumulate the line
   if (SParam.line_neight_features) {
@@ -998,7 +1052,13 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
   // positions before the update (all moves are computed on the old ones)
   std::vector<Geo::Point3<ScalarType>> PrevPos = VertPos;
 
-  for (size_t i = 0; i < AvgPos.size(); i++) {
+  // NEW (parallel): every vertex from the positions before the update
+  std::vector<char> FixedMask(AvgPos.size(), 0);
+  for (std::set<int>::const_iterator It = FixedV.begin(); It != FixedV.end();
+       It++)
+    if ((*It >= 0) && (*It < (int)FixedMask.size()))
+      FixedMask[*It] = 1;
+  ParallelFor(AvgPos.size(), [&](size_t i) {
     Geo::Point3<ScalarType> OldP = PrevPos[i];
     Geo::Point3<ScalarType> NewP =
         OldP * SParam.Damp + AvgPos[i] * (1 - SParam.Damp);
@@ -1006,8 +1066,7 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
 
     // NEW (tangent line move): keep only the component along the line,
     // clamped so the vertex never passes halfway to its line neighbours
-    if ((!LineN.empty()) && (LineN[i].size() == 2) &&
-        (FixedV.count(i) == 0)) {
+    if ((!LineN.empty()) && (LineN[i].size() == 2) && (!FixedMask[i])) {
       Geo::Point3<ScalarType> P0 = PrevPos[LineN[i][0]];
       Geo::Point3<ScalarType> P1 = PrevPos[LineN[i][1]];
       Geo::Point3<ScalarType> Dir = P1 - P0;
@@ -1029,7 +1088,7 @@ void SmoothPolyAlignStep(std::vector<Geo::Point3<ScalarType>> &VertPos,
       Displ = Geo::Point3<ScalarType>(0, 0, 0);
 
     VertPos[i] = OldP + Displ;
-  }
+  });
 }
 
 // enum SmoothType {
@@ -1675,6 +1734,18 @@ void SmoothLaplacian(
     }
   }
 
+  // NEW (speed): the stars of the angle based step, once (the connectivity
+  // does not change)
+  std::vector<std::vector<int>> AngleFan, AngleVF;
+  std::vector<bool> AngleBorder;
+  if (SParam.SType == SMAngleBased) {
+    GetSortedVertStar(Faces, AngleFan, AngleBorder);
+    AngleVF.resize(VertPos.size());
+    for (size_t f = 0; f < Faces.size(); f++)
+      for (size_t j = 0; j < Faces[f].size(); j++)
+        AngleVF[Faces[f][j]].push_back((int)f);
+  }
+
   for (int s = 0; s < SParam.NumIte; s++) {
 
     if ((SParam.check_AspectR) || (SParam.reproject_voronoi_partition) ||
@@ -1704,7 +1775,9 @@ void SmoothLaplacian(
     //                       SParam.Damp, true);
 
     if (SParam.SType == SMAngleBased)
-      SmoothAngleBasedStep(VertPos, Faces, FixedVertSet, SParam.Damp);
+      SmoothAngleBasedStep(VertPos, Faces, FixedVertSet, SParam.Damp, true,
+                           (ScalarType)0.5, &AngleFan, &AngleBorder,
+                           &AngleVF);
 
     if (SParam.SType == SMTaubin)
       SmoothTaubinStep(VertPos, Faces, FixedVertSet, LapNeighbors, SParam.Damp);

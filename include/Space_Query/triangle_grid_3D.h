@@ -36,6 +36,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <thread>
 #include <vector>
 
 namespace Geo {
@@ -164,15 +165,19 @@ public:
    *  \param closestF The index of the closest Face
    *  \param _closestPt The Coordinate of the closest point
    */
-  bool GridClosest(const std::vector<Geo::Point3<ScalarType>> &vert,
-                   const std::vector<std::vector<int>> &face,
-                   const CoordType &_p, const ScalarType &_maxDist,
-                   int &closestF, CoordType &_closestPt) {
+  // The search of GridClosest with the marks given (Mark: one per face,
+  // Stamp: the current mark), const: several threads can search at the
+  // same time, each with its own marks
+  bool GridClosestMarked(const std::vector<Geo::Point3<ScalarType>> &vert,
+                         const std::vector<std::vector<int>> &face,
+                         const CoordType &_p, const ScalarType &_maxDist,
+                         int &closestF, CoordType &_closestPt,
+                         std::vector<int> &Mark, int &Stamp) const {
     // std::cout<<"B"<<std::endl;
 
     ScalarType _minDist = _maxDist;
     closestF = -1;
-    TMark++;
+    Stamp++;
 
     ScalarType radius = voxel.Norm() / 4;
     Box3<int> iboxdone, iboxtodo;
@@ -207,7 +212,7 @@ public:
                   Grid[IndexP.X][IndexP.Y][IndexP.Z].entries;
               for (size_t i = 0; i < to_test.size(); i++) {
                 int currT = to_test[i];
-                if (FaceMark[currT] >= TMark)
+                if (Mark[currT] >= Stamp)
                   continue;
                 // assert(FaceMark[currT]<TMark);//not already tested
                 int IndexV0 = face[currT][0];
@@ -246,7 +251,7 @@ public:
                 // FIX (speed): mark as soon as the exact distance is known.
                 // _minDist only decreases, so a triangle rejected now would
                 // be rejected again in the other cells it spans.
-                FaceMark[currT] = TMark;
+                Mark[currT] = Stamp;
                 if (currD > _minDist)
                   continue;
 
@@ -270,6 +275,61 @@ public:
     } while (_minDist > radius);
 
     return (closestF != -1);
+  }
+
+  bool GridClosest(const std::vector<Geo::Point3<ScalarType>> &vert,
+                   const std::vector<std::vector<int>> &face,
+                   const CoordType &_p, const ScalarType &_maxDist,
+                   int &closestF, CoordType &_closestPt) {
+    return GridClosestMarked(vert, face, _p, _maxDist, closestF, _closestPt,
+                             FaceMark, TMark);
+  }
+
+  // GridClosest of many points on several threads (the same result as one
+  // GridClosest per point: every search starts from fresh marks). Only: the
+  // points to search (NULL = all). ClosestF is -1 and ClosestPt the point
+  // itself where nothing is found (or not searched)
+  void GridClosestMany(const std::vector<Geo::Point3<ScalarType>> &vert,
+                       const std::vector<std::vector<int>> &face,
+                       const std::vector<CoordType> &Pts,
+                       const ScalarType &_maxDist, std::vector<int> &ClosestF,
+                       std::vector<CoordType> &ClosestPt,
+                       const std::vector<bool> *Only = NULL) const {
+    size_t N = Pts.size();
+    ClosestF.assign(N, -1);
+    ClosestPt = Pts;
+    unsigned int NumT = std::thread::hardware_concurrency();
+    if (NumT == 0)
+      NumT = 1;
+    NumT = (unsigned int)std::min<size_t>(NumT, std::max<size_t>(1, N / 500));
+    auto Work = [&](size_t B, size_t E) {
+      std::vector<int> Mark(face.size(), 0);
+      int Stamp = 0;
+      for (size_t i = B; i < E; i++) {
+        if ((Only != NULL) && !(*Only)[i])
+          continue;
+        int F = -1;
+        CoordType Q = Pts[i];
+        GridClosestMarked(vert, face, Pts[i], _maxDist, F, Q, Mark, Stamp);
+        ClosestF[i] = F;
+        if (F >= 0)
+          ClosestPt[i] = Q;
+      }
+    };
+    if (NumT <= 1) {
+      Work(0, N);
+      return;
+    }
+    std::vector<std::thread> Th;
+    size_t Block = (N + NumT - 1) / NumT;
+    for (unsigned int t = 0; t < NumT; t++) {
+      size_t B = t * Block, E = std::min(N, B + Block);
+      if (B >= E)
+        break;
+      Th.emplace_back(Work, B, E);
+    }
+    for (auto &T : Th)
+      T.join();
   }
 
   bool GridClosestBary(const std::vector<Geo::Point3<ScalarType>> &vert,

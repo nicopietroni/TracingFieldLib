@@ -40,7 +40,9 @@
 #include "polyline3.h"
 #include "segment3.h"
 #include <cmath>
+#include <functional>
 #include <limits>
+#include <thread>
 
 namespace Geo {
 template <class ScalarType>
@@ -485,6 +487,35 @@ void SmoothPolyOrientation(
   }
 }
 
+// NEW (parallel): Fn(i) for i in [0,N) on several threads (static blocks;
+// for loops whose iterations write only their own element)
+inline void ParallelFor(size_t N, const std::function<void(size_t)> &Fn,
+                        size_t MinPerThread = 1000) {
+  unsigned int NumT = std::thread::hardware_concurrency();
+  if (NumT == 0)
+    NumT = 1;
+  NumT = (unsigned int)std::min<size_t>(
+      NumT, std::max<size_t>(1, N / std::max<size_t>(1, MinPerThread)));
+  if (NumT <= 1) {
+    for (size_t i = 0; i < N; i++)
+      Fn(i);
+    return;
+  }
+  std::vector<std::thread> Th;
+  size_t Block = (N + NumT - 1) / NumT;
+  for (unsigned int t = 0; t < NumT; t++) {
+    size_t B = t * Block, E = std::min(N, B + Block);
+    if (B >= E)
+      break;
+    Th.emplace_back([&Fn, B, E]() {
+      for (size_t i = B; i < E; i++)
+        Fn(i);
+    });
+  }
+  for (auto &T : Th)
+    T.join();
+}
+
 template <class ScalarType>
 void SmoothPolyScale(
     std::vector<std::vector<Geo::Point3<ScalarType>>> &TargetPoly,
@@ -526,13 +557,15 @@ void SmoothPolyScale(
   };
 
   for (int step = 0; step < Steps; ++step) {
+    // NEW (parallel): every loop writes only its own face
     std::vector<ScalarType> OldScale(TargetPoly.size(), 0);
-    for (size_t i = 0; i < TargetPoly.size(); ++i)
+    ParallelFor(TargetPoly.size(), [&](size_t i) {
       OldScale[i] = PolyMeanEdge(TargetPoly[i]);
+    });
 
     std::vector<ScalarType> NewScale = OldScale;
 
-    for (size_t i = 0; i < TargetPoly.size(); ++i) {
+    ParallelFor(TargetPoly.size(), [&](size_t i) {
       ScalarType SumW = 0;
       ScalarType SumS = 0;
 
@@ -554,20 +587,20 @@ void SmoothPolyScale(
         NewScale[i] =
             (ScalarType(1) - Lambda) * OldScale[i] + Lambda * AvgScale;
       }
-    }
+    });
 
-    for (size_t i = 0; i < TargetPoly.size(); ++i) {
+    ParallelFor(TargetPoly.size(), [&](size_t i) {
       if (TargetPoly[i].empty())
-        continue;
+        return;
       if (OldScale[i] <= 0)
-        continue;
+        return;
 
       ScalarType ScaleFactor = NewScale[i] / OldScale[i];
       Geo::Point3<ScalarType> Bary = PolyBarycenter(TargetPoly[i]);
 
       for (size_t k = 0; k < TargetPoly[i].size(); ++k)
         TargetPoly[i][k] = Bary + (TargetPoly[i][k] - Bary) * ScaleFactor;
-    }
+    });
   }
 }
 

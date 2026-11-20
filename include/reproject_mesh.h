@@ -74,16 +74,24 @@ namespace Geo
     // ProjTriGrid.PrintGridStats();
     // exit(0);
 
+    // NEW (parallel): the closest points of all the attractors on several
+    // threads (independent searches), then accumulated in the same order
+    std::vector<int> AllClosestF;
+    std::vector<Geo::Point3<ScalarType>> AllClosestPt;
+    ProjTriGrid.GridClosestMany(VertProj, FacesProj, TargetVert,
+                                ProjTriGrid.bbox.Diag(), AllClosestF,
+                                AllClosestPt, &ActiveAttractors);
     int projected = 0;
     for (size_t i = 0; i < TargetVert.size(); i++)
     {
       if (!ActiveAttractors[i])
         continue;
       projected++;
-      int closestF;
-      Geo::Point3<ScalarType> closestPt;
-      ProjTriGrid.GridClosest(VertProj, FacesProj, TargetVert[i], ProjTriGrid.bbox.Diag(),
-                              closestF, closestPt);
+      int closestF = AllClosestF[i];
+      Geo::Point3<ScalarType> closestPt = AllClosestPt[i];
+      // (nothing found: no attraction; it read out of the faces before)
+      if (closestF < 0)
+        continue;
 
       Geo::Point3<ScalarType> Diff = TargetVert[i] - closestPt;
       TargetDist[i] = Diff.Norm();
@@ -614,17 +622,18 @@ namespace Geo
                  Geo::TriangleSpatialIndex<ScalarType> &TriGrid,
                  const std::vector<bool> *ReprojOnly = NULL)
   {
-
+    // NEW (parallel): independent searches on several threads (a vertex not
+    // found keeps its position, as before)
+    std::vector<int> ClosestF;
+    std::vector<Geo::Point3<ScalarType>> ClosestPt;
+    TriGrid.GridClosestMany(TargetPos, TargetFaces, VertPos,
+                            TriGrid.bbox.Diag(), ClosestF, ClosestPt,
+                            ReprojOnly);
     for (size_t i = 0; i < VertPos.size(); i++)
     {
       if ((ReprojOnly != NULL) && (!(*ReprojOnly)[i]))
         continue;
-
-      int closestF;
-      Geo::Point3<ScalarType> closestPt = VertPos[i];
-      TriGrid.GridClosest(TargetPos, TargetFaces, VertPos[i], TriGrid.bbox.Diag(),
-                          closestF, closestPt);
-      VertPos[i] = closestPt;
+      VertPos[i] = ClosestPt[i];
     }
   }
 
