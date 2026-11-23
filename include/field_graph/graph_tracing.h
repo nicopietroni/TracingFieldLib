@@ -312,7 +312,12 @@ public:
           //  ScalarType delta=TGraph.AverageWeigth()*0.001;
           //  NextStep=1+(delta*NextStep);
           ScalarType delta = 0.001;
-          NextStep = TGraph.AverageWeigth() + (delta * NextStep);
+          // OLD (without the node multiplier)
+          // NextStep = TGraph.AverageWeigth() + (delta * NextStep);
+          // the node multiplier scales the uniform step too (WeightLink
+          // already includes it)
+          NextStep = TGraph.AverageWeigth() * TGraph.NodeMultiplier(CurrN) +
+                     (delta * NextStep);
         }
         if (NextStep <= 0) {
           std::cout << "Negative Weight:" << NextStep << std::endl;

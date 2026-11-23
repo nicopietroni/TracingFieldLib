@@ -143,6 +143,10 @@ namespace Geo
 
     std::vector<int> PrioritySampleVert;
     std::vector<int> PrioritySampleDir;
+    // per node multiplier of the candidate priority (the priority of a
+    // candidate is multiplied by the average over its nodes), e.g. the
+    // curvature anisotropy; empty: not used, the default
+    std::vector<ScalarType> NodePriorityMult;
     // PrioLen -> Prioritize the shortest path first
     // PrioLenW -> Prioritize the shortest path first, but weighted by the node
     // weight PrioDist -> Prioritize the path distance avegaded per node
@@ -1063,7 +1067,10 @@ namespace Geo
       SParam.uniformW = UniformWDist;
       SParam.checkEnabled = false;
       int StopNode;
+      // the node multipliers (if any) only for the distances
+      TGraph.useNodeMult = true;
       Geo::GraphQuery<ScalarType>::Dijkstra(TGraph, StartN, SParam, StopNode);
+      TGraph.useNodeMult = false;
 
       // TGraph.RestoreEnabledNodes();
       // TGraph.RestoreEnabledArcs();
@@ -2091,6 +2098,22 @@ namespace Geo
 
         // Prio = 1 / (ScalarType)SampledPaths[IndexPath].size();
 
+        // priority multiplier averaged over the nodes of the candidate
+        if (!NodePriorityMult.empty() && !SampledPaths[IndexPath].empty())
+        {
+          const std::vector<int> &PathN = SampledPaths[IndexPath];
+          int EndIdx = PathN.size();
+          if ((EndIdx > 1) && Geo::PathFunctions<ScalarType>::IsLoop(PathN))
+            EndIdx--;
+          ScalarType Mult = 0;
+          for (int j = 0; j < EndIdx; j++)
+          {
+            assert(PathN[j] < (int)NodePriorityMult.size());
+            Mult += NodePriorityMult[PathN[j]];
+          }
+          Prio *= Mult / EndIdx;
+        }
+
         Candidates[i].first = Prio;
       }
       std::sort(Candidates.begin(), Candidates.end());
@@ -2502,7 +2525,10 @@ namespace Geo
       // }
 
       TGraph.CurrDistIndex() = 0;
+      // the node multipliers (if any) only for the distances
+      TGraph.useNodeMult = true;
       Geo::GraphQuery<ScalarType>::Dijkstra(TGraph, StartN, SParam, StopNode);
+      TGraph.useNodeMult = false;
 
       auto t2 = std::chrono::high_resolution_clock::now();
 
@@ -3958,6 +3984,125 @@ namespace Geo
       //     limit_path_to[i]=false;
       //     sample_only_on[i]=false;
       // }
+    }
+
+    // ---------------------------------------------------------------------
+    // API used by the path relaxation (field_graph/path_relaxation.h):
+    // wrappers of the private functions, no change of behaviour
+    // ---------------------------------------------------------------------
+  public:
+    // copy of the conflict sets, to restore them after a failed attempt
+    struct ConflictState
+    {
+      std::set<int> ConflictNodes;
+      std::set<int> PathStartingNodes, PathEndingNodes;
+      std::set<std::pair<int, int>> ConflictEdges;
+    };
+
+    void SaveConflictState(ConflictState &CS) const
+    {
+      CS.ConflictNodes = ConflictNodes;
+      CS.PathStartingNodes = PathStartingNodes;
+      CS.PathEndingNodes = PathEndingNodes;
+      CS.ConflictEdges = ConflictEdges;
+    }
+
+    void RestoreConflictState(ConflictState &CS)
+    {
+      std::swap(ConflictNodes, CS.ConflictNodes);
+      std::swap(PathStartingNodes, CS.PathStartingNodes);
+      std::swap(PathEndingNodes, CS.PathEndingNodes);
+      std::swap(ConflictEdges, CS.ConflictEdges);
+    }
+
+    // rebuild the conflict sets and the disabled nodes/arcs from the
+    // selected paths only
+    void ResetSelectedPathState()
+    {
+      ConflictNodes.clear();
+      PathStartingNodes.clear();
+      PathEndingNodes.clear();
+      ConflictEdges.clear();
+      InitWithSelected();
+      for (size_t i = 0; i < SelectedPaths.size(); i++)
+        if (SelectedPaths[i].size() >= 2)
+          DisableGraphArches(SelectedPaths[i]);
+      InitSingularityNodes(false);
+      if (avoidSingularities)
+        DisableSingularityNodes();
+      TGraph.DisableNodeType(TangentDomain);
+    }
+
+    // add/remove a path to/from the conflict sets and the graph
+    void InsertPathState(const std::vector<int> &PathN)
+    {
+      AddToConflictNodes(PathN);
+      AddToConflictEdges(PathN);
+      DisableGraphPathNodes(PathN);
+      DisableGraphArches(PathN);
+    }
+
+    void RemovePathState(const std::vector<int> &PathN)
+    {
+      EnableGraphPathNodes(PathN);
+      EnableGraphArches(PathN);
+      RemoveToConflictNodes(PathN);
+      RemoveToConflictEdges(PathN);
+    }
+
+    // trace a complete path (loop or border-border) from StartN with the
+    // same rules used for the candidates
+    bool TracePathFrom(const int StartN, std::vector<int> &PathN)
+    {
+      PathN.clear();
+      if ((StartN < 0) || (StartN >= (int)TGraph.NumNodes()))
+        return false;
+      if (!TGraph.IsEnabled(StartN))
+        return false;
+      if (TGraph.NodeType(StartN) != Geo::Internal)
+        return false;
+      if (ConflictNodes.count(StartN) > 0)
+        return false;
+      if (!CanStartFrom(StartN))
+        return false;
+      std::vector<int> ArrivalNodes;
+      SetupSampling(ArrivalNodes);
+      TGraph.DisableNodeType(TangentDomain);
+      ScalarType PathL;
+      return TraceFromNode(TGraph, StartN, ArrivalNodes, PathN, PathL);
+    }
+
+    // arrival nodes for the current exit setup
+    void GetCurrentArrivalNodes(std::vector<int> &ArrivalNodes)
+    {
+      GetArrivalNodes(ArrivalNodes);
+    }
+
+    // a new path that does not conflict with the inserted ones and crosses
+    // them properly
+    bool IsValidNewPath(const std::vector<int> &PathN)
+    {
+      if (PathN.size() < 2)
+        return false;
+      if (ConflictWithInserted(PathN))
+        return false;
+      if (ConflictEdgeWithInsertedEdges(PathN))
+        return false;
+      if (!CrossProperly(PathN))
+        return false;
+      if (Geo::PathFunctions<ScalarType>::SelfIntersectTangentially(TGraph,
+                                                                    PathN))
+        return false;
+      if (Geo::PathFunctions<ScalarType>::HasSelfEdgeTwice(PathN))
+        return false;
+      return true;
+    }
+
+    bool IsBorderVert(const int IndexV) const
+    {
+      assert(IndexV >= 0);
+      assert(IndexV < (int)IsBorder.size());
+      return IsBorder[IndexV];
     }
   };
 

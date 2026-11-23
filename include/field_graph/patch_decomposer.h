@@ -54,6 +54,7 @@
 #include "connectivity.h"
 #include "patch_managing.h"
 #include "path_sampling.h"
+#include "path_relaxation.h"
 #include "segment2.h"
 #include "tangent_space_smooth.h"
 #include <vector>
@@ -288,6 +289,14 @@ namespace Geo
     bool dynamic_smooth;
     bool dynamic_updates;
     bool force_all_features;
+    // progress message every progress_every added/removed paths
+    // (-1: no message, the default)
+    int progress_every;
+    int progress_events;
+    // at the end, move the paths to spread them more uniformly
+    // (path_relaxation.h); default false
+    bool relax_paths;
+    PathRelaxParam<ScalarType> RelaxParam;
     bool split_removal;
 
     bool start_internal;
@@ -1330,6 +1339,8 @@ namespace Geo
       if (stop_when_solved)
         all_solved = (UnsolvedPatches.size() == 0);
 
+      PrintProgress("added");
+
       // auto t2 = std::chrono::high_resolution_clock::now();
       // auto elapsed1 =
       //     std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
@@ -2055,6 +2066,229 @@ namespace Geo
       return is_removable;
     }
     
+    // ---------------------------------------------------------------------
+    // API used by the path relaxation (field_graph/path_relaxation.h)
+    // ---------------------------------------------------------------------
+    Geo::CrossPathSampling<ScalarType> &PathSampling() { return PathSampl; }
+    PatchManaging<ScalarType> &PatchManager() { return PatchMan; }
+
+    bool IsConcaveSpikeVert(const int IndexV) const
+    {
+      return (ConcaveSpikeVertSet.count(IndexV) > 0);
+    }
+
+    void CompactAll() { CompactData(); }
+
+    int NumNonEmptyPaths() const
+    {
+      int Num = 0;
+      for (size_t i = 0; i < PathSampl.SelectedPaths.size(); i++)
+        if (PathSampl.SelectedPaths[i].size() > 0)
+          Num++;
+      return Num;
+    }
+
+    int NumNonEmptyPatches() const
+    {
+      int Num = 0;
+      for (size_t i = 0; i < PatchMan.NumPatches(); i++)
+        if (!PatchMan.isEmpty(i))
+          Num++;
+      return Num;
+    }
+
+    // Replace the selected paths PathIdx with NewPaths (the path sampling
+    // state, conflicts and graph, must already be the one of the new paths).
+    // The replacement is kept only if the number of patches does not change
+    // and all the updated patches satisfy the conditions (as in
+    // RemoveIfPossible); otherwise the paths and the patches are restored
+    // and false is returned (the caller restores the path sampling state).
+    // number of non empty patches not satisfying the conditions
+    int NumUnsatisfiedPatches()
+    {
+      int Num = 0;
+      for (size_t i = 0; i < PatchMan.NumPatches(); i++)
+      {
+        if (PatchMan.isEmpty(i))
+          continue;
+        UpdateCondition(i);
+        if (!SatisfyConditions(i))
+          Num++;
+      }
+      return Num;
+    }
+
+    // add to Neigh the non empty patches sharing a vertex with Patches
+    void AddNeighbourPatches(const std::vector<int> &Patches,
+                             std::vector<int> &Neigh)
+    {
+      std::vector<std::vector<int>> VFIndex;
+      if (VFAdj.size() != PatchMan.VertPos.size())
+        getVFAdjacency(PatchMan.Faces, VFAdj, VFIndex);
+      std::set<int> Result(Neigh.begin(), Neigh.end());
+      for (size_t i = 0; i < Patches.size(); i++)
+      {
+        int IndexP = Patches[i];
+        if (PatchMan.isEmpty(IndexP))
+          continue;
+        const std::vector<int> &PFaces = PatchMan.PData.PatchOriginalFaces[IndexP];
+        for (size_t j = 0; j < PFaces.size(); j++)
+          for (size_t k = 0; k < PatchMan.Faces[PFaces[j]].size(); k++)
+          {
+            int IndexV = PatchMan.Faces[PFaces[j]][k];
+            for (size_t l = 0; l < VFAdj[IndexV].size(); l++)
+            {
+              int IndexP1 = PatchMan.PData.OriginalFaceToPatch[VFAdj[IndexV][l]];
+              if ((IndexP1 >= 0) && (!PatchMan.isEmpty(IndexP1)))
+                Result.insert(IndexP1);
+            }
+          }
+      }
+      Neigh = std::vector<int>(Result.begin(), Result.end());
+    }
+
+    // reason of the last failure of TryReplacePaths: 1 unsolved patches,
+    // 2 number of patches changed, 3 local conditions, 4 global conditions
+    int last_replace_fail = 0;
+
+    bool TryReplacePaths(const std::vector<int> &PathIdx,
+                         const std::vector<std::vector<int>> &NewPaths,
+                         bool check_neighbours = false)
+    {
+      last_replace_fail = 0;
+      assert(PathIdx.size() == NewPaths.size());
+      if (PathIdx.size() == 0)
+        return false;
+
+      // never touch unsolved patches
+      for (size_t i = 0; i < PathIdx.size(); i++)
+      {
+        std::vector<int> Involved;
+        PatchMan.GetTouchedPatches(PathSampl.SelectedPaths[PathIdx[i]],
+                                   Involved);
+        if (HasUnsolvedPatch(Involved))
+        {
+          last_replace_fail = 1;
+          return false;
+        }
+      }
+
+      int NumPatches0 = NumNonEmptyPatches();
+
+      bool need_to_save_status = false;
+      for (size_t i = 0; i < PConditions.size(); i++)
+        need_to_save_status |= PConditions[i]->NeedSaveStatus();
+      if (need_to_save_status)
+      {
+        for (size_t i = 0; i < PConditions.size(); i++)
+          PConditions[i]->SaveStatus();
+        PatchMan.SaveStatus();
+      }
+
+      // the patches touched by the old and the new paths (for the smoothing)
+      std::set<int> TouchedPatches;
+      if (dynamic_smooth)
+        for (size_t i = 0; i < PathIdx.size(); i++)
+        {
+          std::vector<int> Involved;
+          PatchMan.GetTouchedPatches(PathSampl.SelectedPaths[PathIdx[i]],
+                                     Involved);
+          TouchedPatches.insert(Involved.begin(), Involved.end());
+          PatchMan.GetTouchedPatches(NewPaths[i], Involved);
+          TouchedPatches.insert(Involved.begin(), Involved.end());
+        }
+
+      std::vector<std::vector<int>> OldPaths;
+      for (size_t i = 0; i < PathIdx.size(); i++)
+      {
+        OldPaths.push_back(PathSampl.SelectedPaths[PathIdx[i]]);
+        PathSampl.SelectedPaths[PathIdx[i]] = NewPaths[i];
+      }
+
+      // as when adding a path: smooth the mesh around the new paths (the
+      // positions and the field are restored if the replacement fails)
+      std::vector<Geo::Point3<ScalarType>> OldVertPos;
+      std::vector<Field::CrossF<ScalarType>> OldVertCurv, OldFaceCurv;
+      if (dynamic_smooth)
+      {
+        OldVertPos = PatchMan.VertPos;
+        OldVertCurv = VertCurv;
+        OldFaceCurv = FaceCurv;
+        SmoothAround(PathIdx, TouchedPatches, dynamics_smooth_steps);
+      }
+
+      // remove the old ones (OLDPathNodes) and add the new ones
+      std::vector<int> UpdatedPatches;
+      PatchMan.Update(PathIdx, PathIdx, UpdatedPatches);
+
+      bool IsOk = (NumNonEmptyPatches() == NumPatches0);
+      if (!IsOk)
+        last_replace_fail = 2;
+
+      // the updated patches and their neighbours (some conditions use data
+      // of the neighbours, e.g. the boundary normals)
+      std::vector<int> CheckPatches = UpdatedPatches;
+      if (IsOk && check_neighbours)
+        AddNeighbourPatches(UpdatedPatches, CheckPatches);
+
+      bool global_updated = false;
+      if (IsOk)
+      {
+        UpdateCondition(CheckPatches);
+        IsOk = SatisfyConditions(CheckPatches);
+        if (!IsOk)
+        {
+          last_replace_fail = 3;
+          // (which condition fails is not recomputed: too expensive)
+        }
+      }
+      if (IsOk)
+      {
+        for (size_t i = 0; i < PConditions.size(); i++)
+          PConditions[i]->UpdateGlobalData(PatchMan);
+        global_updated = true;
+        IsOk = SatisfyConditionsAfterGlobalUpdate(CheckPatches);
+        if (!IsOk)
+          last_replace_fail = 4;
+      }
+      if (IsOk)
+        return true;
+
+      // restore the paths, the positions and the patches
+      for (size_t i = 0; i < PathIdx.size(); i++)
+        PathSampl.SelectedPaths[PathIdx[i]] = OldPaths[i];
+      if (dynamic_smooth)
+      {
+        PatchMan.VertPos = OldVertPos;
+        VertCurv = OldVertCurv;
+        FaceCurv = OldFaceCurv;
+      }
+      if (need_to_save_status)
+      {
+        for (size_t i = 0; i < PConditions.size(); i++)
+          PConditions[i]->RestoreStatus();
+        PatchMan.RestoreStatus();
+      }
+      else
+      {
+        std::vector<int> UpdatedPatches1;
+        PatchMan.Update(PathIdx, PathIdx, UpdatedPatches1);
+        std::vector<int> CheckPatches1 = UpdatedPatches1;
+        if (check_neighbours)
+          AddNeighbourPatches(UpdatedPatches1, CheckPatches1);
+        UpdateCondition(CheckPatches1);
+        if (global_updated)
+          for (size_t i = 0; i < PConditions.size(); i++)
+            PConditions[i]->UpdateGlobalData(PatchMan);
+      }
+      if (dynamic_smooth)
+      {
+        PatchMan.UpdateSubPatchPos();
+        PatchMan.InitVisualCornersEdges();
+      }
+      return false;
+    }
+
     void GetColorBySolvedPatches(std::vector<Geo::Point3<ScalarType>> &FaceCol)
     {
       FaceCol.clear();
@@ -2126,6 +2360,7 @@ namespace Geo
         if (has_removed)
         {
           success_removal++;
+          PrintProgress("removed");
           return (current_rem_cand >= 0);
         }
 
@@ -2207,6 +2442,9 @@ namespace Geo
       first_iteration = true;
       update_dart = true;
       force_all_features = false;
+      progress_every = -1;
+      progress_events = 0;
+      relax_paths = false;
 
       dynamics_smooth_steps = 5;
       sing_dist_interval_step = 0;
@@ -2430,6 +2668,28 @@ namespace Geo
         if (ConcaveSpikeNumPath.count(VertId) > 0)
           Count.push_back(ConcaveSpikeNumPath[VertId]);
       }
+    }
+
+    // every progress_every events: selected paths, patches and unsolved ones
+    void PrintProgress(const char *Event)
+    {
+      if (progress_every <= 0)
+        return;
+      progress_events++;
+      if ((progress_events % progress_every) != 0)
+        return;
+      int NumPaths = 0;
+      for (size_t i = 0; i < PathSampl.SelectedPaths.size(); i++)
+        if (PathSampl.SelectedPaths[i].size() > 0)
+          NumPaths++;
+      int NumPatches = 0;
+      for (size_t i = 0; i < PatchMan.NumPatches(); i++)
+        if (!PatchMan.isEmpty(i))
+          NumPatches++;
+      std::cout << "[Decompose] " << Event << " (event " << progress_events
+                << "): " << NumPaths << " paths, " << NumPatches
+                << " patches, " << UnsolvedPatches.size() << " unsolved"
+                << std::endl;
     }
 
     void RemovePaths()
@@ -3102,6 +3362,7 @@ namespace Geo
         TimeUpdateDistances, TimeCheckConflicts, TimeRemovePaths;
     // TimeRemovePaths[4] = {0, 0, 0, 0};
     int attept_removal, success_removal;
+    double TimeRelax = 0;
 
     // bool ForceSolveSpikeConcave(int IndexP) // bool Do_features,
     // {
@@ -3820,6 +4081,7 @@ namespace Geo
       TimeCheckConflicts = 0;
       attept_removal = 0;
       success_removal = 0;
+      progress_events = 0;
       TimeRemovePaths = 0;
 
       auto time0 = std::chrono::high_resolution_clock::now();
@@ -3856,6 +4118,37 @@ namespace Geo
 
       // FIX ARTIFICIALLY THE WRONG PATCHES
       // ForceSolveTopology();
+      // spread the paths (does not change the topology)
+      if (relax_paths)
+      {
+        auto tr0 = std::chrono::high_resolution_clock::now();
+        PathRelaxation<ScalarType, PatchDecomposer<ScalarType>> PRelax(
+            *this, RelaxParam);
+        PRelax.Relax();
+        // remove the paths not needed anymore and relax again
+        for (int c = 0; RelaxParam.remove_after && Do_remove &&
+                        (c < RelaxParam.max_remove_cycles);
+             c++)
+        {
+          int NumPaths0 = NumNonEmptyPaths();
+          RemovePaths();
+          CompactData();
+          int NumPaths1 = NumNonEmptyPaths();
+          std::cout << "[Relax] removed " << NumPaths0 - NumPaths1
+                    << " paths after the relaxation" << std::endl;
+          if (NumPaths1 == NumPaths0)
+            break;
+          PathRelaxation<ScalarType, PatchDecomposer<ScalarType>> PRelax1(
+              *this, RelaxParam);
+          PRelax1.Relax();
+        }
+        auto tr1 = std::chrono::high_resolution_clock::now();
+        TimeRelax = std::chrono::duration_cast<std::chrono::microseconds>(
+                        tr1 - tr0)
+                        .count() *
+                    1e-6;
+      }
+
       RemoveNotTopologicallyOK();
       PatchMan.FixWrongValencePatches();
 
@@ -3900,6 +4193,8 @@ namespace Geo
       // std::endl;
       std::cout << "* Check Conflicts: " << TimeCheckConflicts << std::endl;
       std::cout << "* Time Remove: " << TimeRemovePaths << std::endl;
+      if (relax_paths)
+        std::cout << "* Time Relax: " << TimeRelax << std::endl;
       // std::cout << "* Attempted Removals: " << attept_removal << std::endl;
       // std::cout << "* Successful Removals: " << success_removal << std::endl;
       // std::cout << "* Pre-remove Test Spike Concave: " <<

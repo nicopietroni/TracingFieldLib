@@ -380,10 +380,29 @@ public:
     assert(IndexN0 < (int)N.size());
     assert(LocalIdx >= 0);
     assert(LocalIdx < (int)N[IndexN0].size());
-    if (!useModifiedWeight)
-      return (N[IndexN0][LocalIdx].W);
+    // OLD (without the node multiplier)
+    // if (!useModifiedWeight)
+    //   return (N[IndexN0][LocalIdx].W);
+    //
+    // return (N[IndexN0][LocalIdx].W * N[IndexN0][LocalIdx].ModW);
+    ScalarType W = N[IndexN0][LocalIdx].W;
+    if (useModifiedWeight)
+      W *= N[IndexN0][LocalIdx].ModW;
+    return (W * NodeMultiplier(IndexN0));
+  }
 
-    return (N[IndexN0][LocalIdx].W * N[IndexN0][LocalIdx].ModW);
+  // multiplier of the cost of all the arcs leaving a node (e.g. curvature
+  // anisotropy, see InitFromVertCrossField); empty: 1 for every node.
+  // Used only when useNodeMult is true (set only while computing the
+  // distances from the selected paths, never while tracing)
+  std::vector<ScalarType> NodeMult;
+  bool useNodeMult = false;
+
+  ScalarType NodeMultiplier(const int &IndexN0) const {
+    if ((!useNodeMult) || NodeMult.empty())
+      return 1;
+    assert(IndexN0 < (int)NodeMult.size());
+    return NodeMult[IndexN0];
   }
 
   int NodeLink(const int &IndexN0, const int &LocalIdx) const {
@@ -591,6 +610,7 @@ public:
 
   void Clear() {
     EnabledN.clear();
+    NodeMult.clear();
     // EnabledA.clear();
     N.clear();
 

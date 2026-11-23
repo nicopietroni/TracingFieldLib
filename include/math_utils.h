@@ -85,7 +85,8 @@ inline ScalarType MaxPercentile(const std::vector<ScalarType> &Values,
   return TestVal;
 }
 
-void PrintIntStats(const std::string &label, std::vector<int> V) {
+//void PrintIntStats(const std::string &label, std::vector<int> V) {
+inline void PrintIntStats(const std::string &label, std::vector<int> V) { // inline: defined in a header
   if (V.empty()) {
     std::cout << label << ": (empty)" << std::endl;
     return;

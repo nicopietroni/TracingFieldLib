@@ -117,6 +117,38 @@ inline bool WritePath(const std::string &filename,
   return true;
 }
 
+// NEW: as WritePath, with a mark on the header of the paths flagged in
+// IsSharp ("P <i> S" instead of "P <i>"; the other lines are unchanged, so
+// the readers of the old format that read the header line as a whole still
+// work)
+inline bool WritePath(const std::string &filename,
+                      const std::vector<std::vector<int>> &Path,
+                      const std::vector<bool> &IsSharp,
+                      bool writeInfo = true) {
+  if (writeInfo)
+    std::cout << "Saving:" << filename.c_str() << std::endl;
+
+  std::ofstream outfile(filename);
+  if (!outfile) {
+    std::cerr << "Error: Could not open file " << filename.c_str() << std::endl;
+    return false;
+  }
+
+  for (size_t i = 0; i < Path.size(); i++) {
+    outfile << "P " << i;
+    if ((i < IsSharp.size()) && IsSharp[i])
+      outfile << " S";
+    outfile << "\n";
+    if (!outfile)
+      return false;
+    for (size_t j = 0; j < Path[i].size(); j++)
+      outfile << Path[i][j] << "\n";
+  }
+
+  outfile.close();
+  return true;
+}
+
 template <class ScalarType>
 inline bool
 WriteCrossGraphPath(const std::string &filename,

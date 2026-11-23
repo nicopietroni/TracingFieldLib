@@ -100,6 +100,18 @@ public:
     }
   }
 
+  // NEW: Taubin smoothing (lambda step then mu step, mu < -lambda): removes
+  // the high frequencies (zig-zag) without shrinking the low ones (the real
+  // curvature). Open polyline: end points fixed; loop: all the vertices
+  // (SmoothLaplacian steps, uniform weights, no scale parameter)
+  void SmoothTaubin(int iters = 10, ScalarType lambda = ScalarType(0.5),
+                    ScalarType mu = ScalarType(-0.53)) {
+    for (int it = 0; it < iters; ++it) {
+      SmoothLaplacian(1, lambda);
+      SmoothLaplacian(1, mu);
+    }
+  }
+
   void Smooth(int iters = 3, ScalarType damp = 0.25,
               bool project_tangentially = true,
               bool remove_global_drift = true) {
