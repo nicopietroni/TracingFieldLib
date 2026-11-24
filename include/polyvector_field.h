@@ -39,8 +39,7 @@
 //#include <igl/speye.h>
 // #include <igl/PI.h>
 // #include <iostream>
-// #include <directional/circumcircle.h>
-// #include <directional/complex_eigs.h>
+
 
 #include <Eigen/Sparse>
 #include <igl/local_basis.h>
