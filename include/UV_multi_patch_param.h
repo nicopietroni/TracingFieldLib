@@ -29,6 +29,7 @@
 
 #include "box3.h"
 #include "mesh_manifold.h"
+#include "fitting_points.h"
 #include <IO/io_obj.h>
 #include <UV_param.h>
 #include <iostream>
@@ -56,6 +57,10 @@ public:
     typename Geo::UVUtils<ScalarType>::UVType ParamType;
     std::vector<int> CornerIdx; // for Tutte
     bool solve_degenerate;
+    // a component that cannot be parametrized (non manifold, failed solve,
+    // NaN): true stops the program (old behaviour), false gives it the
+    // projection on its best fitting plane and goes on
+    bool exit_on_failure;
 
     MultiPatchParameters() {
       border_size = -1;
@@ -63,8 +68,32 @@ public:
       Max_iteNum = 100;
       ParamType = Geo::UVUtils<ScalarType>::UVLSConformal;
       solve_degenerate = true;
+      exit_on_failure = true;
     }
   };
+
+  // fallback UV of a component: projection on its best fitting plane
+  static void PlaneProjectionUV(const std::vector<Geo::Point3<ScalarType>> &VertPos,
+                                std::vector<Geo::Point2<ScalarType>> &VertUV) {
+    VertUV.assign(VertPos.size(), Geo::Point2<ScalarType>(0, 0));
+    if (VertPos.size() < 3)
+      return;
+    Geo::Plane3<ScalarType> Pl;
+    Geo::FittingPoint<ScalarType>::FitPlaneToPointSet(VertPos, Pl);
+    Geo::Point3<ScalarType> N = Pl.Direction();
+    N.Normalize();
+    // any direction not parallel to the normal
+    Geo::Point3<ScalarType> Ax(1, 0, 0);
+    if (std::fabs(N.X) > std::fabs(N.Y))
+      Ax = Geo::Point3<ScalarType>(0, 1, 0);
+    Geo::Point3<ScalarType> U = Cross(N, Ax);
+    U.Normalize();
+    Geo::Point3<ScalarType> V = Cross(N, U);
+    V.Normalize();
+    for (size_t i = 0; i < VertPos.size(); i++)
+      VertUV[i] = Geo::Point2<ScalarType>(Geo::Dot(VertPos[i], U),
+                                          Geo::Dot(VertPos[i], V));
+  }
 
   static bool
   Parametrize(const std::vector<Geo::Point3<ScalarType>> &VertPos,
@@ -104,14 +133,35 @@ public:
 
       switch (MPatchParam.ParamType) {
       case Geo::UVUtils<ScalarType>::UVLSConformal:
-        if (!EdgeManifold<ScalarType>(SubMeshesV[i], SubMeshesF[i]))
-          exit(0);
-        if (!VertManifold<ScalarType>(SubMeshesV[i], SubMeshesF[i]))
-          exit(0);
+        // if (!EdgeManifold<ScalarType>(SubMeshesV[i], SubMeshesF[i]))
+        //   exit(0);
+        // if (!VertManifold<ScalarType>(SubMeshesV[i], SubMeshesF[i]))
+        //   exit(0);
+        // solved = Geo::UVParam<ScalarType>::LeastSquaresConformal(
+        //     SubMeshesV[i], SubMeshesF[i], CompVertUV);
+        // if (!solved)
+        //   exit(0);
+        if ((!EdgeManifold<ScalarType>(SubMeshesV[i], SubMeshesF[i])) ||
+            (!VertManifold<ScalarType>(SubMeshesV[i], SubMeshesF[i]))) {
+          if (MPatchParam.exit_on_failure)
+            exit(0);
+          std::cout << "WARNING: non manifold component " << i
+                    << ", planar projection UV" << std::endl;
+          PlaneProjectionUV(SubMeshesV[i], CompVertUV);
+          solved = true;
+          break;
+        }
         solved = Geo::UVParam<ScalarType>::LeastSquaresConformal(
             SubMeshesV[i], SubMeshesF[i], CompVertUV);
-        if (!solved)
-          exit(0);
+        if (!solved) {
+          if (MPatchParam.exit_on_failure)
+            exit(0);
+          std::cout << "WARNING: parametrization failed on component " << i
+                    << ", planar projection UV" << std::endl;
+          PlaneProjectionUV(SubMeshesV[i], CompVertUV);
+          solved = true;
+          break;
+        }
         {
           Geo::Box2<ScalarType> BBUV;
           BBUV.Init(CompVertUV);
@@ -128,7 +178,12 @@ public:
             BBUV.Init(CompVertUV);
             if (std::isnan(BBUV.DimX())) {
               WriteOBJ("testNaN.obj", SubMeshesV[i], SubMeshesF[i]);
-              exit(0);
+              // exit(0);
+              if (MPatchParam.exit_on_failure)
+                exit(0);
+              std::cout << "WARNING: NaN parametrization on component " << i
+                        << ", planar projection UV" << std::endl;
+              PlaneProjectionUV(SubMeshesV[i], CompVertUV);
             }
           }
         }

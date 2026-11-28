@@ -3906,6 +3906,77 @@ namespace Geo
       InitializeDistance();
     }
 
+    // default parameters, set by the constructor and by Reset
+    void SetDefaultParameters()
+    {
+      avoidSingularities = true;
+      distanceSingularities = false; // New
+      dynamicUpdates = true;
+      updatePatches = true;
+      print_info = false;
+      SingResample = true;
+      only_visible = true;
+      force_direct = false;
+      PType = PrioDist;
+      UniformWDist = true;
+      MaxCrossJump = -1;
+      SkipRedundantCandidates = false;
+    }
+
+    // back to the state after the construction: all the data are cleared and
+    // the parameters set to the default (the decomposer changes several of
+    // them during a run). NumSamples is kept, it is set by the user.
+    void Reset()
+    {
+      SingNodes.clear();
+      StartingNodes.clear();
+      ConflictNodes.clear();
+      PathStartingNodes.clear();
+      PathEndingNodes.clear();
+      ConflictEdges.clear();
+      VF.clear();
+      VFIndex.clear();
+      NextF.clear();
+      NextE.clear();
+      IsBorder.clear();
+      num_traced = 0;
+      num_loop_candidates = 0;
+      num_all_candidates = 0;
+      CandidateNumNodes.clear();
+      num_incomplete_trace = 0;
+      num_non_direct = 0;
+      num_redundant = 0;
+      num_self_intersected = 0;
+      num_max_jump = 0;
+      SampledNodes.clear();
+      TimeSelfIntersectCheck = 0;
+      SampledPaths.clear();
+      SampledPathsLenghtW.clear();
+      SampledPaths_Status.clear();
+      Candidates.clear();
+      PrioritySampleVert.clear();
+      PrioritySampleDir.clear();
+      NodePriorityMult.clear();
+      SelectedPaths.clear();
+      CanEmit.clear();
+      CanReceive.clear();
+      must_cross_e.clear();
+      sample_on.clear();
+      force_sample.clear();
+      allow_arrive_to.clear();
+      FilterDisableVert.clear();
+      FilterDisableN.clear();
+      for (int k = 0; k < 4; k++)
+        TimeUpdateDist[k] = 0;
+      StartingNodesSave.clear();
+      SampledPathsSave.clear();
+      SampledPathsLenghtWSave.clear();
+      SampledPaths_StatusSave.clear();
+      MustStartEnd.clear();
+      SwapNodeType.clear();
+      SetDefaultParameters();
+    }
+
     // void Reset() {
     //   SingNodes.clear();
     //   StartingNodes.clear();
@@ -3956,22 +4027,25 @@ namespace Geo
         : VertPos(_VertPos), Connectivity(_Connectivity), TGraph(_TGraph),
           VertCurv(_VertCurv), SingIndex(_SingIndex), SingValue(_SingValue)
     {
-      avoidSingularities = true;
-      distanceSingularities = false; // New
-      dynamicUpdates = true;
-      updatePatches = true;
-      print_info = false;
-      // orthoBorderDist=true;
-      NumSamples = 1000;
-      // minSingResample = 8;
-      // maxSingResample = 4;
-      SingResample = true;
+      // avoidSingularities = true;
+      // distanceSingularities = false; // New
+      // dynamicUpdates = true;
+      // updatePatches = true;
+      // print_info = false;
+      // // orthoBorderDist=true;
+      // NumSamples = 1000;
+      // // minSingResample = 8;
+      // // maxSingResample = 4;
+      // SingResample = true;
 
-      only_visible = true;
-      force_direct = false;
-      PType = PrioDist;
-      UniformWDist = true;
-      MaxCrossJump = -1;
+      // only_visible = true;
+      // force_direct = false;
+      // PType = PrioDist;
+      // UniformWDist = true;
+      // MaxCrossJump = -1;
+      // moved to SetDefaultParameters (also used by Reset)
+      SetDefaultParameters();
+      NumSamples = 1000;
 
       // non_traced = 0;
       // non_direct = 0;

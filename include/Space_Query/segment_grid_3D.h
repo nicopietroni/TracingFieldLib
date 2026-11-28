@@ -139,6 +139,10 @@ public:
 
     ScalarType _minDist = _maxDist;
     closestS = -1;
+    // NEW: no segments (e.g. the border of a closed mesh): the grid is not
+    // initialized, the radius stayed 0 and the loop below never ended
+    if (Seg.size() == 0)
+      return false;
     TMark++;
 
     ScalarType radius = voxel.Norm() / 4;

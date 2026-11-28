@@ -2214,11 +2214,22 @@ public:
 
     // update the indexes of  PData.LastUpdatedPatches[i] with the map new
     // indexes
+    // for (size_t i = 0; i < PData.LastUpdatedPatches.size(); i++) {
+    //   int OldIndex = PData.LastUpdatedPatches[i];
+    //   assert(PatchIdxRemap.count(OldIndex) > 0);
+    //   PData.LastUpdatedPatches[i] = PatchIdxRemap[OldIndex];
+    // }
+    // a last updated patch may have been emptied afterwards (e.g. by
+    // ClearDataForPatch): it does not exist anymore, so it is dropped
+    // (operator[] would silently remap it to patch 0)
+    std::vector<int> LastUpdatedPatches_Swap;
     for (size_t i = 0; i < PData.LastUpdatedPatches.size(); i++) {
       int OldIndex = PData.LastUpdatedPatches[i];
-      assert(PatchIdxRemap.count(OldIndex) > 0);
-      PData.LastUpdatedPatches[i] = PatchIdxRemap[OldIndex];
+      if (PatchIdxRemap.count(OldIndex) == 0)
+        continue;
+      LastUpdatedPatches_Swap.push_back(PatchIdxRemap[OldIndex]);
     }
+    PData.LastUpdatedPatches = LastUpdatedPatches_Swap;
 
     PData.SideLenghts = SideLenghts_Swap;
     PData.PatchOriginalFaces = PatchOriginalFaces_Swap;
@@ -2919,6 +2930,8 @@ public:
     EdgesToFace.clear();
     // std::vector<std::vector<int> > OLDPathNodes=PathNodes;
     PData.OLDPathNodes.clear();
+    // patch indices of the previous run
+    PData.LastUpdatedPatches.clear();
   }
 
   void CheckConsistentData() {
@@ -3106,6 +3119,31 @@ public:
 
   std::vector<int> GetLastUpdatedPatches() const {
     return PData.LastUpdatedPatches;
+  }
+
+  // add to Neigh the non empty patches sharing a vertex with Patches
+  // (Patches themselves included)
+  void GetNeighbourPatches(const std::vector<int> &Patches,
+                           std::vector<int> &Neigh) const {
+    std::vector<bool> MarkV(VertPos.size(), false);
+    for (size_t i = 0; i < Patches.size(); i++) {
+      int IndexP = Patches[i];
+      if ((IndexP < 0) || (IndexP >= NumPatches()) || isEmpty(IndexP))
+        continue;
+      for (size_t j = 0; j < PData.SubPatchVertToOriginal[IndexP].size(); j++)
+        MarkV[PData.SubPatchVertToOriginal[IndexP][j]] = true;
+    }
+    std::set<int> Result(Neigh.begin(), Neigh.end());
+    for (size_t i = 0; i < NumPatches(); i++) {
+      if (isEmpty(i))
+        continue;
+      for (size_t j = 0; j < PData.SubPatchVertToOriginal[i].size(); j++)
+        if (MarkV[PData.SubPatchVertToOriginal[i][j]]) {
+          Result.insert(i);
+          break;
+        }
+    }
+    Neigh = std::vector<int>(Result.begin(), Result.end());
   }
 
   void FixWrongValencePatch(size_t &IndexP, int MinVal = 3, int MaxVal = 6) {

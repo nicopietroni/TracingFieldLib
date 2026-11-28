@@ -34,6 +34,8 @@
 #include "path_functions.h"
 #include "point3.h"
 #include <algorithm>
+#include <atomic>
+#include <thread>
 #include <cassert>
 #include <cstddef>
 #include <cstdlib>
@@ -304,6 +306,8 @@ namespace Geo
     bool start_concave;
     bool start_spike;
     bool print_info;
+    // threads of the condition updates of several patches (1: serial, old)
+    int update_threads = 1;
     // bool start_features;
 
     // bool end_internal;
@@ -547,8 +551,45 @@ namespace Geo
 
     void UpdateCondition(const std::vector<int> &IndexPatch)
     {
-      for (size_t i = 0; i < IndexPatch.size(); i++)
-        UpdateCondition(IndexPatch[i]);
+      // OLD
+      // for (size_t i = 0; i < IndexPatch.size(); i++)
+      //   UpdateCondition(IndexPatch[i]);
+      // NEW: with update_threads > 1 the conditions that allow it are updated
+      // on several patches at the same time (same results, the patches are
+      // independent); update_threads = 1 (default) is the old serial loop
+      if ((update_threads <= 1) || (IndexPatch.size() < 2))
+      {
+        for (size_t i = 0; i < IndexPatch.size(); i++)
+          UpdateCondition(IndexPatch[i]);
+        return;
+      }
+      auto t0 = std::chrono::high_resolution_clock::now();
+      for (size_t c = 0; c < PConditions.size(); c++)
+      {
+        if (!PConditions[c]->ParallelUpdate())
+        {
+          for (size_t i = 0; i < IndexPatch.size(); i++)
+            PConditions[c]->UpdatePatchData(PatchMan, IndexPatch[i]);
+          continue;
+        }
+        PConditions[c]->PrepareParallelUpdate(PatchMan, IndexPatch);
+        std::atomic<size_t> Next(0);
+        auto Worker = [&]()
+        {
+          for (size_t i = Next++; i < IndexPatch.size(); i = Next++)
+            PConditions[c]->UpdatePatchData(PatchMan, IndexPatch[i]);
+        };
+        int NumThreads = std::min((int)IndexPatch.size(), update_threads);
+        std::vector<std::thread> Threads;
+        for (int t = 1; t < NumThreads; t++)
+          Threads.push_back(std::thread(Worker));
+        Worker();
+        for (size_t t = 0; t < Threads.size(); t++)
+          Threads[t].join();
+      }
+      auto t1 = std::chrono::high_resolution_clock::now();
+      TimeUpdateConditions +=
+          std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
     }
 
     bool SatisfyConditions(const int &IndexPatch) const
@@ -3533,7 +3574,10 @@ namespace Geo
       {
         std::cout << "WARNING: Removed " << num_removed
                   << " Non Topologically-Correct Patches" << std::endl;
-        PatchMan.CompactEmptyPatches();
+        // PatchMan.CompactEmptyPatches();
+        // CompactData also remaps UnsolvedPatches and the per-patch data
+        // of the conditions, otherwise they are not aligned anymore
+        CompactData();
       }
     }
 

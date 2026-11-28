@@ -107,6 +107,19 @@ public:
   virtual bool NeedSaveStatus() const {
     return false;
   }
+
+  // NEW (parallel update, used only if PatchDecomposer::update_threads > 1):
+  // true if UpdatePatchData can run at the same time on different patches
+  // (the conditions that do not say so are updated serially, as before)
+  virtual bool ParallelUpdate() const { return false; }
+
+  // called once, serially, before updating Patches in parallel (e.g. to
+  // allocate the per patch data)
+  virtual void PrepareParallelUpdate(const PatchManaging<ScalarType> &PatchM,
+                                     const std::vector<int> &Patches) {
+    (void)PatchM;
+    (void)Patches;
+  }
   // PatchCondition()
   // {elapsed_time=0;}
 };

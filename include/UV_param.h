@@ -302,7 +302,11 @@ public:
                    std::vector<size_t> &FixedV,
                    std::vector<Geo::Point2<ScalarType>> &FixedUV,
                    std::vector<Geo::Point2<ScalarType>> &VertUV,
-                   bool InitializeConformal = true, int MaxIte = 100) {
+                   bool InitializeConformal = true, int MaxIte = 100,
+                   ScalarType ConvergenceThr = 0) {
+    // ConvergenceThr > 0: stop before MaxIte when the max displacement of a
+    // vertex in one iteration is below ConvergenceThr * UV bbox diagonal
+    // (0 = always MaxIte iterations, the old behaviour)
 
     bool solved = true;
     bool Has_No_Constr = (FixedV.size() == 0);
@@ -361,7 +365,23 @@ public:
     if (!solved)
       return false;
 
-    igl::arap_solve(bc, arap_data, V_uv);
+    // igl::arap_solve(bc, arap_data, V_uv);
+    if (ConvergenceThr <= 0)
+      igl::arap_solve(bc, arap_data, V_uv);
+    else {
+      // igl::arap_solve has no convergence test and always runs max_iter
+      // iterations: without dynamics its only state is V_uv, so calling it
+      // one iteration at a time is the same as a single call
+      arap_data.max_iter = 1;
+      for (int ite = 0; ite < MaxIte; ite++) {
+        Eigen::MatrixXd V_uv_prev = V_uv;
+        igl::arap_solve(bc, arap_data, V_uv);
+        double diag = (V_uv.colwise().maxCoeff() - V_uv.colwise().minCoeff()).norm();
+        double maxMove = (V_uv - V_uv_prev).rowwise().norm().maxCoeff();
+        if (maxMove <= (double)ConvergenceThr * diag)
+          break;
+      }
+    }
     VertUV.resize(VertPos.size());
     // copy results back to mesh
     for (int i = 0; i < (int)VertUV.size(); i++) {
@@ -375,11 +395,14 @@ public:
   static bool Arap(const std::vector<Geo::Point3<ScalarType>> &VertPos,
                    const std::vector<std::vector<int>> &Faces,
                    std::vector<Geo::Point2<ScalarType>> &VertUV,
-                   bool InitializeConformal = true, int MaxIte = 100) {
+                   bool InitializeConformal = true, int MaxIte = 100,
+                   ScalarType ConvergenceThr = 0) {
     std::vector<size_t> FixedV;
     std::vector<Geo::Point2<ScalarType>> FixedUV;
+    // return Arap(VertPos, Faces, FixedV, FixedUV, VertUV, InitializeConformal,
+    //             MaxIte);
     return Arap(VertPos, Faces, FixedV, FixedUV, VertUV, InitializeConformal,
-                MaxIte);
+                MaxIte, ConvergenceThr);
   }
 
   static bool

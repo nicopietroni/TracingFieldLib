@@ -451,6 +451,8 @@ private:
     return false;
   }
 
+public:
+  // (public: used by the developable decomposer after the smoothing)
   static void
   UnfoldIfNeeded(const std::vector<Geo::Point3<ScalarType>> &RestVertPos,
                  const std::vector<std::vector<int>> &Faces,
@@ -478,6 +480,8 @@ private:
       // std::cout << "Folded F: " << NumFold << std::endl;
     } while (isFolded);
   }
+
+private:
 
   struct SmoothStepData {
     std::vector<bool> Do_Smooth;
